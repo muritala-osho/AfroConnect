@@ -402,6 +402,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           source={{ uri: currentStory.imageUrl }}
           style={[styles.storyImage, { borderRadius: 0 }]}
           contentFit="contain"
+          cachePolicy="disk"
         />
       ) : currentStory.type === "video" && currentStory.imageUrl ? (
         <View style={[styles.videoContainer, { borderRadius: 0 }]}>
@@ -505,7 +506,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             style={styles.userInfo}
             onPress={() => {
               if (isOwnStory) {
-                navigation.navigate("StoryUpload" as any);
+                // If it's my own story, I might want to upload another or view my profile
+                // but let's just go to my profile to be safe and avoid the crash if navigation is complex
+                navigation.navigate("MyProfile" as any);
               } else {
                 navigation.navigate("ProfileDetail", { userId });
               }
@@ -515,6 +518,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               <Image
                 source={userPhoto ? getPhotoSource(userPhoto) : { uri: "https://via.placeholder.com/40" }}
                 style={styles.userAvatar}
+                onLoad={() => {
+                  // expo-image onLoad
+                }}
               />
               {isOwnStory && (
                 <Pressable 
