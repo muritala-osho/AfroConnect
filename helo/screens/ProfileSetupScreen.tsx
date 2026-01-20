@@ -428,10 +428,15 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         order: index,
       }));
 
+      const finalGender = gender.toLowerCase() === 'other' ? 'other' : gender.toLowerCase();
+      const finalPreferredGenders = preferredGenders.length > 0 
+        ? preferredGenders.map(g => g.toLowerCase())
+        : [finalGender === 'male' ? 'female' : 'male'];
+
       await completeProfileSetup({
         name: name.trim(),
         age: ageNum,
-        gender: gender.toLowerCase(),
+        gender: finalGender,
         zodiacSign: zodiacSign || undefined,
         jobTitle: jobTitle.trim() || undefined,
         education: education || undefined,
@@ -452,7 +457,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         },
         bio: bio.trim(),
         interests,
-        lookingFor: lookingFor.toLowerCase(),
+        lookingFor: lookingFor.toLowerCase() || 'friends',
         photos: formattedPhotos,
         favoriteSong: favoriteSongTitle.trim() ? {
           title: favoriteSongTitle.trim(),
@@ -465,7 +470,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         preferences: {
           ageRange: { min: minAgeNum, max: maxAgeNum },
           maxDistance: maxDistanceNum * 1000,
-          genders: preferredGenders.map(g => g.toLowerCase()),
+          genders: finalPreferredGenders,
         },
       });
       await AsyncStorage.removeItem(PROFILE_SETUP_STORAGE_KEY);
@@ -538,7 +543,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                       style={[
                         styles.genderButton,
                         { borderColor: theme.border },
-                        gender === g && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        gender.toLowerCase() === g.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
                       ]}
                       onPress={() => setGender(g)}
                     >
@@ -546,7 +551,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                         style={[
                           styles.genderButtonText,
                           { color: theme.text },
-                          gender === g && { color: theme.buttonText },
+                          gender.toLowerCase() === g.toLowerCase() && { color: theme.buttonText },
                         ]}
                       >
                         {g}

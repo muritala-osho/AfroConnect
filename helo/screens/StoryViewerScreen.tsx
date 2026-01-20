@@ -315,6 +315,33 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     return `${Math.floor(hours / 24)}d ago`;
   };
 
+  const handleShareStory = async () => {
+    if (!currentStory || !currentStory.imageUrl) {
+      Alert.alert("Error", "This story cannot be shared");
+      return;
+    }
+    
+    try {
+      const { Share } = require('react-native');
+      const result = await Share.share({
+        message: `Check out ${userName}'s story on AfroConnect!`,
+        url: currentStory.imageUrl,
+      });
+      
+      if (result.action === Share.sharedAction) {
+        if (result.activityType) {
+          // shared with activity type of result.activityType
+        } else {
+          // shared
+        }
+      } else if (result.action === Share.dismissedAction) {
+        // dismissed
+      }
+    } catch (error: any) {
+      Alert.alert("Error", error.message);
+    }
+  };
+
   const currentStory = stories[currentIndex];
   const activeStoryType = currentStory?.type || "image";
 
@@ -618,7 +645,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                   <Ionicons name="heart-outline" size={28} color="#FFF" />
                 )}
               </Pressable>
-              <Pressable style={styles.actionButton}>
+              <Pressable style={styles.actionButton} onPress={handleShareStory}>
                 <Ionicons name="share-outline" size={28} color="#FFF" />
               </Pressable>
             </View>
