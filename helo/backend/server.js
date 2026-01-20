@@ -133,16 +133,21 @@ app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/verify-otp', authLimiter);
 
 // MongoDB Connection
-const connectionString = process.env.MONGODB_URI;
-if (connectionString && (connectionString.startsWith('mongodb://') || connectionString.startsWith('mongodb+srv://'))) {
-  mongoose.connect(connectionString)
-    .then(() => console.log('✅ MongoDB Connected (using MONGODB_URI from .env)'))
-    .catch(err => {
-      console.error('❌ MongoDB Connection Error:', err);
-      process.exit(1);
-    });
+const connectionString = process.env.MONGODB_URI || process.env.DATABASE_URL;
+if (connectionString && (connectionString.startsWith('mongodb://') || connectionString.startsWith('mongodb+srv://') || connectionString.startsWith('postgresql://') || connectionString.startsWith('postgres://'))) {
+  // If it's a postgres URL but we are in a mongo app, we might need a mock or the user to provide Mongo
+  // For now, let's just allow it to attempt connection if it's mongo, otherwise log warning
+  if (connectionString.startsWith('mongodb')) {
+    mongoose.connect(connectionString)
+      .then(() => console.log('✅ MongoDB Connected'))
+      .catch(err => {
+        console.error('❌ MongoDB Connection Error:', err);
+      });
+  } else {
+    console.log('⚠️ PostgreSQL URL detected but this app requires MongoDB. Please provide MONGODB_URI in secrets.');
+  }
 } else {
-  console.log('⚠️ No MongoDB URI found in .env. Falling back to local/mock mode.');
+  console.log('⚠️ No MongoDB URI found. Falling back to local/mock mode.');
 }
 
 // Routes

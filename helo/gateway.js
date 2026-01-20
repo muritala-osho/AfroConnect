@@ -84,6 +84,17 @@ const server = http.createServer((req, res) => {
   const method = req.method;
   console.log(`[GATEWAY] ${method} ${url}`);
 
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (method === 'OPTIONS') {
+    res.writeHead(200);
+    res.end();
+    return;
+  }
+
   if (url.startsWith('/admin-web')) {
     serveStatic(req, res);
   } else if (url.startsWith('/api/') || url.startsWith('/socket.io/')) {
