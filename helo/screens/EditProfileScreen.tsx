@@ -354,7 +354,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         </Pressable>
       </View>
 
-      <ScreenKeyboardAwareScrollView style={styles.scrollView}>
+      <ScreenKeyboardAwareScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}>
         <View style={styles.content}>
           <View style={styles.photoSection}>
              <Pressable 

@@ -354,10 +354,6 @@ router.post('/reset-password', async (req, res) => {
       $or: [
         { resetPasswordOTP: otp.toString().trim() },
         { verificationOTP: otp.toString().trim() }
-      ],
-      $or: [
-        { resetPasswordOTPExpire: { $gt: Date.now() } },
-        { verificationOTPExpire: { $gt: Date.now() } }
       ]
     });
 
@@ -365,18 +361,10 @@ router.post('/reset-password', async (req, res) => {
       // Improved debugging
       const foundUser = await User.findOne({ email: email.toLowerCase() });
       if (foundUser) {
-        const resetMatch = foundUser.resetPasswordOTP === otp.toString().trim();
-        const verifyMatch = foundUser.verificationOTP === otp.toString().trim();
-        const resetExpired = foundUser.resetPasswordOTPExpire <= Date.now();
-        const verifyExpired = foundUser.verificationOTPExpire <= Date.now();
         console.log(`[RESET_PASSWORD] Failure details for ${email}:`, {
           providedOTP: otp,
           resetOTP: foundUser.resetPasswordOTP,
           verifyOTP: foundUser.verificationOTP,
-          resetMatch,
-          verifyMatch,
-          resetExpired,
-          verifyExpired,
           now: Date.now()
         });
       } else {
@@ -385,8 +373,19 @@ router.post('/reset-password', async (req, res) => {
       
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification code'
+        message: 'Invalid verification code'
       });
+    }
+
+    // Check expiry separately for better UX
+    const isExpired = (user.resetPasswordOTP === otp.toString().trim() && user.resetPasswordOTPExpire <= Date.now()) ||
+                     (user.verificationOTP === otp.toString().trim() && user.verificationOTPExpire <= Date.now());
+
+    if (isExpired) {
+        return res.status(400).json({
+            success: false,
+            message: 'Verification code has expired'
+        });
     }
 
     user.password = newPassword;

@@ -392,6 +392,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 }
               }
               if (status.didJustFinish) {
+                // Play whole video by only moving to next when it finishes
                 goToNext();
               }
             }}
@@ -485,7 +486,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           >
             <View style={styles.avatarContainer}>
               <Image
-                source={getPhotoSource(userPhoto) || { uri: "https://via.placeholder.com/40" }}
+                source={userPhoto ? getPhotoSource(userPhoto) : { uri: "https://via.placeholder.com/40" }}
                 style={styles.userAvatar}
               />
               {isOwnStory && (

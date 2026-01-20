@@ -463,12 +463,20 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
           <Pressable 
             style={[styles.card, { backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', padding: Spacing.md }]}
             onPress={() => {
-              if (user?.id) {
-                // For own profile, show a useful message about how this works for others
+              if (user?.location?.coordinates) {
+                const [lng, lat] = user.location.coordinates;
+                const url = Platform.select({
+                  ios: `maps:0,0?q=${lat},${lng}`,
+                  android: `geo:0,0?q=${lat},${lng}`
+                });
+                if (url) {
+                  require('react-native').Linking.openURL(url);
+                }
+              } else {
                 showAlert(
-                  "Google Maps Integration", 
-                  "On other users' profiles, this button opens Google Maps to show the real distance and navigation route between your current locations.",
-                  [{ text: "Got it", style: "default" }],
+                  "Location Not Found", 
+                  "Your location is not set. Please ensure location permissions are enabled.",
+                  [{ text: "OK", style: "default" }],
                   "map"
                 );
               }
