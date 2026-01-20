@@ -56,7 +56,7 @@ export const getApiBaseUrl = (): string => {
   // For native/mobile in Replit, we use the public dev domain
   // Using the domain directly can sometimes lead to 503 if the proxy is sleeping
   // but relative URLs are only for web. 
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN || '820de3b8-ca50-4976-b074-3e2ffcbb99ac-00-2e4f6c8p3srvs.picard.replit.dev';
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'c5c54baf-607c-4435-b17f-8cf09cd59dc8-00-18tae8zjyowju.riker.replit.dev';
   return `https://${replitDomain}`;
 };
 
