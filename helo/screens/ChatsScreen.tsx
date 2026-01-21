@@ -438,7 +438,12 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       const response = await get<{ stories: StoryUser[] }>('/stories/active', token);
       if (response.success && response.data?.stories) {
         // Filter out my own story from the general stories list since we handle it separately
-        return response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
+        // and ensure we don't have duplicates by checking IDs
+        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
+        const unique = filtered.filter((s, index, self) => 
+          index === self.findIndex(t => t.id === s.id)
+        );
+        return unique;
       }
     } catch (error) {
       console.log('Stories fetch error:', error);

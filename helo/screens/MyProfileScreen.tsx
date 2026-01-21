@@ -362,7 +362,8 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     navigation.navigate("StoryViewer", { 
                       userId: user.id, 
                       userName: user.name, 
-                      userPhoto: user.photos?.[0]?.url || user.photos?.[0] || (user as any).profilePhoto
+                      userPhoto: user.photos?.[0]?.url || user.photos?.[0] || (user as any).profilePhoto,
+                      isOwnStory: true
                     });
                   }
                 }}
