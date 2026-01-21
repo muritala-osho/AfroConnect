@@ -168,7 +168,10 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
       
       if (response.success) {
         setCompleted(true);
-        onComplete?.();
+        // Add a small delay before calling onComplete to let user see success state
+        setTimeout(() => {
+          onComplete?.();
+        }, 2000);
       } else {
         setError(response.message || 'Failed to submit quiz');
       }

@@ -39,6 +39,7 @@ import ProfilePromptsScreen from "@/screens/ProfilePromptsScreen";
 import OTPVerificationScreen from "@/screens/OTPVerificationScreen";
 import VisitorsScreen from "@/screens/VisitorsScreen";
 import SupportMessagesScreen from "@/screens/SupportMessagesScreen";
+import ProfileCommentsScreen from "@/screens/ProfileCommentsScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -82,6 +83,7 @@ export type RootStackParamList = {
   ProfilePrompts: undefined;
   Visitors: undefined;
   SupportMessages: undefined;
+  ProfileComments: { userId: string };
   AppealBanned: { 
     appealToken: string; 
     email: string; 
@@ -188,6 +190,7 @@ export default function RootNavigator() {
             <Stack.Screen name="ProfilePrompts" component={ProfilePromptsScreen} />
             <Stack.Screen name="Visitors" component={VisitorsScreen} options={{ presentation: "modal" }} />
             <Stack.Screen name="SupportMessages" component={SupportMessagesScreen} options={{ presentation: "modal" }} />
+            <Stack.Screen name="ProfileComments" component={ProfileCommentsScreen} />
             <Stack.Screen name="AppealBanned" component={AppealBannedScreen} />
           </>
         )}
