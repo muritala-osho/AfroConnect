@@ -293,8 +293,9 @@ router.post('/login', authLimiter, async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
+    const normalizedEmail = email.toLowerCase().trim();
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       // For debugging
       console.log('[FORGOT_PASSWORD] No account found with email:', email);
@@ -349,26 +350,29 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+    const providedOTP = otp.toString().trim();
+
     const user = await User.findOne({
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       $or: [
-        { resetPasswordOTP: otp.toString().trim() },
-        { verificationOTP: otp.toString().trim() }
+        { resetPasswordOTP: providedOTP },
+        { verificationOTP: providedOTP }
       ]
     });
 
     if (!user) {
       // Improved debugging
-      const foundUser = await User.findOne({ email: email.toLowerCase() });
+      const foundUser = await User.findOne({ email: normalizedEmail });
       if (foundUser) {
-        console.log(`[RESET_PASSWORD] Failure details for ${email}:`, {
-          providedOTP: otp,
+        console.log(`[RESET_PASSWORD] Failure details for ${normalizedEmail}:`, {
+          providedOTP: providedOTP,
           resetOTP: foundUser.resetPasswordOTP,
           verifyOTP: foundUser.verificationOTP,
           now: Date.now()
         });
       } else {
-        console.log('[RESET_PASSWORD] User not found during verify:', email);
+        console.log('[RESET_PASSWORD] User not found during verify:', normalizedEmail);
       }
       
       return res.status(400).json({
@@ -378,8 +382,8 @@ router.post('/reset-password', async (req, res) => {
     }
 
     // Check expiry separately for better UX
-    const isExpired = (user.resetPasswordOTP === otp.toString().trim() && user.resetPasswordOTPExpire <= Date.now()) ||
-                     (user.verificationOTP === otp.toString().trim() && user.verificationOTPExpire <= Date.now());
+    const isExpired = (user.resetPasswordOTP === providedOTP && user.resetPasswordOTPExpire <= Date.now()) ||
+                     (user.verificationOTP === providedOTP && user.verificationOTPExpire <= Date.now());
 
     if (isExpired) {
         return res.status(400).json({
