@@ -59,7 +59,8 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
   onComplete,
   onClose,
 }) => {
-  const { colors } = useTheme();
+  const { theme } = useTheme();
+  const colors = theme;
   const api = useApi();
   
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -403,7 +404,8 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
   userId,
   compact = false,
 }) => {
-  const { colors } = useTheme();
+  const { theme } = useTheme();
+  const colors = theme;
   const api = useApi();
   
   const [compatibility, setCompatibility] = useState<number | null>(null);
@@ -449,16 +451,16 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
   if (loading) {
     return (
       <View style={[styles.scoreContainer, compact && styles.scoreContainerCompact]}>
-        <ActivityIndicator size="small" color={colors.primary} />
+        <ActivityIndicator size="small" color={colors?.primary || '#FF6B6B'} />
       </View>
     );
   }
 
   if (needsQuiz) {
     return (
-      <View style={[styles.scoreContainer, compact && styles.scoreContainerCompact, { backgroundColor: colors.card }]}>
-        <Ionicons name="help-circle-outline" size={compact ? 16 : 20} color={colors.textSecondary} />
-        <Text style={[styles.scoreLabel, { color: colors.textSecondary, fontSize: compact ? 10 : 12 }]}>
+      <View style={[styles.scoreContainer, compact && styles.scoreContainerCompact, { backgroundColor: colors?.card || '#fff' }]}>
+        <Ionicons name="help-circle-outline" size={compact ? 16 : 20} color={colors?.textSecondary || '#666'} />
+        <Text style={[styles.scoreLabel, { color: colors?.textSecondary || '#666', fontSize: compact ? 10 : 12 }]}>
           Take quiz to see
         </Text>
       </View>
@@ -467,9 +469,9 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
 
   if (notAvailable) {
     return (
-      <View style={[styles.scoreContainer, compact && styles.scoreContainerCompact, { backgroundColor: colors.card }]}>
-        <Ionicons name="time-outline" size={compact ? 16 : 20} color={colors.textSecondary} />
-        <Text style={[styles.scoreLabel, { color: colors.textSecondary, fontSize: compact ? 10 : 12 }]}>
+      <View style={[styles.scoreContainer, compact && styles.scoreContainerCompact, { backgroundColor: colors?.card || '#fff' }]}>
+        <Ionicons name="time-outline" size={compact ? 16 : 20} color={colors?.textSecondary || '#666'} />
+        <Text style={[styles.scoreLabel, { color: colors?.textSecondary || '#666', fontSize: compact ? 10 : 12 }]}>
           Quiz pending
         </Text>
       </View>
