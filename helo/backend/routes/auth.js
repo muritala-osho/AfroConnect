@@ -354,26 +354,27 @@ router.post('/reset-password', async (req, res) => {
     const providedOTP = otp.toString().trim();
 
     const user = await User.findOne({
-      email: normalizedEmail,
-      $or: [
-        { resetPasswordOTP: providedOTP },
-        { verificationOTP: providedOTP }
-      ]
+      email: normalizedEmail
     });
 
     if (!user) {
-      // Improved debugging
-      const foundUser = await User.findOne({ email: normalizedEmail });
-      if (foundUser) {
-        console.log(`[RESET_PASSWORD] Failure details for ${normalizedEmail}:`, {
-          providedOTP: providedOTP,
-          resetOTP: foundUser.resetPasswordOTP,
-          verifyOTP: foundUser.verificationOTP,
-          now: Date.now()
-        });
-      } else {
-        console.log('[RESET_PASSWORD] User not found during verify:', normalizedEmail);
-      }
+      console.log('[RESET_PASSWORD] User not found:', normalizedEmail);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification code'
+      });
+    }
+
+    const matchesOTP = (user.resetPasswordOTP && user.resetPasswordOTP === providedOTP) ||
+                       (user.verificationOTP && user.verificationOTP === providedOTP);
+
+    if (!matchesOTP) {
+      console.log(`[RESET_PASSWORD] Failure details for ${normalizedEmail}:`, {
+        providedOTP: providedOTP,
+        resetOTP: user.resetPasswordOTP,
+        verifyOTP: user.verificationOTP,
+        now: Date.now()
+      });
       
       return res.status(400).json({
         success: false,
