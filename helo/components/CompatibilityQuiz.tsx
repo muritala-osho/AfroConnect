@@ -421,7 +421,9 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
   const fetchCompatibility = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/api/quiz/compatibility/${userId}`);
+      // Remove leading /api if it exists because useApi already adds it
+      const endpoint = userId.startsWith('/api') ? userId.replace('/api', '') : `/quiz/compatibility/${userId}`;
+      const response = await api.get(endpoint);
       
       if (response.success) {
         if (response.compatibility !== null) {

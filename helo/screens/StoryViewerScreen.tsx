@@ -323,9 +323,13 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     
     try {
       const { Share } = require('react-native');
+      // Use the actual image URL and include a fallback if needed
+      const shareUrl = currentStory.imageUrl;
+      const shareMessage = `Check out ${userName}'s story on AfroConnect! ${shareUrl}`;
+      
       const result = await Share.share({
-        message: `Check out ${userName}'s story on AfroConnect!`,
-        url: currentStory.imageUrl,
+        message: shareMessage,
+        url: shareUrl,
       });
       
       if (result.action === Share.sharedAction) {

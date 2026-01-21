@@ -42,7 +42,7 @@ router.post('/profile/:userId', protect, async (req, res) => {
     }
 
     const newComment = {
-      _id: new require('mongoose').Types.ObjectId(),
+      _id: new (require('mongoose').Types.ObjectId)(),
       authorId: req.user.id,
       authorName: req.user.name,
       authorPhoto: req.user.photos && req.user.photos.length > 0 ? req.user.photos[0] : null,
