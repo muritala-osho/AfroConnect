@@ -351,22 +351,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                 <ThemedText style={styles.heroName} numberOfLines={2}>
                   {user?.name || "User"}
                 </ThemedText>
-                {user?.premium?.isActive && (
-                  <View style={styles.premiumBadgeContainer}>
-                    <Feather name="star" size={14} color="#000" />
-                    <ThemedText style={styles.premiumBadgeText}>PREMIUM</ThemedText>
-                  </View>
-                )}
               </View>
               {user?.age && !(user as any)?.privacySettings?.hideAge && (
                 <ThemedText style={styles.heroAge}>{user.age}</ThemedText>
-              )}
-              {(user as any)?.verified && (
-                <SafeImage 
-                  source={require("@/assets/icons/verified-tick.png")} 
-                  style={{ width: 24, height: 24, marginLeft: 6 }} 
-                  contentFit="contain"
-                />
               )}
               <Pressable 
                 onPress={(e) => {

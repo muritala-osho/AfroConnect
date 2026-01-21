@@ -295,20 +295,11 @@ const CallHistoryItemComponent = memo(({
   }) => (
     <Pressable style={styles.storyItem} onPress={() => {
       if (item.id === user?.id) {
-        // If it's my own story, fetching my own stories first ensures the viewer shows them
-        fetchMyStories().then((hasStories) => {
-          if (hasStories) {
-            navigation.navigate("StoryViewer" as any, { 
-              userId: user.id, 
-              userName: user.name || 'You',
-              userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
-              isOwnStory: true
-            });
-          } else {
-            // If no stories yet, the + badge (handled by the caller of StoryItem usually) would handle it
-            // but if they click the circle itself, we can trigger upload or show alert
-            navigation.navigate("StoryUpload");
-          }
+        navigation.navigate("StoryViewer" as any, { 
+          userId: user.id, 
+          userName: user.name || 'You',
+          userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
+          isOwnStory: true
         });
       } else {
         onPress();
@@ -446,13 +437,14 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     try {
       const response = await get<{ stories: StoryUser[] }>('/stories/active', token);
       if (response.success && response.data?.stories) {
-        return response.data.stories.filter(s => s.hasStory);
+        // Filter out my own story from the general stories list since we handle it separately
+        return response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
       }
     } catch (error) {
       console.log('Stories fetch error:', error);
     }
     return [];
-  }, [token, get]);
+  }, [token, get, user?.id]);
 
   const fetchCallHistory = useCallback(async () => {
     if (!token) return;
