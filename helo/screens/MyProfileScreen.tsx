@@ -355,34 +355,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               {user?.age && !(user as any)?.privacySettings?.hideAge && (
                 <ThemedText style={styles.heroAge}>{user.age}</ThemedText>
               )}
-              <Pressable 
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (user?.id) {
-                    navigation.navigate("StoryViewer", { 
-                      userId: user.id, 
-                      userName: user.name, 
-                      userPhoto: user.photos?.[0]?.url || user.photos?.[0] || (user as any).profilePhoto,
-                      isOwnStory: true
-                    });
-                  }
-                }}
-                style={{ marginLeft: 8, padding: 4, borderRadius: 20, backgroundColor: theme.primary }}
-              >
-                <Feather name="plus-circle" size={24} color="#fff" />
-              </Pressable>
-              <Pressable 
-                onPress={(e) => {
-                  e.stopPropagation();
-                  if (user?.photos && user.photos.length > 0) {
-                    setSelectedPhoto(currentHeroPhoto);
-                    setPhotoModalVisible(true);
-                  }
-                }}
-                style={{ marginLeft: 8, padding: 8 }}
-              >
-                <Feather name="maximize-2" size={20} color="#fff" />
-              </Pressable>
+              {/* Plus badge removed as requested */}
             </View>
             {(user as any)?.livingIn && (
               <View style={styles.locationRow}>
