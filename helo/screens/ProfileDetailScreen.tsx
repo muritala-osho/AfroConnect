@@ -203,7 +203,7 @@ export default function ProfileDetailScreen() {
           <View style={styles.section}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
               <ThemedText style={styles.sectionTitle}>Comments</ThemedText>
-              <Pressable onPress={() => {/* Logic to show all comments */}}>
+              <Pressable onPress={() => navigation.navigate("ProfileComments" as any, { userId })}>
                 <ThemedText style={{ color: theme.primary, fontSize: 14 }}>View All</ThemedText>
               </Pressable>
             </View>
