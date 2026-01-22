@@ -456,7 +456,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       if (response.success && response.data?.stories) {
         // Filter out my own story from the general stories list since we handle it separately
         // and ensure we don't have duplicates by checking IDs
-        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
+        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id && s.name !== 'Your Story');
         const unique = filtered.filter((s, index, self) => 
           index === self.findIndex(t => t.id === s.id)
         );

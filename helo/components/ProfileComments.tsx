@@ -38,7 +38,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -136,7 +136,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
         <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />
       ) : (
         <FlatList
-          data={comments.slice(0, 3)}
+          data={showAll ? comments : comments.slice(0, 3)}
           renderItem={renderCommentItem}
           keyExtractor={(item) => item._id}
           scrollEnabled={false}
@@ -147,6 +147,14 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
           }
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
+      )}
+      {comments.length > 3 && !showAll && (
+        <TouchableOpacity 
+          style={styles.viewAllButton}
+          onPress={() => setShowAll(true)}
+        >
+          <Text style={[styles.viewAllText, { color: theme.primary }]}>View All Comments ({comments.length})</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -196,4 +204,13 @@ const styles = StyleSheet.create({
   commentTime: { fontSize: 11 },
   commentText: { fontSize: 14, lineHeight: 20 },
   emptyText: { textAlign: 'center', marginTop: 10, fontStyle: 'italic' },
+  viewAllButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 8,
+  },
+  viewAllText: {
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });
