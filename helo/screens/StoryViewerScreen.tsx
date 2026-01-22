@@ -549,35 +549,35 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           <View style={styles.headerActions}>
             {isOwnStory && currentStory.type === 'text' && (
               <Pressable
-                style={styles.headerButton}
+                style={[styles.headerButton, styles.headerButtonHighVis]}
                 onPress={startEditing}
               >
-                <Ionicons name="create-outline" size={24} color="#FFF" />
+                <Ionicons name="create" size={26} color="#FFF" />
               </Pressable>
             )}
             {isOwnStory && (
               <Pressable
-                style={styles.headerButton}
+                style={[styles.headerButton, styles.headerButtonHighVis]}
                 onPress={handleDeleteStory}
               >
-                <Ionicons name="trash-outline" size={24} color="#FF6B6B" />
+                <Ionicons name="trash" size={26} color="#FF5252" />
               </Pressable>
             )}
             <Pressable
-              style={styles.headerButton}
+              style={[styles.headerButton, styles.headerButtonHighVis]}
               onPress={paused ? resumeProgress : pauseProgress}
             >
               <Ionicons
                 name={paused ? "play" : "pause"}
-                size={24}
+                size={26}
                 color="#FFF"
               />
             </Pressable>
             <Pressable
-              style={styles.headerButton}
+              style={[styles.headerButton, styles.headerButtonHighVis]}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="close" size={28} color="#FFF" />
+              <Ionicons name="close" size={32} color="#FFF" />
             </Pressable>
           </View>
         </View>
@@ -687,6 +687,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
     paddingHorizontal: 20,
+  },
+  headerButtonHighVis: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   accessHint: {
     color: "rgba(255,255,255,0.5)",

@@ -456,7 +456,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       if (response.success && response.data?.stories) {
         // Filter out my own story from the general stories list since we handle it separately
         // and ensure we don't have duplicates by checking IDs
-        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id && s.name !== 'Your Story');
+        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
         const unique = filtered.filter((s, index, self) => 
           index === self.findIndex(t => t.id === s.id)
         );
@@ -888,9 +888,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
             style={styles.addStoryGradient}
           >
             <View style={[styles.addStoryInner, { backgroundColor: theme.background }]}>
-              {user?.photos?.[0] ? (
+              {user?.photos?.[0] || (user as any)?.profilePhoto ? (
                 <Image 
-                  source={{ uri: typeof user.photos[0] === 'string' ? user.photos[0] : user.photos[0].url }} 
+                  source={getPhotoSource(user?.photos?.[0] || (user as any)?.profilePhoto)} 
                   style={styles.storyAvatar} 
                   contentFit="cover" 
                 />
@@ -997,8 +997,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 contentContainerStyle={styles.storiesContainer}
               >
                 {renderAddStoryButton()}
-                {storyUsers.map((storyUser) => {
-                  const isOwnStory = storyUser.id === user?.id;
+                {storyUsers.filter(s => s.id !== user?.id).map((storyUser) => {
                   return (
                     <StoryItem
                       key={`story-${storyUser.id}`}
@@ -1007,11 +1006,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                       user={user}
                       navigation={navigation}
                       onPress={() => {
-                        if (isOwnStory) {
-                          handleViewOwnStory();
-                        } else {
-                          navigation.navigate("StoryViewer" as any, { userId: storyUser.id, userName: storyUser.name, userPhoto: storyUser.photo });
-                        }
+                        navigation.navigate("StoryViewer" as any, { userId: storyUser.id, userName: storyUser.name, userPhoto: storyUser.photo });
                       }}
                     />
                   );
