@@ -292,48 +292,65 @@ const CallHistoryItemComponent = memo(({
     onPress: () => void;
     user: any;
     navigation: any;
-  }) => (
-    <Pressable style={styles.storyItem} onPress={() => {
-      if (item.id === user?.id) {
-        navigation.navigate("StoryViewer" as any, { 
-          userId: user.id, 
-          userName: user.name || 'You',
-          userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
-          isOwnStory: true
-        });
-      } else {
-        onPress();
-      }
-    }}>
-    <LinearGradient
-      colors={item.hasNewStory 
-        ? ['#FF6B6B', '#FF8E53', '#FFC93C'] 
-        : item.hasStory 
-          ? [theme.primary, theme.primary] 
-          : [theme.border, theme.border]
-      }
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.storyGradientRing}
-    >
-      <View style={[styles.storyInnerRing, { backgroundColor: theme.background }]}>
-        {item.photo ? (
-          <Image source={{ uri: item.photo }} style={styles.storyAvatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.storyAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="user" size={22} color={theme.textSecondary} />
-          </View>
-        )}
-      </View>
-    </LinearGradient>
-    {item.hasNewStory && (
-      <View style={styles.storyNewDot} />
-    )}
-    <ThemedText style={[styles.storyName, { color: theme.text }]} numberOfLines={1}>
-      {item.name.split(' ')[0]}
-    </ThemedText>
-  </Pressable>
-));
+  }) => {
+    const isOwnStory = item.id === user?.id || item.name === 'Your Story' || item.name === user?.name;
+    
+    return (
+      <Pressable style={styles.storyItem} onPress={() => {
+        if (isOwnStory && item.hasStory) {
+          navigation.navigate("StoryViewer" as any, { 
+            userId: user.id, 
+            userName: user.name || 'You',
+            userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
+            isOwnStory: true
+          });
+        } else if (isOwnStory) {
+          navigation.navigate('StoryUpload');
+        } else {
+          onPress();
+        }
+      }}>
+      <LinearGradient
+        colors={item.hasNewStory 
+          ? ['#FF6B6B', '#FF8E53', '#FFC93C'] 
+          : item.hasStory 
+            ? [theme.primary, theme.primary] 
+            : [theme.border, theme.border]
+        }
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.storyGradientRing}
+      >
+        <View style={[styles.storyInnerRing, { backgroundColor: theme.background }]}>
+          {item.photo ? (
+            <Image source={{ uri: item.photo }} style={styles.storyAvatar} contentFit="cover" />
+          ) : (
+            <View style={[styles.storyAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
+              <Feather name="user" size={22} color={theme.textSecondary} />
+            </View>
+          )}
+        </View>
+      </LinearGradient>
+      {isOwnStory && (
+        <Pressable 
+          style={[styles.storyPlusBadge, { backgroundColor: theme.primary, borderColor: theme.background }]}
+          onPress={(e) => {
+            e.stopPropagation();
+            navigation.navigate('StoryUpload');
+          }}
+        >
+          <Ionicons name="add" size={12} color="#fff" />
+        </Pressable>
+      )}
+      {item.hasNewStory && !isOwnStory && (
+        <View style={styles.storyNewDot} />
+      )}
+      <ThemedText style={[styles.storyName, { color: theme.text }]} numberOfLines={1}>
+        {isOwnStory ? "Your Story" : item.name.split(' ')[0]}
+      </ThemedText>
+    </Pressable>
+    );
+  });
 
 export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const { theme, isDark } = useTheme();

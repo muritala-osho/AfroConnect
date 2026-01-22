@@ -136,7 +136,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
         <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />
       ) : (
         <FlatList
-          data={comments}
+          data={comments.slice(0, 3)}
           renderItem={renderCommentItem}
           keyExtractor={(item) => item._id}
           scrollEnabled={false}
