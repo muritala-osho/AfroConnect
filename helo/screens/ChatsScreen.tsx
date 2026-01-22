@@ -35,6 +35,7 @@ import * as Haptics from 'expo-haptics';
 import noMessageImg from "../assets/images/no_messages_empty_state.png";
 
 import socketService from "@/services/socket";
+import { getPhotoSource } from "@/utils/photos";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
