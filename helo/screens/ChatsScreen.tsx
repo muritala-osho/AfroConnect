@@ -996,26 +996,51 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.storiesContainer}
               >
-                {renderAddStoryButton()}
-                {storyUsers.map((storyUser) => {
-                  const isOwnStory = storyUser.id === user?.id;
-                  return (
-                    <StoryItem
-                      key={`story-${storyUser.id}`}
-                      item={storyUser}
-                      theme={theme}
-                      user={user}
-                      navigation={navigation}
-                      onPress={() => {
-                        if (isOwnStory) {
-                          handleViewOwnStory();
-                        } else {
-                          navigation.navigate("StoryViewer" as any, { userId: storyUser.id, userName: storyUser.name, userPhoto: storyUser.photo });
-                        }
-                      }}
-                    />
-                  );
-                })}
+          {/* Your Story item is handled via storyUsers now to avoid duplication */}
+          {storyUsers.findIndex(s => s.id === user?.id) === -1 ? (
+             <StoryItem 
+               item={{
+                 id: user?.id || 'me',
+                 name: 'Your Story',
+                 photo: user?.photos?.[0]?.url || user?.photos?.[0],
+                 hasStory: userHasStory,
+                 hasNewStory: false
+               }}
+               theme={theme}
+               user={user}
+               navigation={navigation}
+               onPress={() => {}}
+             />
+          ) : (
+            storyUsers.filter(s => s.id === user?.id).map(item => (
+              <StoryItem 
+                key={item.id}
+                item={item}
+                theme={theme}
+                user={user}
+                navigation={navigation}
+                onPress={() => {}}
+              />
+            ))
+          )}
+          
+          {storyUsers.filter(item => item.id !== user?.id).map((item) => (
+            <StoryItem 
+              key={item.id}
+              item={item}
+              theme={theme}
+              user={user}
+              navigation={navigation}
+              onPress={() => {
+                navigation.navigate("StoryViewer" as any, { 
+                  userId: item.id, 
+                  userName: item.name,
+                  userPhoto: item.photo,
+                  stories: item.stories
+                });
+              }}
+            />
+          ))}
               </ScrollView>
             </View>
           </>

@@ -547,7 +547,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </Pressable>
 
           <View style={styles.headerActions}>
-            {isOwnStory && currentStory.type === 'text' && (
+            {isOwnStory && (
               <Pressable
                 style={styles.headerButton}
                 onPress={startEditing}
