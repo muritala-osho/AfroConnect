@@ -455,9 +455,8 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     try {
       const response = await get<{ stories: StoryUser[] }>('/stories/active', token);
       if (response.success && response.data?.stories) {
-        // Filter out my own story from the general stories list since we handle it separately
-        // and ensure we don't have duplicates by checking IDs
-        const filtered = response.data.stories.filter(s => s.hasStory && s.id !== user?.id);
+        // Filter out my own story completely from the active list to avoid any duplication
+        const filtered = response.data.stories.filter(s => s.id !== user?.id && s.name !== 'Your Story');
         const unique = filtered.filter((s, index, self) => 
           index === self.findIndex(t => t.id === s.id)
         );
@@ -850,14 +849,12 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   , [conversations, archivedChats]);
 
   const handleViewOwnStory = () => {
-    if (userHasStory && user?.id) {
-      const ownStoryUser = storyUsers.find(u => u.id === user.id);
-      
+    if (user?.id) {
       navigation.navigate("StoryViewer" as any, { 
         userId: user.id, 
         userName: user.name || 'You',
         userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
-        stories: (ownStoryUser as any)?.stories || []
+        isOwnStory: true
       });
     }
   };
