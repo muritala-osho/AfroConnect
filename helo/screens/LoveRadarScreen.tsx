@@ -651,7 +651,11 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                         {user.name}, {user.age}
                       </ThemedText>
                       {user.verified && (
-                        <Feather name="check-circle" size={14} color={theme.primary} />
+                        <Image 
+                          source={require("@/assets/icons/verified-badge.png")} 
+                          style={{ width: 16, height: 16, marginLeft: 4 }} 
+                          contentFit="contain"
+                        />
                       )}
                       {user.online && (
                         <View style={[styles.onlineBadge, { backgroundColor: theme.online }]} />

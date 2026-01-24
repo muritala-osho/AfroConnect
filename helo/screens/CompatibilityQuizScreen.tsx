@@ -68,6 +68,10 @@ export default function CompatibilityQuizScreen({ navigation }: any) {
   const [error, setError] = useState<string | null>(null);
   const [slideAnim] = useState(new Animated.Value(0));
   const [progressAnim] = useState(new Animated.Value(0));
+  const [quizResults, setQuizResults] = useState<{
+    personalityType: string;
+    categoryBreakdown: { category: string; score: number; label: string }[];
+  } | null>(null);
 
   useEffect(() => {
     fetchQuestions();
@@ -169,9 +173,18 @@ export default function CompatibilityQuizScreen({ navigation }: any) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
       
-      const response = await api.post('/quiz/submit', { responses }, token);
+      const response = await api.post<{
+        success: boolean;
+        personalityType?: string;
+        categoryBreakdown?: { category: string; score: number; label: string }[];
+        message?: string;
+      }>('/quiz/submit', { responses }, token);
       
-      if (response.success) {
+      if (response.success && response.data) {
+        setQuizResults({
+          personalityType: response.data.personalityType || 'Balanced',
+          categoryBreakdown: response.data.categoryBreakdown || []
+        });
         setCompleted(true);
       } else {
         setError(response.message || 'Failed to submit quiz');
@@ -197,26 +210,70 @@ export default function CompatibilityQuizScreen({ navigation }: any) {
     );
   }
 
-  if (completed) {
+  if (completed && quizResults) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.completedContainer}>
+        <ScrollView contentContainerStyle={styles.resultsContainer}>
           <View style={[styles.completedIcon, { backgroundColor: theme.primary + '20' }]}>
-            <Ionicons name="checkmark-circle" size={80} color={theme.primary} />
+            <Ionicons name="sparkles" size={60} color={theme.primary} />
           </View>
           <Text style={[styles.completedTitle, { color: theme.text }]}>
-            Quiz Complete!
+            Your Results!
           </Text>
-          <Text style={[styles.completedSubtitle, { color: theme.textSecondary }]}>
-            Your compatibility scores will now be calculated with other users.
+          
+          <View style={[styles.personalityCard, { backgroundColor: theme.surface }]}>
+            <Text style={[styles.personalityLabel, { color: theme.textSecondary }]}>
+              Your Personality Type
+            </Text>
+            <Text style={[styles.personalityType, { color: theme.primary }]}>
+              {quizResults.personalityType}
+            </Text>
+          </View>
+
+          <Text style={[styles.breakdownTitle, { color: theme.text }]}>
+            Category Breakdown
           </Text>
+          
+          {quizResults.categoryBreakdown.map((item, index) => (
+            <View key={index} style={[styles.categoryCard, { backgroundColor: theme.surface }]}>
+              <View style={styles.categoryHeader}>
+                <Ionicons
+                  name={categoryIcons[item.category] as any || 'help-circle-outline'}
+                  size={20}
+                  color={categoryColors[item.category] || theme.primary}
+                />
+                <Text style={[styles.categoryName, { color: theme.text }]}>
+                  {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
+                </Text>
+              </View>
+              <Text style={[styles.categoryLabel, { color: categoryColors[item.category] || theme.primary }]}>
+                {item.label}
+              </Text>
+              <View style={[styles.scoreBar, { backgroundColor: theme.border }]}>
+                <View 
+                  style={[
+                    styles.scoreBarFill, 
+                    { 
+                      backgroundColor: categoryColors[item.category] || theme.primary,
+                      width: `${(item.score / 5) * 100}%`
+                    }
+                  ]} 
+                />
+              </View>
+            </View>
+          ))}
+
+          <Text style={[styles.resultsHint, { color: theme.textSecondary }]}>
+            Your compatibility with other users will be calculated based on these results.
+          </Text>
+
           <TouchableOpacity
             style={[styles.doneButton, { backgroundColor: theme.primary }]}
             onPress={() => navigation.goBack()}
           >
             <Text style={styles.doneButtonText}>Back to Profile</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -543,10 +600,74 @@ const styles = StyleSheet.create({
     paddingHorizontal: 48,
     paddingVertical: 14,
     borderRadius: 24,
+    marginTop: 20,
   },
   doneButtonText: {
     color: '#fff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  resultsContainer: {
+    alignItems: 'center',
+    padding: 24,
+    paddingBottom: 40,
+  },
+  personalityCard: {
+    width: '100%',
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  personalityLabel: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  personalityType: {
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  breakdownTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  categoryCard: {
+    width: '100%',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  categoryName: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  categoryLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 8,
+  },
+  scoreBar: {
+    height: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  scoreBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  resultsHint: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 20,
   },
 });

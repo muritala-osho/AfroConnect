@@ -85,17 +85,68 @@ router.post('/submit', protect, async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // Calculate user's profile from their responses
+    const categoryScores = {};
+    const categoryTotals = {};
+    
+    for (const response of formattedResponses) {
+      const question = validQuestions.find(q => q._id.toString() === response.questionId.toString());
+      if (question) {
+        if (!categoryScores[question.category]) {
+          categoryScores[question.category] = 0;
+          categoryTotals[question.category] = 0;
+        }
+        categoryScores[question.category] += response.selectedOption.value;
+        categoryTotals[question.category] += 1;
+      }
+    }
+
+    const profile = {};
+    for (const cat of Object.keys(categoryScores)) {
+      profile[cat] = Math.round(categoryScores[cat] / categoryTotals[cat]);
+    }
+
+    // Determine personality type based on responses
+    const avgScore = Object.values(categoryScores).reduce((a, b) => a + b, 0) / 
+                     Object.values(categoryTotals).reduce((a, b) => a + b, 0);
+    
+    let personalityType = 'Balanced';
+    if (avgScore <= 2) personalityType = 'Adventurer';
+    else if (avgScore <= 2.5) personalityType = 'Social Butterfly';
+    else if (avgScore <= 3.5) personalityType = 'Balanced';
+    else if (avgScore <= 4) personalityType = 'Homebody';
+    else personalityType = 'Independent';
+
     res.json({
       success: true,
       message: 'Quiz submitted successfully',
       completedAt: userResponse.completedAt,
-      totalQuestions: userResponse.totalQuestions
+      totalQuestions: userResponse.totalQuestions,
+      profile,
+      personalityType,
+      categoryBreakdown: Object.keys(categoryScores).map(cat => ({
+        category: cat,
+        score: profile[cat],
+        label: getCategoryLabel(cat, profile[cat])
+      }))
     });
   } catch (error) {
     console.error('Submit quiz error:', error);
     res.status(500).json({ success: false, message: 'Failed to submit quiz' });
   }
 });
+
+function getCategoryLabel(category, score) {
+  const labels = {
+    lifestyle: ['Very Active', 'Active', 'Moderate', 'Relaxed', 'Very Relaxed'],
+    values: ['Very Traditional', 'Traditional', 'Balanced', 'Progressive', 'Very Progressive'],
+    personality: ['Very Extroverted', 'Extroverted', 'Ambivert', 'Introverted', 'Very Introverted'],
+    relationship: ['Very Affectionate', 'Affectionate', 'Balanced', 'Independent', 'Very Independent'],
+    future: ['Very Ambitious', 'Ambitious', 'Flexible', 'Content', 'Very Content']
+  };
+  const catLabels = labels[category] || ['Very Low', 'Low', 'Medium', 'High', 'Very High'];
+  return catLabels[Math.min(Math.max(0, score - 1), 4)];
+}
 
 // Calculate compatibility with another user
 router.get('/compatibility/:userId', protect, async (req, res) => {
