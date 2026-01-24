@@ -1050,8 +1050,20 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     );
   }
 
-  const photoSource = currentUser.photos?.[0] ? getPhotoSource(currentUser.photos[0]) : { uri: 'https://via.placeholder.com/400x600?text=No+Photo' };
-  const nextPhotoSource = nextUser?.photos?.[0] ? getPhotoSource(nextUser.photos[0]) : { uri: 'https://via.placeholder.com/400x600?text=No+Photo' };
+  const getValidPhotoSource = (photos: any[]) => {
+    if (!photos || photos.length === 0) {
+      return require("@/assets/images/placeholder-1.jpg");
+    }
+    const photo = photos[0];
+    const source = getPhotoSource(photo);
+    if (!source) {
+      return require("@/assets/images/placeholder-1.jpg");
+    }
+    return source;
+  };
+  
+  const photoSource = getValidPhotoSource(currentUser.photos);
+  const nextPhotoSource = nextUser ? getValidPhotoSource(nextUser.photos) : require("@/assets/images/placeholder-1.jpg");
   const displayInterests = currentUser.interests?.slice(0, 5) || [];
 
   const getInterestIcon = (interest: string): keyof typeof Feather.glyphMap => {
