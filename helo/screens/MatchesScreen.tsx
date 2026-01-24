@@ -527,7 +527,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     <View style={styles.emptyState}>
       <Image 
         source={require("@/assets/images/no_matches_empty_state.png")} 
-        style={styles.emptyImage} 
+        style={{ width: 200, height: 200, marginBottom: Spacing.lg }} 
         contentFit="contain"
       />
       <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
@@ -838,10 +838,5 @@ const styles = StyleSheet.create({
   likeBackButton: {
     borderWidth: 2,
     borderColor: "#4CAF50",
-  },
-  emptyImage: {
-    width: 200,
-    height: 200,
-    marginBottom: Spacing.lg,
   },
 });

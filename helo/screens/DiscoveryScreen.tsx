@@ -182,19 +182,25 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       );
 
       const data = await response.json();
+      console.log(`[DISCOVERY RADAR] Received ${data.users?.length || 0} users from radar`);
       if (data.success && data.users?.length > 0) {
-        const radarUsers: DiscoverUser[] = data.users.map((u: any) => ({
-          id: u.id || u._id,
-          name: u.name || 'Unknown',
-          age: u.age,
-          bio: u.bio || '',
-          photos: u.profilePhoto ? [u.profilePhoto] : [],
-          interests: u.interests || [],
-          online: u.online,
-          distance: u.distance,
-          gender: u.gender || 'unknown',
-          verified: u.verified || false,
-        }));
+        const radarUsers: DiscoverUser[] = data.users.map((u: any) => {
+          // Use profilePhoto URL directly, or fallback to photos array
+          const photoUrl = u.profilePhoto || (u.photos?.[0]?.url || u.photos?.[0]);
+          console.log(`[DISCOVERY RADAR] User ${u.name}: photo=${photoUrl ? 'YES' : 'NO'}`);
+          return {
+            id: u.id || u._id,
+            name: u.name || 'Unknown',
+            age: u.age,
+            bio: u.bio || '',
+            photos: photoUrl ? [photoUrl] : [],
+            interests: u.interests || [],
+            online: u.online,
+            distance: u.distance,
+            gender: u.gender || 'unknown',
+            verified: u.verified || false,
+          };
+        });
         
         setUsers(prev => {
           prev.forEach(u => seenUserIds.current.add(u.id));
@@ -221,10 +227,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
   const loadPotentialMatches = useCallback(async () => {
     if (!user?.id || !token) {
+      console.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
       setLoading(false);
       return;
     }
 
+    console.log('[DISCOVERY] loadPotentialMatches starting...');
     try {
       setLoading(true);
       const params: Record<string, any> = {
@@ -271,6 +279,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         console.log('[DISCOVERY] API response has no data property');
       }
       
+      console.log('[DISCOVERY] API call complete, response:', response.success);
       if (response.success && response.data?.users) {
         console.log(`[DISCOVERY] Success. Raw users count: ${response.data.users.length}`);
         const myInterests = new Set(user.interests || []);
@@ -337,8 +346,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setUsers([]);
       }
     } catch (error) {
-      console.error("Error loading nearby users:", error);
-      setUsers([]);
+      console.error("[DISCOVERY] Error loading nearby users:", error);
+      // Don't set users to empty - leave existing users from radar
     } finally {
       setLoading(false);
     }
@@ -377,11 +386,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       
       const loadData = async () => {
         setLoading(true);
-        await loadPotentialMatches();
+        // Load from both sources in parallel for faster results
+        await Promise.all([
+          loadPotentialMatches(),
+          fetchRadarNearbyUsers()
+        ]);
       };
       loadData();
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, discoveryType]);
+  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType]);
 
   // Radar scanning on focus - reduced dependencies to prevent infinite loops
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);

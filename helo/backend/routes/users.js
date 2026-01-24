@@ -366,6 +366,7 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
+    console.log(`[NEARBY] Returning ${users.length} users`);
     res.json({
       success: true,
       users

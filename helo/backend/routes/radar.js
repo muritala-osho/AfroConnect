@@ -147,6 +147,10 @@ router.get('/nearby-users', protect, async (req, res) => {
       .sort((a, b) => (a.distance || 999) - (b.distance || 999))
       .slice(0, 50);
 
+    console.log(`[RADAR] Returning ${nearbyUsers.length} users for radius ${searchRadius}km`);
+    if (nearbyUsers.length > 0) {
+      console.log(`[RADAR] First user sample: ${nearbyUsers[0].name}, photo: ${nearbyUsers[0].profilePhoto ? 'YES' : 'NO'}`);
+    }
     res.json({
       success: true,
       users: nearbyUsers,
