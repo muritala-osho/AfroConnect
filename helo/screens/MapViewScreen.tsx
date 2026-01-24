@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
+import { WebView } from "react-native-webview";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";
@@ -7,11 +8,12 @@ import { ThemedView } from "@/components/ThemedView";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
+import { useApi } from "@/hooks/useApi";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
-import { storage, StoredUser } from "@/utils/storage";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { getPhotoSource } from "@/utils/photos";
+import * as Location from 'expo-location';
 
 type MapViewScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "MapView">;
 
@@ -19,8 +21,21 @@ interface MapViewScreenProps {
   navigation: MapViewScreenNavigationProp;
 }
 
-interface UserWithDistance extends StoredUser {
+interface NearbyUser {
+  id: string;
+  _id?: string;
+  name: string;
+  age: number;
+  photos?: any[];
+  location?: { lat: number; lng: number };
+  online?: boolean;
   distance?: number;
+}
+
+interface WeatherData {
+  temperature: number;
+  description: string;
+  icon: string;
 }
 
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -35,218 +50,377 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return Math.round(R * c);
 }
 
+function getWeatherDescription(code: number): { description: string; icon: string } {
+  const weatherCodes: { [key: number]: { description: string; icon: string } } = {
+    0: { description: "Clear", icon: "weather-sunny" },
+    1: { description: "Mainly clear", icon: "weather-sunny" },
+    2: { description: "Partly cloudy", icon: "weather-partly-cloudy" },
+    3: { description: "Overcast", icon: "weather-cloudy" },
+    45: { description: "Foggy", icon: "weather-fog" },
+    48: { description: "Rime fog", icon: "weather-fog" },
+    51: { description: "Light drizzle", icon: "weather-rainy" },
+    61: { description: "Slight rain", icon: "weather-rainy" },
+    63: { description: "Moderate rain", icon: "weather-rainy" },
+    71: { description: "Slight snow", icon: "weather-snowy" },
+    80: { description: "Slight showers", icon: "weather-rainy" },
+    95: { description: "Thunderstorm", icon: "weather-lightning" },
+  };
+  return weatherCodes[code] || { description: "Unknown", icon: "weather-cloudy" };
+}
+
 export default function MapViewScreen({ navigation }: MapViewScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const [users, setUsers] = useState<UserWithDistance[]>([]);
+  const { user, token } = useAuth();
+  const { get } = useApi();
+  const [users, setUsers] = useState<NearbyUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUser, setSelectedUser] = useState<UserWithDistance | null>(null);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
 
   useEffect(() => {
-    loadNearbyUsers();
-  }, [user?.id]);
+    initializeMap();
+  }, []);
 
-  const loadNearbyUsers = async () => {
-    if (!user?.id) return;
-    
+  const initializeMap = async () => {
     setLoading(true);
     try {
-      const allUsers = await storage.getAllUsers();
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLoading(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
       
-      const filteredUsers = allUsers
-        .filter(u => {
-          if (u.id === user.id) return false;
-          
-          if (user.preferences) {
-            const { ageRange, genders, maxDistance } = user.preferences;
-            
-            if (ageRange && (u.age < ageRange.min || u.age > ageRange.max)) {
-              return false;
-            }
-            
-            if (genders && genders.length > 0 && !genders.includes(u.gender)) {
-              return false;
-            }
-            
-            if (maxDistance && user.location?.lat && user.location?.lng && u.location?.lat && u.location?.lng) {
-              const distance = calculateDistance(
-                user.location.lat,
-                user.location.lng,
-                u.location.lat,
-                u.location.lng
-              );
-              if (distance > maxDistance) return false;
-            }
-          }
-          
-          return true;
-        })
-        .map(u => {
-          const distance = (user.location?.lat && user.location?.lng && u.location?.lat && u.location?.lng)
-            ? calculateDistance(
-                user.location.lat,
-                user.location.lng,
-                u.location.lat,
-                u.location.lng
-              )
-            : 0;
-          return {
-            ...u,
-            distance,
-          };
-        });
-      
-      setUsers(filteredUsers);
+      const lat = location.coords.latitude;
+      const lng = location.coords.longitude;
+      setCurrentLocation({ lat, lng });
+
+      fetchWeather(lat, lng);
+      await loadNearbyUsers(lat, lng);
     } catch (error) {
-      console.error("Error loading users:", error);
+      console.error("Error initializing map:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading || !user) {
+  const fetchWeather = async (lat: number, lng: number) => {
+    try {
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,weather_code&timezone=auto`
+      );
+      const data = await response.json();
+      
+      if (data.current) {
+        const weatherInfo = getWeatherDescription(data.current.weather_code);
+        setWeather({
+          temperature: Math.round(data.current.temperature_2m),
+          description: weatherInfo.description,
+          icon: weatherInfo.icon,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching weather:', error);
+    }
+  };
+
+  const loadNearbyUsers = async (lat: number, lng: number) => {
+    if (!token) return;
+
+    try {
+      const response = await get<{ users: any[] }>('/users/discover', token);
+      
+      if (response.success && response.data?.users) {
+        const usersWithDistance = response.data.users
+          .filter((u: any) => u._id !== user?.id && u.location?.lat && u.location?.lng)
+          .map((u: any) => ({
+            id: u._id,
+            name: u.name,
+            age: u.age,
+            photos: u.photos,
+            location: u.location,
+            online: u.online,
+            distance: calculateDistance(lat, lng, u.location.lat, u.location.lng),
+          }))
+          .slice(0, 20);
+        
+        setUsers(usersWithDistance);
+      }
+    } catch (error) {
+      console.error("Error loading users:", error);
+    }
+  };
+
+  const generateMapHtml = () => {
+    if (!currentLocation) return '';
+
+    const userMarkers = users.map(u => {
+      const photo = u.photos?.[0] ? getPhotoSource(u.photos[0]) : null;
+      const photoUrl = typeof photo === 'object' && photo?.uri ? photo.uri : '';
+      const escapedName = (u.name || 'User')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/'/g, '&#39;')
+        .replace(/"/g, '&quot;');
+      
+      return `
+        var icon${u.id} = L.divIcon({
+          className: '',
+          html: '<div class="user-marker" onclick="window.ReactNativeWebView.postMessage(JSON.stringify({type:\\'select\\',id:\\'${u.id}\\'}))"><div class="marker-ring"></div>${photoUrl ? `<img src="${photoUrl}" class="marker-img" />` : '<div class="marker-placeholder"></div>'}<div class="marker-label">${escapedName}</div></div>',
+          iconSize: [50, 60],
+          iconAnchor: [25, 60]
+        });
+        L.marker([${u.location?.lat}, ${u.location?.lng}], {icon: icon${u.id}}).addTo(map);
+      `;
+    }).join('\n');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body, #map { width: 100%; height: 100%; background: #1a1a2e; }
+          .user-marker {
+            position: relative;
+            cursor: pointer;
+          }
+          .marker-ring {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #FF6B6B;
+            animation: pulse 2s infinite;
+          }
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+          }
+          .marker-img {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 3px solid #FF6B6B;
+            object-fit: cover;
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            background: #2a2a3e;
+          }
+          .marker-placeholder {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 3px solid #FF6B6B;
+            background: #3a3a4e;
+            position: absolute;
+            top: 3px;
+            left: 3px;
+          }
+          .marker-label {
+            position: absolute;
+            top: 52px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+          }
+          .you-marker {
+            width: 20px;
+            height: 20px;
+            background: #4CAF50;
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+          }
+          .you-pulse {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: rgba(76, 175, 80, 0.3);
+            border-radius: 50%;
+            top: -20px;
+            left: -20px;
+            animation: youPulse 2s infinite;
+          }
+          @keyframes youPulse {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+          }).setView([${currentLocation.lat}, ${currentLocation.lng}], 13);
+          
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19
+          }).addTo(map);
+          
+          var youIcon = L.divIcon({
+            className: '',
+            html: '<div style="position:relative"><div class="you-pulse"></div><div class="you-marker"></div></div>',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+          L.marker([${currentLocation.lat}, ${currentLocation.lng}], {icon: youIcon}).addTo(map);
+          
+          ${userMarkers}
+        </script>
+      </body>
+      </html>
+    `;
+  };
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'select') {
+        const selected = users.find(u => u.id === data.id);
+        if (selected) setSelectedUser(selected);
+      }
+    } catch (e) {}
+  };
+
+  if (loading) {
     return (
       <ThemedView style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={theme.primary} />
+        <ActivityIndicator size="large" color="#FF6B6B" />
+        <ThemedText style={{ color: theme.text, marginTop: Spacing.md }}>
+          Finding nearby people...
+        </ThemedText>
       </ThemedView>
     );
   }
 
-  const hasLocation = user.location && user.location.lat && user.location.lng;
-  
-  const initialRegion = hasLocation ? {
-    latitude: user.location.lat,
-    longitude: user.location.lng,
-    latitudeDelta: 0.1,
-    longitudeDelta: 0.1,
-  } : {
-    latitude: 0,
-    longitude: 0,
-    latitudeDelta: 50,
-    longitudeDelta: 50,
-  };
-
-  if (!hasLocation) {
+  if (!currentLocation) {
     return (
-      <View style={styles.container}>
-        <ThemedView style={[styles.container, styles.centerContent]}>
-          <Feather name="map-pin" size={64} color={theme.textSecondary} />
-          <ThemedText style={[styles.mapUnavailableTitle, { color: theme.text }]}>
-            Location Not Available
-          </ThemedText>
-          <ThemedText style={[styles.mapUnavailableText, { color: theme.textSecondary }]}>
-            Please enable location services to see nearby users on the map.
-            {"\n\n"}
-            Go to your device settings to grant location permission.
-          </ThemedText>
-          <Pressable
-            style={[styles.backToListButton, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.goBack()}
-          >
-            <ThemedText style={[styles.backToListText, { color: theme.buttonText }]}>
-              Go Back
-            </ThemedText>
-          </Pressable>
-        </ThemedView>
-
+      <ThemedView style={[styles.container, styles.centerContent]}>
+        <View style={styles.errorIconContainer}>
+          <Feather name="map-pin" size={48} color="#FF6B6B" />
+        </View>
+        <ThemedText style={styles.errorTitle}>Location Required</ThemedText>
+        <ThemedText style={styles.errorText}>
+          Please enable location services to see nearby users on the map.
+        </ThemedText>
         <Pressable
-          style={[styles.backButton, { top: insets.top + Spacing.md, backgroundColor: theme.surface }]}
-          onPress={() => navigation.goBack()}
+          style={styles.retryButton}
+          onPress={initializeMap}
         >
-          <Feather name="arrow-left" size={24} color={theme.text} />
+          <ThemedText style={styles.retryButtonText}>Try Again</ThemedText>
         </Pressable>
-      </View>
+        <Pressable style={styles.backButtonLarge} onPress={() => navigation.goBack()}>
+          <ThemedText style={styles.backButtonLargeText}>Go Back</ThemedText>
+        </Pressable>
+      </ThemedView>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.map}>
-        <ThemedView style={[styles.container, styles.centerContent]}>
-          <Feather name="map" size={64} color={theme.textSecondary} />
-          <ThemedText style={[styles.mapUnavailableTitle, { color: theme.text }]}>
-            Map View
-          </ThemedText>
-          <ThemedText style={[styles.mapUnavailableText, { color: theme.textSecondary }]}>
-            Map view with nearby users will be available on native devices.
-            {"\n\n"}
-            {users.length} users found nearby
-          </ThemedText>
-          <Pressable
-            style={[styles.backToListButton, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.goBack()}
-          >
-            <ThemedText style={[styles.backToListText, { color: theme.buttonText }]}>
-              Back to List
-            </ThemedText>
-          </Pressable>
-        </ThemedView>
-      </View>
+      <WebView
+        source={{ html: generateMapHtml() }}
+        style={styles.map}
+        scrollEnabled={false}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        onMessage={handleWebViewMessage}
+      />
 
       <Pressable
-        style={[styles.backButton, { top: insets.top + Spacing.md, backgroundColor: theme.surface }]}
+        style={[styles.backButton, { top: insets.top + Spacing.md }]}
         onPress={() => navigation.goBack()}
       >
-        <Feather name="arrow-left" size={24} color={theme.text} />
+        <Feather name="arrow-left" size={24} color="#FFF" />
       </Pressable>
 
-      {selectedUser ? (
-        <View style={[styles.userCard, { bottom: insets.bottom + Spacing.md, backgroundColor: theme.surface }]}>
-          <Pressable
-            style={styles.closeCard}
-            onPress={() => setSelectedUser(null)}
-          >
-            <Feather name="x" size={20} color={theme.textSecondary} />
-          </Pressable>
+      <View style={[styles.headerCard, { top: insets.top + Spacing.md }]}>
+        <ThemedText style={styles.headerTitle}>Nearby Users</ThemedText>
+        <View style={styles.headerBadge}>
+          <ThemedText style={styles.headerBadgeText}>{users.length} found</ThemedText>
+        </View>
+      </View>
 
+      {weather && (
+        <View style={[styles.weatherBadge, { top: insets.top + 70 }]}>
+          <MaterialCommunityIcons name={weather.icon as any} size={18} color="#FFD93D" />
+          <ThemedText style={styles.weatherText}>{weather.temperature}°C</ThemedText>
+          <ThemedText style={styles.weatherDesc}>{weather.description}</ThemedText>
+        </View>
+      )}
+
+      {selectedUser && (
+        <View style={[styles.userCard, { bottom: insets.bottom + Spacing.lg }]}>
+          <Pressable style={styles.closeCard} onPress={() => setSelectedUser(null)}>
+            <Feather name="x" size={20} color="#888" />
+          </Pressable>
+          
           <View style={styles.cardContent}>
-            {selectedUser.photos && selectedUser.photos[0] ? (
+            {selectedUser.photos?.[0] ? (
               <Image
                 source={getPhotoSource(selectedUser.photos[0])}
                 style={styles.cardImage}
                 contentFit="cover"
               />
             ) : (
-              <View style={[styles.cardImage, { backgroundColor: theme.backgroundSecondary }]}>
-                <Feather name="user" size={40} color={theme.textSecondary} />
+              <View style={[styles.cardImage, styles.cardImagePlaceholder]}>
+                <Feather name="user" size={32} color="#666" />
               </View>
             )}
-
+            
             <View style={styles.cardInfo}>
-              <View style={styles.cardHeader}>
-                <ThemedText style={[styles.cardName, { color: theme.text }]}>
-                  {selectedUser.name}, {selectedUser.age}
-                </ThemedText>
-                {selectedUser.online && (
-                  <View style={[styles.onlineDot, { backgroundColor: theme.online }]} />
-                )}
+              <ThemedText style={styles.cardName}>{selectedUser.name}, {selectedUser.age}</ThemedText>
+              <View style={styles.cardDistanceRow}>
+                <Feather name="navigation" size={12} color="#FF6B6B" />
+                <ThemedText style={styles.cardDistance}>{selectedUser.distance} km away</ThemedText>
               </View>
-              <ThemedText style={[styles.cardDistance, { color: theme.textSecondary }]}>
-                <Feather name="map-pin" size={12} color={theme.textSecondary} /> {selectedUser.distance} km away
-              </ThemedText>
-              <ThemedText
-                style={[styles.cardBio, { color: theme.textSecondary }]}
-                numberOfLines={2}
-              >
-                {selectedUser.bio}
-              </ThemedText>
-
-              <Pressable
-                style={[styles.viewProfileButton, { backgroundColor: theme.primary }]}
-                onPress={() => {
-                  setSelectedUser(null);
-                  navigation.navigate("ProfileDetail", { userId: selectedUser.id });
-                }}
-              >
-                <ThemedText style={[styles.viewProfileText, { color: theme.buttonText }]}>
-                  View Profile
-                </ThemedText>
-              </Pressable>
             </View>
           </View>
+          
+          <View style={styles.cardButtons}>
+            <Pressable
+              style={styles.cardButtonPrimary}
+              onPress={() => {
+                setSelectedUser(null);
+                navigation.navigate("UserDistanceMap", { otherUser: selectedUser });
+              }}
+            >
+              <Feather name="map" size={18} color="#FFF" />
+              <ThemedText style={styles.cardButtonText}>View Distance</ThemedText>
+            </Pressable>
+            <Pressable
+              style={styles.cardButtonSecondary}
+              onPress={() => {
+                setSelectedUser(null);
+                navigation.navigate("ProfileDetail", { userId: selectedUser.id });
+              }}
+            >
+              <Feather name="user" size={18} color="#FFF" />
+              <ThemedText style={styles.cardButtonText}>Profile</ThemedText>
+            </Pressable>
+          </View>
         </View>
-      ) : null}
+      )}
     </View>
   );
 }
@@ -254,140 +428,196 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#1a1a2e",
   },
   centerContent: {
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
   },
   map: {
     flex: 1,
+    backgroundColor: "#1a1a2e",
   },
-  mapUnavailableTitle: {
-    fontSize: 24,
-    fontWeight: "600",
-    marginTop: Spacing.lg,
+  errorIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 107, 107, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.lg,
   },
-  mapUnavailableText: {
-    fontSize: 16,
-    textAlign: "center",
-    marginTop: Spacing.md,
-    paddingHorizontal: Spacing.xl,
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: Spacing.sm,
   },
-  backToListButton: {
-    marginTop: Spacing.xl,
+  errorText: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: Spacing.xl,
+  },
+  retryButton: {
+    backgroundColor: '#FF6B6B',
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
   },
-  backToListText: {
-    fontSize: 16,
-    fontWeight: "600",
+  retryButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+  },
+  backButtonLarge: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+  },
+  backButtonLargeText: {
+    color: '#888',
+    fontWeight: '600',
   },
   backButton: {
     position: "absolute",
-    left: Spacing.md,
+    left: Spacing.lg,
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  markerContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 3,
-    overflow: "hidden",
-  },
-  markerImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.6)",
     alignItems: "center",
     justifyContent: "center",
   },
-  currentUserMarker: {
-    width: 40,
-    height: 40,
+  headerCard: {
+    position: 'absolute',
+    right: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
+    gap: 8,
+  },
+  headerTitle: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  headerBadge: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  headerBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  weatherBadge: {
+    position: 'absolute',
+    right: Spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 20,
+    gap: 6,
+  },
+  weatherText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  weatherDesc: {
+    color: '#888',
+    fontSize: 12,
   },
   userCard: {
-    position: "absolute",
-    left: Spacing.md,
-    right: Spacing.md,
-    borderRadius: BorderRadius.lg,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    position: 'absolute',
+    left: Spacing.lg,
+    right: Spacing.lg,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: Spacing.md,
   },
   closeCard: {
-    position: "absolute",
+    position: 'absolute',
     top: Spacing.sm,
     right: Spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
   },
   cardContent: {
-    flexDirection: "row",
-    padding: Spacing.md,
-    gap: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
   },
   cardImage: {
-    width: 80,
-    height: 80,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: Spacing.md,
+  },
+  cardImagePlaceholder: {
+    backgroundColor: '#3A3A3A',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardInfo: {
     flex: 1,
-    gap: Spacing.xs,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.xs,
   },
   cardName: {
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
   },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  cardDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   cardDistance: {
     fontSize: 13,
+    color: '#FF6B6B',
+    fontWeight: '600',
   },
-  cardBio: {
-    fontSize: 14,
-    lineHeight: 18,
+  cardButtons: {
+    flexDirection: 'row',
+    gap: Spacing.sm,
   },
-  viewProfileButton: {
+  cardButtonPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF6B6B',
     paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
-    alignItems: "center",
-    marginTop: Spacing.xs,
+    gap: 6,
   },
-  viewProfileText: {
-    fontSize: 14,
-    fontWeight: "600",
+  cardButtonSecondary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3A3A3A',
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+  },
+  cardButtonText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
