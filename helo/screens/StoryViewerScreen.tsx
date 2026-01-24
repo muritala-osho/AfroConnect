@@ -78,7 +78,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       try {
         setLoading(true);
         // Add a fallback for own stories to ensure they always load
-        const isOwn = userId === user?.id || (route.params as any)?.isOwnStory === true;
+        const isOwn = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id) || (route.params as any)?.isOwnStory === true;
         const endpoint = isOwn ? `/stories/my-stories` : `/stories/user/${userId}`;
         const response = await get<{ stories: Story[]; message?: string }>(endpoint, token);
         
@@ -133,7 +133,13 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     }
   };
 
-  const isOwnStory = userId === user?.id || (route.params as any)?.isOwnStory === true;
+  const isOwnStory = 
+    String(userId) === String(user?.id) || 
+    String(userId) === String((user as any)?._id) ||
+    (route.params as any)?.isOwnStory === true;
+  
+  // Debug logging
+  console.log('[StoryViewer] isOwnStory check:', { userId, 'user.id': user?.id, 'user._id': (user as any)?._id, isOwnStory, 'route.isOwnStory': (route.params as any)?.isOwnStory });
 
   const handleDeleteStory = async () => {
     if (!token || !currentStory) return;
@@ -403,10 +409,10 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       <StatusBar barStyle="light-content" />
       
       {currentStory.type === "image" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={StyleSheet.absoluteFillObject}>
           <Image
             source={{ uri: currentStory.imageUrl || currentStory.mediaUrl }}
-            style={[styles.storyImage, { borderRadius: 0 }]}
+            style={{ width: '100%', height: '100%' }}
             contentFit="contain"
             cachePolicy="disk"
             placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
@@ -414,10 +420,10 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           />
         </View>
       ) : currentStory.type === "video" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={StyleSheet.absoluteFillObject}>
           <Video
             source={{ uri: (currentStory.imageUrl || currentStory.mediaUrl) as string }}
-            style={styles.storyImage}
+            style={{ width: '100%', height: '100%' }}
             resizeMode={ResizeMode.CONTAIN}
             shouldPlay={!paused}
             isLooping={false}
