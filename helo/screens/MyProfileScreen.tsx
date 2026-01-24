@@ -347,15 +347,12 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
 
           <View style={styles.heroContent}>
             <View style={styles.nameRow}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.heroName} numberOfLines={2}>
-                  {user?.name || "User"}
-                </ThemedText>
-              </View>
-              {user?.age && !(user as any)?.privacySettings?.hideAge && (
-                <ThemedText style={styles.heroAge}>{user.age}</ThemedText>
-              )}
-              {/* Plus badge removed as requested */}
+              <ThemedText style={styles.heroName} numberOfLines={1}>
+                {user?.name || "User"}
+                {user?.age && !(user as any)?.privacySettings?.hideAge && (
+                  <ThemedText style={styles.heroAge}>  {user.age}</ThemedText>
+                )}
+              </ThemedText>
             </View>
             {(user as any)?.livingIn && (
               <View style={styles.locationRow}>
@@ -758,16 +755,24 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   heroName: {
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '800',
     color: '#fff',
-    marginRight: 8,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    includeFontPadding: false,
+    paddingBottom: 4,
   },
   heroAge: {
-    fontSize: 26,
-    fontWeight: '300',
+    fontSize: 28,
+    fontWeight: '400',
     color: '#fff',
-    marginRight: 8,
+    marginLeft: 8,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    includeFontPadding: false,
   },
   locationRow: {
     flexDirection: 'row',

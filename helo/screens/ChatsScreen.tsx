@@ -458,7 +458,8 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       const response = await get<{ stories: StoryUser[] }>('/stories/active', token);
       if (response.success && response.data?.stories) {
         // Filter out my own story completely from the active list to avoid any duplication
-        const filtered = response.data.stories.filter(s => s.id !== user?.id && s.name !== 'Your Story');
+        // We handle "Your Story" as the first item in the list manually in the ScrollView
+        const filtered = response.data.stories.filter(s => s.id !== user?.id);
         const unique = filtered.filter((s, index, self) => 
           index === self.findIndex(t => t.id === s.id)
         );
