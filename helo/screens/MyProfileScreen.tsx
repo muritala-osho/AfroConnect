@@ -421,15 +421,8 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
           <Pressable 
             style={[styles.card, { backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', padding: Spacing.md }]}
             onPress={() => {
-              if (user?.location?.coordinates) {
-                const [lng, lat] = user.location.coordinates;
-                const url = Platform.select({
-                  ios: `maps:0,0?q=${lat},${lng}`,
-                  android: `geo:0,0?q=${lat},${lng}`
-                });
-                if (url) {
-                  require('react-native').Linking.openURL(url);
-                }
+              if (user?.location?.coordinates || user?.location?.lat) {
+                navigation.navigate("MapView" as any);
               } else {
                 showAlert(
                   "Location Not Found", 
@@ -441,13 +434,13 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             }}
           >
             <View style={[styles.detailIconContainer, { backgroundColor: theme.primary + '15', marginRight: Spacing.md }]}>
-              <Feather name="map" size={20} color={theme.primary} />
+              <Feather name="map-pin" size={20} color={theme.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={{ fontWeight: '600' }}>Google Maps Integration</ThemedText>
-              <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>Real-time distance calculation</ThemedText>
+              <ThemedText style={{ fontWeight: '600' }}>View Nearby Users</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>See who's around you on the map</ThemedText>
             </View>
-            <Feather name="info" size={20} color={theme.textSecondary} />
+            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
           </Pressable>
         </View>
 

@@ -188,7 +188,11 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
 
       if (response.success && response.data?.isMatch) {
         await triggerNotification(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("It's a Match!", `You and ${currentProfile.name} liked each other!`);
+        navigation.navigate("MatchPopup", {
+          currentUser: user,
+          matchedUser: currentProfile,
+          isSuperLike: false
+        });
       }
     } catch (error) {
       console.error("Error recording like:", error);
@@ -231,7 +235,11 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
         await triggerNotification(Haptics.NotificationFeedbackType.Success);
         
         if (response.data?.isMatch) {
-          Alert.alert("Super Match!", `${currentProfile.name} already liked you too!`);
+          navigation.navigate("MatchPopup", {
+            currentUser: user,
+            matchedUser: currentProfile,
+            isSuperLike: true
+          });
         } else {
           Alert.alert("Super Like Sent!", `${currentProfile.name} will see that you Super Liked them!`);
         }
