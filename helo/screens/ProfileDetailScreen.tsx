@@ -22,7 +22,6 @@ import ActivityStatus from "@/components/ActivityStatus";
 import ProfilePrompts from "@/components/ProfilePrompts";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
-import ProfileComments from "@/components/ProfileComments";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -187,6 +186,7 @@ export default function ProfileDetailScreen() {
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>Details</ThemedText>
             <View style={styles.detailsGrid}>
+              {user.distance !== undefined && <DetailItem icon="navigate-outline" label="Distance" value={`${Math.round(user.distance)} km away`} />}
               {user.gender && <DetailItem icon="person-outline" label="Gender" value={user.gender} />}
               {user.lookingFor && <DetailItem icon="heart-outline" label="Looking for" value={user.lookingFor} />}
               {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
@@ -198,6 +198,19 @@ export default function ProfileDetailScreen() {
               {user.lifestyle?.ethnicity && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle.ethnicity} />}
             </View>
           </View>
+
+          {user.interests && user.interests.length > 0 && (
+            <View style={styles.section}>
+              <ThemedText style={styles.sectionTitle}>Interests</ThemedText>
+              <View style={styles.interestsContainer}>
+                {user.interests.map((interest: string, index: number) => (
+                  <View key={index} style={[styles.interestTag, { backgroundColor: theme.primary + '20' }]}>
+                    <ThemedText style={[styles.interestText, { color: theme.primary }]}>{interest}</ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           <ProfilePrompts userId={user._id} isOwnProfile={false} />
 
@@ -217,15 +230,6 @@ export default function ProfileDetailScreen() {
             <Feather name="chevron-right" size={20} color={theme.primary} />
           </Pressable>
 
-          <View style={styles.section}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.sm }}>
-              <ThemedText style={styles.sectionTitle}>Comments</ThemedText>
-              <Pressable onPress={() => navigation.navigate("ProfileComments" as any, { userId })}>
-                <ThemedText style={{ color: theme.primary, fontSize: 14 }}>View All</ThemedText>
-              </Pressable>
-            </View>
-            <ProfileComments userId={user._id} />
-          </View>
         </View>
       </ScreenScrollView>
     </ThemedView>
@@ -289,4 +293,18 @@ const styles = StyleSheet.create({
   quizTextContent: { flex: 1 },
   quizTitle: { fontSize: 16, fontWeight: '700' },
   quizSubtitle: { fontSize: 12, opacity: 0.7 },
+  interestsContainer: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 8 
+  },
+  interestTag: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  interestText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

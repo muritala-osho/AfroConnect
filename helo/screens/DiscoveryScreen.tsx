@@ -566,13 +566,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         />
         <Pressable 
           style={styles.headerIconButton}
-          onPress={() => setRadarScanning(true)}
+          onPress={() => navigation.navigate("LoveRadar")}
         >
           <View style={styles.radarIconContainer}>
             <Feather name="target" size={22} color={theme.primary} />
-            {radarScanning && (
-              <Animated.View style={[styles.radarPing, radarPulseStyle]} />
-            )}
           </View>
         </Pressable>
       </View>
@@ -821,6 +818,21 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const handleSuperLike = useCallback(async () => {
     if (currentIndex >= users.length) return;
     const targetUser = users[currentIndex];
+    
+    // Check premium status before making API call
+    if (!user?.premium?.isActive) {
+      showAlert(
+        'Premium Feature', 
+        'Super Like is available for Premium members. Upgrade to stand out and show extra interest!', 
+        [
+          { text: 'Maybe Later', style: 'cancel' },
+          { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Subscription' as any) }
+        ], 
+        'star'
+      );
+      return;
+    }
+    
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     }
@@ -860,7 +872,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       console.error("Super like error:", error);
       showAlert('Error', 'Something went wrong. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
     }
-  }, [currentIndex, users, token, api, starButtonScale, animateSwipe, showAlert, navigation, playSuperLikeAnimation]);
+  }, [currentIndex, users, token, api, starButtonScale, animateSwipe, showAlert, navigation, playSuperLikeAnimation, user?.premium?.isActive]);
 
   const handleShareLocation = useCallback(async () => {
     if (!token) return;
