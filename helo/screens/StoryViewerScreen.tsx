@@ -402,14 +402,18 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       <StatusBar barStyle="light-content" />
       
       {currentStory.type === "image" && currentStory.imageUrl ? (
-        <Image
-          source={{ uri: currentStory.imageUrl }}
-          style={[styles.storyImage, { borderRadius: 0 }]}
-          contentFit="contain"
-          cachePolicy="disk"
-        />
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <Image
+            source={{ uri: currentStory.imageUrl }}
+            style={[styles.storyImage, { borderRadius: 0 }]}
+            contentFit="contain"
+            cachePolicy="disk"
+            placeholder={{ blurhash: 'L6PZfSi_.AyE_3t7t7R**0o#DgR4' }}
+            transition={200}
+          />
+        </View>
       ) : currentStory.type === "video" && currentStory.imageUrl ? (
-        <View style={[styles.videoContainer, { borderRadius: 0 }]}>
+        <View style={[styles.videoContainer, { borderRadius: 0, backgroundColor: '#000' }]}>
           <Video
             source={{ uri: currentStory.imageUrl }}
             style={styles.storyImage}
@@ -424,7 +428,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 }
               }
               if (status.didJustFinish) {
-                // Play whole video by only moving to next when it finishes
                 goToNext();
               }
             }}
@@ -549,35 +552,35 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           <View style={styles.headerActions}>
             {isOwnStory && currentStory.type === 'text' && (
               <Pressable
-                style={[styles.headerButton, styles.headerButtonHighVis]}
+                style={styles.headerButtonHighVis}
                 onPress={startEditing}
               >
-                <Ionicons name="create" size={26} color="#FFF" />
+                <Ionicons name="pencil" size={24} color="#FFF" />
               </Pressable>
             )}
             {isOwnStory && (
               <Pressable
-                style={[styles.headerButton, styles.headerButtonHighVis]}
+                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(255,50,50,0.7)' }]}
                 onPress={handleDeleteStory}
               >
-                <Ionicons name="trash" size={26} color="#FF5252" />
+                <Ionicons name="trash-outline" size={24} color="#FFF" />
               </Pressable>
             )}
             <Pressable
-              style={[styles.headerButton, styles.headerButtonHighVis]}
+              style={styles.headerButtonHighVis}
               onPress={paused ? resumeProgress : pauseProgress}
             >
               <Ionicons
                 name={paused ? "play" : "pause"}
-                size={26}
+                size={24}
                 color="#FFF"
               />
             </Pressable>
             <Pressable
-              style={[styles.headerButton, styles.headerButtonHighVis]}
+              style={styles.headerButtonHighVis}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="close" size={32} color="#FFF" />
+              <Ionicons name="close" size={28} color="#FFF" />
             </Pressable>
           </View>
         </View>

@@ -294,7 +294,7 @@ const CallHistoryItemComponent = memo(({
     user: any;
     navigation: any;
   }) => {
-    const isOwnStory = item.id === user?.id || item.name === 'Your Story' || item.name === user?.name;
+    const isOwnStory = item.id === user?.id || item.name === 'Your Story';
     
     return (
       <Pressable style={styles.storyItem} onPress={() => {
@@ -961,7 +961,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                   navigation={navigation}
                   onPress={() => {}}
                 />
-                {storyUsers.filter(s => s.id !== user?.id).map((storyUser) => {
+                {storyUsers.filter(s => s.id !== user?.id && s.name !== user?.name && s.name !== 'Your Story').map((storyUser) => {
                   return (
                     <StoryItem
                       key={`story-${storyUser.id}`}
@@ -1309,6 +1309,18 @@ const styles = StyleSheet.create({
     padding: 3,
     alignItems: "center",
     justifyContent: "center",
+  },
+  storyPlusBadge: {
+    position: "absolute",
+    bottom: 16,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    zIndex: 10,
   },
   storyInnerRing: {
     width: 60,
