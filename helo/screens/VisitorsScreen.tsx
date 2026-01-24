@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList } from "react-native";
+import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform } from "react-native";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
@@ -43,8 +43,9 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
     setLoading(true);
     try {
       const response = await get<any>('/users/me', token);
-      if (response.success && response.user?.profileViews) {
-        setVisitors(response.user.profileViews);
+      const data = response.data as any;
+      if (response.success && data?.user?.profileViews) {
+        setVisitors(data.user.profileViews);
       }
     } catch (error) {
       console.error('Failed to fetch visitors:', error);

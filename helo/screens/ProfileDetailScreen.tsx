@@ -178,6 +178,32 @@ export default function ProfileDetailScreen() {
             </View>
           </View>
 
+          <View style={styles.actionButtonsRow}>
+            <Pressable
+              style={[styles.actionButton, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                if (currentUser?.premium?.isActive) {
+                  navigation.navigate('ChatDetail', { userId: user._id, userName: user.name });
+                } else {
+                  navigation.navigate('Subscription' as any);
+                }
+              }}
+            >
+              <Feather name="message-circle" size={20} color="#FFF" />
+              <ThemedText style={styles.actionButtonText}>
+                {currentUser?.premium?.isActive ? 'Message' : 'Message (Premium)'}
+              </ThemedText>
+            </Pressable>
+            
+            <Pressable
+              style={[styles.actionButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
+              onPress={() => navigation.navigate('DistanceWeather' as any, { userId: user._id, userName: user.name })}
+            >
+              <Ionicons name="location" size={20} color={theme.primary} />
+              <ThemedText style={[styles.actionButtonText, { color: theme.text }]}>Distance & Weather</ThemedText>
+            </Pressable>
+          </View>
+
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>About Me</ThemedText>
             <ThemedText style={styles.bio}>{user.bio || "No bio yet."}</ThemedText>
@@ -297,6 +323,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     flexWrap: 'wrap', 
     gap: 8 
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: Spacing.lg,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
   },
   interestTag: {
     paddingHorizontal: 14,

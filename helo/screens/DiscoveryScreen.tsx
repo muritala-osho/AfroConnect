@@ -1286,14 +1286,22 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               }
               try {
                 const response = await api.post<{ success: boolean; message: string }>('/boost/activate', { type: 'standard' }, token || '');
-                if (response.success) {
-                  showAlert('Boost Activated!', 'Your profile is now being featured to more users!', [{ text: 'Great', style: 'default' }], 'zap');
+                const data = response.data as any;
+                if (response.success && data?.success) {
+                  showAlert('Boost Activated!', 'Your profile is now being featured to more users for 30 minutes!', [{ text: 'Great', style: 'default' }], 'zap');
+                } else if (data?.message?.includes('already have an active boost')) {
+                  showAlert('Boost Active', 'You already have an active boost! Your profile is being featured to more users.', [{ text: 'OK', style: 'default' }], 'zap');
                 } else {
-                  showAlert('Boost', (response as any).data?.message || 'Failed to activate boost', [{ text: 'OK', style: 'default' }], 'info');
+                  showAlert('Boost', data?.message || 'Failed to activate boost', [{ text: 'OK', style: 'default' }], 'info');
                 }
-              } catch (error) {
+              } catch (error: any) {
                 console.error("Boost error:", error);
-                showAlert('Error', 'Failed to activate boost. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
+                const errorMsg = error?.response?.data?.message || error?.message || '';
+                if (errorMsg.includes('already have an active boost')) {
+                  showAlert('Boost Active', 'You already have an active boost! Your profile is being featured to more users.', [{ text: 'OK', style: 'default' }], 'zap');
+                } else {
+                  showAlert('Error', 'Failed to activate boost. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
+                }
               }
             }}
           >

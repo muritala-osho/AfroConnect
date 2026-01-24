@@ -361,6 +361,16 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   return (
     <ScreenScrollView contentContainerStyle={{ paddingTop: Spacing.md }}>
       <View style={styles.container}>
+        <View style={styles.topHeader}>
+          <Pressable
+            style={[styles.backButton, { backgroundColor: theme.surface }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Feather name="arrow-left" size={20} color={theme.text} />
+          </Pressable>
+          <ThemedText style={[styles.pageTitle, { color: theme.text }]}>Love Radar</ThemedText>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={styles.headerRow}>
           <View style={styles.headerInfo}>
             <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
@@ -765,6 +775,24 @@ const styles = StyleSheet.create({
   buttonText: {
     ...Typography.body,
     fontWeight: "600",
+  },
+  topHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: "700",
   },
   radarCard: {
     borderRadius: BorderRadius.lg,

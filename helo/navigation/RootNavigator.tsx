@@ -39,6 +39,7 @@ import ProfilePromptsScreen from "@/screens/ProfilePromptsScreen";
 import OTPVerificationScreen from "@/screens/OTPVerificationScreen";
 import VisitorsScreen from "@/screens/VisitorsScreen";
 import SupportMessagesScreen from "@/screens/SupportMessagesScreen";
+import DistanceWeatherScreen from "@/screens/DistanceWeatherScreen";
 import ProfileCommentsScreen from "@/screens/ProfileCommentsScreen";
 import MatchPopupScreen from "@/screens/MatchPopupScreen";
 import { useAuth } from "@/hooks/useAuth";
@@ -85,6 +86,7 @@ export type RootStackParamList = {
   Visitors: undefined;
   SupportMessages: undefined;
   ProfileComments: { userId: string };
+  DistanceWeather: { userId: string; userName: string };
   MatchPopup: { 
     currentUser: any; 
     matchedUser: any; 
@@ -197,6 +199,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Visitors" component={VisitorsScreen} options={{ presentation: "modal" }} />
             <Stack.Screen name="SupportMessages" component={SupportMessagesScreen} options={{ presentation: "modal" }} />
             <Stack.Screen name="ProfileComments" component={ProfileCommentsScreen} />
+            <Stack.Screen name="DistanceWeather" component={DistanceWeatherScreen} options={{ presentation: "modal" }} />
             <Stack.Screen name="MatchPopup" component={MatchPopupScreen} options={{ presentation: "fullScreenModal", animation: "fade" }} />
             <Stack.Screen name="AppealBanned" component={AppealBannedScreen} />
           </>
