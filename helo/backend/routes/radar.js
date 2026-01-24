@@ -70,20 +70,18 @@ router.get('/nearby-users', protect, async (req, res) => {
       });
     }
 
-    searchRadius = Math.max(1, Math.min(50, searchRadius));
+    searchRadius = Math.max(1, Math.min(100, searchRadius));
 
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const query = {
       _id: { $ne: req.user.id },
-      verified: true,
       banned: { $ne: true },
       suspended: { $ne: true },
-      locationSharingEnabled: true,
-      lastActive: { $gte: twentyFourHoursAgo },
-      'location.coordinates': { 
-        $ne: [0, 0]
-      }
+      $or: [
+        { 'location.coordinates': { $exists: true, $ne: [0, 0] } },
+        { 'location.lat': { $exists: true } }
+      ]
     };
 
     if (gender && gender !== 'any') {
@@ -103,14 +101,18 @@ router.get('/nearby-users', protect, async (req, res) => {
 
     const nearbyUsers = users
       .map(user => {
-        if (!user.location || !user.location.coordinates || 
-            user.location.coordinates.length !== 2 ||
-            (user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
+        let userLat, userLng;
+        
+        if (user.location?.coordinates?.length === 2 && 
+            !(user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
+          userLat = user.location.coordinates[1];
+          userLng = user.location.coordinates[0];
+        } else if (user.location?.lat && user.location?.lng) {
+          userLat = user.location.lat;
+          userLng = user.location.lng;
+        } else {
           return null;
         }
-
-        const userLat = user.location.coordinates[1];
-        const userLng = user.location.coordinates[0];
         const distance = calculateDistance(latitude, longitude, userLat, userLng);
 
         if (distance > searchRadius) {

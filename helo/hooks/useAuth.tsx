@@ -56,6 +56,14 @@ export interface User {
     showDistance?: boolean;
     showLastActive?: boolean;
   };
+  lifestyle?: {
+    lookingFor?: string;
+    religion?: string;
+    drinking?: string;
+    smoking?: string;
+    workout?: string;
+    pets?: string;
+  };
   googleId?: string;
   isAdmin?: boolean;
   premium?: { isActive: boolean; plan: string; expiresAt?: string };

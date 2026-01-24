@@ -72,9 +72,9 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   const [locationLoading, setLocationLoading] = useState(false);
   
   const [filters, setFilters] = useState({
-    radius: 10,
+    radius: 50,
     ageMin: 18,
-    ageMax: 50,
+    ageMax: 60,
     gender: "any" as "any" | "male" | "female",
   });
 
@@ -412,7 +412,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
               <Slider
                 style={styles.slider}
                 minimumValue={1}
-                maximumValue={50}
+                maximumValue={100}
                 step={1}
                 value={filters.radius}
                 onValueChange={(value) => setFilters({ ...filters, radius: value })}
