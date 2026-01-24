@@ -216,13 +216,21 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             if (Platform.OS !== 'web') {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
+            // Clear loading state since we now have users
+            setLoading(false);
             return [...prev, ...newUsers];
           }
           return prev;
         });
+        // If radar returned users but none were new, still clear loading
+        setLoading(false);
+      } else {
+        // No users from radar, still clear loading
+        setLoading(false);
       }
     } catch (error) {
       console.error("Radar fetch error:", error);
+      setLoading(false);
     } finally {
       setRadarScanning(false);
     }
