@@ -294,38 +294,43 @@ router.get('/nearby', protect, async (req, res) => {
     // DISCOVERY LOGIC: Nearby Focus
     const maxDist = maxDistance ? parseInt(maxDistance) : 10000; 
     
-    let geoQuery = {};
+    // Don't use geo query - fetch users with any location format and filter in memory
+    // This ensures compatibility with both location.coordinates and location.lat/lng formats
     if (lat && lng && includeAll !== 'true') {
-      geoQuery = {
-        'location.coordinates': {
-          $near: {
-            $geometry: {
-              type: "Point",
-              coordinates: [parseFloat(lng), parseFloat(lat)]
-            },
-            $maxDistance: maxDist * 1000 // meters
-          }
-        }
-      };
+      query.$or = [
+        { 'location.coordinates': { $exists: true } },
+        { 'location.lat': { $exists: true } }
+      ];
     }
 
-    let users = await User.find({ ...query, ...geoQuery })
+    let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
-      .limit(100);
+      .limit(200);
     
     users = users.map(user => {
       const userObj = user.toObject();
       let score = 0;
 
-      // Distance calculation
+      // Distance calculation - support both location formats
       let distanceKm = 0;
-      if (lat && lng && user.location?.coordinates) {
-        distanceKm = calculateDistance(
-          parseFloat(lat),
-          parseFloat(lng),
-          user.location.coordinates[1],
-          user.location.coordinates[0]
-        );
+      if (lat && lng) {
+        let userLat, userLng;
+        if (user.location?.coordinates && user.location.coordinates.length >= 2) {
+          userLng = user.location.coordinates[0];
+          userLat = user.location.coordinates[1];
+        } else if (user.location?.lat && user.location?.lng) {
+          userLat = user.location.lat;
+          userLng = user.location.lng;
+        }
+        
+        if (userLat && userLng) {
+          distanceKm = calculateDistance(
+            parseFloat(lat),
+            parseFloat(lng),
+            userLat,
+            userLng
+          );
+        }
       }
 
       // Boost nearby users

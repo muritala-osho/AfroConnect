@@ -1159,7 +1159,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 
-                      style={{ width: 22, height: 22, marginLeft: 8 }} 
+                      style={{ width: 28, height: 28, marginLeft: 8 }} 
                       contentFit="contain"
                     />
                   )}

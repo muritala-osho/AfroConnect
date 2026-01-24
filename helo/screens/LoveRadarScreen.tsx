@@ -653,7 +653,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                       {user.verified && (
                         <Image 
                           source={require("@/assets/icons/verified-tick.png")} 
-                          style={{ width: 16, height: 16, marginLeft: 4 }} 
+                          style={{ width: 22, height: 22, marginLeft: 4 }} 
                           contentFit="contain"
                         />
                       )}
