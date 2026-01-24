@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
@@ -39,6 +40,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState('');
   const [showAll, setShowAll] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const fetchComments = useCallback(async () => {
     try {

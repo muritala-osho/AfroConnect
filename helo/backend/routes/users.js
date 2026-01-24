@@ -260,8 +260,6 @@ router.get('/nearby', protect, async (req, res) => {
 
     const query = {
       _id: { $nin: excludedIds },
-      // Real user filters: must have a profile photo
-      photos: { $exists: true, $not: { $size: 0 } },
     };
 
     // If verifiedOnly is passed, filter by verified status
@@ -277,9 +275,6 @@ router.get('/nearby', protect, async (req, res) => {
     // If testing/includeAll, we skip strict filters to show cards
     if (includeAll === 'true') {
       console.log('IncludeAll mode: skipping strict filters and expanding query');
-      // In includeAll mode, we only exclude self/blocked
-      query._id = { $nin: excludedIds };
-      // Keep photo requirement to avoid empty cards
     } else {
       // Age filter
       const minAgeFilter = minAge ? parseInt(minAge) : currentUser.preferences?.ageRange?.min || 18;
