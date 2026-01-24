@@ -298,15 +298,17 @@ const CallHistoryItemComponent = memo(({
     
     return (
       <Pressable style={styles.storyItem} onPress={() => {
-        if (isOwnStory && item.hasStory) {
-          navigation.navigate("StoryViewer" as any, { 
-            userId: user.id, 
-            userName: user.name || 'You',
-            userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
-            isOwnStory: true
-          });
-        } else if (isOwnStory) {
-          navigation.navigate('StoryUpload');
+        if (isOwnStory) {
+          if (item.hasStory) {
+            navigation.navigate("StoryViewer" as any, { 
+              userId: user.id, 
+              userName: user.name || 'You',
+              userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
+              isOwnStory: true
+            });
+          } else {
+            navigation.navigate('StoryUpload');
+          }
         } else {
           onPress();
         }
@@ -315,7 +317,7 @@ const CallHistoryItemComponent = memo(({
         colors={item.hasNewStory 
           ? ['#FF6B6B', '#FF8E53', '#FFC93C'] 
           : item.hasStory 
-            ? [theme.primary, theme.primary] 
+            ? ['#FF6B6B', '#FF8E53'] 
             : [theme.border, theme.border]
         }
         start={{ x: 0, y: 0 }}
@@ -863,56 +865,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     navigation.navigate('StoryUpload' as any);
   };
 
-  const renderAddStoryButton = () => (
-    <View style={styles.storyItem}>
-      <View style={styles.storyPhotoContainer}>
-        <Pressable 
-          onPress={() => {
-            if (userHasStory) {
-              handleViewOwnStory();
-            } else {
-              handleAddStory();
-            }
-          }}
-          style={styles.storyPhotoTouchable}
-        >
-          <LinearGradient
-            colors={userHasStory 
-              ? ['#FF6B6B', '#FF8E53', '#FFC93C'] 
-              : [theme.primary, theme.primary + '80']
-            }
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.addStoryGradient}
-          >
-            <View style={[styles.addStoryInner, { backgroundColor: theme.background }]}>
-              {user?.photos?.[0] || (user as any)?.profilePhoto ? (
-                <Image 
-                  source={getPhotoSource(user?.photos?.[0] || (user as any)?.profilePhoto)} 
-                  style={styles.storyAvatar} 
-                  contentFit="cover" 
-                />
-              ) : (
-                <View style={[styles.storyAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-                  <Feather name="user" size={22} color={theme.textSecondary} />
-                </View>
-              )}
-            </View>
-          </LinearGradient>
-        </Pressable>
-        <Pressable 
-          style={[styles.addStoryBadge, { backgroundColor: theme.primary, zIndex: 10 }]}
-          onPress={handleAddStory}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="plus" size={10} color="#FFF" />
-        </Pressable>
-      </View>
-      <ThemedText style={[styles.storyName, { color: theme.text }]}>
-        {userHasStory ? 'Your Story' : 'Add Story'}
-      </ThemedText>
-    </View>
-  );
+  const renderAddStoryButton = () => null;
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -994,7 +947,19 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.storiesContainer}
               >
-                {renderAddStoryButton()}
+                <StoryItem 
+                  item={{
+                    id: user?.id || 'me',
+                    name: 'Your Story',
+                    photo: user?.photos?.[0]?.url || user?.photos?.[0] || (user as any)?.profilePhoto,
+                    hasStory: userHasStory,
+                    hasNewStory: false
+                  }}
+                  theme={theme}
+                  user={user}
+                  navigation={navigation}
+                  onPress={() => {}}
+                />
                 {storyUsers.filter(s => s.id !== user?.id).map((storyUser) => {
                   return (
                     <StoryItem
