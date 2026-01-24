@@ -301,7 +301,7 @@ const CallHistoryItemComponent = memo(({
         if (isOwnStory) {
           if (item.hasStory) {
             navigation.navigate("StoryViewer" as any, { 
-              userId: user.id, 
+              userId: user._id || user.id, 
               userName: user.name || 'You',
               userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
               isOwnStory: true
@@ -852,11 +852,12 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   , [conversations, archivedChats]);
 
   const handleViewOwnStory = () => {
-    if (user?.id) {
+    const uid = (user as any)?._id || user?.id;
+    if (uid) {
       navigation.navigate("StoryViewer" as any, { 
-        userId: user.id, 
-        userName: user.name || 'You',
-        userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
+        userId: uid, 
+        userName: user?.name || 'You',
+        userPhoto: typeof user?.photos?.[0] === 'string' ? user?.photos?.[0] : user?.photos?.[0]?.url,
         isOwnStory: true
       });
     }
