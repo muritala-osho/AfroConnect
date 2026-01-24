@@ -40,10 +40,10 @@ interface PriceTier {
 }
 
 const PRICING_TIERS: PriceTier[] = [
-  { id: 'price_daily', interval: 'day', amount: 299, currency: 'USD', label: 'Daily', savings: undefined },
-  { id: 'price_weekly', interval: 'week', amount: 999, currency: 'USD', label: 'Weekly', savings: 'Save 52%' },
-  { id: 'price_monthly', interval: 'month', amount: 1999, currency: 'USD', label: 'Monthly', savings: 'Save 67%', popular: true },
-  { id: 'price_yearly', interval: 'year', amount: 9999, currency: 'USD', label: 'Yearly', savings: 'Save 86%' },
+  { id: 'price_daily', interval: 'day', amount: 99, currency: 'USD', label: 'Daily', savings: undefined },
+  { id: 'price_weekly', interval: 'week', amount: 499, currency: 'USD', label: 'Weekly', savings: 'Save 28%' },
+  { id: 'price_monthly', interval: 'month', amount: 999, currency: 'USD', label: 'Monthly', savings: 'Save 67%', popular: true },
+  { id: 'price_yearly', interval: 'year', amount: 4999, currency: 'USD', label: 'Yearly', savings: 'Save 86%' },
 ];
 
 const PREMIUM_FEATURES = [
@@ -208,12 +208,6 @@ export default function PremiumScreen({ navigation }: any) {
                     </LinearGradient>
                   )}
                   
-                  {tier.savings && (
-                    <View style={styles.savingsBadge}>
-                      <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
-                    </View>
-                  )}
-                  
                   <View style={styles.tierContent}>
                     <View style={styles.tierLeft}>
                       <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
@@ -230,9 +224,16 @@ export default function PremiumScreen({ navigation }: any) {
                     </View>
                     
                     <View style={styles.tierRight}>
-                      <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]}>
-                        {formatPrice(tier.amount, tier.currency)}
-                      </Text>
+                      <View style={styles.priceRow}>
+                        <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]}>
+                          {formatPrice(tier.amount, tier.currency)}
+                        </Text>
+                        {tier.savings && (
+                          <View style={styles.savingsBadge}>
+                            <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.tierPer}>/{tier.interval}</Text>
                     </View>
                   </View>
@@ -434,19 +435,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   savingsBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: 'rgba(76, 175, 80, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
+    marginLeft: 8,
   },
   savingsBadgeText: {
     color: '#4CAF50',
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 8,
+    fontWeight: '800',
   },
   tierContent: {
     flexDirection: 'row',
@@ -491,6 +494,7 @@ const styles = StyleSheet.create({
   },
   tierRight: {
     alignItems: 'flex-end',
+    flexShrink: 0,
   },
   tierPrice: {
     fontSize: 22,
