@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Pressable, Dimensions, Linking, ActivityIndicator } from "react-native";
+import { View, StyleSheet, Pressable, Dimensions, ActivityIndicator, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { WebView } from "react-native-webview";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -11,12 +11,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
 import * as Location from 'expo-location';
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 type UserDistanceMapScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "UserDistanceMap">;
 type UserDistanceMapScreenRouteProp = RouteProp<RootStackParamList, "UserDistanceMap">;
@@ -24,6 +24,15 @@ type UserDistanceMapScreenRouteProp = RouteProp<RootStackParamList, "UserDistanc
 interface UserDistanceMapScreenProps {
   navigation: UserDistanceMapScreenNavigationProp;
   route: UserDistanceMapScreenRouteProp;
+}
+
+interface WeatherData {
+  temperature: number;
+  weatherCode: number;
+  humidity: number;
+  windSpeed: number;
+  description: string;
+  icon: string;
 }
 
 function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -38,6 +47,36 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
   return Math.round(R * c * 10) / 10;
 }
 
+function getWeatherDescription(code: number): { description: string; icon: string } {
+  const weatherCodes: { [key: number]: { description: string; icon: string } } = {
+    0: { description: "Clear sky", icon: "weather-sunny" },
+    1: { description: "Mainly clear", icon: "weather-sunny" },
+    2: { description: "Partly cloudy", icon: "weather-partly-cloudy" },
+    3: { description: "Overcast", icon: "weather-cloudy" },
+    45: { description: "Foggy", icon: "weather-fog" },
+    48: { description: "Rime fog", icon: "weather-fog" },
+    51: { description: "Light drizzle", icon: "weather-rainy" },
+    53: { description: "Moderate drizzle", icon: "weather-rainy" },
+    55: { description: "Dense drizzle", icon: "weather-pouring" },
+    61: { description: "Slight rain", icon: "weather-rainy" },
+    63: { description: "Moderate rain", icon: "weather-rainy" },
+    65: { description: "Heavy rain", icon: "weather-pouring" },
+    71: { description: "Slight snow", icon: "weather-snowy" },
+    73: { description: "Moderate snow", icon: "weather-snowy" },
+    75: { description: "Heavy snow", icon: "weather-snowy-heavy" },
+    77: { description: "Snow grains", icon: "weather-snowy" },
+    80: { description: "Slight showers", icon: "weather-rainy" },
+    81: { description: "Moderate showers", icon: "weather-rainy" },
+    82: { description: "Violent showers", icon: "weather-pouring" },
+    85: { description: "Slight snow showers", icon: "weather-snowy" },
+    86: { description: "Heavy snow showers", icon: "weather-snowy-heavy" },
+    95: { description: "Thunderstorm", icon: "weather-lightning" },
+    96: { description: "Thunderstorm with hail", icon: "weather-lightning-rainy" },
+    99: { description: "Thunderstorm with heavy hail", icon: "weather-lightning-rainy" },
+  };
+  return weatherCodes[code] || { description: "Unknown", icon: "weather-cloudy" };
+}
+
 export default function UserDistanceMapScreen({ navigation, route }: UserDistanceMapScreenProps) {
   const { otherUser } = route.params;
   const { theme } = useTheme();
@@ -47,6 +86,8 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
   const [currentUserLocation, setCurrentUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
 
   useEffect(() => {
     fetchCurrentLocation();
@@ -58,6 +99,32 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
     if (lat === 0 && lng === 0) return false;
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return false;
     return true;
+  };
+
+  const fetchWeather = async (lat: number, lng: number) => {
+    setWeatherLoading(true);
+    try {
+      const response = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`
+      );
+      const data = await response.json();
+      
+      if (data.current) {
+        const weatherInfo = getWeatherDescription(data.current.weather_code);
+        setWeather({
+          temperature: Math.round(data.current.temperature_2m),
+          weatherCode: data.current.weather_code,
+          humidity: data.current.relative_humidity_2m,
+          windSpeed: Math.round(data.current.wind_speed_10m),
+          description: weatherInfo.description,
+          icon: weatherInfo.icon,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching weather:', error);
+    } finally {
+      setWeatherLoading(false);
+    }
   };
 
   const fetchCurrentLocation = async () => {
@@ -89,6 +156,10 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
         lat: freshLat,
         lng: freshLng,
       });
+
+      if (isValidLocation(otherUser?.location?.lat, otherUser?.location?.lng)) {
+        fetchWeather(otherUser.location.lat, otherUser.location.lng);
+      }
       
       if (token) {
         try {
@@ -154,7 +225,7 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        html, body, #map { width: 100%; height: 100%; }
+        html, body, #map { width: 100%; height: 100%; background: #1a1a2e; }
         .custom-marker {
           background: #FF6B6B;
           border-radius: 50%;
@@ -187,33 +258,48 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
           white-space: nowrap;
           z-index: 1000;
         }
+        .distance-badge {
+          position: fixed;
+          top: 20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+          color: white;
+          padding: 8px 20px;
+          border-radius: 20px;
+          font-size: 14px;
+          font-weight: 700;
+          box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+          z-index: 1000;
+        }
       </style>
     </head>
     <body>
       <div id="map"></div>
+      <div class="distance-badge">${distance} km away</div>
       <script>
         var map = L.map('map', {
           zoomControl: false,
           attributionControl: false
         }).setView([${midLat || 0}, ${midLng || 0}], 12);
         
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
           maxZoom: 19
         }).addTo(map);
         
         ${hasValidLocations ? `
           var youIcon = L.divIcon({
             className: '',
-            html: '<div style="position:relative"><div class="marker-label">You</div><div class="custom-marker you-marker" style="width:30px;height:30px;"></div></div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
+            html: '<div style="position:relative"><div class="marker-label">You</div><div class="custom-marker you-marker" style="width:36px;height:36px;"></div></div>',
+            iconSize: [36, 36],
+            iconAnchor: [18, 18]
           });
           
           var otherIcon = L.divIcon({
             className: '',
-            html: '<div style="position:relative"><div class="marker-label">${escapedName}</div><div class="custom-marker" style="width:40px;height:40px;">${otherUserPhoto ? `<img src="${otherUserPhoto}" class="marker-image" />` : ''}</div></div>',
-            iconSize: [40, 40],
-            iconAnchor: [20, 20]
+            html: '<div style="position:relative"><div class="marker-label">${escapedName}</div><div class="custom-marker" style="width:44px;height:44px;">${otherUserPhoto ? `<img src="${otherUserPhoto}" class="marker-image" />` : ''}</div></div>',
+            iconSize: [44, 44],
+            iconAnchor: [22, 22]
           });
           
           L.marker([${userLat}, ${userLng}], {icon: youIcon}).addTo(map);
@@ -230,7 +316,7 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
             opacity: 0.8
           }).addTo(map);
           
-          map.fitBounds(latlngs, { padding: [70, 70] });
+          map.fitBounds(latlngs, { padding: [80, 80] });
         ` : ''}
       </script>
     </body>
@@ -270,13 +356,6 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
     );
   }
 
-  const openInMaps = () => {
-    if (hasValidLocations) {
-      const url = `https://www.google.com/maps/dir/${userLat},${userLng}/${otherLat},${otherLng}`;
-      Linking.openURL(url);
-    }
-  };
-
   return (
     <ThemedView style={styles.container}>
       <View style={styles.mapContainer}>
@@ -296,26 +375,9 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
         <Feather name="arrow-left" size={24} color="#FFF" />
       </Pressable>
 
-      <View style={[styles.bottomCard, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View style={[styles.bottomCard, { paddingBottom: insets.bottom + Spacing.md }]}>
         <View style={styles.cardHandle} />
         
-        <View style={styles.distanceHeader}>
-          <View style={styles.distanceIconContainer}>
-            <Feather name="navigation" size={24} color="#FF6B6B" />
-          </View>
-          <View style={styles.distanceInfo}>
-            <ThemedText style={styles.distanceLabel}>Distance</ThemedText>
-            <ThemedText style={styles.distanceValue}>
-              {hasValidLocations ? `${distance} km away` : 'Location unavailable'}
-            </ThemedText>
-          </View>
-          {hasValidLocations && (
-            <Pressable style={styles.directionsButton} onPress={openInMaps}>
-              <Feather name="external-link" size={18} color="#FF6B6B" />
-            </Pressable>
-          )}
-        </View>
-
         <View style={styles.userInfoRow}>
           <View style={styles.userPhotoContainer}>
             {otherUserPhoto ? (
@@ -333,11 +395,41 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
           </View>
           <View style={styles.userDetails}>
             <ThemedText style={styles.userName}>{otherUser.name}, {otherUser.age}</ThemedText>
-            <ThemedText style={styles.userStatus}>
-              {otherUser.online ? 'Online now' : 'Offline'}
-            </ThemedText>
+            <View style={styles.distanceBadge}>
+              <Feather name="navigation" size={12} color="#FF6B6B" />
+              <ThemedText style={styles.distanceText}>{distance} km away</ThemedText>
+            </View>
           </View>
         </View>
+
+        {weather && (
+          <View style={styles.weatherCard}>
+            <View style={styles.weatherMain}>
+              <MaterialCommunityIcons name={weather.icon as any} size={40} color="#FFD93D" />
+              <View style={styles.weatherTempContainer}>
+                <ThemedText style={styles.weatherTemp}>{weather.temperature}°C</ThemedText>
+                <ThemedText style={styles.weatherDesc}>{weather.description}</ThemedText>
+              </View>
+            </View>
+            <View style={styles.weatherDetails}>
+              <View style={styles.weatherDetailItem}>
+                <Feather name="droplet" size={14} color="#64B5F6" />
+                <ThemedText style={styles.weatherDetailText}>{weather.humidity}%</ThemedText>
+              </View>
+              <View style={styles.weatherDetailItem}>
+                <Feather name="wind" size={14} color="#81C784" />
+                <ThemedText style={styles.weatherDetailText}>{weather.windSpeed} km/h</ThemedText>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {weatherLoading && (
+          <View style={styles.weatherCard}>
+            <ActivityIndicator size="small" color="#FF6B6B" />
+            <ThemedText style={{ color: '#888', marginLeft: Spacing.sm }}>Loading weather...</ThemedText>
+          </View>
+        )}
 
         <View style={styles.buttonRow}>
           <Pressable
@@ -356,7 +448,7 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
             }}
           >
             <Feather name="user" size={20} color="#FFF" />
-            <ThemedText style={styles.actionButtonText}>View Profile</ThemedText>
+            <ThemedText style={styles.actionButtonText}>Profile</ThemedText>
           </Pressable>
         </View>
       </View>
@@ -379,7 +471,7 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-    backgroundColor: "#121212",
+    backgroundColor: "#1a1a2e",
   },
   backButton: {
     position: "absolute",
@@ -421,51 +513,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#444",
     borderRadius: 2,
     alignSelf: "center",
-    marginBottom: Spacing.lg,
-  },
-  distanceHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: Spacing.lg,
-  },
-  distanceIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "rgba(255, 107, 107, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: Spacing.md,
-  },
-  distanceInfo: {
-    flex: 1,
-  },
-  distanceLabel: {
-    fontSize: 12,
-    color: "#888",
-    marginBottom: 2,
-  },
-  distanceValue: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#FFF",
-  },
-  directionsButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255, 107, 107, 0.15)",
-    alignItems: "center",
-    justifyContent: "center",
+    marginBottom: Spacing.md,
   },
   userInfoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: Spacing.lg,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.md,
-    backgroundColor: "#2A2A2A",
-    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.md,
   },
   userPhotoContainer: {
     position: "relative",
@@ -490,20 +543,65 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: "#4CAF50",
     borderWidth: 2,
-    borderColor: "#2A2A2A",
+    borderColor: "#1E1E1E",
   },
   userDetails: {
     flex: 1,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 18,
+    fontWeight: "700",
     color: "#FFF",
-    marginBottom: 2,
+    marginBottom: 4,
   },
-  userStatus: {
+  distanceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  distanceText: {
     fontSize: 13,
+    color: "#FF6B6B",
+    fontWeight: "600",
+  },
+  weatherCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#2A2A2A",
+    borderRadius: BorderRadius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  weatherMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  weatherTempContainer: {
+    marginLeft: Spacing.xs,
+  },
+  weatherTemp: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  weatherDesc: {
+    fontSize: 12,
     color: "#888",
+  },
+  weatherDetails: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  weatherDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  weatherDetailText: {
+    fontSize: 12,
+    color: "#AAA",
   },
   buttonRow: {
     flexDirection: "row",
