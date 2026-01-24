@@ -116,21 +116,30 @@ export default function ProfileDetailScreen() {
     <ThemedView style={styles.container}>
       <ScreenScrollView>
         <Pressable onPress={handleTap} style={styles.photoContainer}>
-          <Image
-            source={getPhotoSource(user.photos[currentPhotoIndex]) || { uri: 'https://via.placeholder.com/150' }}
-            style={styles.mainPhoto}
-          />
-          <View style={styles.photoIndicators}>
-            {user.photos?.map((_: any, index: number) => (
-              <View
-                key={index}
-                style={[
-                  styles.indicator,
-                  { backgroundColor: index === currentPhotoIndex ? "#FFF" : "rgba(255,255,255,0.5)" },
-                ]}
-              />
-            ))}
-          </View>
+          {user.photos && user.photos.length > 0 ? (
+            <Image
+              source={getPhotoSource(user.photos[currentPhotoIndex]) || require("@/assets/images/placeholder-1.jpg")}
+              style={styles.mainPhoto}
+            />
+          ) : (
+            <Image
+              source={require("@/assets/images/placeholder-1.jpg")}
+              style={styles.mainPhoto}
+            />
+          )}
+          {user.photos && user.photos.length > 1 && (
+            <View style={styles.photoIndicators}>
+              {user.photos.map((_: any, index: number) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.indicator,
+                    { backgroundColor: index === currentPhotoIndex ? "#FFF" : "rgba(255,255,255,0.5)" },
+                  ]}
+                />
+              ))}
+            </View>
+          )}
           <Pressable style={styles.floatBack} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={28} color="#FFF" />
           </Pressable>
@@ -138,28 +147,36 @@ export default function ProfileDetailScreen() {
 
         <View style={styles.content}>
           <View style={styles.header}>
-            <View style={styles.nameRow}>
-              <View>
-                <ThemedText style={styles.name}>{user.name}, {user.age}</ThemedText>
+            <View style={styles.nameContainer}>
+              <View style={styles.nameRow}>
+                <ThemedText style={styles.name}>{user.name}{user.age ? `, ${user.age}` : ''}</ThemedText>
                 {user.premium?.isActive && (
-                  <View style={{ marginLeft: 4 }}>
-                    <Feather name="star" size={16} color="#FFD700" />
-                  </View>
+                  <Feather name="star" size={18} color="#FFD700" style={{ marginLeft: 6 }} />
                 )}
+                {user.verified && (
+                  <Image 
+                    source={require("@/assets/icons/verified-tick.png")} 
+                    style={{ width: 24, height: 24, marginLeft: 6 }} 
+                  />
+                )}
+              </View>
+              <View style={styles.statusRow}>
+                <ActivityStatus onlineStatus={user.onlineStatus || (user.online ? 'online' : 'offline')} />
                 {user.username && (
-                  <ThemedText style={{ color: theme.textSecondary, fontSize: 14 }}>
+                  <ThemedText style={{ color: theme.textSecondary, fontSize: 14, marginLeft: 8 }}>
                     @{user.username}
                   </ThemedText>
                 )}
               </View>
-              {((user as any) || {}).verified && (
-                <View style={[styles.verifiedBadgeRow, { backgroundColor: theme.primary + '15' }]}>
-            <VerificationBadge size="small" />
-                  <ThemedText style={[styles.verifiedText, { color: theme.primary }]}>Verified by AfroConnect Admin</ThemedText>
+              {user.location?.city && (
+                <View style={styles.locationRow}>
+                  <Ionicons name="location-outline" size={16} color={theme.textSecondary} />
+                  <ThemedText style={{ color: theme.textSecondary, fontSize: 14, marginLeft: 4 }}>
+                    {user.location.city}{user.location.country ? `, ${user.location.country}` : ''}
+                  </ThemedText>
                 </View>
               )}
             </View>
-            <ActivityStatus />
           </View>
 
           <View style={styles.section}>
@@ -232,8 +249,11 @@ const styles = StyleSheet.create({
   floatBack: { position: "absolute", top: 40, left: 20, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" },
   content: { padding: Spacing.lg },
   header: { marginBottom: Spacing.lg },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 },
-  name: { fontSize: 24, fontWeight: "800" },
+  nameContainer: { gap: 6 },
+  nameRow: { flexDirection: "row", alignItems: "center" },
+  statusRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  locationRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
+  name: { fontSize: 26, fontWeight: "800" },
   verifiedBadgeRow: { 
     flexDirection: 'row', 
     alignItems: 'center', 

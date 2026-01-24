@@ -27,6 +27,7 @@ import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { StoredUser } from "@/utils/storage";
 import { getPhotoSource } from "@/utils/photos";
+import { useThemedAlert } from "@/components/ThemedAlert";
 import { Image as ExpoImage } from "expo-image";
 
 const { width } = Dimensions.get("window");
@@ -68,6 +69,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const api = useApi();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { showAlert, AlertComponent } = useThemedAlert();
   const [matches, setMatches] = useState<MatchWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -86,7 +88,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate('MainTabs', { screen: 'Discovery' });
+      (navigation as any).navigate('MainTabs', { screen: 'Discovery' });
     }
   }, [navigation]);
 
@@ -836,5 +838,10 @@ const styles = StyleSheet.create({
   likeBackButton: {
     borderWidth: 2,
     borderColor: "#4CAF50",
+  },
+  emptyImage: {
+    width: 200,
+    height: 200,
+    marginBottom: Spacing.lg,
   },
 });
