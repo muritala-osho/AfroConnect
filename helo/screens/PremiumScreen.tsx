@@ -177,7 +177,7 @@ export default function PremiumScreen({ navigation }: any) {
 
           {isActive && (
             <LinearGradient colors={['#4CAF50', '#2E7D32']} style={styles.activeBanner}>
-              <MaterialCommunityIcons name="check-circle" size={24} color="#FFF" />
+              <MaterialCommunityIcons name="check-circle" size={24} color="#FFF" style={{ marginRight: 10 }} />
               <Text style={styles.activeBannerText}>You're a Premium Member!</Text>
             </LinearGradient>
           )}
@@ -291,7 +291,7 @@ export default function PremiumScreen({ navigation }: any) {
                     <Text style={styles.subscribeText}>
                       {isActive ? 'Already Premium' : `Get Premium - ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}`}
                     </Text>
-                    {!isActive && <Feather name="arrow-right" size={20} color="#FFF" />}
+                    {!isActive && <Feather name="arrow-right" size={20} color="#FFF" style={{ marginLeft: 8 }} />}
                   </>
                 )}
               </LinearGradient>
@@ -390,7 +390,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 24,
-    gap: 10,
   },
   activeBannerText: {
     color: '#FFF',
@@ -405,7 +404,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   tiersContainer: {
-    gap: 12,
     marginBottom: 24,
   },
   tierCard: {
@@ -416,6 +414,7 @@ const styles = StyleSheet.create({
     padding: 16,
     position: 'relative',
     overflow: 'hidden',
+    marginBottom: 12,
   },
   tierCardSelected: {
     borderColor: '#FF6B6B',
@@ -457,7 +456,6 @@ const styles = StyleSheet.create({
   tierLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   radioOuter: {
     width: 24,
@@ -467,6 +465,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 12,
   },
   radioOuterSelected: {
     borderColor: '#FF6B6B',
@@ -509,16 +508,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 24,
-    gap: 12,
+    justifyContent: 'space-between',
   },
   featureItem: {
-    width: (width - 52) / 2,
+    width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 12,
     padding: 12,
-    gap: 10,
+    marginBottom: 10,
   },
   featureIcon: {
     width: 40,
@@ -526,6 +525,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
   featureText: {
     flex: 1,
@@ -539,12 +539,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(76, 175, 80, 0.1)',
     borderRadius: 16,
     padding: 16,
-    gap: 14,
     borderWidth: 1,
     borderColor: 'rgba(76, 175, 80, 0.2)',
   },
   guaranteeText: {
     flex: 1,
+    marginLeft: 14,
   },
   guaranteeTitle: {
     fontSize: 14,
@@ -578,7 +578,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 18,
-    gap: 8,
   },
   subscribeText: {
     color: '#FFF',
