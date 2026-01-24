@@ -557,18 +557,18 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           <View style={[styles.headerActions, { flexShrink: 0 }]}>
             {isOwnStory && currentStory.type === 'text' && (
               <Pressable
-                style={[styles.headerButtonHighVis, { backgroundColor: '#4CAF50' }]}
+                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(76,175,80,0.8)' }]}
                 onPress={startEditing}
               >
-                <Ionicons name="pencil" size={24} color="#FFF" />
+                <Ionicons name="pencil" size={16} color="#FFF" />
               </Pressable>
             )}
             {isOwnStory && (
               <Pressable
-                style={[styles.headerButtonHighVis, { backgroundColor: '#F44336' }]}
+                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(244,67,54,0.8)' }]}
                 onPress={handleDeleteStory}
               >
-                <Ionicons name="trash-outline" size={24} color="#FFF" />
+                <Ionicons name="trash-outline" size={16} color="#FFF" />
               </Pressable>
             )}
             <Pressable
@@ -577,7 +577,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             >
               <Ionicons
                 name={paused ? "play" : "pause"}
-                size={24}
+                size={16}
                 color="#FFF"
               />
             </Pressable>
@@ -585,7 +585,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               style={styles.headerButtonHighVis}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="close" size={28} color="#FFF" />
+              <Ionicons name="close" size={18} color="#FFF" />
             </Pressable>
           </View>
         </View>
@@ -697,20 +697,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   headerButtonHighVis: {
-    backgroundColor: "rgba(0,0,0,0.7)",
-    borderRadius: 24,
-    width: 52,
-    height: 52,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: "center",
     alignItems: "center",
-    marginLeft: 12,
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.5)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.6,
-    shadowRadius: 4,
-    elevation: 8,
+    marginLeft: 8,
   },
   accessHint: {
     color: "rgba(255,255,255,0.5)",
