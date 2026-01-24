@@ -546,7 +546,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 </Pressable>
               )}
             </View>
-            <View style={{ flex: 1 }}>
+            <View style={{ maxWidth: 120 }}>
               <ThemedText style={styles.userName} numberOfLines={1}>{userName}</ThemedText>
               <ThemedText style={styles.storyTime}>
                 {formatTime(currentStory.createdAt)}
@@ -554,10 +554,10 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             </View>
           </Pressable>
 
-          <View style={styles.headerActions}>
+          <View style={[styles.headerActions, { flexShrink: 0 }]}>
             {isOwnStory && currentStory.type === 'text' && (
               <Pressable
-                style={styles.headerButtonHighVis}
+                style={[styles.headerButtonHighVis, { backgroundColor: '#4CAF50' }]}
                 onPress={startEditing}
               >
                 <Ionicons name="pencil" size={24} color="#FFF" />
@@ -565,7 +565,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             )}
             {isOwnStory && (
               <Pressable
-                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(255,50,50,0.7)' }]}
+                style={[styles.headerButtonHighVis, { backgroundColor: '#F44336' }]}
                 onPress={handleDeleteStory}
               >
                 <Ionicons name="trash-outline" size={24} color="#FFF" />
