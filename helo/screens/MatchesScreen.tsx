@@ -525,11 +525,9 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Image 
-        source={require("@/assets/images/no_matches_empty_state.png")} 
-        style={{ width: 200, height: 200, marginBottom: Spacing.lg }} 
-        contentFit="contain"
-      />
+      <View style={styles.emptyIconContainer}>
+        <Feather name="heart" size={60} color={theme.textSecondary} />
+      </View>
       <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
         No Matches
       </ThemedText>

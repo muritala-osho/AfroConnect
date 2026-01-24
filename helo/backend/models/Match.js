@@ -27,7 +27,7 @@ const matchSchema = new mongoose.Schema({
 // Ensure users array has exactly 2 elements
 matchSchema.pre('save', function(next) {
   if (this.users.length !== 2) {
-    next(new Error('A match must have exactly 2 users'));
+    return next(new Error('A match must have exactly 2 users'));
   }
   next();
 });

@@ -1169,11 +1169,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 <ThemedText style={[styles.stampText, { color: '#FF6B6B' }]}>{t('nope')}</ThemedText>
               </Animated.View>
 
-              {currentUser.online && (
-                <View style={styles.recentlyActiveBadge}>
-                  <ThemedText style={styles.recentlyActiveText}>{t('recentlyActive')}</ThemedText>
-                </View>
-              )}
 
               <View style={styles.cardInfoOverlay}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -1625,20 +1620,6 @@ const styles = StyleSheet.create({
   stampText: {
     fontSize: 32,
     fontWeight: "800",
-  },
-  recentlyActiveBadge: {
-    position: "absolute",
-    bottom: 170,
-    left: 16,
-    backgroundColor: "#00C853",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  recentlyActiveText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#FFF",
   },
   cardInfoOverlay: {
     position: "absolute",
