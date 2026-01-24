@@ -68,7 +68,7 @@ export async function pickImageFromGallery(options?: {
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsMultipleSelection: options?.allowsMultiple || false,
       quality: 0.8,
       base64: false,
@@ -105,7 +105,7 @@ export async function takePhoto(): Promise<PhotoResult | null> {
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.8,
       base64: false,
     });

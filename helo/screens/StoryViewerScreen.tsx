@@ -520,9 +520,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             style={styles.userInfo}
             onPress={() => {
               if (isOwnStory) {
-                // If it's my own story, I might want to upload another or view my profile
-                // but let's just go to my profile to be safe and avoid the crash if navigation is complex
-                navigation.navigate("MyProfile" as any);
+                navigation.navigate("MainTabs" as any, { screen: "MyProfile" });
               } else {
                 navigation.navigate("ProfileDetail", { userId });
               }

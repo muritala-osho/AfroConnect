@@ -76,7 +76,7 @@ export default function StoryUploadScreen({
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: type === 'image' ? ImagePicker.MediaTypeOptions.Images : ImagePicker.MediaTypeOptions.Videos,
+        mediaTypes: type === 'image' ? ['images'] : ['videos'],
         quality: 0.8,
         allowsEditing: true,
         aspect: [9, 16],
