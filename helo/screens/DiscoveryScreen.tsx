@@ -128,13 +128,16 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   }, []);
 
   const fetchRadarNearbyUsers = useCallback(async () => {
-    if (!token) return;
-    if (hasLocationPermission === false) return;
+    if (!token) {
+      console.log('[DISCOVERY RADAR] Skipped - no token');
+      return;
+    }
+    if (hasLocationPermission === false) {
+      console.log('[DISCOVERY RADAR] Skipped - no location permission');
+      return;
+    }
     
     try {
-      // Start loading matches in background immediately
-      loadPotentialMatches();
-      
       setRadarScanning(true);
       
       let permissionGranted: boolean | null = hasLocationPermission;

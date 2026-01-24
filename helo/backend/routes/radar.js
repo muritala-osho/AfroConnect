@@ -84,7 +84,7 @@ router.get('/nearby-users', protect, async (req, res) => {
       ]
     };
 
-    if (gender && gender !== 'any') {
+    if (gender && gender !== 'any' && gender !== 'both' && gender !== 'all') {
       const genderArray = gender.split(',');
       query.gender = { $in: genderArray };
     }
