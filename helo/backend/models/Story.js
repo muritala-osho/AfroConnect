@@ -26,6 +26,9 @@ const storySchema = new mongoose.Schema({
   mediaUrl: {
     type: String
   },
+  imageUrl: {
+    type: String
+  },
   thumbnail: {
     type: String
   },

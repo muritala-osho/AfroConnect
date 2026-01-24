@@ -30,6 +30,7 @@ interface Story {
   _id: string;
   type: "image" | "text" | "video";
   imageUrl?: string;
+  mediaUrl?: string;
   textContent?: string;
   backgroundColor?: string[];
   createdAt: string;
@@ -77,8 +78,8 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       try {
         setLoading(true);
         // Add a fallback for own stories to ensure they always load
-        const isOwnStory = userId === user?.id;
-        const endpoint = isOwnStory ? `/stories/my-stories` : `/stories/user/${userId}`;
+        const isOwn = userId === user?.id || (route.params as any)?.isOwnStory === true;
+        const endpoint = isOwn ? `/stories/my-stories` : `/stories/user/${userId}`;
         const response = await get<{ stories: Story[]; message?: string }>(endpoint, token);
         
         if (response.success && response.data?.stories) {
@@ -132,7 +133,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     }
   };
 
-  const isOwnStory = userId === user?.id;
+  const isOwnStory = userId === user?.id || (route.params as any)?.isOwnStory === true;
 
   const handleDeleteStory = async () => {
     if (!token || !currentStory) return;
@@ -401,10 +402,10 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     >
       <StatusBar barStyle="light-content" />
       
-      {currentStory.type === "image" && currentStory.imageUrl ? (
+      {currentStory.type === "image" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <Image
-            source={{ uri: currentStory.imageUrl }}
+            source={{ uri: currentStory.imageUrl || currentStory.mediaUrl }}
             style={[styles.storyImage, { borderRadius: 0 }]}
             contentFit="contain"
             cachePolicy="disk"
@@ -412,10 +413,10 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             transition={200}
           />
         </View>
-      ) : currentStory.type === "video" && currentStory.imageUrl ? (
-        <View style={[styles.videoContainer, { borderRadius: 0, backgroundColor: '#000' }]}>
+      ) : currentStory.type === "video" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
           <Video
-            source={{ uri: currentStory.imageUrl }}
+            source={{ uri: (currentStory.imageUrl || currentStory.mediaUrl) as string }}
             style={styles.storyImage}
             resizeMode={ResizeMode.CONTAIN}
             shouldPlay={!paused}
