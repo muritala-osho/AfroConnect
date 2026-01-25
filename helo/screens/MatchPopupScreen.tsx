@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { View, StyleSheet, Pressable, Dimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,7 +8,7 @@ import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import Animated, { 
@@ -18,11 +18,14 @@ import Animated, {
   withSequence,
   withDelay,
   withTiming,
+  withRepeat,
   interpolate,
-  Extrapolate
+  Extrapolate,
+  Easing
 } from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get("window");
+const PHOTO_SIZE = width * 0.32;
 
 type MatchPopupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "MatchPopup">;
 type MatchPopupScreenRouteProp = RouteProp<RootStackParamList, "MatchPopup">;
@@ -36,26 +39,65 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
   const { currentUser, matchedUser, isSuperLike } = route.params;
   const insets = useSafeAreaInsets();
   
-  const scale = useSharedValue(0);
-  const rotate = useSharedValue(0);
+  const leftPhotoScale = useSharedValue(0);
+  const rightPhotoScale = useSharedValue(0);
+  const leftPhotoX = useSharedValue(-100);
+  const rightPhotoX = useSharedValue(100);
   const heartScale = useSharedValue(0);
+  const heartPulse = useSharedValue(1);
   const textOpacity = useSharedValue(0);
-  const buttonsTranslate = useSharedValue(100);
+  const textY = useSharedValue(30);
+  const buttonsOpacity = useSharedValue(0);
+  const buttonsY = useSharedValue(50);
+  const sparkleRotate = useSharedValue(0);
+  const glowOpacity = useSharedValue(0);
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
     
-    scale.value = withSpring(1, { damping: 12, stiffness: 100 });
-    rotate.value = withSequence(
-      withTiming(-5, { duration: 100 }),
-      withTiming(5, { duration: 100 }),
-      withTiming(0, { duration: 100 })
+    // Photos fly in from sides and scale up
+    leftPhotoScale.value = withDelay(100, withSpring(1, { damping: 12, stiffness: 100 }));
+    rightPhotoScale.value = withDelay(200, withSpring(1, { damping: 12, stiffness: 100 }));
+    leftPhotoX.value = withDelay(100, withSpring(0, { damping: 15, stiffness: 80 }));
+    rightPhotoX.value = withDelay(200, withSpring(0, { damping: 15, stiffness: 80 }));
+    
+    // Heart appears and pulses
+    heartScale.value = withDelay(400, withSpring(1, { damping: 8, stiffness: 120 }));
+    heartPulse.value = withDelay(600, withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(1, { duration: 500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1,
+      true
+    ));
+    
+    // Text fades in and slides up
+    textOpacity.value = withDelay(500, withTiming(1, { duration: 400 }));
+    textY.value = withDelay(500, withSpring(0, { damping: 15 }));
+    
+    // Buttons slide up
+    buttonsOpacity.value = withDelay(700, withTiming(1, { duration: 300 }));
+    buttonsY.value = withDelay(700, withSpring(0, { damping: 15 }));
+    
+    // Sparkle rotation
+    sparkleRotate.value = withRepeat(
+      withTiming(360, { duration: 8000, easing: Easing.linear }),
+      -1,
+      false
     );
-    heartScale.value = withDelay(300, withSpring(1, { damping: 8 }));
-    textOpacity.value = withDelay(400, withTiming(1, { duration: 300 }));
-    buttonsTranslate.value = withDelay(500, withSpring(0, { damping: 15 }));
+    
+    // Glow pulse
+    glowOpacity.value = withDelay(400, withRepeat(
+      withSequence(
+        withTiming(0.6, { duration: 1000 }),
+        withTiming(0.3, { duration: 1000 })
+      ),
+      -1,
+      true
+    ));
   }, []);
 
   const currentUserPhoto = currentUser?.photos?.[0] ? getPhotoSource(currentUser.photos[0]) : null;
@@ -63,30 +105,39 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
 
   const leftPhotoStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: scale.value },
-      { rotate: `${-12 + rotate.value}deg` },
+      { translateX: leftPhotoX.value },
+      { scale: leftPhotoScale.value },
     ],
   }));
 
   const rightPhotoStyle = useAnimatedStyle(() => ({
     transform: [
-      { scale: scale.value },
-      { rotate: `${12 + rotate.value}deg` },
+      { translateX: rightPhotoX.value },
+      { scale: rightPhotoScale.value },
     ],
   }));
 
   const heartStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
+    transform: [{ scale: heartScale.value * heartPulse.value }],
     opacity: heartScale.value,
   }));
 
   const textStyle = useAnimatedStyle(() => ({
     opacity: textOpacity.value,
+    transform: [{ translateY: textY.value }],
   }));
 
   const buttonsStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: buttonsTranslate.value }],
-    opacity: interpolate(buttonsTranslate.value, [100, 0], [0, 1], Extrapolate.CLAMP),
+    opacity: buttonsOpacity.value,
+    transform: [{ translateY: buttonsY.value }],
+  }));
+
+  const sparkleStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${sparkleRotate.value}deg` }],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
   }));
 
   const handleSendMessage = () => {
@@ -101,104 +152,144 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
     navigation.goBack();
   };
 
+  const primaryColor = isSuperLike ? '#7c4dff' : '#FF6B6B';
+  const secondaryColor = isSuperLike ? '#b388ff' : '#FF8E53';
+
   return (
     <View style={styles.container}>
       <LinearGradient
         colors={isSuperLike 
-          ? ['#1a1a2e', '#4a148c', '#7c4dff', '#b388ff'] 
-          : ['#1a1a2e', '#2d1f3d', '#FF6B6B', '#FF8E53']}
+          ? ['#0f0c29', '#302b63', '#24243e'] 
+          : ['#1a1a2e', '#16213e', '#1a1a2e']}
         style={styles.gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
       />
 
-      <View style={styles.confettiContainer}>
-        {[...Array(20)].map((_, i) => (
+      {/* Animated glow behind photos */}
+      <Animated.View style={[styles.glowContainer, glowStyle]}>
+        <LinearGradient
+          colors={[primaryColor, secondaryColor, 'transparent']}
+          style={styles.glowGradient}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+      </Animated.View>
+
+      {/* Sparkles */}
+      <Animated.View style={[styles.sparkleContainer, sparkleStyle]}>
+        {[...Array(12)].map((_, i) => (
           <View
             key={i}
             style={[
-              styles.confetti,
+              styles.sparkle,
               {
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 60}%`,
-                backgroundColor: ['#FF6B6B', '#FFD93D', '#6BCB77', '#4D96FF', '#FF8E53'][i % 5],
-                transform: [{ rotate: `${Math.random() * 360}deg` }],
+                transform: [
+                  { rotate: `${i * 30}deg` },
+                  { translateY: -height * 0.25 },
+                ],
               },
             ]}
-          />
+          >
+            <Ionicons name="sparkles" size={20} color={primaryColor} style={{ opacity: 0.6 }} />
+          </View>
+        ))}
+      </Animated.View>
+
+      {/* Hearts floating up */}
+      <View style={styles.floatingHeartsContainer}>
+        {[...Array(8)].map((_, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.floatingHeart,
+              {
+                left: `${10 + Math.random() * 80}%`,
+                animationDelay: `${i * 0.3}s`,
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={16 + Math.random() * 12} color={primaryColor} style={{ opacity: 0.4 }} />
+          </Animated.View>
         ))}
       </View>
 
-      <View style={[styles.content, { paddingTop: insets.top + 40 }]}>
-        <Animated.View style={[styles.photosContainer, { transform: [{ scale: scale.value }] }]}>
-          <Animated.View style={[styles.photoWrapper, styles.leftPhoto, leftPhotoStyle]}>
-            {currentUserPhoto ? (
-              <Image
-                source={currentUserPhoto}
-                style={styles.photo}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.photo, styles.noPhoto]}>
-                <Feather name="user" size={40} color="#666" />
-              </View>
-            )}
-            <View style={styles.photoLabel}>
-              <ThemedText style={styles.photoLabelText}>You</ThemedText>
+      <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
+        {/* Round Photos Side by Side */}
+        <View style={styles.photosContainer}>
+          <Animated.View style={[styles.photoWrapper, leftPhotoStyle]}>
+            <View style={[styles.photoBorder, { borderColor: primaryColor }]}>
+              {currentUserPhoto ? (
+                <Image
+                  source={currentUserPhoto}
+                  style={styles.roundPhoto}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.roundPhoto, styles.noPhoto]}>
+                  <Feather name="user" size={40} color="#666" />
+                </View>
+              )}
+            </View>
+            <View style={[styles.nameTag, { backgroundColor: primaryColor }]}>
+              <ThemedText style={styles.nameTagText}>You</ThemedText>
             </View>
           </Animated.View>
 
+          {/* Heart Badge in Center */}
           <Animated.View style={[styles.heartBadge, heartStyle]}>
             <LinearGradient
-              colors={isSuperLike ? ['#7c4dff', '#b388ff'] : ['#FF6B6B', '#FF8E53']}
+              colors={[primaryColor, secondaryColor]}
               style={styles.heartGradient}
             >
-              <Feather name="heart" size={28} color="#FFF" />
+              <Ionicons name="heart" size={32} color="#FFF" />
             </LinearGradient>
           </Animated.View>
 
-          <Animated.View style={[styles.photoWrapper, styles.rightPhoto, rightPhotoStyle]}>
-            {matchedUserPhoto ? (
-              <Image
-                source={matchedUserPhoto}
-                style={styles.photo}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.photo, styles.noPhoto]}>
-                <Feather name="user" size={40} color="#666" />
-              </View>
-            )}
-            <View style={styles.photoLabel}>
-              <ThemedText style={styles.photoLabelText}>{matchedUser.name}</ThemedText>
+          <Animated.View style={[styles.photoWrapper, rightPhotoStyle]}>
+            <View style={[styles.photoBorder, { borderColor: secondaryColor }]}>
+              {matchedUserPhoto ? (
+                <Image
+                  source={matchedUserPhoto}
+                  style={styles.roundPhoto}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.roundPhoto, styles.noPhoto]}>
+                  <Feather name="user" size={40} color="#666" />
+                </View>
+              )}
+            </View>
+            <View style={[styles.nameTag, { backgroundColor: secondaryColor }]}>
+              <ThemedText style={styles.nameTagText} numberOfLines={1}>{matchedUser.name}</ThemedText>
             </View>
           </Animated.View>
-        </Animated.View>
+        </View>
 
+        {/* Match Text */}
         <Animated.View style={[styles.textContainer, textStyle]}>
           <ThemedText style={styles.matchTitle}>
-            {isSuperLike ? "Super Match!" : "It's a Match!"}
+            {isSuperLike ? "✨ Super Match! ✨" : "It's a Match! 💕"}
           </ThemedText>
           <ThemedText style={styles.matchSubtitle}>
             {currentUser.name} & {matchedUser.name}
           </ThemedText>
           <ThemedText style={styles.matchDescription}>
-            You both liked each other! Start a conversation now.
+            You both liked each other! Why not start a conversation?
           </ThemedText>
         </Animated.View>
 
-        <Animated.View style={[styles.buttonsContainer, buttonsStyle, { paddingBottom: insets.bottom + 20 }]}>
+        {/* Action Buttons */}
+        <Animated.View style={[styles.buttonsContainer, buttonsStyle, { paddingBottom: insets.bottom + 30 }]}>
           <Pressable
             style={styles.messageButton}
             onPress={handleSendMessage}
           >
             <LinearGradient
-              colors={isSuperLike ? ['#7c4dff', '#b388ff'] : ['#FF6B6B', '#FF8E53']}
+              colors={[primaryColor, secondaryColor]}
               style={styles.messageButtonGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
-              <Feather name="message-circle" size={22} color="#FFF" />
+              <Ionicons name="chatbubble-ellipses" size={24} color="#FFF" />
               <ThemedText style={styles.messageButtonText}>Send Message</ThemedText>
             </LinearGradient>
           </Pressable>
@@ -222,18 +313,41 @@ const styles = StyleSheet.create({
   },
   gradient: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.9,
   },
-  confettiContainer: {
+  glowContainer: {
+    position: 'absolute',
+    top: height * 0.15,
+    left: '50%',
+    marginLeft: -150,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    overflow: 'hidden',
+  },
+  glowGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 150,
+  },
+  sparkleContainer: {
+    position: 'absolute',
+    top: height * 0.35,
+    left: '50%',
+    width: 10,
+    height: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sparkle: {
+    position: 'absolute',
+  },
+  floatingHeartsContainer: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
-  confetti: {
+  floatingHeart: {
     position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 2,
-    opacity: 0.6,
+    bottom: -30,
   },
   content: {
     flex: 1,
@@ -245,106 +359,107 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 40,
+    marginTop: 20,
   },
   photoWrapper: {
-    position: 'relative',
+    alignItems: 'center',
   },
-  leftPhoto: {
-    marginRight: -30,
-    zIndex: 1,
-  },
-  rightPhoto: {
-    marginLeft: -30,
-    zIndex: 1,
-  },
-  photo: {
-    width: width * 0.38,
-    height: width * 0.48,
-    borderRadius: 20,
+  photoBorder: {
+    width: PHOTO_SIZE + 8,
+    height: PHOTO_SIZE + 8,
+    borderRadius: (PHOTO_SIZE + 8) / 2,
     borderWidth: 4,
-    borderColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a1a2e',
+  },
+  roundPhoto: {
+    width: PHOTO_SIZE,
+    height: PHOTO_SIZE,
+    borderRadius: PHOTO_SIZE / 2,
   },
   noPhoto: {
     backgroundColor: '#3A3A3A',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  photoLabel: {
-    position: 'absolute',
-    bottom: -12,
-    left: '50%',
-    transform: [{ translateX: -40 }],
-    backgroundColor: 'rgba(0,0,0,0.8)',
+  nameTag: {
+    marginTop: 10,
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 20,
-    width: 80,
+    minWidth: 60,
     alignItems: 'center',
   },
-  photoLabelText: {
+  nameTagText: {
     color: '#FFF',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
   },
   heartBadge: {
-    position: 'absolute',
+    marginHorizontal: -15,
     zIndex: 10,
-    top: '50%',
-    left: '50%',
-    marginLeft: -30,
-    marginTop: -30,
   },
   heartGradient: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 4,
     borderColor: '#FFF',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 10,
   },
   textContainer: {
     alignItems: 'center',
-    marginTop: 60,
+    paddingHorizontal: 20,
   },
   matchTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '800',
     color: '#FFF',
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    textShadowColor: 'rgba(255,107,107,0.5)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
   },
   matchSubtitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '600',
     color: '#FFD93D',
-    marginTop: 8,
+    marginTop: 10,
     textAlign: 'center',
   },
   matchDescription: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 12,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    lineHeight: 22,
   },
   buttonsContainer: {
     width: '100%',
     gap: 12,
   },
   messageButton: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.xl,
     overflow: 'hidden',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
   messageButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
+    paddingVertical: 18,
+    gap: 12,
   },
   messageButtonText: {
     fontSize: 18,
@@ -352,12 +467,12 @@ const styles = StyleSheet.create({
     color: '#FFF',
   },
   keepSwipingButton: {
-    paddingVertical: 14,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   keepSwipingText: {
     fontSize: 16,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
   },
 });

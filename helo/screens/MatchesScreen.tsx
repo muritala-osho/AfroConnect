@@ -29,6 +29,7 @@ import { StoredUser } from "@/utils/storage";
 import { getPhotoSource } from "@/utils/photos";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { Image as ExpoImage } from "expo-image";
+import LikeCard from "@/components/LikeCard";
 
 const { width } = Dimensions.get("window");
 const CARD_GAP = 10;
@@ -263,129 +264,46 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     }
   }, [token, api]);
 
+  const handlePremiumRequired = useCallback(() => {
+    showAlert(
+      'Premium Feature',
+      'Upgrade to Premium to like back directly from this tab.',
+      [{ text: 'Upgrade', onPress: () => navigation.navigate('Premium') }, { text: 'Cancel', style: 'cancel' }],
+      'star'
+    );
+  }, [showAlert, navigation]);
+
+  const handleLikeCardPress = useCallback((userId: string) => {
+    if (!user?.premium?.isActive) {
+      showAlert(
+        'Premium Feature',
+        'Upgrade to Premium to see who liked you.',
+        [{ text: 'Upgrade', onPress: () => navigation.navigate('Premium') }, { text: 'Cancel', style: 'cancel' }],
+        'star'
+      );
+    } else {
+      navigation.navigate("ProfileDetail", { userId, isFromLikes: true, likeUserId: userId });
+    }
+  }, [user, showAlert, navigation]);
+
+  const handleRemoveLike = useCallback((userId: string) => {
+    setWhoLikesMe(prev => prev.filter(u => u._id !== userId));
+  }, []);
+
   const renderLikeCard = (likeUser: any, isTall: boolean, isLast: boolean = false) => {
-    const photoSource = likeUser.photos?.[0] ? getPhotoSource(likeUser.photos[0]) : null;
-    const cardHeight = isTall ? TALL_CARD_HEIGHT : SHORT_CARD_HEIGHT;
-    
-    // Swipe logic for Likes page
-    const translateX = useSharedValue(0);
-    const context = useSharedValue({ x: 0 });
-
-    const gesture = Gesture.Pan()
-      .onStart(() => {
-        context.value = { x: translateX.value };
-      })
-      .onUpdate((event) => {
-        translateX.value = event.translationX + context.value.x;
-      })
-      .onEnd((event) => {
-        if (translateX.value > width * 0.25) {
-          if (!user?.premium?.isActive) {
-            translateX.value = withSpring(0);
-            runOnJS(showAlert)(
-              'Premium Feature',
-              'Upgrade to Premium to like back directly from this tab.',
-              [{ text: 'Upgrade', onPress: () => navigation.navigate('Premium') }, { text: 'Cancel', style: 'cancel' }],
-              'star'
-            );
-            return;
-          }
-          translateX.value = withTiming(width, { duration: 200 }, () => {
-            runOnJS(handleLikeBack)(likeUser._id);
-          });
-        } else if (translateX.value < -width * 0.25) {
-          translateX.value = withTiming(-width, { duration: 200 }, () => {
-            runOnJS(handlePass)(likeUser._id);
-            runOnJS(setWhoLikesMe)(prev => prev.filter(u => u._id !== likeUser._id));
-          });
-        } else {
-          translateX.value = withSpring(0);
-        }
-      });
-
-    const animatedStyle = useAnimatedStyle(() => ({
-      transform: [{ translateX: translateX.value }],
-    }));
-
-    const likeIndicatorStyle = useAnimatedStyle(() => ({
-      opacity: interpolate(translateX.value, [0, width * 0.2], [0, 1]),
-    }));
-
-    const nopeIndicatorStyle = useAnimatedStyle(() => ({
-      opacity: interpolate(translateX.value, [0, -width * 0.2], [0, 1]),
-    }));
-
     return (
-      <GestureDetector gesture={gesture}>
-        <Animated.View
-          key={likeUser._id}
-          style={[styles.matchCard, animatedStyle, { height: cardHeight, marginBottom: isLast ? 0 : CARD_GAP }]}
-        >
-          <Pressable
-            style={styles.likeCardContent}
-            onPress={() => {
-              if (!user?.premium?.isActive) {
-                showAlert(
-                  'Premium Feature',
-                  'Upgrade to Premium to see who liked you.',
-                  [{ text: 'Upgrade', onPress: () => navigation.navigate('Premium') }, { text: 'Cancel', style: 'cancel' }],
-                  'star'
-                );
-              } else {
-                navigation.navigate("ProfileDetail", { userId: likeUser._id, isFromLikes: true, likeUserId: likeUser._id });
-              }
-            }}
-          >
-            {photoSource ? (
-              <Image
-                source={photoSource}
-                style={[styles.matchPhoto, likeUser.isBlurred && { filter: 'blur(10px)' }]}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={[styles.matchPhoto, styles.noPhotoContainer]}>
-                <Feather name="user" size={50} color="#666" />
-              </View>
-            )}
-            
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.8)']}
-              style={styles.cardGradient}
-            />
-
-            {/* Swipe Indicators */}
-            <Animated.View style={[styles.swipeIndicator, styles.likeIndicator, likeIndicatorStyle]}>
-              <Feather name="heart" size={30} color="#FFF" />
-            </Animated.View>
-            <Animated.View style={[styles.swipeIndicator, styles.nopeIndicator, nopeIndicatorStyle]}>
-              <Feather name="x" size={30} color="#FFF" />
-            </Animated.View>
-            
-            <View style={[styles.matchBadge, { backgroundColor: '#FF6B6B' }]}>
-              <ThemedText style={styles.matchBadgeText}>Likes you</ThemedText>
-            </View>
-            
-            {likeUser.onlineStatus && (
-              <View style={styles.onlineDot} />
-            )}
-            
-            <View style={styles.cardInfo}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <ThemedText style={styles.cardName} numberOfLines={1}>
-                  {likeUser.name}{likeUser.age ? `, ${likeUser.age}` : ''}
-                </ThemedText>
-                {likeUser.verified && (
-                  <ExpoImage 
-                    source={require("@/assets/icons/verified-tick.png")} 
-                    style={{ width: 18, height: 18, marginLeft: 4 }} 
-                    contentFit="contain"
-                  />
-                )}
-              </View>
-            </View>
-          </Pressable>
-        </Animated.View>
-      </GestureDetector>
+      <LikeCard
+        key={likeUser._id}
+        likeUser={likeUser}
+        isTall={isTall}
+        isLast={isLast}
+        isPremium={user?.premium?.isActive || false}
+        onLikeBack={handleLikeBack}
+        onPass={handlePass}
+        onPress={handleLikeCardPress}
+        onPremiumRequired={handlePremiumRequired}
+        onRemove={handleRemoveLike}
+      />
     );
   };
 
