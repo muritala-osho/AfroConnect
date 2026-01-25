@@ -178,29 +178,34 @@ export default function ProfileDetailScreen() {
             </View>
           </View>
 
-          <View style={styles.actionButtonsRow}>
+          <View style={styles.actionButtonsContainer}>
             <Pressable
-              style={[styles.actionButton, { backgroundColor: theme.primary }]}
+              style={[styles.primaryActionButton, { backgroundColor: theme.primary }]}
               onPress={() => {
                 if (currentUser?.premium?.isActive) {
                   navigation.navigate('ChatDetail', { userId: user._id, userName: user.name });
                 } else {
-                  navigation.navigate('Subscription' as any);
+                  navigation.navigate('Premium' as any);
                 }
               }}
             >
-              <Feather name="message-circle" size={20} color="#FFF" />
-              <ThemedText style={styles.actionButtonText}>
-                {currentUser?.premium?.isActive ? 'Message' : 'Message (Premium)'}
+              <Feather name="message-circle" size={22} color="#FFF" />
+              <ThemedText style={styles.primaryButtonText}>
+                {currentUser?.premium?.isActive ? 'Send Message' : 'Unlock to Message'}
               </ThemedText>
+              {!currentUser?.premium?.isActive && (
+                <View style={styles.premiumBadge}>
+                  <Ionicons name="star" size={12} color="#FFD700" />
+                </View>
+              )}
             </Pressable>
             
             <Pressable
-              style={[styles.actionButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
+              style={[styles.secondaryActionButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
               onPress={() => navigation.navigate('DistanceWeather' as any, { userId: user._id, userName: user.name })}
             >
               <Ionicons name="location" size={20} color={theme.primary} />
-              <ThemedText style={[styles.actionButtonText, { color: theme.text }]}>Distance & Weather</ThemedText>
+              <ThemedText style={[styles.secondaryButtonText, { color: theme.text }]}>Distance & Weather</ThemedText>
             </Pressable>
           </View>
 
@@ -324,13 +329,27 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap', 
     gap: 8 
   },
-  actionButtonsRow: {
-    flexDirection: 'row',
+  actionButtonsContainer: {
     gap: 12,
     marginBottom: Spacing.lg,
   },
-  actionButton: {
-    flex: 1,
+  primaryActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: BorderRadius.lg,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  premiumBadge: {
+    marginLeft: 4,
+  },
+  secondaryActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -338,10 +357,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: BorderRadius.md,
   },
-  actionButtonText: {
+  secondaryButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFF',
   },
   interestTag: {
     paddingHorizontal: 14,

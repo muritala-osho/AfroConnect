@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform } from "react-native";
+import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
@@ -65,23 +66,26 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
     return name[0] + "****" + name[name.length - 1];
   };
 
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  const handleVisitorPress = (visitorUser: any) => {
+    if (isPremium) {
+      navigation.navigate("ProfileDetail", { userId: visitorUser._id });
+    } else {
+      setShowPremiumModal(true);
+    }
+  };
+
   const renderVisitor = ({ item }: { item: Visitor }) => {
     const visitorUser = item.user;
     if (!visitorUser) return null;
 
-    const name = isPremium ? visitorUser.name : hashName(visitorUser.name);
     const photoSource = visitorUser.photos?.[0] ? getPhotoSource(visitorUser.photos[0]) : null;
 
     return (
       <Pressable 
         style={[styles.visitorCard, { backgroundColor: theme.surface }]}
-        onPress={() => {
-          if (isPremium) {
-            navigation.navigate("ProfileDetail", { userId: visitorUser._id });
-          } else {
-            navigation.navigate("Premium");
-          }
-        }}
+        onPress={() => handleVisitorPress(visitorUser)}
       >
         <View style={styles.photoContainer}>
           {photoSource ? (
@@ -89,7 +93,6 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
               source={photoSource} 
               style={styles.photo} 
               contentFit="cover"
-              blurRadius={isPremium ? 0 : 20}
             />
           ) : (
             <View style={[styles.photo, { backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }]}>
@@ -99,7 +102,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         </View>
         <View style={styles.infoContainer}>
           <View style={styles.nameRow}>
-            <ThemedText style={styles.name}>{name}, {visitorUser.age}</ThemedText>
+            <ThemedText style={styles.name}>{visitorUser.name}, {visitorUser.age}</ThemedText>
             {visitorUser.verified && (
                <Image 
                source={require("@/assets/icons/verified-tick.png")} 
@@ -112,7 +115,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
             Visited {new Date(item.viewedAt).toLocaleDateString()}
           </ThemedText>
         </View>
-        {!isPremium && <Feather name="lock" size={16} color={theme.textSecondary} />}
+        {!isPremium && <Feather name="lock" size={16} color={theme.primary} />}
       </Pressable>
     );
   };
@@ -154,9 +157,44 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
           onPress={() => navigation.navigate("Premium")}
         >
           <Feather name="star" size={20} color="#FFF" />
-          <ThemedText style={styles.premiumText}>Upgrade to see who viewed you</ThemedText>
+          <ThemedText style={styles.premiumText}>Upgrade to view full profiles</ThemedText>
         </Pressable>
       )}
+
+      <Modal
+        visible={showPremiumModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPremiumModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+            <View style={[styles.modalIcon, { backgroundColor: theme.primary + '20' }]}>
+              <Ionicons name="lock-closed" size={32} color={theme.primary} />
+            </View>
+            <ThemedText style={styles.modalTitle}>Premium Feature</ThemedText>
+            <ThemedText style={[styles.modalText, { color: theme.textSecondary }]}>
+              Upgrade to Premium to view full profiles and connect with people who visited you.
+            </ThemedText>
+            <Pressable 
+              style={[styles.unlockButton, { backgroundColor: theme.primary }]}
+              onPress={() => {
+                setShowPremiumModal(false);
+                navigation.navigate("Premium");
+              }}
+            >
+              <Ionicons name="star" size={18} color="#FFF" />
+              <ThemedText style={styles.unlockButtonText}>Unlock Premium</ThemedText>
+            </Pressable>
+            <Pressable 
+              style={styles.cancelButton}
+              onPress={() => setShowPremiumModal(false)}
+            >
+              <ThemedText style={{ color: theme.textSecondary }}>Maybe Later</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -247,5 +285,57 @@ const styles = StyleSheet.create({
   premiumText: {
     color: '#FFF',
     fontWeight: '700',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  unlockButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 25,
+    width: '100%',
+  },
+  unlockButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  cancelButton: {
+    marginTop: 12,
+    paddingVertical: 8,
   },
 });

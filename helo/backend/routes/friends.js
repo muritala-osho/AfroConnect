@@ -39,6 +39,10 @@ router.post('/request', protect, async (req, res) => {
       reverseRequest.status = 'accepted';
       await reverseRequest.save();
 
+      // Convert to ObjectIds for comparison
+      const userId1 = req.user._id.toString();
+      const userId2 = receiverId.toString();
+
       // Check if match already exists
       const existingMatch = await Match.findOne({
         users: { $all: [req.user._id, receiverId] },
@@ -47,11 +51,24 @@ router.post('/request', protect, async (req, res) => {
 
       let match = existingMatch;
       if (!existingMatch) {
-        // Create a match
-        match = await Match.create({
-          users: [req.user._id, receiverId],
-          isSuperLike: false
-        });
+        try {
+          // Create a match
+          match = await Match.create({
+            users: [req.user._id, receiverId],
+            isSuperLike: false,
+            status: 'active'
+          });
+          console.log('Match created successfully:', match._id, 'between', userId1, 'and', userId2);
+        } catch (matchError) {
+          console.error('Error creating match:', matchError);
+          // Return success for the mutual like even if match creation fails
+          return res.status(200).json({ 
+            success: true, 
+            isMatch: true,
+            matchedUser: reverseRequest.sender,
+            message: "It's a match!"
+          });
+        }
       }
 
       return res.status(200).json({ 
