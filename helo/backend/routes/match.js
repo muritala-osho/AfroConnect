@@ -20,13 +20,13 @@ router.get('/who-likes-me', protect, async (req, res) => {
       status: 'pending'
     }).populate('sender', 'name age bio photos location onlineStatus lastActive interests verified lifestyle gender');
     
-    // Extract the users who sent requests
+    // Extract the users who sent requests (already plain objects from populate)
     const usersWhoLikedMe = pendingRequests
       .filter(req => req.sender)
-      .map(req => req.sender);
+      .map(req => req.sender.toObject ? req.sender.toObject() : req.sender);
 
     let processedUsers = usersWhoLikedMe.map(u => {
-      const userObj = u.toObject();
+      const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
       let score = 0;
       
       // Compatibility scoring (Worldwide Focus)
@@ -45,7 +45,7 @@ router.get('/who-likes-me', protect, async (req, res) => {
 
     if (!isPremium) {
       processedUsers = processedUsers.map(u => {
-        const userObj = u.toObject();
+        const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
         let distance = null;
         if (req.user.location?.coordinates && userObj.location?.coordinates) {
           distance = calculateDistance(

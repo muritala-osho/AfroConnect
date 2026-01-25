@@ -40,23 +40,32 @@ export default function DistanceWeatherScreen() {
 
   const loadData = async () => {
     try {
-      const [userResponse, locationResult] = await Promise.all([
-        get<any>(`/users/${userId}`, token || ""),
-        Location.requestForegroundPermissionsAsync().then(async ({ status }) => {
-          if (status === 'granted') {
-            const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            return { lat: loc.coords.latitude, lng: loc.coords.longitude };
-          }
-          return null;
-        })
-      ]);
-
+      // Fetch user data first
+      const userResponse = await get<any>(`/users/${userId}`, token || "");
+      
       if (userResponse.success && userResponse.data?.user) {
         setOtherUser(userResponse.data.user);
         
+        // Try to get current location, but don't fail if unavailable
+        let locationResult = null;
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({ 
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 5000,
+              distanceInterval: 10
+            });
+            locationResult = { lat: loc.coords.latitude, lng: loc.coords.longitude };
+          }
+        } catch (locError) {
+          console.log("Location unavailable, using other user's location for weather");
+        }
+        
+        const otherLoc = userResponse.data.user.location?.coordinates;
+        
         if (locationResult) {
           setMyLocation(locationResult);
-          const otherLoc = userResponse.data.user.location?.coordinates;
           if (otherLoc && otherLoc.length === 2) {
             const dist = calculateDistance(
               locationResult.lat,
@@ -71,12 +80,9 @@ export default function DistanceWeatherScreen() {
           const weatherLat = otherLoc?.[1] || locationResult.lat;
           const weatherLng = otherLoc?.[0] || locationResult.lng;
           fetchWeather(weatherLat, weatherLng);
-        } else {
-          // No permission, try to get weather from their location if available
-          const otherLoc = userResponse.data.user.location?.coordinates;
-          if (otherLoc && otherLoc.length === 2) {
-            fetchWeather(otherLoc[1], otherLoc[0]);
-          }
+        } else if (otherLoc && otherLoc.length === 2) {
+          // No permission/location available, try to get weather from their location
+          fetchWeather(otherLoc[1], otherLoc[0]);
         }
       }
     } catch (error) {
