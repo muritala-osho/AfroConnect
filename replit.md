@@ -40,13 +40,22 @@ This architecture enables unified URL handling where the gateway proxies API req
 - **Error Boundaries**: Class-based error boundary with fallback UI for crash recovery
 
 ### Core Features
-- Swipe-based matching with location filtering and preference scoring
-- Real-time messaging with typing indicators, read receipts, and reactions
+- Swipe-based matching with location filtering and preference scoring (excludes already-matched users)
+- Real-time messaging with typing indicators, read receipts, reactions, and multiple message types (text, image, audio, location)
+- Chat enhancements: 17 custom themes, voice recording, location sharing, image upload, emoji picker, AI message suggestions, report user
 - Voice/video calling via Agora RTC integration
 - Stories feature for ephemeral content sharing
 - Profile verification with multi-step photo process
+- Profile visitors screen with premium gating (blurred photos and hashed names for non-premium users)
 - Admin dashboard for moderation and analytics
 - Push notifications via Expo notifications service
+
+### Recent Updates (January 2026)
+- Added location message type support with coordinates and address display
+- Implemented AI chat suggestions via OpenAI GPT-4 with template fallback
+- Enhanced profile visitors page with premium gating features
+- Updated discovery to exclude users you've already matched with
+- Voice message recording with duration tracking and Cloudinary upload
 
 ## External Dependencies
 
