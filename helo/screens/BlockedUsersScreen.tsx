@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, FlatList, ActivityIndicator, Pressable, Image } from "react-native";
+import { View, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { Image } from "expo-image";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
@@ -7,6 +8,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { useThemedAlert } from "@/components/ThemedAlert";
+import { getPhotoSource } from "@/utils/photos";
 
 export default function BlockedUsersScreen() {
   const { theme } = useTheme();
@@ -47,11 +49,14 @@ export default function BlockedUsersScreen() {
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => (
+  const renderItem = ({ item }: { item: any }) => {
+    const photoSource = getPhotoSource(item.photos?.[0]) || { uri: 'https://via.placeholder.com/50' };
+    return (
     <View style={[styles.userCard, { backgroundColor: theme.settingsItemBg }]}>
       <Image 
-        source={{ uri: item.photos?.[0] || 'https://via.placeholder.com/50' }} 
-        style={styles.avatar} 
+        source={photoSource} 
+        style={styles.avatar}
+        contentFit="cover"
       />
       <View style={styles.userInfo}>
         <ThemedText style={styles.userName}>{item.name}</ThemedText>
@@ -64,7 +69,8 @@ export default function BlockedUsersScreen() {
         <ThemedText style={{ color: theme.primary, fontWeight: '600' }}>Unblock</ThemedText>
       </Pressable>
     </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
