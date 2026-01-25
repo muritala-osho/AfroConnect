@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
@@ -15,7 +16,10 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { Image } from "expo-image";
+import { getPhotoSource } from "@/utils/photos";
 import * as Location from "expo-location";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
@@ -25,6 +29,7 @@ export default function DistanceWeatherScreen() {
   const { get } = useApi();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { userId, userName } = route.params || {};
 
   const [loading, setLoading] = useState(true);
@@ -40,13 +45,11 @@ export default function DistanceWeatherScreen() {
 
   const loadData = async () => {
     try {
-      // Fetch user data first
       const userResponse = await get<any>(`/users/${userId}`, token || "");
       
       if (userResponse.success && userResponse.data?.user) {
         setOtherUser(userResponse.data.user);
         
-        // Try to get current location, but don't fail if unavailable
         let locationResult = null;
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -59,7 +62,7 @@ export default function DistanceWeatherScreen() {
             locationResult = { lat: loc.coords.latitude, lng: loc.coords.longitude };
           }
         } catch (locError) {
-          console.log("Location unavailable, using other user's location for weather");
+          console.log("Location unavailable");
         }
         
         const otherLoc = userResponse.data.user.location?.coordinates;
@@ -76,12 +79,10 @@ export default function DistanceWeatherScreen() {
             setDistance(dist);
           }
           
-          // Fetch weather for either their location or current user's location
           const weatherLat = otherLoc?.[1] || locationResult.lat;
           const weatherLng = otherLoc?.[0] || locationResult.lng;
           fetchWeather(weatherLat, weatherLng);
         } else if (otherLoc && otherLoc.length === 2) {
-          // No permission/location available, try to get weather from their location
           fetchWeather(otherLoc[1], otherLoc[0]);
         }
       }
@@ -156,11 +157,22 @@ export default function DistanceWeatherScreen() {
     return descriptions[code] || "Unknown";
   };
 
+  const getWeatherGradient = (code: number): [string, string] => {
+    if (code === 0 || code === 1) return ['#FFB74D', '#FF9800'];
+    if (code <= 3) return ['#90CAF9', '#42A5F5'];
+    if (code <= 48) return ['#B0BEC5', '#78909C'];
+    if (code <= 67) return ['#64B5F6', '#1976D2'];
+    if (code <= 77) return ['#E0E0E0', '#9E9E9E'];
+    return ['#7986CB', '#3F51B5'];
+  };
+
   const hasValidLocation = otherUser?.location?.coordinates && 
     Array.isArray(otherUser.location.coordinates) && 
     otherUser.location.coordinates.length === 2 &&
     otherUser.location.coordinates[0] !== 0 &&
     otherUser.location.coordinates[1] !== 0;
+
+  const userPhoto = otherUser?.photos?.[0] ? getPhotoSource(otherUser.photos[0]) : null;
 
   if (loading) {
     return (
@@ -174,127 +186,171 @@ export default function DistanceWeatherScreen() {
   return (
     <ThemedView style={styles.container}>
       <ScreenScrollView>
-        {/* Header */}
-        <View style={styles.header}>
-          <Pressable style={[styles.backButton, { backgroundColor: theme.surface }]} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={24} color={theme.text} />
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <ThemedText style={styles.title}>Distance & Weather</ThemedText>
-            <ThemedText style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-              {userName || 'User'}
-            </ThemedText>
+        {/* Header with User Photo */}
+        <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+          <LinearGradient
+            colors={[theme.primary, theme.primary + '80', 'transparent']}
+            style={styles.headerGradient}
+          />
+          
+          <View style={styles.headerRow}>
+            <Pressable 
+              style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.2)' }]} 
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={24} color="#FFF" />
+            </Pressable>
+            <ThemedText style={styles.headerTitle}>Distance & Weather</ThemedText>
+            <View style={{ width: 40 }} />
           </View>
-          <View style={{ width: 40 }} />
-        </View>
-
-        <View style={styles.content}>
-          {/* Distance Card */}
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialCommunityIcons name="map-marker-distance" size={28} color={theme.primary} />
-              </View>
-              <ThemedText style={styles.cardTitle}>Distance</ThemedText>
-            </View>
-            
-            <View style={styles.cardBody}>
-              {distance !== null ? (
-                <>
-                  <ThemedText style={[styles.bigValue, { color: theme.primary }]}>
-                    {distance < 1 ? `${Math.round(distance * 1000)}` : distance.toFixed(1)}
-                  </ThemedText>
-                  <ThemedText style={[styles.valueUnit, { color: theme.textSecondary }]}>
-                    {distance < 1 ? 'meters' : 'km'}
-                  </ThemedText>
-                </>
+          
+          {/* User Info */}
+          <View style={styles.userInfo}>
+            <View style={styles.userPhotoContainer}>
+              {userPhoto ? (
+                <Image source={userPhoto} style={styles.userPhoto} contentFit="cover" />
               ) : (
-                <>
-                  <Ionicons name="location-outline" size={40} color={theme.textSecondary} />
-                  <ThemedText style={[styles.noDataText, { color: theme.textSecondary }]}>
-                    {!myLocation ? 'Enable location permission' : 'User location not shared'}
-                  </ThemedText>
-                </>
+                <View style={[styles.userPhoto, styles.noPhoto]}>
+                  <Ionicons name="person" size={40} color="#999" />
+                </View>
               )}
             </View>
-            
+            <ThemedText style={styles.userName}>{userName || otherUser?.name || 'User'}</ThemedText>
             {otherUser?.location?.city && (
-              <View style={[styles.locationBadge, { backgroundColor: theme.primary + '10' }]}>
-                <Ionicons name="location" size={14} color={theme.primary} />
-                <ThemedText style={[styles.locationText, { color: theme.primary }]}>
+              <View style={styles.locationPill}>
+                <Ionicons name="location" size={14} color="#FFF" />
+                <ThemedText style={styles.locationPillText}>
                   {otherUser.location.city}{otherUser.location.country ? `, ${otherUser.location.country}` : ''}
                 </ThemedText>
               </View>
             )}
           </View>
+        </View>
 
-          {/* Weather Card */}
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: '#FFB800' + '15' }]}>
+        <View style={styles.content}>
+          {/* Distance & Weather Cards Row */}
+          <View style={styles.cardsRow}>
+            {/* Distance Card */}
+            <View style={[styles.miniCard, { backgroundColor: theme.surface }]}>
+              <View style={[styles.miniIconCircle, { backgroundColor: theme.primary + '20' }]}>
+                <MaterialCommunityIcons name="map-marker-distance" size={24} color={theme.primary} />
+              </View>
+              <ThemedText style={[styles.miniCardLabel, { color: theme.textSecondary }]}>Distance</ThemedText>
+              {distance !== null ? (
+                <View style={styles.valueRow}>
+                  <ThemedText style={[styles.miniCardValue, { color: theme.primary }]}>
+                    {distance < 1 ? Math.round(distance * 1000) : distance.toFixed(0)}
+                  </ThemedText>
+                  <ThemedText style={[styles.miniCardUnit, { color: theme.textSecondary }]}>
+                    {distance < 1 ? 'm' : 'km'}
+                  </ThemedText>
+                </View>
+              ) : (
+                <ThemedText style={[styles.miniCardValue, { color: theme.textSecondary, fontSize: 14 }]}>
+                  {!myLocation ? 'No permission' : 'Not shared'}
+                </ThemedText>
+              )}
+            </View>
+
+            {/* Temperature Card */}
+            <View style={[styles.miniCard, { backgroundColor: theme.surface }]}>
+              <View style={[styles.miniIconCircle, { backgroundColor: '#FFB800' + '20' }]}>
                 <Ionicons 
                   name={weather?.current?.weather_code !== undefined ? getWeatherIcon(weather.current.weather_code) : "cloudy"} 
-                  size={28} 
+                  size={24} 
                   color="#FFB800" 
                 />
               </View>
-              <ThemedText style={styles.cardTitle}>Weather</ThemedText>
-            </View>
-            
-            <View style={styles.cardBody}>
+              <ThemedText style={[styles.miniCardLabel, { color: theme.textSecondary }]}>Temperature</ThemedText>
               {weatherLoading ? (
-                <ActivityIndicator size="large" color="#FFB800" />
+                <ActivityIndicator size="small" color="#FFB800" />
               ) : weather?.current ? (
-                <>
-                  <ThemedText style={[styles.bigValue, { color: '#FFB800' }]}>
-                    {Math.round(weather.current.temperature_2m)}°
+                <View style={styles.valueRow}>
+                  <ThemedText style={[styles.miniCardValue, { color: '#FFB800' }]}>
+                    {Math.round(weather.current.temperature_2m)}
                   </ThemedText>
-                  <ThemedText style={[styles.weatherCondition, { color: theme.text }]}>
-                    {getWeatherDescription(weather.current.weather_code)}
-                  </ThemedText>
-                </>
+                  <ThemedText style={[styles.miniCardUnit, { color: theme.textSecondary }]}>°C</ThemedText>
+                </View>
               ) : (
-                <>
-                  <Ionicons name="cloud-offline-outline" size={40} color={theme.textSecondary} />
-                  <ThemedText style={[styles.noDataText, { color: theme.textSecondary }]}>
-                    Weather unavailable
-                  </ThemedText>
-                </>
+                <ThemedText style={[styles.miniCardValue, { color: theme.textSecondary, fontSize: 14 }]}>
+                  Unavailable
+                </ThemedText>
               )}
             </View>
-            
-            {weather?.current && (
+          </View>
+
+          {/* Weather Details Card */}
+          {weather?.current && (
+            <View style={[styles.weatherCard, { backgroundColor: theme.surface }]}>
+              <LinearGradient
+                colors={getWeatherGradient(weather.current.weather_code)}
+                style={styles.weatherCardGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <View style={styles.weatherCardContent}>
+                  <Ionicons 
+                    name={getWeatherIcon(weather.current.weather_code)} 
+                    size={60} 
+                    color="#FFF" 
+                  />
+                  <View style={styles.weatherCardText}>
+                    <ThemedText style={styles.weatherTemp}>
+                      {Math.round(weather.current.temperature_2m)}°C
+                    </ThemedText>
+                    <ThemedText style={styles.weatherDesc}>
+                      {getWeatherDescription(weather.current.weather_code)}
+                    </ThemedText>
+                  </View>
+                </View>
+              </LinearGradient>
+              
               <View style={styles.weatherStats}>
                 <View style={[styles.statItem, { backgroundColor: theme.background }]}>
-                  <Ionicons name="water" size={18} color="#4FC3F7" />
+                  <Ionicons name="water" size={20} color="#4FC3F7" />
                   <ThemedText style={styles.statValue}>{weather.current.relative_humidity_2m}%</ThemedText>
                   <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Humidity</ThemedText>
                 </View>
                 <View style={[styles.statItem, { backgroundColor: theme.background }]}>
-                  <Feather name="wind" size={18} color="#81C784" />
-                  <ThemedText style={styles.statValue}>{Math.round(weather.current.wind_speed_10m)}</ThemedText>
-                  <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>km/h Wind</ThemedText>
+                  <Feather name="wind" size={20} color="#81C784" />
+                  <ThemedText style={styles.statValue}>{Math.round(weather.current.wind_speed_10m)} km/h</ThemedText>
+                  <ThemedText style={[styles.statLabel, { color: theme.textSecondary }]}>Wind Speed</ThemedText>
                 </View>
               </View>
-            )}
-          </View>
+            </View>
+          )}
 
           {/* Map Button */}
           {hasValidLocation ? (
             <Pressable
-              style={[styles.mapButton, { backgroundColor: theme.primary }]}
+              style={({ pressed }) => [
+                styles.mapButton, 
+                { backgroundColor: theme.primary, opacity: pressed ? 0.8 : 1 }
+              ]}
               onPress={() => navigation.navigate('UserDistanceMap', { otherUser })}
             >
-              <Feather name="map" size={22} color="#FFF" />
-              <ThemedText style={styles.mapButtonText}>View on Map</ThemedText>
-              <Ionicons name="chevron-forward" size={20} color="#FFF" />
+              <View style={styles.mapButtonContent}>
+                <View style={styles.mapButtonIcon}>
+                  <Feather name="map" size={24} color="#FFF" />
+                </View>
+                <View style={styles.mapButtonText}>
+                  <ThemedText style={styles.mapButtonTitle}>View on Map</ThemedText>
+                  <ThemedText style={styles.mapButtonSubtitle}>See exact location</ThemedText>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color="#FFF" />
+              </View>
             </Pressable>
           ) : (
-            <View style={[styles.mapButton, { backgroundColor: theme.textSecondary + '40' }]}>
-              <Feather name="map-pin" size={22} color={theme.textSecondary} />
-              <ThemedText style={[styles.mapButtonText, { color: theme.textSecondary }]}>
-                Map unavailable - location not shared
-              </ThemedText>
+            <View style={[styles.mapButton, { backgroundColor: theme.surface }]}>
+              <View style={styles.mapButtonContent}>
+                <View style={[styles.mapButtonIcon, { backgroundColor: theme.textSecondary + '20' }]}>
+                  <Feather name="map-pin" size={24} color={theme.textSecondary} />
+                </View>
+                <View style={styles.mapButtonText}>
+                  <ThemedText style={[styles.mapButtonTitle, { color: theme.textSecondary }]}>Map Unavailable</ThemedText>
+                  <ThemedText style={[styles.mapButtonSubtitle, { color: theme.textSecondary }]}>Location not shared</ThemedText>
+                </View>
+              </View>
             </View>
           )}
         </View>
@@ -311,16 +367,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  header: {
+  headerContainer: {
+    position: 'relative',
+    paddingBottom: Spacing.xl,
+  },
+  headerGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 200,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.md,
-    paddingTop: 50,
-    paddingBottom: Spacing.lg,
-  },
-  headerCenter: {
-    alignItems: 'center',
+    paddingTop: Spacing.md,
   },
   backButton: {
     width: 40,
@@ -329,88 +392,138 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: {
+  headerTitle: {
     fontSize: 18,
     fontWeight: '700',
+    color: '#FFF',
   },
-  headerSubtitle: {
+  userInfo: {
+    alignItems: 'center',
+    marginTop: Spacing.lg,
+  },
+  userPhotoContainer: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  userPhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#FFF',
+  },
+  noPhoto: {
+    backgroundColor: '#E0E0E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#FFF',
+    marginTop: Spacing.md,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.full,
+    gap: 4,
+    marginTop: Spacing.sm,
+  },
+  locationPillText: {
     fontSize: 13,
-    marginTop: 2,
+    color: '#FFF',
+    fontWeight: '500',
   },
   content: {
     padding: Spacing.lg,
     gap: Spacing.lg,
   },
-  card: {
+  cardsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  miniCard: {
+    flex: 1,
     borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
+    padding: Spacing.lg,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  iconCircle: {
+  miniIconCircle: {
     width: 50,
     height: 50,
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: Spacing.sm,
   },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  miniCardLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: Spacing.xs,
   },
-  cardBody: {
-    alignItems: 'center',
-    paddingVertical: Spacing.lg,
-    minHeight: 100,
-    justifyContent: 'center',
-  },
-  bigValue: {
-    fontSize: 56,
+  miniCardValue: {
+    fontSize: 28,
     fontWeight: '800',
-    lineHeight: 60,
   },
-  valueUnit: {
+  miniCardUnit: {
     fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 2,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  weatherCard: {
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  weatherCardGradient: {
+    padding: Spacing.xl,
+  },
+  weatherCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.lg,
+  },
+  weatherCardText: {
+    flex: 1,
+  },
+  weatherTemp: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  weatherDesc: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
     fontWeight: '500',
     marginTop: 4,
   },
-  weatherCondition: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  noDataText: {
-    fontSize: 14,
-    marginTop: Spacing.sm,
-    textAlign: 'center',
-  },
-  locationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    gap: 6,
-    marginTop: Spacing.sm,
-  },
-  locationText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
   weatherStats: {
     flexDirection: 'row',
+    padding: Spacing.md,
     gap: Spacing.md,
-    marginTop: Spacing.md,
   },
   statItem: {
     flex: 1,
@@ -420,7 +533,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   statLabel: {
@@ -428,17 +541,39 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   mapButton: {
+    borderRadius: BorderRadius.xl,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  mapButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
     padding: Spacing.lg,
-    borderRadius: BorderRadius.xl,
+    gap: Spacing.md,
+  },
+  mapButtonIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mapButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
     flex: 1,
+  },
+  mapButtonTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  mapButtonSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
 });

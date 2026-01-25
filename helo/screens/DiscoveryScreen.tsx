@@ -659,17 +659,20 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
         
         if (response.data?.isMatch) {
-          // It's a mutual match!
-          showAlert(
-            "It's a Match!",
-            `You and ${targetUser.name} liked each other! 🎉 Start chatting now.`,
-            [{ text: 'Start Chat', style: 'default', onPress: () => navigation.navigate('ChatDetail', { userId: targetUser.id, userName: targetUser.name }) },
-             { text: 'Keep Swiping', style: 'cancel' }],
-            'heart'
-          );
-        } else {
-          // Request sent
-          // No need to show alert for every like, it slows down the experience
+          // It's a mutual match! Navigate to the match popup
+          navigation.navigate('MatchPopup', {
+            currentUser: {
+              id: user.id,
+              name: user.name,
+              photos: user.photos || []
+            },
+            matchedUser: {
+              id: targetUser.id,
+              name: targetUser.name,
+              photos: targetUser.photos || []
+            },
+            isSuperLike: false
+          });
         }
       }
     } catch (error: any) {
