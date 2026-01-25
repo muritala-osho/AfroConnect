@@ -26,6 +26,28 @@ router.post('/request', protect, async (req, res) => {
 
     if (existingRequest) {
       console.log('[MATCH] Request already exists, status:', existingRequest.status);
+      
+      // If the request is already accepted, check if there's an existing match
+      if (existingRequest.status === 'accepted') {
+        const existingMatch = await Match.findOne({
+          users: { $all: [req.user._id, receiverId] },
+          status: 'active'
+        });
+        
+        if (existingMatch) {
+          // Get matched user info
+          const matchedUser = await User.findById(receiverId).select('name photos age');
+          console.log('[MATCH] Already matched! Returning match info');
+          return res.status(200).json({ 
+            success: true, 
+            isMatch: true,
+            match: existingMatch,
+            matchedUser,
+            message: "You're already matched!"
+          });
+        }
+      }
+      
       return res.status(400).json({ success: false, message: 'Match request already sent' });
     }
 

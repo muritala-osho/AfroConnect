@@ -52,34 +52,35 @@ export default function LikeCard({
   const context = useSharedValue({ x: 0 });
 
   const gesture = Gesture.Pan()
-    .activeOffsetX([-10, 10])
-    .failOffsetY([-20, 20])
+    .activeOffsetX([-5, 5])
+    .failOffsetY([-30, 30])
+    .minDistance(5)
     .onStart(() => {
       context.value = { x: translateX.value };
     })
     .onUpdate((event) => {
-      translateX.value = event.translationX * 1.2 + context.value.x;
+      translateX.value = event.translationX * 1.5 + context.value.x;
     })
     .onEnd((event) => {
       const velocity = event.velocityX;
-      const threshold = width * 0.2;
+      const threshold = width * 0.12;
       
-      if (translateX.value > threshold || velocity > 500) {
+      if (translateX.value > threshold || velocity > 300) {
         if (!isPremium) {
-          translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+          translateX.value = withSpring(0, { damping: 15, stiffness: 400 });
           runOnJS(onPremiumRequired)();
           return;
         }
-        translateX.value = withTiming(width, { duration: 150 }, () => {
+        translateX.value = withTiming(width, { duration: 120 }, () => {
           runOnJS(onLikeBack)(likeUser._id);
         });
-      } else if (translateX.value < -threshold || velocity < -500) {
-        translateX.value = withTiming(-width, { duration: 150 }, () => {
+      } else if (translateX.value < -threshold || velocity < -300) {
+        translateX.value = withTiming(-width, { duration: 120 }, () => {
           runOnJS(onPass)(likeUser._id);
           runOnJS(onRemove)(likeUser._id);
         });
       } else {
-        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+        translateX.value = withSpring(0, { damping: 15, stiffness: 400 });
       }
     });
 
