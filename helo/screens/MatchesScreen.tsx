@@ -100,17 +100,31 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   };
 
   const [whoLikesMe, setWhoLikesMe] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'matches' | 'likes'>('matches');
+  const [whoViewedMe, setWhoViewedMe] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'matches' | 'likes' | 'viewed'>('matches');
 
   const loadMatches = async () => {
     if (!token) return;
     
     setLoading(true);
     try {
+      const isPremium = user?.premium?.isActive;
+      
+      // Fetch matches and likes
       const [matchesRes, likesRes] = await Promise.all([
         api.get<{ success: boolean; matches: any[] }>('/match/my-matches', token),
         api.get<{ success: boolean; users: any[] }>('/match/who-likes-me', token)
       ]);
+      
+      // Fetch who-viewed-me separately if premium
+      let viewedRes: any = null;
+      if (isPremium) {
+        try {
+          viewedRes = await api.get<{ success: boolean; views: any[] }>('/users/who-viewed-me', token);
+        } catch (e) {
+          console.log('Could not fetch who viewed me');
+        }
+      }
       
         const matchesData = matchesRes.data;
         if (matchesRes.success && matchesData?.matches) {
@@ -164,6 +178,20 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
       if (likesRes.success && likesRes.data?.users) {
         setWhoLikesMe(likesRes.data.users);
+      }
+      
+      // Handle who viewed me data
+      if (viewedRes && viewedRes.success && viewedRes.data?.views) {
+        const viewsData = viewedRes.data.views.map((v: any) => ({
+          _id: v.user?._id,
+          name: v.user?.name,
+          age: v.user?.age,
+          photos: v.user?.photos || [],
+          verified: v.user?.verified,
+          gender: v.user?.gender,
+          viewedAt: v.viewedAt
+        })).filter((v: any) => v._id);
+        setWhoViewedMe(viewsData);
       }
     } catch (error) {
       console.error("Error loading matches:", error);
@@ -390,6 +418,147 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     );
   };
 
+  const renderViewedCard = (viewedUser: any, isTall: boolean, isLast: boolean = false) => {
+    const photoSource = viewedUser.photos?.[0] ? getPhotoSource(viewedUser.photos[0]) : null;
+    const cardHeight = isTall ? TALL_CARD_HEIGHT : SHORT_CARD_HEIGHT;
+    
+    return (
+      <Pressable
+        key={viewedUser._id}
+        style={[styles.matchCard, { height: cardHeight, marginBottom: isLast ? 0 : CARD_GAP }]}
+        onPress={() => navigation.navigate("ProfileDetail", { userId: viewedUser._id })}
+      >
+        {photoSource ? (
+          <Image
+            source={photoSource}
+            style={styles.matchPhoto}
+            contentFit="cover"
+          />
+        ) : (
+          <View style={[styles.matchPhoto, styles.noPhotoContainer]}>
+            <Feather name="user" size={50} color="#666" />
+          </View>
+        )}
+        
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.8)']}
+          style={styles.cardGradient}
+        />
+        
+        <View style={[styles.matchBadge, { backgroundColor: '#9C27B0' }]}>
+          <Feather name="eye" size={10} color="#FFF" style={{ marginRight: 4 }} />
+          <ThemedText style={styles.matchBadgeText}>Viewed you</ThemedText>
+        </View>
+        
+        <View style={styles.cardInfo}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <ThemedText style={styles.cardName} numberOfLines={1}>
+              {viewedUser.name}{viewedUser.age ? `, ${viewedUser.age}` : ''}
+            </ThemedText>
+            {viewedUser.verified && (
+              <ExpoImage 
+                source={require("@/assets/icons/verified-tick.png")} 
+                style={{ width: 18, height: 18, marginLeft: 4 }} 
+                contentFit="contain"
+              />
+            )}
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderViewedMasonryGrid = () => {
+    const isPremium = user?.premium?.isActive;
+    
+    if (!isPremium) {
+      return (
+        <View style={styles.emptyState}>
+          <View style={[styles.emptyIconContainer, { backgroundColor: '#9C27B0' + '20' }]}>
+            <Feather name="eye" size={60} color="#9C27B0" />
+          </View>
+          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>Premium Feature</ThemedText>
+          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Upgrade to see who viewed your profile
+          </ThemedText>
+          <Pressable
+            style={[styles.emptyButton, { backgroundColor: theme.primary }]}
+            onPress={() => navigation.navigate('Premium')}
+          >
+            <ThemedText style={[styles.emptyButtonText, { color: theme.buttonText }]}>
+              Upgrade Now
+            </ThemedText>
+          </Pressable>
+        </View>
+      );
+    }
+    
+    if (whoViewedMe.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <View style={[styles.emptyIconContainer, { backgroundColor: '#9C27B0' + '20' }]}>
+            <Feather name="eye" size={60} color="#9C27B0" />
+          </View>
+          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>No views yet</ThemedText>
+          <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+            Complete your profile to get more views!
+          </ThemedText>
+        </View>
+      );
+    }
+
+    const leftColumn: React.ReactNode[] = [];
+    const rightColumn: React.ReactNode[] = [];
+    
+    let i = 0;
+    let patternIndex = 0;
+    
+    while (i < whoViewedMe.length) {
+      const isFirstPattern = patternIndex % 2 === 0;
+      
+      if (isFirstPattern) {
+        if (i < whoViewedMe.length) {
+          leftColumn.push(renderViewedCard(whoViewedMe[i], true, i === whoViewedMe.length - 1));
+          i++;
+        }
+        if (i < whoViewedMe.length) {
+          rightColumn.push(renderViewedCard(whoViewedMe[i], false, i === whoViewedMe.length - 1));
+          i++;
+        }
+        if (i < whoViewedMe.length) {
+          rightColumn.push(renderViewedCard(whoViewedMe[i], false, i === whoViewedMe.length - 1));
+          i++;
+        }
+      } else {
+        if (i < whoViewedMe.length) {
+          leftColumn.push(renderViewedCard(whoViewedMe[i], false, i === whoViewedMe.length - 1));
+          i++;
+        }
+        if (i < whoViewedMe.length) {
+          leftColumn.push(renderViewedCard(whoViewedMe[i], false, i === whoViewedMe.length - 1));
+          i++;
+        }
+        if (i < whoViewedMe.length) {
+          rightColumn.push(renderViewedCard(whoViewedMe[i], true, i === whoViewedMe.length - 1));
+          i++;
+        }
+      }
+      
+      patternIndex++;
+    }
+
+    return (
+      <View style={styles.masonryContainer}>
+        <View style={[styles.column, { marginRight: CARD_GAP / 2 }]}>
+          {leftColumn}
+        </View>
+        <View style={[styles.column, { marginLeft: CARD_GAP / 2 }]}>
+          {rightColumn}
+        </View>
+      </View>
+    );
+  };
+
   const renderMasonryGrid = () => {
     if (matches.length === 0) {
       return renderEmptyState();
@@ -511,6 +680,14 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               Likes ({whoLikesMe.length})
             </ThemedText>
           </Pressable>
+          <Pressable 
+            style={[styles.tab, activeTab === 'viewed' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}
+            onPress={() => setActiveTab('viewed')}
+          >
+            <ThemedText style={[styles.tabText, { color: activeTab === 'viewed' ? theme.primary : theme.textSecondary }]}>
+              Viewed ({whoViewedMe.length})
+            </ThemedText>
+          </Pressable>
         </View>
 
         <ScrollView
@@ -524,7 +701,9 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
             />
           }
         >
-          {activeTab === 'matches' ? renderMasonryGrid() : renderLikesMasonryGrid()}
+          {activeTab === 'matches' && renderMasonryGrid()}
+          {activeTab === 'likes' && renderLikesMasonryGrid()}
+          {activeTab === 'viewed' && renderViewedMasonryGrid()}
         </ScrollView>
       </ThemedView>
     </GestureHandlerRootView>

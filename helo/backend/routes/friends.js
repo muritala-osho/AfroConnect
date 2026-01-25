@@ -29,23 +29,41 @@ router.post('/request', protect, async (req, res) => {
       
       // If the request is already accepted, check if there's an existing match
       if (existingRequest.status === 'accepted') {
-        const existingMatch = await Match.findOne({
+        let existingMatch = await Match.findOne({
           users: { $all: [req.user._id, receiverId] },
           status: 'active'
         });
         
-        if (existingMatch) {
-          // Get matched user info
-          const matchedUser = await User.findById(receiverId).select('name photos age');
-          console.log('[MATCH] Already matched! Returning match info');
-          return res.status(200).json({ 
-            success: true, 
-            isMatch: true,
-            match: existingMatch,
-            matchedUser,
-            message: "You're already matched!"
-          });
+        // If no match document exists but status is accepted, create the match now
+        if (!existingMatch) {
+          try {
+            existingMatch = await Match.create({
+              users: [req.user._id, receiverId],
+              isSuperLike: false,
+              status: 'active'
+            });
+            console.log('[MATCH] Created missing match document:', existingMatch._id);
+          } catch (createErr) {
+            console.error('[MATCH] Error creating match:', createErr);
+          }
         }
+        
+        // Get matched user info
+        const matchedUser = await User.findById(receiverId).select('name photos age');
+        console.log('[MATCH] Already matched! Returning match info');
+        return res.status(200).json({ 
+          success: true, 
+          isMatch: true,
+          match: existingMatch,
+          matchedUser,
+          message: "You're already matched!"
+        });
+      }
+      
+      // If status is pending (already liked, waiting for response), just return success
+      if (existingRequest.status === 'pending') {
+        console.log('[MATCH] Request still pending');
+        return res.status(200).json({ success: true, isMatch: false, message: 'Request already sent, waiting for response' });
       }
       
       return res.status(400).json({ success: false, message: 'Match request already sent' });
