@@ -244,9 +244,25 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const handleLikeBack = async (likeUserId: string) => {
     if (!token) return;
     try {
-      const response = await api.post('/match/swipe', { targetUserId: likeUserId, action: 'like' }, token);
+      // Use friends/request endpoint which handles mutual likes and creates matches
+      const response = await api.post<{ isMatch?: boolean; matchedUser?: any }>('/friends/request', { receiverId: likeUserId }, token);
       if (response.success) {
         setWhoLikesMe(prev => prev.filter(u => u._id !== likeUserId));
+        
+        // If it's a match, show the match popup
+        if (response.data?.isMatch && response.data?.matchedUser) {
+          const matchedUser = response.data.matchedUser;
+          navigation.navigate('MatchPopup', {
+            currentUser: user,
+            matchedUser: {
+              id: matchedUser._id || likeUserId,
+              name: matchedUser.name || 'Your Match',
+              photos: matchedUser.photos || []
+            },
+            isSuperLike: false
+          });
+        }
+        
         loadMatches();
       }
     } catch (error) {
