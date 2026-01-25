@@ -90,10 +90,12 @@ const multiUpload = (req, res, next) => {
     // Normalize req.file if only one file was uploaded
     if (req.files && req.files.length > 0) {
       const photoFile = req.files.find(f => f.fieldname === 'photo' || f.fieldname === 'file');
+      const imageFile = req.files.find(f => f.fieldname === 'image');
       const videoFile = req.files.find(f => f.fieldname === 'video');
       const audioFile = req.files.find(f => f.fieldname === 'audio');
       
       if (photoFile) req.file = photoFile;
+      else if (imageFile) req.file = imageFile;
       else if (videoFile) req.file = videoFile;
       else if (audioFile) req.file = audioFile;
       else req.file = req.files[0];
@@ -305,52 +307,6 @@ router.post('/file', protect, fileUpload.single('file'), async (req, res) => {
   }
 });
 
-router.post('/chat-image', protect, imageUpload.array('images', 5), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ success: false, message: 'No images uploaded' });
-    }
-
-    const uploadedImages = await Promise.all(
-      req.files.map(async (file) => {
-        const compressedBuffer = await sharp(file.buffer)
-          .resize(1200, 1200, {
-            fit: 'inside',
-            withoutEnlargement: true
-          })
-          .jpeg({
-            quality: 80,
-            progressive: true,
-            mozjpeg: true
-          })
-          .toBuffer();
-
-        const b64 = compressedBuffer.toString('base64');
-        const dataURI = `data:image/jpeg;base64,${b64}`;
-
-        const result = await cloudinary.uploader.upload(dataURI, {
-          folder: 'afroconnect/chat-images',
-          resource_type: 'image',
-        });
-
-        return {
-          url: result.secure_url,
-          publicId: result.public_id,
-          width: result.width,
-          height: result.height,
-        };
-      })
-    );
-
-    res.json({
-      success: true,
-      images: uploadedImages,
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Upload failed' });
-  }
-});
 
 router.post('/video', protect, multiUpload, async (req, res) => {
   try {
