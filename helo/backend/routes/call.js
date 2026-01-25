@@ -4,6 +4,58 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const CallHistory = require('../models/CallHistory');
 const Match = require('../models/Match');
+const Message = require('../models/Message');
+
+const createCallMessage = async (callerId, receiverId, callType, callStatus, duration = 0, io) => {
+  try {
+    const match = await Match.findOne({
+      users: { $all: [callerId, receiverId] },
+      status: 'active'
+    });
+    
+    if (!match) return null;
+    
+    const callTypeLabel = callType === 'video' ? 'Video' : 'Voice';
+    let content = '';
+    
+    if (callStatus === 'missed') {
+      content = `📞 Missed ${callTypeLabel} call`;
+    } else if (callStatus === 'rejected' || callStatus === 'declined') {
+      content = `📞 ${callTypeLabel} call declined`;
+    } else if (callStatus === 'completed') {
+      const mins = Math.floor(duration / 60);
+      const secs = duration % 60;
+      const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      content = `📞 ${callTypeLabel} call - ${durationStr}`;
+    } else {
+      content = `📞 ${callTypeLabel} call ended`;
+    }
+    
+    const message = await Message.create({
+      matchId: match._id,
+      sender: callerId,
+      receiver: receiverId,
+      type: 'call',
+      content,
+      callType: callType,
+      callStatus: callStatus,
+      callDuration: duration,
+      status: 'delivered',
+      deliveredAt: new Date()
+    });
+    
+    await message.populate('sender', 'name photos');
+    
+    if (io) {
+      io.to(match._id.toString()).emit('message:new', message);
+    }
+    
+    return message;
+  } catch (error) {
+    console.error('Create call message error:', error);
+    return null;
+  }
+};
 
 // @route   POST /api/call/initiate
 // @desc    Initiate a call (create call history entry)
@@ -41,6 +93,9 @@ router.post('/decline', protect, async (req, res) => {
       status: 'rejected'
     });
 
+    const io = req.app.get('io');
+    await createCallMessage(callerId, req.user._id, type, 'declined', 0, io);
+
     res.status(201).json({ success: true, callHistory });
   } catch (error) {
     console.error('Decline call error:', error);
@@ -61,6 +116,9 @@ router.post('/missed', protect, async (req, res) => {
       type,
       status: 'missed'
     });
+
+    const io = req.app.get('io');
+    await createCallMessage(callerId, req.user._id, type, 'missed', 0, io);
 
     res.status(201).json({ success: true, callHistory });
   } catch (error) {
@@ -85,6 +143,9 @@ router.put('/:callId/end', protect, async (req, res) => {
     call.status = status || 'completed';
     call.endedAt = Date.now();
     await call.save();
+
+    const io = req.app.get('io');
+    await createCallMessage(call.caller, call.receiver, call.type, call.status, duration, io);
 
     res.json({ success: true, call });
   } catch (error) {

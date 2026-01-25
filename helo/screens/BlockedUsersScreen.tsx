@@ -21,8 +21,8 @@ export default function BlockedUsersScreen() {
     setLoading(true);
     try {
       const response = await get<any>('/block/list', token);
-      if (response.success) {
-        setBlockedUsers(response.blockedUsers);
+      if (response.success && response.data?.blockedUsers) {
+        setBlockedUsers(response.data.blockedUsers);
       }
     } catch (error) {
       console.error('Failed to fetch blocked users:', error);
@@ -94,23 +94,23 @@ export default function BlockedUsersScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: Spacing.m },
+  listContent: { padding: Spacing.md },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.m,
-    borderRadius: BorderRadius.m,
-    marginBottom: Spacing.s,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
   },
   avatar: { width: 50, height: 50, borderRadius: 25 },
-  userInfo: { flex: 1, marginLeft: Spacing.m },
+  userInfo: { flex: 1, marginLeft: Spacing.md },
   userName: { fontSize: 16, fontWeight: 'bold' },
   unblockButton: {
-    paddingHorizontal: Spacing.m,
-    paddingVertical: Spacing.s,
-    borderRadius: BorderRadius.s,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.sm,
     borderWidth: 1,
   },
   emptyContainer: { flex: 1, alignItems: 'center', marginTop: 100 },
-  emptyText: { marginTop: Spacing.m, fontSize: 16 },
+  emptyText: { marginTop: Spacing.md, fontSize: 16 },
 });

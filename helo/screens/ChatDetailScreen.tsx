@@ -34,7 +34,7 @@ interface Message {
   sender: string | { _id: string };
   content?: string;
   text?: string;
-  type: 'text' | 'image' | 'video' | 'audio' | 'system' | 'location';
+  type: 'text' | 'image' | 'video' | 'audio' | 'system' | 'location' | 'call';
   imageUrl?: string;
   audioUrl?: string;
   createdAt: string;
@@ -382,6 +382,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   };
 
   const startRecording = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Supported', 'Voice recording is only available in the mobile app');
+      return;
+    }
+    
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
@@ -408,22 +413,28 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error('Recording error:', error);
-      Alert.alert('Error', 'Could not start recording');
+      Alert.alert('Error', 'Could not start recording. Please try again.');
     }
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
+    if (!recordingRef.current) {
+      setIsRecording(false);
+      return;
+    }
     
     try {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
       }
       
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
+      const recording = recordingRef.current;
       recordingRef.current = null;
       setIsRecording(false);
+      
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
       
       if (uri && recordingDuration >= 1) {
         try {
@@ -463,17 +474,31 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   };
 
   const cancelRecording = async () => {
-    if (!recordingRef.current) return;
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
     
-    try {
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-      }
-      await recordingRef.current.stopAndUnloadAsync();
-      recordingRef.current = null;
+    if (!recordingRef.current) {
       setIsRecording(false);
       setRecordingDuration(0);
-    } catch (error) {}
+      return;
+    }
+    
+    try {
+      if (Platform.OS !== 'web') {
+        const recording = recordingRef.current;
+        recordingRef.current = null;
+        await recording.stopAndUnloadAsync();
+      } else {
+        recordingRef.current = null;
+      }
+    } catch (error) {
+      console.log('Cancel recording cleanup:', error);
+    }
+    
+    setIsRecording(false);
+    setRecordingDuration(0);
   };
 
   const fetchAISuggestions = async () => {
@@ -597,45 +622,54 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           </View>
         )}
         
-        <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
-          {!isMe && (
-            <Image
-              source={getPhotoSource(userPhoto) || { uri: 'https://via.placeholder.com/40' }}
-              style={styles.messageAvatar}
-              contentFit="cover"
-            />
-          )}
-          
-          <View style={[
-            styles.messageBubble,
-            isMe ? styles.myBubble : styles.theirBubble,
-            { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
-          ]}>
-            {item.type === 'image' && item.imageUrl && (
-              <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-            )}
-            
-            {messageText ? (
-              <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
-                {messageText}
-              </ThemedText>
-            ) : null}
-            
-            <View style={styles.messageFooter}>
-              <ThemedText style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
-                {formatTime(item.createdAt)}
-              </ThemedText>
-              {isMe && (
-                <Ionicons 
-                  name={item.status === 'seen' ? 'checkmark-done' : item.status === 'delivered' ? 'checkmark-done' : 'checkmark'} 
-                  size={14} 
-                  color={item.status === 'seen' ? '#4FC3F7' : 'rgba(255,255,255,0.5)'} 
-                  style={{ marginLeft: 4 }}
-                />
-              )}
+        {(item.type === 'system' || item.type === 'call') ? (
+          <View style={styles.systemMessageContainer}>
+            <View style={[styles.systemMessage, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+              <Ionicons name={item.type === 'call' ? 'call' : 'information-circle'} size={14} color="#FFF" style={{ marginRight: 6 }} />
+              <ThemedText style={styles.systemMessageText}>{messageText}</ThemedText>
             </View>
           </View>
-        </View>
+        ) : (
+          <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
+            {!isMe && (
+              <Image
+                source={getPhotoSource(userPhoto) || { uri: 'https://via.placeholder.com/40' }}
+                style={styles.messageAvatar}
+                contentFit="cover"
+              />
+            )}
+            
+            <View style={[
+              styles.messageBubble,
+              isMe ? styles.myBubble : styles.theirBubble,
+              { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
+            ]}>
+              {item.type === 'image' && item.imageUrl && (
+                <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+              )}
+              
+              {messageText ? (
+                <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
+                  {messageText}
+                </ThemedText>
+              ) : null}
+              
+              <View style={styles.messageFooter}>
+                <ThemedText style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
+                  {formatTime(item.createdAt)}
+                </ThemedText>
+                {isMe && (
+                  <Ionicons 
+                    name={item.status === 'seen' ? 'checkmark-done' : item.status === 'delivered' ? 'checkmark-done' : 'checkmark'} 
+                    size={14} 
+                    color={item.status === 'seen' ? '#4FC3F7' : 'rgba(255,255,255,0.5)'} 
+                    style={{ marginLeft: 4 }}
+                  />
+                )}
+              </View>
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -1053,6 +1087,9 @@ const styles = StyleSheet.create({
   dateHeaderContainer: { alignItems: 'center', marginVertical: 16 },
   dateHeader: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 },
   dateHeaderText: { fontSize: 12, fontWeight: '500' },
+  systemMessageContainer: { alignItems: 'center', marginVertical: 8 },
+  systemMessage: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
+  systemMessageText: { color: '#FFF', fontSize: 13 },
   messageRow: { flexDirection: 'row', marginVertical: 4, alignItems: 'flex-end' },
   messageRowLeft: { justifyContent: 'flex-start' },
   messageRowRight: { justifyContent: 'flex-end' },
