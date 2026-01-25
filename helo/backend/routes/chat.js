@@ -478,6 +478,54 @@ router.delete('/message/:messageId', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/chat/:matchId/message
+// @desc    Send a message (alias route)
+// @access  Private
+router.post('/:matchId/message', protect, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { content, type = 'text', imageUrl } = req.body;
+
+    const match = await Match.findById(matchId);
+    if (!match || !match.users.includes(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    const receiver = match.users.find(id => !id.equals(req.user._id));
+
+    const messageData = {
+      matchId,
+      sender: req.user._id,
+      receiver,
+      type,
+      content,
+      status: 'sent',
+      deliveredAt: new Date()
+    };
+
+    if (type === 'image' && imageUrl) {
+      messageData.imageUrl = imageUrl;
+    }
+
+    const message = await Message.create(messageData);
+    await message.populate('sender', 'name photos');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(matchId.toString()).emit('chat:new-message', message);
+      io.to(receiver.toString()).emit('chat:message-delivered', { 
+        messageId: message._id,
+        status: 'delivered'
+      });
+    }
+
+    res.status(201).json({ success: true, message });
+  } catch (error) {
+    console.error('Send message error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   POST /api/chat/:matchId/location
 // @desc    Send location message
 // @access  Private
