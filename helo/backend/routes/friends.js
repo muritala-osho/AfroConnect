@@ -12,6 +12,7 @@ const User = require('../models/User');
 router.post('/request', protect, async (req, res) => {
   try {
     const { receiverId, message } = req.body;
+    console.log('[MATCH] User', req.user._id, 'liking user', receiverId);
 
     if (receiverId === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'Cannot send request to yourself' });
@@ -24,6 +25,7 @@ router.post('/request', protect, async (req, res) => {
     });
 
     if (existingRequest) {
+      console.log('[MATCH] Request already exists, status:', existingRequest.status);
       return res.status(400).json({ success: false, message: 'Match request already sent' });
     }
 
@@ -36,6 +38,7 @@ router.post('/request', protect, async (req, res) => {
 
     if (reverseRequest) {
       // Auto-accept the reverse request - it's a match!
+      console.log('[MATCH] Mutual like detected! Creating match between', req.user._id, 'and', receiverId);
       reverseRequest.status = 'accepted';
       await reverseRequest.save();
 

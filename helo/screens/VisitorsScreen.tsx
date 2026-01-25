@@ -43,10 +43,9 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
     if (!token) return;
     setLoading(true);
     try {
-      const response = await get<any>('/users/me', token);
-      const data = response.data as any;
-      if (response.success && data?.user?.profileViews) {
-        setVisitors(data.user.profileViews);
+      const response = await get<any>('/users/who-viewed-me', token);
+      if (response.success && response.data?.views) {
+        setVisitors(response.data.views);
       }
     } catch (error) {
       console.error('Failed to fetch visitors:', error);

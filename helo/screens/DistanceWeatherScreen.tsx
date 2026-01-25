@@ -193,13 +193,20 @@ export default function DistanceWeatherScreen() {
             )}
           </View>
 
-          <Pressable
-            style={[styles.mapButton, { backgroundColor: theme.primary }]}
-            onPress={() => navigation.navigate('UserDistanceMap', { otherUser })}
-          >
-            <Feather name="map" size={20} color="#FFF" />
-            <ThemedText style={styles.mapButtonText}>View on Map</ThemedText>
-          </Pressable>
+          {otherUser?.location?.coordinates ? (
+            <Pressable
+              style={[styles.mapButton, { backgroundColor: theme.primary }]}
+              onPress={() => navigation.navigate('UserDistanceMap', { otherUser })}
+            >
+              <Feather name="map" size={20} color="#FFF" />
+              <ThemedText style={styles.mapButtonText}>View on Map</ThemedText>
+            </Pressable>
+          ) : (
+            <View style={[styles.mapButton, { backgroundColor: theme.textSecondary }]}>
+              <Feather name="map-pin" size={20} color="#FFF" />
+              <ThemedText style={styles.mapButtonText}>User location not shared</ThemedText>
+            </View>
+          )}
         </View>
       </ScreenScrollView>
     </ThemedView>
