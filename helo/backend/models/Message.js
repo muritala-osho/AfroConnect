@@ -33,7 +33,7 @@ const messageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['text', 'image', 'video', 'audio', 'file', 'system', 'story_reaction', 'story_reply', 'call'],
+    enum: ['text', 'image', 'video', 'audio', 'file', 'system', 'story_reaction', 'story_reply', 'call', 'location'],
     default: 'text'
   },
   callType: {
@@ -75,6 +75,15 @@ const messageSchema = new mongoose.Schema({
     type: Number
   },
   fileType: {
+    type: String
+  },
+  latitude: {
+    type: Number
+  },
+  longitude: {
+    type: Number
+  },
+  address: {
     type: String
   },
   status: {

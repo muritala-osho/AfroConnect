@@ -18,14 +18,14 @@ import { RootStackParamList } from "@/navigation/RootNavigator";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface Visitor {
-  user: {
-    _id: string;
-    name: string;
-    age: number;
-    photos: any[];
-    verified: boolean;
-  };
+  _id: string;
+  name: string;
+  age: number;
+  photos: any[];
+  verified: boolean;
   viewedAt: string;
+  isBlurred?: boolean;
+  canInteract?: boolean;
 }
 
 export default function VisitorsScreen({ navigation }: { navigation: NativeStackNavigationProp<RootStackParamList> }) {
@@ -76,15 +76,15 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
   };
 
   const renderVisitor = ({ item }: { item: Visitor }) => {
-    const visitorUser = item.user;
-    if (!visitorUser) return null;
+    if (!item._id) return null;
 
-    const photoSource = visitorUser.photos?.[0] ? getPhotoSource(visitorUser.photos[0]) : null;
+    const photoSource = item.photos?.[0] ? getPhotoSource(item.photos[0]) : null;
+    const showBlurred = item.isBlurred || !isPremium;
 
     return (
       <Pressable 
         style={[styles.visitorCard, { backgroundColor: theme.surface }]}
-        onPress={() => handleVisitorPress(visitorUser)}
+        onPress={() => handleVisitorPress(item)}
       >
         <View style={styles.photoContainer}>
           {photoSource ? (
@@ -92,17 +92,23 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
               source={photoSource} 
               style={styles.photo} 
               contentFit="cover"
+              blurRadius={showBlurred ? 20 : 0}
             />
           ) : (
             <View style={[styles.photo, { backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }]}>
               <Feather name="user" size={30} color={theme.textSecondary} />
             </View>
           )}
+          {showBlurred && (
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' }}>
+              <Feather name="eye-off" size={24} color="#FFF" />
+            </View>
+          )}
         </View>
         <View style={styles.infoContainer}>
           <View style={styles.nameRow}>
-            <ThemedText style={styles.name}>{visitorUser.name}, {visitorUser.age}</ThemedText>
-            {visitorUser.verified && (
+            <ThemedText style={styles.name}>{isPremium ? item.name : hashName(item.name)}, {item.age}</ThemedText>
+            {item.verified && (
                <Image 
                source={require("@/assets/icons/verified-tick.png")} 
                style={{ width: 16, height: 16, marginLeft: 4 }} 
@@ -140,7 +146,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
       <FlatList
         data={visitors}
         renderItem={renderVisitor}
-        keyExtractor={(item, index) => item.user?._id || index.toString()}
+        keyExtractor={(item, index) => item._id || index.toString()}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>

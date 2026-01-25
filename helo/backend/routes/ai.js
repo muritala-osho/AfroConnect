@@ -134,4 +134,63 @@ router.post('/suggest-message', protect, async (req, res) => {
   }
 });
 
+const chatSuggestionTemplates = [
+  "Hey! How's your day going? 😊",
+  "I love your profile! What are your hobbies?",
+  "What's your favorite thing to do on weekends?",
+  "I noticed we have similar interests! Tell me more about yourself",
+  "You seem really interesting! What do you do for fun?",
+  "Hi there! What made you swipe right on me? 😄",
+  "I'd love to get to know you better!",
+  "What's the best trip you've ever taken?",
+  "What are you passionate about?",
+  "Any fun plans for this week?",
+  "What's your idea of a perfect date?",
+  "Tell me something that made you smile today! 😊",
+];
+
+router.post('/chat-suggestions', protect, async (req, res) => {
+  try {
+    const { recipientName, context } = req.body;
+    
+    if (openai) {
+      try {
+        const response = await openai.chat.completions.create({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "system",
+              content: `You are a friendly dating assistant. Generate 5 short, casual, flirty but respectful conversation starters for someone named ${recipientName || 'this person'}. Keep each message under 100 characters. Be warm and genuine. Return as JSON array of strings.`
+            },
+            {
+              role: "user",
+              content: context ? `Previous conversation context: ${context}` : "Generate opening messages for a new match."
+            }
+          ],
+          max_completion_tokens: 500,
+        });
+        
+        try {
+          const content = response.choices[0].message.content.trim();
+          const suggestions = JSON.parse(content);
+          return res.json({ success: true, suggestions });
+        } catch (parseError) {
+          console.log('AI response parse error, using templates');
+        }
+      } catch (aiError) {
+        console.log('AI error, using templates');
+      }
+    }
+    
+    const suggestions = chatSuggestionTemplates
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 5);
+    
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    console.error('Chat suggestions error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

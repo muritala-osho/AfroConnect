@@ -256,6 +256,12 @@ router.get('/nearby', protect, async (req, res) => {
     // In includeAll mode, we might want to see already swiped users for testing
     if (includeAll !== 'true') {
       excludedIds = [...excludedIds, ...(currentUser.swipedRight || []), ...(currentUser.swipedLeft || [])];
+      
+      // Also exclude matched users - they should not appear in discovery again
+      const Match = require('../models/Match');
+      const matches = await Match.find({ users: req.user.id, status: 'active' });
+      const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
+      excludedIds = [...excludedIds, ...matchedUserIds];
     }
 
     const query = {
@@ -412,20 +418,17 @@ router.get('/profile-views', protect, async (req, res) => {
 });
 
 // @route   GET /api/users/who-viewed-me
-// @desc    Get users who viewed current user's profile (alias for profile-views)
-// @access  Private (Premium)
+// @desc    Get users who viewed current user's profile
+// @access  Private (Normal users see limited info, Premium sees full + actions)
 router.get('/who-viewed-me', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
-    if (!isPremium) {
-      return res.status(403).json({ success: false, message: 'Who viewed me is a Premium feature' });
-    }
 
     const user = await User.findById(req.user._id)
       .populate('profileViews.user', 'name username photos age gender verified');
     
     if (!user.profileViews || user.profileViews.length === 0) {
-      return res.json({ success: true, views: [] });
+      return res.json({ success: true, views: [], isPremium });
     }
     
     // Sort by latest view and remove duplicates (only latest view from each user)
@@ -439,9 +442,34 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       }
     });
 
+    // For non-premium users, blur photos but show name and age
+    const processedViews = uniqueViews.map(view => {
+      const viewData = {
+        _id: view.user._id,
+        name: view.user.name,
+        age: view.user.age,
+        gender: view.user.gender,
+        verified: view.user.verified,
+        viewedAt: view.viewedAt
+      };
+      
+      if (isPremium) {
+        viewData.photos = view.user.photos;
+        viewData.canInteract = true;
+      } else {
+        viewData.photos = [];
+        viewData.isBlurred = true;
+        viewData.canInteract = false;
+      }
+      
+      return viewData;
+    });
+
     res.json({
       success: true,
-      views: uniqueViews
+      views: processedViews,
+      isPremium,
+      totalCount: processedViews.length
     });
   } catch (error) {
     console.error('Who viewed me error:', error);

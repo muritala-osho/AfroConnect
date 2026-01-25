@@ -479,12 +479,21 @@ router.delete('/message/:messageId', protect, async (req, res) => {
 });
 
 // @route   POST /api/chat/:matchId/message
-// @desc    Send a message (alias route)
+// @desc    Send a message (text, image, audio, location)
 // @access  Private
 router.post('/:matchId/message', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
-    const { content, type = 'text', imageUrl } = req.body;
+    const { 
+      content, 
+      type = 'text', 
+      imageUrl, 
+      audioUrl, 
+      audioDuration,
+      latitude,
+      longitude,
+      address
+    } = req.body;
 
     const match = await Match.findById(matchId);
     if (!match || !match.users.includes(req.user._id)) {
@@ -505,6 +514,17 @@ router.post('/:matchId/message', protect, async (req, res) => {
 
     if (type === 'image' && imageUrl) {
       messageData.imageUrl = imageUrl;
+    }
+    
+    if (type === 'audio' && audioUrl) {
+      messageData.audioUrl = audioUrl;
+      messageData.audioDuration = audioDuration || 0;
+    }
+    
+    if (type === 'location') {
+      messageData.latitude = latitude;
+      messageData.longitude = longitude;
+      messageData.address = address;
     }
 
     const message = await Message.create(messageData);

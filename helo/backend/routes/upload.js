@@ -150,6 +150,37 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
   }
 });
 
+router.post('/chat-image', protect, multiUpload, async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No image uploaded' });
+    }
+
+    const compressedBuffer = await sharp(file.buffer)
+      .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80, progressive: true })
+      .toBuffer();
+
+    const b64 = compressedBuffer.toString('base64');
+    const dataURI = `data:image/jpeg;base64,${b64}`;
+
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder: 'afroconnect/chat-images',
+      resource_type: 'image',
+    });
+
+    res.json({
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id
+    });
+  } catch (error) {
+    console.error('Chat image upload error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
+
 const handleAudioUpload = async (req, res) => {
   try {
     if (!req.file) {
