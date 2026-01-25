@@ -25,11 +25,10 @@ const matchSchema = new mongoose.Schema({
 });
 
 // Ensure users array has exactly 2 elements
-matchSchema.pre('save', function(next) {
+matchSchema.pre('save', async function() {
   if (this.users.length !== 2) {
-    return next(new Error('A match must have exactly 2 users'));
+    throw new Error('A match must have exactly 2 users');
   }
-  next();
 });
 
 // Index for faster queries
