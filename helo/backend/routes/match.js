@@ -7,25 +7,23 @@ const Boost = require('../models/Boost');
 const auth = protect;
 
 // @route   GET /api/match/who-likes-me
-// @desc    Get list of users who liked current user
+// @desc    Get list of users who liked current user (pending friend requests)
 // @access  Private
 router.get('/who-likes-me', protect, async (req, res) => {
   try {
+    const FriendRequest = require('../models/FriendRequest');
     const isPremium = req.user.premium?.isActive;
     
-    // Matching logic: Priority for same personality and shared interests (Worldwide)
-    // No distance filter here to allow global compatible matches
-    const alreadySwiped = [
-      ...(req.user.swipedRight || []),
-      ...(req.user.swipedLeft || []),
-      req.user._id
-    ];
-
-    const usersWhoLikedMe = await User.find({
-      swipedRight: req.user._id,
-      _id: { $nin: alreadySwiped }
-    }).select('name age bio photos location onlineStatus lastActive interests verified lifestyle')
-    .limit(50); // Fast loading
+    // Find pending friend requests where this user is the receiver
+    const pendingRequests = await FriendRequest.find({
+      receiver: req.user._id,
+      status: 'pending'
+    }).populate('sender', 'name age bio photos location onlineStatus lastActive interests verified lifestyle gender');
+    
+    // Extract the users who sent requests
+    const usersWhoLikedMe = pendingRequests
+      .filter(req => req.sender)
+      .map(req => req.sender);
 
     let processedUsers = usersWhoLikedMe.map(u => {
       const userObj = u.toObject();

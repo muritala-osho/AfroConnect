@@ -411,6 +411,44 @@ router.get('/profile-views', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/who-viewed-me
+// @desc    Get users who viewed current user's profile (alias for profile-views)
+// @access  Private (Premium)
+router.get('/who-viewed-me', protect, async (req, res) => {
+  try {
+    const isPremium = req.user.premium?.isActive;
+    if (!isPremium) {
+      return res.status(403).json({ success: false, message: 'Who viewed me is a Premium feature' });
+    }
+
+    const user = await User.findById(req.user._id)
+      .populate('profileViews.user', 'name username photos age gender verified');
+    
+    if (!user.profileViews || user.profileViews.length === 0) {
+      return res.json({ success: true, views: [] });
+    }
+    
+    // Sort by latest view and remove duplicates (only latest view from each user)
+    const uniqueViews = [];
+    const seenUsers = new Set();
+    
+    [...user.profileViews].reverse().forEach(view => {
+      if (view.user && !seenUsers.has(view.user._id.toString())) {
+        uniqueViews.push(view);
+        seenUsers.add(view.user._id.toString());
+      }
+    });
+
+    res.json({
+      success: true,
+      views: uniqueViews
+    });
+  } catch (error) {
+    console.error('Who viewed me error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/:id
 // @desc    Get user by ID
 // @access  Private
