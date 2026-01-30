@@ -184,7 +184,7 @@ const userSchema = new mongoose.Schema({
   },
   lookingFor: {
     type: String,
-    enum: ['relationship', 'friendship', 'casual', 'networking'],
+    enum: ['relationship', 'friendship', 'casual', 'networking', 'not_sure', 'not sure'],
     default: 'relationship'
   },
   preferences: {
@@ -222,11 +222,13 @@ const userSchema = new mongoose.Schema({
   lifestyle: {
     smoking: {
       type: String,
-      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say']
+      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say', ''],
+      default: null
     },
     drinking: {
       type: String,
-      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say']
+      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say', ''],
+      default: null
     },
     workout: {
       type: String,
