@@ -375,6 +375,88 @@ router.post('/:storyId/react', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/stories/:storyId/reply
+// @desc    Reply to a story
+// @access  Private
+router.post('/:storyId/reply', protect, async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Message is required' });
+    }
+
+    const story = await Story.findById(req.params.storyId).populate('user', 'name photos');
+
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+
+    const storyOwnerId = story.user._id.toString();
+    const replierId = req.user._id.toString();
+
+    if (storyOwnerId === replierId) {
+      return res.status(400).json({ success: false, message: 'Cannot reply to your own story' });
+    }
+
+    const replier = await User.findById(req.user._id).select('name photos');
+    const match = await Match.findOne({
+      users: { $all: [req.user._id, story.user._id] },
+      status: 'active'
+    });
+
+    const io = req.app.get('io');
+
+    if (match) {
+      const Message = require('../models/Message');
+      const storyPreview = story.type === 'text' ? story.textContent?.substring(0, 50) : 'a story';
+      const replyContent = message.trim();
+
+      await Message.create({
+        matchId: match._id,
+        sender: req.user._id,
+        receiver: story.user._id,
+        content: replyContent,
+        type: 'story_reply',
+        storyReaction: {
+          storyId: story._id,
+          storyType: story.type,
+          storyPreview: story.mediaUrl || story.textContent?.substring(0, 100)
+        }
+      });
+
+      if (io) {
+        io.to(storyOwnerId).emit('chat:new-message', {
+          matchId: match._id,
+          sender: req.user._id,
+          senderName: replier?.name,
+          senderPhoto: replier?.photos?.[0]?.url || replier?.photos?.[0],
+          content: replyContent,
+          type: 'story_reply',
+          storyReaction: { storyId: story._id },
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else {
+      if (io) {
+        io.to(storyOwnerId).emit('story:reply', {
+          senderId: replierId,
+          senderName: replier?.name,
+          senderPhoto: replier?.photos?.[0]?.url || replier?.photos?.[0],
+          storyId: story._id,
+          message: message.trim(),
+          createdAt: new Date().toISOString()
+        });
+      }
+    }
+
+    res.json({ success: true, message: 'Reply sent', hasMatch: !!match });
+  } catch (error) {
+    console.error('Reply to story error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   DELETE /api/stories/:storyId/react
 // @desc    Remove reaction from a story
 // @access  Private

@@ -275,14 +275,16 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const handleSendReply = async () => {
     if (!replyText.trim() || !token) return;
     try {
-      await post(`/stories/${stories[currentIndex]._id}/reply`, {
+      const response = await post(`/stories/${stories[currentIndex]._id}/reply`, {
         message: replyText,
       }, token);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setReplyText("");
       setShowReplyInput(false);
+      Alert.alert("Reply sent!");
     } catch (error) {
       console.error("Reply error:", error);
+      Alert.alert("Error", "Failed to send reply. Please try again.");
     }
   };
 
@@ -323,20 +325,17 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   };
 
   const handleShareStory = async () => {
-    if (!currentStory || !currentStory.imageUrl) {
+    if (!currentStory) {
       Alert.alert("Error", "This story cannot be shared");
       return;
     }
     
     try {
       const { Share } = require('react-native');
-      // Use the actual image URL and include a fallback if needed
-      const shareUrl = currentStory.imageUrl;
-      const shareMessage = `Check out ${userName}'s story on AfroConnect! ${shareUrl}`;
+      const shareMessage = "Hey! Check out this story on AfroConnect - Download the app to see it! 🌍❤️";
       
       const result = await Share.share({
         message: shareMessage,
-        url: shareUrl,
       });
       
       if (result.action === Share.sharedAction) {
