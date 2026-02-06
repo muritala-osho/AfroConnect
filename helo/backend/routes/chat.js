@@ -244,7 +244,8 @@ router.post('/:matchId', protect, async (req, res) => {
       
       const io = req.app.get('io');
       if (io) {
-        io.to(matchId.toString()).emit('chat:new-message', message);
+        const msgPayload = { message, matchId: matchId.toString() };
+        io.to(matchId.toString()).emit('chat:new-message', msgPayload);
       }
       
       return res.status(201).json({ success: true, message });
@@ -312,10 +313,11 @@ router.post('/:matchId', protect, async (req, res) => {
       }
     }
 
-    // Emit socket event for real-time delivery
     const io = req.app.get('io');
     if (io) {
-      io.to(matchId.toString()).emit('chat:new-message', message);
+      const msgPayload = { message, matchId: matchId.toString() };
+      io.to(matchId.toString()).emit('chat:new-message', msgPayload);
+      io.to(receiver.toString()).emit('chat:new-message', msgPayload);
       io.to(receiver.toString()).emit('chat:message-delivered', { 
         messageId: message._id,
         status: 'delivered'
@@ -532,7 +534,9 @@ router.post('/:matchId/message', protect, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(matchId.toString()).emit('chat:new-message', message);
+      const msgPayload = { message, matchId: matchId.toString() };
+      io.to(matchId.toString()).emit('chat:new-message', msgPayload);
+      io.to(receiver.toString()).emit('chat:new-message', msgPayload);
       io.to(receiver.toString()).emit('chat:message-delivered', { 
         messageId: message._id,
         status: 'delivered'
@@ -579,7 +583,9 @@ router.post('/:matchId/location', protect, async (req, res) => {
 
     const io = req.app.get('io');
     if (io) {
-      io.to(matchId.toString()).emit('chat:new-message', message);
+      const msgPayload = { message, matchId: matchId.toString() };
+      io.to(matchId.toString()).emit('chat:new-message', msgPayload);
+      io.to(receiver.toString()).emit('chat:new-message', msgPayload);
     }
 
     res.status(201).json({ success: true, message });

@@ -25,6 +25,10 @@ const reportSchema = new mongoose.Schema({
     type: String,
     maxlength: 500
   },
+  matchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Match'
+  },
   status: {
     type: String,
     enum: ['pending', 'reviewed', 'resolved'],
@@ -34,7 +38,7 @@ const reportSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
-});
+}, { strict: false });
 
 const Report = mongoose.model('Report', reportSchema);
 
@@ -59,16 +63,18 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    // Normalize reason to match enum
-    let normalizedReason = reason;
-    if (reason === 'inappropriate') normalizedReason = 'inappropriate';
-    if (reason === 'fake') normalizedReason = 'fake';
+    const validReasons = ['inappropriate', 'harassment', 'spam', 'fake', 'underage', 'other'];
+    let normalizedReason = reason.toLowerCase().trim();
+    if (!validReasons.includes(normalizedReason)) {
+      normalizedReason = 'other';
+    }
 
     const report = await Report.create({
       reporter: req.user._id,
       reportedUser: reportedUserId,
       reason: normalizedReason,
-      description
+      description,
+      matchId: req.body.matchId || undefined
     });
 
     res.status(201).json({

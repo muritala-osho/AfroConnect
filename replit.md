@@ -50,12 +50,18 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Admin dashboard for moderation and analytics
 - Push notifications via Expo notifications service
 
-### Recent Updates (January 2026)
-- Added location message type support with coordinates and address display
-- Implemented AI chat suggestions via OpenAI GPT-4 with template fallback
-- Enhanced profile visitors page with premium gating features
-- Updated discovery to exclude users you've already matched with
-- Voice message recording with duration tracking and Cloudinary upload
+### Recent Updates (February 2026)
+- Fixed discovery filtering: excludes matched users, swiped users, AND pending friend requests
+- Distance filtering for free users now uses saved preference (default 50km) instead of 10000km
+- Gender preference filter properly handles 'male', 'female', and 'both' values
+- Fixed real-time chat: chat rooms are joined via socket, messages broadcast to both room and receiver
+- All socket message emissions now include matchId in payload for proper message routing
+- Fixed story viewing: my-stories endpoint now returns imageUrl/mediaUrl fallback fields
+- Fixed report user: schema accepts matchId field, reason validation is case-insensitive
+- Upload improvements: expanded audio MIME types, flexible multer middleware for voice uploads
+- Blocked users page redesigned with confirmation dialog, header, safe area insets
+- Matches tab: improved user ID comparison to handle both _id and id formats
+- Typing indicator properly emits 'chat:typing' with chatId parameter
 
 ## External Dependencies
 

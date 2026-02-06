@@ -253,15 +253,27 @@ router.get('/nearby', protect, async (req, res) => {
     // Initial query: exclude self, blocked users, and people already swiped
     let excludedIds = [...blockedUserIds, ...blockedByIds, req.user.id];
     
-    // In includeAll mode, we might want to see already swiped users for testing
     if (includeAll !== 'true') {
       excludedIds = [...excludedIds, ...(currentUser.swipedRight || []), ...(currentUser.swipedLeft || [])];
       
-      // Also exclude matched users - they should not appear in discovery again
       const Match = require('../models/Match');
       const matches = await Match.find({ users: req.user.id, status: 'active' });
       const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
       excludedIds = [...excludedIds, ...matchedUserIds];
+
+      const FriendRequest = require('../models/FriendRequest');
+      const pendingRequests = await FriendRequest.find({
+        $or: [
+          { sender: req.user._id, status: 'pending' },
+          { receiver: req.user._id, status: 'pending' }
+        ]
+      }).select('sender receiver');
+      const pendingIds = pendingRequests.map(r => {
+        const sid = r.sender.toString();
+        const rid = r.receiver.toString();
+        return sid === req.user._id.toString() ? rid : sid;
+      });
+      excludedIds = [...excludedIds, ...pendingIds];
     }
 
     const query = {
@@ -287,18 +299,21 @@ router.get('/nearby', protect, async (req, res) => {
       const maxAgeFilter = maxAge ? parseInt(maxAge) : currentUser.preferences?.ageRange?.max || 100;
       query.age = { $gte: minAgeFilter, $lte: maxAgeFilter };
 
-      // Gender filter
       if (genders) {
         const genderArray = genders.split(',');
         query.gender = { $in: genderArray };
       } else {
         const genderPref = currentUser.preferences?.genderPreference || 'both';
-        if (genderPref !== 'both') query.gender = genderPref;
+        if (genderPref === 'male') query.gender = 'male';
+        else if (genderPref === 'female') query.gender = 'female';
       }
     }
 
-    // DISCOVERY LOGIC: Nearby Focus
-    const maxDist = maxDistance ? parseInt(maxDistance) : 10000; 
+    let maxDist = maxDistance ? parseInt(maxDistance) : 50;
+    if (!maxDistance && currentUser.preferences?.maxDistance) {
+      const storedDist = currentUser.preferences.maxDistance;
+      maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
+    }
     
     // Don't use geo query - fetch users with any location format and filter in memory
     // This ensures compatibility with both location.coordinates and location.lat/lng formats

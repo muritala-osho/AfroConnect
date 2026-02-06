@@ -209,6 +209,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   useEffect(() => {
     if (!matchId) return;
+    socketService.joinChat(matchId);
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;

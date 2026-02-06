@@ -182,12 +182,14 @@ router.get('/my-stories', protect, async (req, res) => {
         const storyObj = s.toObject();
         return {
           ...storyObj,
+          imageUrl: s.imageUrl || s.mediaUrl,
+          mediaUrl: s.mediaUrl || s.imageUrl,
           viewers: isPremium ? s.views.map(v => ({
             id: v.user?._id,
             name: v.user?.name,
             photo: v.user?.photos?.[0]?.url || v.user?.photos?.[0],
             viewedAt: v.viewedAt
-          })) : [] // Return empty list for non-premium
+          })) : []
         };
       })
     });

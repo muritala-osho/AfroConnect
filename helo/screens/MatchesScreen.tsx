@@ -117,7 +117,11 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         if (matchesRes.success && matchesData?.matches) {
           const rawMatches = Array.isArray(matchesData.matches) ? matchesData.matches : [];
           const enrichedMatches = rawMatches.map((match: any) => {
-          const otherUser = match.users?.find((u: any) => u._id !== user?.id);
+          const myId = user?.id || (user as any)?._id;
+          const otherUser = match.users?.find((u: any) => {
+            const uId = u._id || u.id;
+            return uId && uId !== myId;
+          });
           const locationCity = otherUser?.location?.city || otherUser?.location?.address || '';
           const locationCountry = otherUser?.location?.country || '';
           const countryCode = otherUser?.location?.countryCode || '';
@@ -152,9 +156,10 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           };
         });
         
+        const myId2 = user?.id || (user as any)?._id;
         const seenUserIds = new Set<string>();
         const deduplicatedMatches = enrichedMatches.filter((m: MatchWithUser) => {
-          if (!m.user.id || m.user.id === user?.id || seenUserIds.has(m.user.id)) {
+          if (!m.user.id || m.user.id === myId2 || seenUserIds.has(m.user.id)) {
             return false;
           }
           seenUserIds.add(m.user.id);

@@ -15,7 +15,7 @@ cloudinary.config({
 const storage = multer.memoryStorage();
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac'];
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/mp4a-latm', 'audio/3gpp', 'audio/3gpp2', 'audio/amr'];
 const ALLOWED_FILE_TYPES = [
   'application/pdf',
   'application/msword',
@@ -217,8 +217,21 @@ const handleAudioUpload = async (req, res) => {
   }
 };
 
-router.post('/voice', protect, audioUpload.single('audio'), handleAudioUpload);
-router.post('/audio', protect, audioUpload.single('audio'), handleAudioUpload);
+const audioMultiUpload = (req, res, next) => {
+  audioUpload.any()(req, res, (err) => {
+    if (err) {
+      console.error('Audio multer error:', err);
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    if (req.files && req.files.length > 0) {
+      req.file = req.files[0];
+    }
+    next();
+  });
+};
+
+router.post('/voice', protect, audioMultiUpload, handleAudioUpload);
+router.post('/audio', protect, audioMultiUpload, handleAudioUpload);
 
 // Delete photo - accepts publicId as query param or encoded in URL
 router.delete('/photo', protect, async (req, res) => {
