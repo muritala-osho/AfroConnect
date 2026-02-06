@@ -42,14 +42,16 @@ const DetailItem = ({ icon, label, value }: { icon: any; label: string; value: s
 export default function ProfileDetailScreen() {
   const { theme } = useTheme();
   const { token, user: currentUser } = useAuth();
-  const { get } = useApi();
+  const { get, post } = useApi();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { userId } = route.params;
+  const { userId, isFromLikes, isFromVisitors } = route.params || {};
 
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
     fetchUser();
@@ -65,6 +67,46 @@ export default function ProfileDetailScreen() {
       console.error("Error loading user:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLike = async () => {
+    if (!token || actionLoading) return;
+    setActionLoading(true);
+    try {
+      const response = await post<{ isMatch?: boolean; matchedUser?: any }>('/friends/request', { receiverId: userId }, token);
+      if (response.success) {
+        setLiked(true);
+        if (response.data?.isMatch && response.data?.matchedUser) {
+          const matchedUser = response.data.matchedUser;
+          navigation.navigate('MatchPopup', {
+            currentUser,
+            matchedUser: {
+              id: matchedUser._id || userId,
+              name: matchedUser.name || 'Your Match',
+              photos: matchedUser.photos || []
+            },
+            isSuperLike: false
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Like error:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePass = async () => {
+    if (!token || actionLoading) return;
+    setActionLoading(true);
+    try {
+      await post('/match/swipe', { targetUserId: userId, action: 'pass' }, token);
+      navigation.goBack();
+    } catch (error) {
+      console.error('Pass error:', error);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -179,6 +221,24 @@ export default function ProfileDetailScreen() {
           </View>
 
           <View style={styles.actionButtonsContainer}>
+            <View style={styles.likePassRow}>
+              <Pressable
+                style={[styles.passButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: '#FF6B6B' }]}
+                onPress={handlePass}
+                disabled={actionLoading}
+              >
+                <Ionicons name="close" size={28} color="#FF6B6B" />
+              </Pressable>
+              
+              <Pressable
+                style={[styles.likeButton, { backgroundColor: liked ? '#4CAF50' : theme.primary }]}
+                onPress={handleLike}
+                disabled={actionLoading || liked}
+              >
+                <Ionicons name={liked ? "checkmark" : "heart"} size={28} color="#FFF" />
+              </Pressable>
+            </View>
+
             <Pressable
               style={[styles.primaryActionButton, { backgroundColor: theme.primary }]}
               onPress={() => {
@@ -332,6 +392,25 @@ const styles = StyleSheet.create({
   actionButtonsContainer: {
     gap: 12,
     marginBottom: Spacing.lg,
+  },
+  likePassRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  passButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  likeButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryActionButton: {
     flexDirection: 'row',

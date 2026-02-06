@@ -352,9 +352,16 @@ router.get('/nearby', protect, async (req, res) => {
 
     // Sort: Nearby first, then personality
     users.sort((a, b) => b.score - a.score);
-    users = users.slice(0, 40); 
 
     const isPremium = currentUser.premium?.isActive;
+
+    // For free users, limit discovery to maxDistance (default 10km)
+    // Premium users can see users worldwide
+    if (!isPremium && lat && lng && includeAll !== 'true') {
+      users = users.filter(u => u.distance <= maxDist);
+    }
+
+    users = users.slice(0, 40);
 
     users = users.map(user => {
       const privacy = user.privacySettings || {};

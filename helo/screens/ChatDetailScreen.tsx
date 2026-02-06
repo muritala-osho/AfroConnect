@@ -17,6 +17,7 @@ import { Audio } from "expo-av";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
+import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -149,10 +150,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   useEffect(() => {
     if (!userId) return;
-    socketService.onUserStatus((data: { userId: string; status: string }) => {
+    socketService.onUserStatus((data: any) => {
       if (data.userId === userId) {
-        setIsOnline(data.status === 'online');
-        if (data.status === 'offline') setLastSeenDate(new Date());
+        const online = data.isOnline === true || data.status === 'online';
+        setIsOnline(online);
+        if (!online) setLastSeenDate(new Date());
       }
     });
     return () => { socketService.off('user:status'); };
@@ -208,23 +210,35 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   useEffect(() => {
     if (!matchId) return;
     const handleNewMessage = (data: any) => {
-      if (data.matchId === matchId) {
-        setMessages(prev => [...prev, data.message]);
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      const msg = data.message || data;
+      const msgMatchId = data.matchId || msg.matchId;
+      if (msgMatchId === matchId || msg.matchId === matchId) {
+        const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender?._id;
+        const myId = user?.id || (user as any)?._id;
+        if (senderId !== myId) {
+          setMessages(prev => {
+            if (prev.some(m => m._id === msg._id)) return prev;
+            return [...prev, msg];
+          });
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }
       }
     };
     const handleTyping = (data: any) => {
-      if (data.matchId === matchId && data.userId === userId) {
+      const typingUserId = data.userId || data.senderId;
+      if ((data.chatId === matchId || data.matchId === matchId) && typingUserId === userId) {
         setIsTyping(true);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
       }
     };
+    socketService.on('chat:new-message', handleNewMessage);
     socketService.on('message:new', handleNewMessage);
-    socketService.on('typing', handleTyping);
+    socketService.on('chat:user-typing', handleTyping);
     return () => {
+      socketService.off('chat:new-message');
       socketService.off('message:new');
-      socketService.off('typing');
+      socketService.off('chat:user-typing');
     };
   }, [matchId, userId]);
 
@@ -271,7 +285,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   const handleTypingIndicator = useCallback(() => {
     if (matchId && token) {
-      socketService.emit('typing', { matchId, userId: user?.id });
+      socketService.emit('chat:typing', { chatId: matchId, userId: user?.id });
     }
   }, [matchId, token, user?.id]);
 
@@ -297,7 +311,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           name: 'chat_image.jpg',
         } as any);
         
-        const uploadResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || ''}/api/upload/chat-image`, {
+        const apiBase = getApiBaseUrl();
+        const uploadResponse = await fetch(`${apiBase}/api/upload/chat-image`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
@@ -307,11 +322,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         if (uploadData.success && uploadData.url) {
           await sendMessage('📷 Photo', 'image', { imageUrl: uploadData.url });
         } else {
-          Alert.alert('Upload Failed', 'Could not upload image. Please try again.');
+          Alert.alert('Upload Failed', uploadData.message || 'Could not upload image. Please try again.');
         }
       } catch (error) {
         console.error('Image upload error:', error);
-        Alert.alert('Error', 'Failed to upload image');
+        Alert.alert('Error', 'Failed to upload image. Check your connection.');
       }
     }
   };
@@ -339,7 +354,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           name: 'chat_photo.jpg',
         } as any);
         
-        const uploadResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || ''}/api/upload/chat-image`, {
+        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
@@ -446,7 +461,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           } as any);
           formData.append('duration', recordingDuration.toString());
           
-          const uploadResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || ''}/api/upload/audio`, {
+          const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: formData,
@@ -553,10 +568,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     
     setSubmittingReport(true);
     try {
-      const response = await post('/report', {
+      const response = await post('/reports', {
         reportedUserId: userId,
         reason: selectedReportReason,
-        details: reportDetails,
+        description: reportDetails,
         matchId
       }, token || '');
       

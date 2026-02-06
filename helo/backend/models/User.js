@@ -317,7 +317,7 @@ const userSchema = new mongoose.Schema({
     whoCanViewStories: {
       type: String,
       enum: ['friends', 'matches', 'everyone'],
-      default: 'friends'
+      default: 'everyone'
     },
     allowMessageCopying: {
       type: Boolean,
@@ -441,7 +441,7 @@ const userSchema = new mongoose.Schema({
     whoCanSee: {
       type: String,
       enum: ['everyone', 'matches', 'friends', 'custom'],
-      default: 'matches'
+      default: 'everyone'
     }
   },
   dailySwipes: {

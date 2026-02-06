@@ -226,8 +226,8 @@ router.get('/user/:userId', protect, async (req, res) => {
         stories: stories.map(s => ({
           _id: s._id,
           type: s.type,
-          imageUrl: s.mediaUrl,
-          mediaUrl: s.mediaUrl,
+          imageUrl: s.imageUrl || s.mediaUrl,
+          mediaUrl: s.mediaUrl || s.imageUrl,
           textContent: s.textContent,
           backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
           createdAt: s.createdAt,
@@ -288,8 +288,8 @@ router.get('/user/:userId', protect, async (req, res) => {
       stories: stories.map(s => ({
         _id: s._id,
         type: s.type,
-        imageUrl: s.mediaUrl,
-        mediaUrl: s.mediaUrl,
+        imageUrl: s.imageUrl || s.mediaUrl,
+        mediaUrl: s.mediaUrl || s.imageUrl,
         textContent: s.textContent,
         backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
         createdAt: s.createdAt,
