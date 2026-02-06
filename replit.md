@@ -62,6 +62,14 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Blocked users page redesigned with confirmation dialog, header, safe area insets
 - Matches tab: improved user ID comparison to handle both _id and id formats
 - Typing indicator properly emits 'chat:typing' with chatId parameter
+- Stories open visibility: any authenticated user can view stories (blocked users excluded), `/active` endpoint shows all users' stories
+- Discovery filter: removed `includeAll` bypass, backend properly filters matched/swiped users
+- Story reply: added POST `/stories/:storyId/reply` route, sends chat message if matched or socket notification if not
+- Story share: shares friendly app promo message instead of raw Cloudinary URL, works for text stories too
+- Premium/Stripe: installed `stripe-replit-sync` dependency, Stripe schema initializes correctly
+- ProfileDetailScreen: complete redesign with hero photo gradient, floating action bar (pass/message/like/superlike), quick info pills, photo gallery, colored interest tags, report button
+- Metro memory increased to 1024MB to prevent OOM crashes
+- UserDistanceMap: fixed location format handling (GeoJSON + lat/lng) and photo URI extraction
 
 ## External Dependencies
 
