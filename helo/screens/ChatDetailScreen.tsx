@@ -13,6 +13,9 @@ import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import * as FileSystem from "expo-file-system/legacy";
+import * as MediaLibrary from "expo-media-library";
+import * as Sharing from "expo-sharing";
 import { Audio } from "expo-av";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
@@ -114,11 +117,14 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>(AI_SUGGESTIONS);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const [audioProgress, setAudioProgress] = useState<number>(0);
   
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     const loadChatTheme = async () => {
@@ -517,6 +523,100 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     setRecordingDuration(0);
   };
 
+  const playAudio = async (audioUrl: string, messageId: string) => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.stopAsync();
+        await soundRef.current.unloadAsync();
+        soundRef.current = null;
+      }
+
+      if (playingAudioId === messageId) {
+        setPlayingAudioId(null);
+        setAudioProgress(0);
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUrl },
+        { shouldPlay: true },
+        (status: any) => {
+          if (status.isLoaded) {
+            if (status.durationMillis > 0) {
+              setAudioProgress(status.positionMillis / status.durationMillis);
+            }
+            if (status.didJustFinish) {
+              setPlayingAudioId(null);
+              setAudioProgress(0);
+              soundRef.current = null;
+            }
+          }
+        }
+      );
+      soundRef.current = sound;
+      setPlayingAudioId(messageId);
+    } catch (error) {
+      console.error('Audio playback error:', error);
+      Alert.alert('Error', 'Could not play voice message');
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      if (soundRef.current) {
+        soundRef.current.unloadAsync();
+      }
+    };
+  }, []);
+
+  const saveImage = async (imageUrl: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        link.download = `afroconnect_${Date.now()}.jpg`;
+        link.target = '_blank';
+        link.click();
+        return;
+      }
+
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to save images to your gallery.');
+        return;
+      }
+
+      const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.jpg`;
+      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+      
+      if (downloadResult.status === 200) {
+        await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+        Alert.alert('Saved', 'Image saved to your gallery.');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Error', 'Failed to download image.');
+      }
+    } catch (error) {
+      console.error('Save image error:', error);
+      if (Platform.OS !== 'web') {
+        try {
+          const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.jpg`;
+          const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+          if (downloadResult.status === 200 && await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(downloadResult.uri);
+          }
+        } catch (shareError) {
+          Alert.alert('Error', 'Could not save image.');
+        }
+      }
+    }
+  };
+
   const fetchAISuggestions = async () => {
     if (!token) return;
     setShowAISuggestions(true);
@@ -661,10 +761,43 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
             ]}>
               {item.type === 'image' && item.imageUrl && (
-                <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+                <Pressable onLongPress={() => saveImage(item.imageUrl!)}>
+                  <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+                  <Pressable 
+                    style={styles.imageSaveButton} 
+                    onPress={() => saveImage(item.imageUrl!)}
+                  >
+                    <Ionicons name="download-outline" size={16} color="#FFF" />
+                  </Pressable>
+                </Pressable>
+              )}
+
+              {item.type === 'audio' && item.audioUrl && (
+                <Pressable 
+                  style={[styles.audioPlayer, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }]}
+                  onPress={() => playAudio(item.audioUrl!, item._id)}
+                >
+                  <Ionicons 
+                    name={playingAudioId === item._id ? 'pause' : 'play'} 
+                    size={24} 
+                    color={isMe ? '#FFF' : theme.primary} 
+                  />
+                  <View style={styles.audioWaveform}>
+                    <View style={[styles.audioProgressBar, { backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)' }]}>
+                      <View style={[
+                        styles.audioProgressFill, 
+                        { 
+                          width: playingAudioId === item._id ? `${audioProgress * 100}%` : '0%',
+                          backgroundColor: isMe ? '#FFF' : theme.primary 
+                        }
+                      ]} />
+                    </View>
+                  </View>
+                  <Ionicons name="mic" size={14} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
+                </Pressable>
               )}
               
-              {messageText ? (
+              {messageText && item.type !== 'audio' ? (
                 <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
                   {messageText}
                 </ThemedText>
@@ -1182,4 +1315,34 @@ const styles = StyleSheet.create({
   reportInput: { borderWidth: 1, borderRadius: 12, padding: 14, fontSize: 15, marginTop: 16, minHeight: 80, textAlignVertical: 'top' },
   submitReportButton: { marginTop: 20, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   submitReportText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  imageSaveButton: { 
+    position: 'absolute' as const, 
+    bottom: 12, 
+    right: 8, 
+    width: 32, 
+    height: 32, 
+    borderRadius: 16, 
+    backgroundColor: 'rgba(0,0,0,0.5)', 
+    justifyContent: 'center' as const, 
+    alignItems: 'center' as const 
+  },
+  audioPlayer: { 
+    flexDirection: 'row' as const, 
+    alignItems: 'center' as const, 
+    paddingHorizontal: 10, 
+    paddingVertical: 8, 
+    borderRadius: 16, 
+    minWidth: 180,
+    gap: 8
+  },
+  audioWaveform: { flex: 1 },
+  audioProgressBar: { 
+    height: 4, 
+    borderRadius: 2, 
+    overflow: 'hidden' as const 
+  },
+  audioProgressFill: { 
+    height: '100%' as const, 
+    borderRadius: 2 
+  },
 });

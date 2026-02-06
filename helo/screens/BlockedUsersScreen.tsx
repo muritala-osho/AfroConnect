@@ -16,7 +16,7 @@ export default function BlockedUsersScreen() {
   const { theme } = useTheme();
   const { token } = useAuth();
   const { get, del } = useApi();
-  const { showAlert } = useThemedAlert();
+  const { showAlert, AlertComponent } = useThemedAlert();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
@@ -123,6 +123,7 @@ export default function BlockedUsersScreen() {
           }
         />
       )}
+      <AlertComponent />
     </View>
   );
 }
