@@ -46,7 +46,8 @@
         {
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save images.",
           "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos to your gallery.",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["photo", "video"]
         }
       ]
     ],

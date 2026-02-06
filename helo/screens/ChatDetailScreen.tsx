@@ -119,6 +119,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [aiSuggestions, setAiSuggestions] = useState<string[]>(AI_SUGGESTIONS);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -202,6 +203,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           if (messagesResponse.success && messagesResponse.data) {
             setMessages(messagesResponse.data.messages || []);
           }
+          post(`/chat/${mId}/read`, {}, token).catch(() => {});
         }
       }
     } catch (error) {
@@ -222,7 +224,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       if (msgMatchId === matchId || msg.matchId === matchId) {
         const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender?._id;
         const myId = user?.id || (user as any)?._id;
-        if (senderId !== myId) {
+        if (String(senderId) !== String(myId)) {
           setMessages(prev => {
             if (prev.some(m => m._id === msg._id)) return prev;
             return [...prev, msg];
@@ -585,7 +587,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         return;
       }
 
-      const { status } = await MediaLibrary.requestPermissionsAsync();
+      const { status } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please allow access to save images to your gallery.');
         return;
@@ -761,7 +763,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
             ]}>
               {item.type === 'image' && item.imageUrl && (
-                <Pressable onLongPress={() => saveImage(item.imageUrl!)}>
+                <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
                   <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
                   <Pressable 
                     style={styles.imageSaveButton} 
@@ -1211,6 +1213,22 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           </View>
         </View>
       </Modal>
+
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => setViewingImage(null)}>
+        <View style={styles.imageViewerOverlay}>
+          <Pressable style={styles.imageViewerClose} onPress={() => setViewingImage(null)}>
+            <Feather name="x" size={28} color="#FFF" />
+          </Pressable>
+          <View style={styles.imageViewerActions}>
+            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}>
+              <Ionicons name="download-outline" size={24} color="#FFF" />
+            </Pressable>
+          </View>
+          {viewingImage && (
+            <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />
+          )}
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1344,5 +1362,33 @@ const styles = StyleSheet.create({
   audioProgressFill: { 
     height: '100%' as const, 
     borderRadius: 2 
+  },
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageViewerClose: {
+    position: 'absolute' as const,
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    padding: 8,
+  },
+  imageViewerActions: {
+    position: 'absolute' as const,
+    top: 50,
+    left: 20,
+    zIndex: 10,
+    flexDirection: 'row' as const,
+    gap: 16,
+  },
+  imageViewerActionBtn: {
+    padding: 8,
+  },
+  imageViewerImage: {
+    width: SCREEN_WIDTH,
+    height: '80%',
   },
 });

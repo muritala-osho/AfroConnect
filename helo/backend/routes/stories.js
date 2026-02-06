@@ -250,11 +250,9 @@ router.get('/user/:userId', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'You are blocked from viewing this status' });
     }
     
-    const privacySetting = targetUser.privacySettings?.whoCanViewStories || 'matches';
+    const privacySetting = targetUser.privacySettings?.whoCanViewStories || 'everyone';
     
-    // Check authorization based on privacy settings
     if (privacySetting === 'friends') {
-      // Check if they are friends (mutual friend relationship)
       const FriendRequest = require('../models/FriendRequest');
       const friendship = await FriendRequest.findOne({
         $or: [
@@ -267,7 +265,6 @@ router.get('/user/:userId', protect, async (req, res) => {
         return res.status(403).json({ success: false, message: 'Only friends can view these stories' });
       }
     } else if (privacySetting === 'matches') {
-      // Check if user is a match
       const match = await Match.findOne({
         users: { $all: [req.user._id, userId] },
         status: 'active'
@@ -277,7 +274,6 @@ router.get('/user/:userId', protect, async (req, res) => {
         return res.status(403).json({ success: false, message: 'Not authorized to view stories' });
       }
     }
-    // 'everyone' - no additional check needed
 
     const stories = await Story.find({
       user: userId,
@@ -470,8 +466,7 @@ router.get('/:storyId/reactions', protect, async (req, res) => {
         return res.status(403).json({ success: false, message: 'Not authorized' });
       }
       
-      // Check privacy settings
-      const privacySetting = storyOwner?.privacySettings?.whoCanViewStories || 'matches';
+      const privacySetting = storyOwner?.privacySettings?.whoCanViewStories || 'everyone';
       
       if (privacySetting === 'friends') {
         const FriendRequest = require('../models/FriendRequest');
