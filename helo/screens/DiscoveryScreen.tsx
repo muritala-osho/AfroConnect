@@ -248,7 +248,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       setLoading(true);
       const params: Record<string, any> = {
         limit: 50,
-        includeAll: 'true'
       };
 
       if (discoveryType === 'local' && user.location?.lat && user.location?.lng) {
@@ -386,8 +385,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       ageMin: user?.preferences?.ageRange?.min,
       ageMax: user?.preferences?.ageRange?.max,
       gender: user?.gender,
-      discoveryType: discoveryType,
-      includeAll: 'true'
+      discoveryType: discoveryType
     });
     
     // Load on initial mount or when preferences actually change

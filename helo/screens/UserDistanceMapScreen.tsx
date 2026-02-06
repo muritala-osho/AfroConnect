@@ -157,8 +157,17 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
         lng: freshLng,
       });
 
-      if (isValidLocation(otherUser?.location?.lat, otherUser?.location?.lng)) {
-        fetchWeather(otherUser.location.lat, otherUser.location.lng);
+      const otherLoc = (() => {
+        const loc = otherUser?.location;
+        if (!loc) return null;
+        if (loc.lat && loc.lng) return { lat: loc.lat, lng: loc.lng };
+        if (loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length === 2) {
+          return { lat: loc.coordinates[1], lng: loc.coordinates[0] };
+        }
+        return null;
+      })();
+      if (otherLoc && isValidLocation(otherLoc.lat, otherLoc.lng)) {
+        fetchWeather(otherLoc.lat, otherLoc.lng);
       }
       
       if (token) {
@@ -192,13 +201,25 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
 
   const userLat = currentUserLocation?.lat ?? 0;
   const userLng = currentUserLocation?.lng ?? 0;
-  const otherLat = otherUser?.location?.lat ?? 0;
-  const otherLng = otherUser?.location?.lng ?? 0;
+  
+  const getOtherLocation = () => {
+    const loc = otherUser?.location;
+    if (!loc) return { lat: 0, lng: 0 };
+    if (loc.lat && loc.lng) return { lat: loc.lat, lng: loc.lng };
+    if (loc.coordinates && Array.isArray(loc.coordinates) && loc.coordinates.length === 2) {
+      return { lat: loc.coordinates[1], lng: loc.coordinates[0] };
+    }
+    return { lat: 0, lng: 0 };
+  };
+  
+  const otherLocation = getOtherLocation();
+  const otherLat = otherLocation.lat;
+  const otherLng = otherLocation.lng;
 
   const hasValidLocations = 
     currentUserLocation !== null &&
     isValidLocation(currentUserLocation?.lat, currentUserLocation?.lng) &&
-    isValidLocation(otherUser?.location?.lat, otherUser?.location?.lng);
+    isValidLocation(otherLat, otherLng);
 
   const distance = hasValidLocations 
     ? calculateDistance(userLat, userLng, otherLat, otherLng)
@@ -207,7 +228,8 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
   const midLat = (userLat + otherLat) / 2;
   const midLng = (userLng + otherLng) / 2;
 
-  const otherUserPhoto = otherUser?.photos?.[0] ? getPhotoSource(otherUser.photos[0]) : null;
+  const otherUserPhotoSource = otherUser?.photos?.[0] ? getPhotoSource(otherUser.photos[0]) : null;
+  const otherUserPhoto = otherUserPhotoSource && typeof otherUserPhotoSource === 'object' && 'uri' in otherUserPhotoSource ? otherUserPhotoSource.uri : null;
 
   const escapedName = (otherUser?.name || 'User')
     .replace(/&/g, '&amp;')
@@ -382,7 +404,7 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
           <View style={styles.userPhotoContainer}>
             {otherUserPhoto ? (
               <Image
-                source={otherUserPhoto}
+                source={{ uri: otherUserPhoto }}
                 style={styles.userPhoto}
                 contentFit="cover"
               />

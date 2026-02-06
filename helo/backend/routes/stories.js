@@ -56,22 +56,15 @@ router.get('/active', protect, async (req, res) => {
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
     const blockedUserIds = currentUser?.blockedUsers || [];
     
-    // Get user's matches to find friends
-    const matches = await Match.find({
-      users: req.user._id,
-      status: 'active'
-    });
+    // Also exclude users who blocked the current user
+    const usersWhoBlockedMe = await User.find({
+      blockedUsers: req.user._id
+    }).select('_id');
+    const allBlockedIds = [...blockedUserIds, ...usersWhoBlockedMe.map(u => u._id.toString())];
 
-    const friendIds = matches.map(match => 
-      match.users.find(id => !id.equals(req.user._id))
-    ).filter(id => id && !blockedUserIds.includes(id.toString()));
-
-    // Always include current user to see own stories
-    const targetUserIds = [...friendIds, req.user._id];
-
-    // Get active stories from target users
+    // Get active stories from all users except blocked ones
     const stories = await Story.find({
-      user: { $in: targetUserIds },
+      user: { $nin: allBlockedIds },
       expiresAt: { $gt: Date.now() }
     })
     .populate('user', 'name photos')
@@ -238,43 +231,6 @@ router.get('/user/:userId', protect, async (req, res) => {
       });
     }
     
-    // Fetch target user to check their privacy settings
-    const targetUser = await User.findById(userId).select('privacySettings storyPrivacy');
-    if (!targetUser) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    
-    // Check if current user is blocked from viewing this specific user's status
-    const isPremiumBlocked = targetUser.storyPrivacy?.blockedUsers?.some(id => id.toString() === req.user._id.toString());
-    if (isPremiumBlocked) {
-      return res.status(403).json({ success: false, message: 'You are blocked from viewing this status' });
-    }
-    
-    const privacySetting = targetUser.privacySettings?.whoCanViewStories || 'everyone';
-    
-    if (privacySetting === 'friends') {
-      const FriendRequest = require('../models/FriendRequest');
-      const friendship = await FriendRequest.findOne({
-        $or: [
-          { from: req.user._id, to: userId, status: 'accepted' },
-          { from: userId, to: req.user._id, status: 'accepted' }
-        ]
-      });
-      
-      if (!friendship) {
-        return res.status(403).json({ success: false, message: 'Only friends can view these stories' });
-      }
-    } else if (privacySetting === 'matches') {
-      const match = await Match.findOne({
-        users: { $all: [req.user._id, userId] },
-        status: 'active'
-      });
-
-      if (!match) {
-        return res.status(403).json({ success: false, message: 'Not authorized to view stories' });
-      }
-    }
-
     const stories = await Story.find({
       user: userId,
       expiresAt: { $gt: Date.now() }
