@@ -91,7 +91,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
-  const { get, post } = useApi();
+  const { get, post, put } = useApi();
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -203,7 +203,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           if (messagesResponse.success && messagesResponse.data) {
             setMessages(messagesResponse.data.messages || []);
           }
-          post(`/chat/${mId}/read`, {}, token).catch(() => {});
+          put(`/chat/${mId}/read`, {}, token).catch(() => {});
         }
       }
     } catch (error) {
@@ -587,35 +587,36 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         return;
       }
 
-      const { status } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Please allow access to save images to your gallery.');
+      const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.jpg`;
+      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+
+      if (downloadResult.status !== 200) {
+        Alert.alert('Error', 'Failed to download image.');
         return;
       }
 
-      const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.jpg`;
-      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
-      
-      if (downloadResult.status === 200) {
-        await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
-        Alert.alert('Saved', 'Image saved to your gallery.');
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+          Alert.alert('Saved', 'Image saved to your gallery.');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return;
+        }
+      } catch (_permError) {}
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: 'image/jpeg',
+          dialogTitle: 'Save Image',
+        });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        Alert.alert('Error', 'Failed to download image.');
+        Alert.alert('Error', 'Cannot save images in this environment. Try a development build.');
       }
     } catch (error) {
       console.error('Save image error:', error);
-      if (Platform.OS !== 'web') {
-        try {
-          const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.jpg`;
-          const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
-          if (downloadResult.status === 200 && await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(downloadResult.uri);
-          }
-        } catch (shareError) {
-          Alert.alert('Error', 'Could not save image.');
-        }
-      }
+      Alert.alert('Error', 'Could not save image.');
     }
   };
 

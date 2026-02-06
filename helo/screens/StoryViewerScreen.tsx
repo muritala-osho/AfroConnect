@@ -364,8 +364,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     return ["#FF6B6B", "#FF8E8E"];
   }, [currentStory]);
 
-  if (!currentStory) return null;
-
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -375,7 +373,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     );
   }
 
-  if (stories.length === 0 || accessDenied) {
+  if (!currentStory || stories.length === 0 || accessDenied) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <StatusBar barStyle="light-content" />
