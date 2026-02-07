@@ -194,8 +194,20 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
           isSuperLike: false
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error recording like:", error);
+      const errMsg = error?.message || error?.response?.data?.message || '';
+      if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
+        Alert.alert(
+          'Out of Likes',
+          "You've used all 10 daily likes. Upgrade to Premium for unlimited likes!",
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => navigation.navigate('Premium') }
+          ]
+        );
+        return;
+      }
     }
 
     if (currentIndex < potentialMatches.length - 1) {
@@ -248,6 +260,18 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       }
     } catch (error: any) {
       console.error("Error sending super like:", error);
+      const errMsg = error?.message || error?.response?.data?.message || '';
+      if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
+        Alert.alert(
+          'Out of Likes',
+          "You've used all 10 daily likes. Upgrade to Premium for unlimited likes!",
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', onPress: () => navigation.navigate('Premium') }
+          ]
+        );
+        return;
+      }
       Alert.alert("Error", error.message || "Failed to send Super Like");
     }
 

@@ -113,6 +113,17 @@ const userSchema = new mongoose.Schema({
     city: String,
     country: String
   },
+  passportLocation: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: [Number],
+    city: String,
+    country: String,
+    isActive: { type: Boolean, default: false }
+  },
   locationSharingEnabled: {
     type: Boolean,
     default: true

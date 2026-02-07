@@ -242,6 +242,15 @@ router.get('/nearby', protect, async (req, res) => {
 
     // Discovery: Worldwide priority if specified, otherwise nearby
     const currentUser = await User.findById(req.user.id);
+
+    // Passport mode for premium users
+    let searchLat = lat ? parseFloat(lat) : null;
+    let searchLng = lng ? parseFloat(lng) : null;
+    if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
+      searchLng = currentUser.passportLocation.coordinates[0];
+      searchLat = currentUser.passportLocation.coordinates[1];
+    }
+
     const blockedUserIds = currentUser.blockedUsers || [];
     
     // Also get users who have blocked the current user
@@ -315,9 +324,12 @@ router.get('/nearby', protect, async (req, res) => {
       maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
     }
     
+    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
+    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+
     // Don't use geo query - fetch users with any location format and filter in memory
     // This ensures compatibility with both location.coordinates and location.lat/lng formats
-    if (lat && lng && includeAll !== 'true') {
+    if ((effectiveLat || effectiveLng) && includeAll !== 'true') {
       query.$or = [
         { 'location.coordinates': { $exists: true } },
         { 'location.lat': { $exists: true } }
@@ -334,7 +346,7 @@ router.get('/nearby', protect, async (req, res) => {
 
       // Distance calculation - support both location formats
       let distanceKm = 0;
-      if (lat && lng) {
+      if (effectiveLat && effectiveLng) {
         let userLat, userLng;
         if (user.location?.coordinates && user.location.coordinates.length >= 2) {
           userLng = user.location.coordinates[0];
@@ -346,8 +358,8 @@ router.get('/nearby', protect, async (req, res) => {
         
         if (userLat && userLng) {
           distanceKm = calculateDistance(
-            parseFloat(lat),
-            parseFloat(lng),
+            effectiveLat,
+            effectiveLng,
             userLat,
             userLng
           );
@@ -372,7 +384,7 @@ router.get('/nearby', protect, async (req, res) => {
 
     // For free users, limit discovery to maxDistance (default 10km)
     // Premium users can see users worldwide
-    if (!isPremium && lat && lng && includeAll !== 'true') {
+    if (!isPremium && effectiveLat && effectiveLng && includeAll !== 'true') {
       users = users.filter(u => u.distance <= maxDist);
     }
 
@@ -637,6 +649,36 @@ router.post('/me/locations', protect, async (req, res) => {
     res.json({ success: true, locations: user.additionalLocations });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/passport-location', protect, async (req, res) => {
+  try {
+    if (!req.user.premium?.isActive) {
+      return res.status(403).json({ success: false, message: 'Passport is a Premium feature!' });
+    }
+    const { lat, lng, city, country, isActive } = req.body;
+    const user = await User.findById(req.user._id);
+    if (isActive === false) {
+      user.passportLocation = { isActive: false };
+      await user.save();
+      return res.json({ success: true, message: 'Passport location cleared' });
+    }
+    if (!lat || !lng) {
+      return res.status(400).json({ success: false, message: 'Location required' });
+    }
+    user.passportLocation = {
+      type: 'Point',
+      coordinates: [parseFloat(lng), parseFloat(lat)],
+      city: city || '',
+      country: country || '',
+      isActive: true
+    };
+    await user.save();
+    res.json({ success: true, message: `Passport set to ${city || 'selected location'}`, passportLocation: user.passportLocation });
+  } catch (error) {
+    console.error('Passport location error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

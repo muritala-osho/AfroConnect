@@ -123,6 +123,13 @@ export default function LikeCard({
             style={styles.cardGradient}
           />
 
+          {likeUser.isBlurred && (
+            <View style={styles.blurOverlay}>
+              <Feather name="lock" size={32} color="#FFF" />
+              <ThemedText style={styles.blurOverlayText}>Upgrade to Premium to see who likes you</ThemedText>
+            </View>
+          )}
+
           <Animated.View style={[styles.swipeIndicator, styles.likeIndicator, likeIndicatorStyle]}>
             <Feather name="heart" size={30} color="#FFF" />
           </Animated.View>
@@ -141,9 +148,9 @@ export default function LikeCard({
           <View style={styles.cardInfo}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <ThemedText style={styles.cardName} numberOfLines={1}>
-                {likeUser.name}{likeUser.age ? `, ${likeUser.age}` : ''}
+                {likeUser.isBlurred ? `${(likeUser.name || '?')[0]}***` : likeUser.name}{likeUser.age && !likeUser.isBlurred ? `, ${likeUser.age}` : ''}
               </ThemedText>
-              {likeUser.verified && (
+              {likeUser.verified && !likeUser.isBlurred && (
                 <Image 
                   source={require("@/assets/icons/verified-tick.png")} 
                   style={{ width: 18, height: 18, marginLeft: 4 }} 
@@ -242,5 +249,20 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  blurOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    zIndex: 5,
+    paddingHorizontal: 10,
+  },
+  blurOverlayText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 8,
   },
 });

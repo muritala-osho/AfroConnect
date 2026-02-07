@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import Animated, { 
   useAnimatedStyle, 
@@ -74,6 +74,19 @@ interface DiscoverUser {
 
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
 
+const PASSPORT_CITIES = [
+  { name: 'New York', lat: 40.7128, lng: -74.0060, country: 'USA' },
+  { name: 'London', lat: 51.5074, lng: -0.1278, country: 'UK' },
+  { name: 'Paris', lat: 48.8566, lng: 2.3522, country: 'France' },
+  { name: 'Lagos', lat: 6.5244, lng: 3.3792, country: 'Nigeria' },
+  { name: 'Nairobi', lat: -1.2921, lng: 36.8219, country: 'Kenya' },
+  { name: 'Tokyo', lat: 35.6762, lng: 139.6503, country: 'Japan' },
+  { name: 'Dubai', lat: 25.2048, lng: 55.2708, country: 'UAE' },
+  { name: 'São Paulo', lat: -23.5505, lng: -46.6333, country: 'Brazil' },
+  { name: 'Johannesburg', lat: -26.2041, lng: 28.0473, country: 'South Africa' },
+  { name: 'Accra', lat: 5.6037, lng: -0.1870, country: 'Ghana' },
+];
+
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -94,6 +107,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [showSuperLikeAnimation, setShowSuperLikeAnimation] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [discoveryType, setDiscoveryType] = useState<'local' | 'global'>('local');
+  const [passportActive, setPassportActive] = useState(false);
+  const [passportCity, setPassportCity] = useState('');
+  const [showPassportModal, setShowPassportModal] = useState(false);
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
   
@@ -554,6 +570,64 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     transform: [{ rotate: `${radarRotation.value}deg` }],
   }));
 
+  const handlePassportPress = useCallback(() => {
+    if (!user?.premium?.isActive) {
+      showAlert(
+        'Premium Feature',
+        'Passport lets you match with people in any city! Upgrade to Premium to unlock.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Premium') }
+        ],
+        'globe'
+      );
+      return;
+    }
+    setShowPassportModal(true);
+  }, [user?.premium?.isActive, showAlert, navigation]);
+
+  const handleSelectPassportCity = useCallback(async (city: typeof PASSPORT_CITIES[0]) => {
+    if (!token) return;
+    try {
+      const response = await api.post<{ success: boolean; message?: string }>(
+        '/users/passport-location',
+        { lat: city.lat, lng: city.lng, city: city.name, country: city.country, isActive: true },
+        token
+      );
+      if (response.success) {
+        setPassportActive(true);
+        setPassportCity(city.name);
+        setShowPassportModal(false);
+        showAlert('Passport Active', `You're now discovering people in ${city.name}!`, [{ text: 'OK', style: 'default' }], 'globe');
+        setLoading(true);
+        loadPotentialMatches();
+      }
+    } catch (error) {
+      console.error('Passport set error:', error);
+    }
+  }, [token, api, showAlert, loadPotentialMatches]);
+
+  const handleClearPassport = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await api.post<{ success: boolean }>(
+        '/users/passport-location',
+        { isActive: false },
+        token
+      );
+      if (response.success) {
+        setPassportActive(false);
+        setPassportCity('');
+        setShowPassportModal(false);
+        showAlert('Passport Cleared', 'You\'re back to discovering people near you.', [{ text: 'OK', style: 'default' }], 'map-pin');
+        setLoading(true);
+        loadPotentialMatches();
+      }
+    } catch (error) {
+      console.error('Passport clear error:', error);
+    }
+  }, [token, api, showAlert, loadPotentialMatches]);
+
   const renderHeader = () => (
     <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
       <View style={styles.headerLeft}>
@@ -603,6 +677,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       </View>
 
       <View style={styles.headerRight}>
+        <Pressable 
+          style={[styles.headerIconButton, passportActive && { backgroundColor: theme.primary + '20' }]}
+          onPress={handlePassportPress}
+        >
+          <Feather name="globe" size={22} color={passportActive ? theme.primary : theme.text} />
+        </Pressable>
         <Pressable 
           style={styles.headerIconButton}
           onPress={() => navigation.navigate('Filters')}
@@ -766,9 +846,21 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     navigation.navigate("ProfileDetail", { userId: targetUser.id });
   }, [currentIndex, users, navigation]);
 
-  const handleRewind = useCallback(() => {
+  const handleRewind = useCallback(async () => {
     if (userHistory.current.length === 0) {
       showAlert('No History', 'No previous profiles to rewind to', [{ text: 'OK', style: 'default' }], 'alert-circle');
+      return;
+    }
+    if (!user?.premium?.isActive) {
+      showAlert(
+        'Premium Feature',
+        'Rewind is available for Premium members. Upgrade to undo your last swipe!',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Premium') }
+        ],
+        'rotate-ccw'
+      );
       return;
     }
     if (Platform.OS !== 'web') {
@@ -778,6 +870,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       withTiming(0.8, { duration: 100 }),
       withSpring(1, { damping: 10 })
     );
+    try {
+      await api.post('/match/rewind', {}, token || '');
+    } catch (error) {
+      console.error('Rewind API error:', error);
+    }
     const previousUser = userHistory.current.pop();
     if (previousUser) {
       seenUserIds.current.delete(previousUser.id);
@@ -795,7 +892,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         withSpring(0, { damping: 15 })
       );
     }
-  }, [currentIndex, rewindButtonScale, translateX, showAlert]);
+  }, [currentIndex, rewindButtonScale, translateX, showAlert, user?.premium?.isActive, navigation, api, token]);
 
   const playSuperLikeAnimation = useCallback(() => {
     setShowSuperLikeAnimation(true);
@@ -869,9 +966,22 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       }
       
       setTimeout(() => animateSwipe('right'), 500);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Super like error:", error);
-      showAlert('Error', 'Something went wrong. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
+      const errMsg = error?.message || error?.response?.data?.message || '';
+      if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
+        showAlert(
+          'Out of Likes',
+          "You've used all 10 daily likes. Upgrade to Premium for unlimited likes!",
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Premium') }
+          ],
+          'heart'
+        );
+      } else {
+        showAlert('Error', 'Something went wrong. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
+      }
     }
   }, [currentIndex, users, token, api, starButtonScale, animateSwipe, showAlert, navigation, playSuperLikeAnimation, user?.premium?.isActive]);
 
@@ -1128,6 +1238,64 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
         {renderHeader()}
 
+        {passportActive && (
+          <View style={[styles.passportBadge, { backgroundColor: theme.primary }]}>
+            <Feather name="globe" size={14} color="#FFF" />
+            <ThemedText style={styles.passportBadgeText}>Passport Active: {passportCity}</ThemedText>
+            <Pressable onPress={handleClearPassport}>
+              <Feather name="x" size={16} color="#FFF" />
+            </Pressable>
+          </View>
+        )}
+
+        <Modal
+          visible={showPassportModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowPassportModal(false)}
+        >
+          <View style={styles.passportModalOverlay}>
+            <View style={[styles.passportModalContent, { backgroundColor: theme.surface }]}>
+              <View style={styles.passportModalHeader}>
+                <ThemedText style={[styles.passportModalTitle, { color: theme.text }]}>
+                  Passport - Choose a City
+                </ThemedText>
+                <Pressable onPress={() => setShowPassportModal(false)}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.passportCityList}>
+                {PASSPORT_CITIES.map((city) => (
+                  <Pressable
+                    key={city.name}
+                    style={[
+                      styles.passportCityItem,
+                      { borderBottomColor: theme.border },
+                      passportCity === city.name && { backgroundColor: theme.primary + '15' }
+                    ]}
+                    onPress={() => handleSelectPassportCity(city)}
+                  >
+                    <View>
+                      <ThemedText style={[styles.passportCityName, { color: theme.text }]}>{city.name}</ThemedText>
+                      <ThemedText style={[styles.passportCityCountry, { color: theme.textSecondary }]}>{city.country}</ThemedText>
+                    </View>
+                    {passportCity === city.name && <Feather name="check" size={20} color={theme.primary} />}
+                  </Pressable>
+                ))}
+              </ScrollView>
+              {passportActive && (
+                <Pressable
+                  style={[styles.passportClearButton, { borderColor: '#FF6B6B' }]}
+                  onPress={handleClearPassport}
+                >
+                  <Feather name="map-pin" size={18} color="#FF6B6B" />
+                  <ThemedText style={styles.passportClearText}>Clear Passport - Use Real Location</ThemedText>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         <View style={styles.cardWrapper}>
           {nextUser && (
             <View style={[styles.profileCard, styles.stackedCard]}>
@@ -1359,7 +1527,9 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     flex: 1,
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   headerIconButton: {
     padding: 8,
@@ -1923,5 +2093,79 @@ const styles = StyleSheet.create({
   },
   loveRadarButtonText: {
     ...Typography.bodyBold,
+  },
+  passportBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    gap: 6,
+    marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    marginBottom: 4,
+  },
+  passportBadgeText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  passportModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  passportModalContent: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.xxl,
+    maxHeight: '70%',
+  },
+  passportModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  passportModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  passportCityList: {
+    paddingHorizontal: Spacing.lg,
+  },
+  passportCityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing.md,
+    borderBottomWidth: 1,
+  },
+  passportCityName: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  passportCityCountry: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  passportClearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+  },
+  passportClearText: {
+    color: '#FF6B6B',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
