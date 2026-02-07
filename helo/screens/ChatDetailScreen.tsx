@@ -368,7 +368,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as ImagePicker.MediaType[],
       quality: 0.8,
       allowsEditing: true,
       base64: true,
@@ -406,7 +406,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const handlePickVideo = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      mediaTypes: ['videos'] as ImagePicker.MediaType[],
       quality: 0.8,
       allowsEditing: true,
     });
@@ -1047,7 +1047,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
                     <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) WebBrowser.openBrowserAsync(url); }} style={styles.videoContainer}>
                       <Image 
-                        source={{ uri: (item.videoUrl || item.imageUrl || '').replace(/\.[^.]+$/, '.jpg') }}
+                        source={{ uri: (() => {
+                          const url = item.videoUrl || item.imageUrl || '';
+                          if (url.includes('cloudinary.com')) {
+                            return url.replace('/upload/', '/upload/so_0,w_400,h_300,c_fill/').replace(/\.(mp4|mov|avi|webm)$/i, '.jpg');
+                          }
+                          return url.replace(/\.[^.]+$/, '.jpg');
+                        })() }}
                         style={styles.videoThumbnail}
                         contentFit="cover"
                       />

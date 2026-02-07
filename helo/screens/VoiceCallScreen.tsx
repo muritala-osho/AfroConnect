@@ -12,6 +12,7 @@ import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
+import agoraService from '@/services/agoraService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ export default function VoiceCallScreen() {
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const agoraJoined = useRef(false);
 
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) {
@@ -138,11 +140,51 @@ export default function VoiceCallScreen() {
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      agoraService.leave();
       socketService.off('call:accepted');
       socketService.off('call:declined');
       socketService.off('call:ended');
     };
   }, []);
+
+  useEffect(() => {
+    if (callStatus === 'connected' && callData && !agoraJoined.current) {
+      agoraJoined.current = true;
+      const joinAgora = async () => {
+        if (agoraService.isSupported()) {
+          let joinToken = callData.token;
+          let joinUid = callData.uid || 0;
+          if (isIncoming && authToken) {
+            try {
+              const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+              if (res.success && res.data?.token) {
+                joinToken = res.data.token;
+                joinUid = 0;
+              }
+            } catch (e) {
+              console.log('Failed to get receiver token, using shared token');
+            }
+          }
+          const joined = await agoraService.joinVoiceCall(
+            callData.appId,
+            callData.channelName,
+            joinToken,
+            joinUid
+          );
+          if (!joined) {
+            console.log('Agora voice join failed, call continues without RTC');
+          }
+        }
+      };
+      joinAgora();
+    }
+  }, [callStatus, callData]);
+
+  useEffect(() => {
+    if (agoraJoined.current) {
+      agoraService.toggleMute(isMuted);
+    }
+  }, [isMuted]);
 
   useEffect(() => {
     if (callStatus === 'connected') {
@@ -163,6 +205,7 @@ export default function VoiceCallScreen() {
   const handleEndCall = () => {
     const wasConnected = callStatus === 'connected';
     setCallStatus('ended');
+    agoraService.leave();
     socketService.endCall({ 
       targetUserId: isIncoming ? callerId : userId,
       callType: 'audio',

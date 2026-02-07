@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar } from 'react-native';
+import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar, Platform } from 'react-native';
 import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
+import agoraService from '@/services/agoraService';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,6 +49,10 @@ export default function VideoCallScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showControls, setShowControls] = useState(true);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const agoraJoined = useRef(false);
+  const remoteVideoRef = useRef<HTMLDivElement | null>(null);
+  const [remoteUserJoined, setRemoteUserJoined] = useState(false);
+  const localVideoRef = useRef<HTMLDivElement | null>(null);
 
   const playRingingTone = useCallback(async () => {
     try {
@@ -196,11 +201,68 @@ export default function VideoCallScreen() {
       if (ringingTimeout.current) {
         clearTimeout(ringingTimeout.current);
       }
+      agoraService.leave();
       socketService.off('call:accepted');
       socketService.off('call:declined');
       socketService.off('call:ended');
     };
   }, []);
+
+  useEffect(() => {
+    if (callStatus === 'connected' && callData && !agoraJoined.current) {
+      agoraJoined.current = true;
+      const joinAgora = async () => {
+        if (agoraService.isSupported()) {
+          agoraService.setRemoteUserHandlers(
+            (user) => {
+              setRemoteUserJoined(true);
+              if (user.videoTrack && remoteVideoRef.current) {
+                user.videoTrack.play(remoteVideoRef.current);
+              }
+            },
+            () => {
+              setRemoteUserJoined(false);
+            }
+          );
+          let joinToken = callData.token;
+          let joinUid = callData.uid || 0;
+          if (isIncoming && authToken) {
+            try {
+              const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+              if (res.success && res.data?.token) {
+                joinToken = res.data.token;
+                joinUid = 0;
+              }
+            } catch (e) {
+              console.log('Failed to get receiver token, using shared token');
+            }
+          }
+          const { videoTrack } = await agoraService.joinVideoCall(
+            callData.appId,
+            callData.channelName,
+            joinToken,
+            joinUid
+          );
+          if (videoTrack && localVideoRef.current) {
+            videoTrack.play(localVideoRef.current);
+          }
+        }
+      };
+      joinAgora();
+    }
+  }, [callStatus, callData]);
+
+  useEffect(() => {
+    if (agoraJoined.current) {
+      agoraService.toggleMute(isMuted);
+    }
+  }, [isMuted]);
+
+  useEffect(() => {
+    if (agoraJoined.current) {
+      agoraService.toggleCamera(isCameraOff);
+    }
+  }, [isCameraOff]);
 
   useEffect(() => {
     if (callStatus === 'connected') {
@@ -227,7 +289,7 @@ export default function VideoCallScreen() {
     if (ringingTimeout.current) {
       clearTimeout(ringingTimeout.current);
     }
-    // Notify the other user that call ended - socket will save to chat
+    agoraService.leave();
     socketService.endCall({ 
       targetUserId: isIncoming ? callerId : userId,
       callType: 'video',
@@ -285,6 +347,9 @@ export default function VideoCallScreen() {
   const flipCamera = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsFrontCamera(!isFrontCamera);
+    if (agoraJoined.current) {
+      agoraService.switchCamera();
+    }
   };
 
   const getStatusText = () => {
@@ -304,11 +369,17 @@ export default function VideoCallScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      <SafeImage
-        source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
-        style={styles.remoteVideo}
-        contentFit="cover"
-      />
+      {Platform.OS === 'web' && remoteUserJoined ? (
+        <View style={styles.remoteVideo}>
+          <div ref={remoteVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any }} />
+        </View>
+      ) : (
+        <SafeImage
+          source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
+          style={styles.remoteVideo}
+          contentFit="cover"
+        />
+      )}
       
       <LinearGradient
         colors={['rgba(0,0,0,0.6)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
@@ -343,21 +414,19 @@ export default function VideoCallScreen() {
       </Animated.View>
 
       <View style={[styles.selfVideoContainer, { top: insets.top + 80 }]}>
-        {isCameraOff ? (
+        {Platform.OS === 'web' && agoraJoined.current && !isCameraOff ? (
+          <View style={styles.selfVideo}>
+            <div ref={localVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any, borderRadius: 16 }} />
+          </View>
+        ) : isCameraOff ? (
           <View style={styles.cameraOffPlaceholder}>
             <Ionicons name="videocam-off" size={32} color="rgba(255,255,255,0.5)" />
             <ThemedText style={styles.cameraOffText}>Camera Off</ThemedText>
           </View>
         ) : cameraPermission?.granted ? (
-          <CameraView
-            style={styles.selfVideo}
-            facing={isFrontCamera ? 'front' : 'back'}
-          />
+          <CameraView style={styles.selfVideo} facing={isFrontCamera ? 'front' : 'back'} />
         ) : (
-          <LinearGradient
-            colors={['rgba(74, 144, 226, 0.4)', 'rgba(74, 144, 226, 0.1)']}
-            style={styles.selfVideo}
-          >
+          <LinearGradient colors={['rgba(74, 144, 226, 0.4)', 'rgba(74, 144, 226, 0.1)']} style={styles.selfVideo}>
             <Ionicons name="videocam" size={32} color="rgba(255,255,255,0.5)" />
           </LinearGradient>
         )}
