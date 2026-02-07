@@ -92,6 +92,12 @@ This architecture enables unified URL handling where the gateway proxies API req
 - FlatList performance: SwipeableMessage extracted as React.memo component, FlatList optimized with keyExtractor/maxToRenderPerBatch/windowSize/removeClippedSubviews
 - Typing indicator: backend now includes chatId in user-typing emit, frontend simplified check (ignores self-typing)
 - Incoming call: IncomingCallHandler uses _id fallback for user ID, socket setUserOnline uses same pattern
+- VoiceCallScreen: mute/speaker toggle buttons visible during connected call, proper control layout
+- VideoCallScreen: expo-camera CameraView for live self-video preview, chat button navigates to ChatDetail, all control buttons functional
+- IncomingCallHandler: haptic interval properly cleared on accept/decline, call:ended/accepted listeners dismiss UI
+- Chat input bar: reduced padding throughout for compact layout (paddingTop 6, inputWrapper minHeight 40)
+- Translation: MyMemory API uses explicit source language code (default 'en') instead of invalid 'auto'
+- ProfileDetailScreen: map navigation passes full user object as otherUser param for correct location display
 
 ## External Dependencies
 
