@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from "react";
 import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
@@ -23,6 +23,7 @@ import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as WebBrowser from 'expo-web-browser';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -97,6 +98,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
   const { get, post, put, del } = useApi();
+
+  const myId = useMemo(() => (user as any)?._id || user?.id || '', [user]);
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -236,7 +239,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       const msgMatchId = data.matchId || msg.matchId;
       if (msgMatchId === matchId || msg.matchId === matchId) {
         const senderId = typeof msg.sender === 'string' ? msg.sender : msg.sender?._id;
-        const myId = user?.id || (user as any)?._id;
         if (String(senderId) !== String(myId)) {
           setMessages(prev => {
             if (prev.some(m => m._id === msg._id)) return prev;
@@ -262,7 +264,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       socketService.off('message:new');
       socketService.off('chat:user-typing');
     };
-  }, [matchId, userId]);
+  }, [matchId, userId, myId]);
 
   const sendMessage = async (content?: string, type: string = 'text', extraData?: any) => {
     const textToSend = content || message.trim();
@@ -278,7 +280,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     let replyData: any = undefined;
     if (replyingTo) {
       const replySenderId = typeof replyingTo.sender === 'string' ? replyingTo.sender : replyingTo.sender?._id;
-      const myId = user?.id || (user as any)?._id;
       replyData = {
         messageId: replyingTo._id,
         content: replyingTo.content || replyingTo.text || '',
@@ -289,7 +290,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     
     const tempMessage: Message = {
       _id: `temp_${Date.now()}`,
-      sender: user?.id || '',
+      sender: myId,
       content: textToSend,
       type: type as any,
       createdAt: new Date().toISOString(),
@@ -322,9 +323,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   const handleTypingIndicator = useCallback(() => {
     if (matchId && token) {
-      socketService.emit('chat:typing', { chatId: matchId, userId: user?.id });
+      socketService.emit('chat:typing', { chatId: matchId, userId: myId });
     }
-  }, [matchId, token, user?.id]);
+  }, [matchId, token, myId]);
 
   const handleEmojiSelect = (emoji: string) => {
     setMessage(prev => prev + emoji);
@@ -849,10 +850,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       if (response.success && response.data?.translatedText) {
         setTranslatedText(response.data.translatedText);
       } else {
-        Alert.alert('Error', 'Translation failed');
+        Alert.alert('Error', response.message || 'Translation failed');
       }
     } catch (error) {
-      Alert.alert('Error', 'Translation failed');
+      Alert.alert('Error', (error as any)?.message || 'Translation failed');
     } finally {
       setTranslating(false);
     }
@@ -973,8 +974,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const senderId = typeof item.sender === 'string' ? item.sender : item.sender?._id;
-    const currentUserId = user?.id || (user as any)?._id;
-    const isMe = String(senderId) === String(currentUserId);
+    const isMe = String(senderId) === String(myId);
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDateHeader = shouldShowDateHeader(item, prevMessage);
     const messageText = item.deletedForEveryone ? 'This message was deleted' : (item.content || item.text || '');
@@ -1041,7 +1041,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   )}
 
                   {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
-                    <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) Linking.openURL(url); }} style={styles.videoContainer}>
+                    <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) WebBrowser.openBrowserAsync(url); }} style={styles.videoContainer}>
                       <View style={styles.videoPlaceholder}>
                         <Ionicons name="videocam" size={32} color="#FFF" />
                         <ThemedText style={styles.videoLabel}>Video</ThemedText>
@@ -1267,7 +1267,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             <ThemedText style={[styles.replyBarName, { color: theme.primary }]} numberOfLines={1}>
               {(() => {
                 const sid = typeof replyingTo.sender === 'string' ? replyingTo.sender : replyingTo.sender?._id;
-                const myId = user?.id || (user as any)?._id;
                 return String(sid) === String(myId) ? 'You' : userName;
               })()}
             </ThemedText>
@@ -1572,7 +1571,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             
             {selectedMessage && (() => {
               const sid = typeof selectedMessage.sender === 'string' ? selectedMessage.sender : selectedMessage.sender?._id;
-              const myId = user?.id || (user as any)?._id;
               return String(sid) === String(myId);
             })() && (
               <Pressable style={styles.messageMenuItem} onPress={handleDeleteForEveryone}>

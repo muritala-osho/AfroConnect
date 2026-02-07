@@ -68,14 +68,18 @@ router.post('/translate', protect, async (req, res) => {
     }
 
     const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=auto|${targetCode}`;
-    const response = await fetch(url);
-    const data = await response.json();
+    let data;
+    try {
+      const response = await fetch(url);
+      data = await response.json();
+    } catch (fetchErr) {
+      console.error("MyMemory fetch error:", fetchErr);
+      return res.status(502).json({ success: false, message: "Translation service is temporarily unavailable. Please try again later." });
+    }
 
-    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+    if (data.responseData?.translatedText) {
       let translatedText = data.responseData.translatedText;
-      // MyMemory sometimes returns all caps for some languages, check match quality
       if (data.responseData.match < 0.5 && data.matches && data.matches.length > 1) {
-        // Try to find a better match
         const betterMatch = data.matches.find(m => m.translation && m.quality && parseInt(m.quality) > 50);
         if (betterMatch) translatedText = betterMatch.translation;
       }
