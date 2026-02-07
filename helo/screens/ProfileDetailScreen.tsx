@@ -232,8 +232,11 @@ export default function ProfileDetailScreen() {
   }
 
   const quickInfoPills = [];
-  if (user.location?.city) {
-    quickInfoPills.push({ icon: 'location-outline', text: user.location.city, color: theme.primary });
+  if (user.location?.city || user.location?.address) {
+    const city = user.location.city || user.location.address || '';
+    const country = user.location.country || '';
+    const locationText = country ? `${city}, ${country}` : city;
+    quickInfoPills.push({ icon: 'location-outline', text: locationText, color: theme.primary });
   }
   if (user.distance !== undefined) {
     quickInfoPills.push({ icon: 'navigate-outline', text: `${Math.round(user.distance)} km`, color: '#4CAF50' });
@@ -321,11 +324,11 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               )}
             </View>
-            {user.location?.city && (
+            {(user.location?.city || user.location?.address) && (
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.9)" />
                 <ThemedText style={styles.locationText}>
-                  {user.location.city}{user.location.country ? `, ${user.location.country}` : ''}
+                  {user.location.city || user.location.address}{user.location.country ? `, ${user.location.country}` : ''}
                 </ThemedText>
               </View>
             )}

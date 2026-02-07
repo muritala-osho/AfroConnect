@@ -345,10 +345,11 @@ router.get('/nearby', protect, async (req, res) => {
       let score = 0;
 
       // Distance calculation - support both location formats
-      let distanceKm = 0;
+      let distanceKm = null;
       if (effectiveLat && effectiveLng) {
         let userLat, userLng;
-        if (user.location?.coordinates && user.location.coordinates.length >= 2) {
+        if (user.location?.coordinates && user.location.coordinates.length >= 2 &&
+            !(user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
           userLng = user.location.coordinates[0];
           userLat = user.location.coordinates[1];
         } else if (user.location?.lat && user.location?.lng) {
@@ -356,7 +357,7 @@ router.get('/nearby', protect, async (req, res) => {
           userLng = user.location.lng;
         }
         
-        if (userLat && userLng) {
+        if (userLat != null && userLng != null) {
           distanceKm = calculateDistance(
             effectiveLat,
             effectiveLng,
@@ -364,6 +365,9 @@ router.get('/nearby', protect, async (req, res) => {
             userLng
           );
         }
+      }
+      if (distanceKm === null) {
+        distanceKm = 99999;
       }
 
       // Boost nearby users

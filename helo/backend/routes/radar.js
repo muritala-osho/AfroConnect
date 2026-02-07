@@ -72,10 +72,42 @@ router.get('/nearby-users', protect, async (req, res) => {
 
     searchRadius = Math.max(1, Math.min(100, searchRadius));
 
+    const currentUser = await User.findById(req.user.id).select('swipedRight swipedLeft blockedUsers');
+    const blockedUserIds = currentUser?.blockedUsers || [];
+    const usersWhoBlockedMe = await User.find({ blockedUsers: req.user.id }).select('_id');
+    const blockedByIds = usersWhoBlockedMe.map(u => u._id);
+
+    const Match = require('../models/Match');
+    const matches = await Match.find({ users: req.user.id, status: 'active' });
+    const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
+
+    const FriendRequest = require('../models/FriendRequest');
+    const pendingRequests = await FriendRequest.find({
+      $or: [
+        { sender: req.user._id, status: 'pending' },
+        { receiver: req.user._id, status: 'pending' }
+      ]
+    }).select('sender receiver');
+    const pendingIds = pendingRequests.map(r => {
+      const sid = r.sender.toString();
+      const rid = r.receiver.toString();
+      return sid === req.user._id.toString() ? rid : sid;
+    });
+
+    const excludedIds = [
+      ...blockedUserIds.map(id => id.toString()),
+      ...blockedByIds.map(id => id.toString()),
+      req.user.id.toString(),
+      ...(currentUser?.swipedRight || []).map(id => id.toString()),
+      ...(currentUser?.swipedLeft || []).map(id => id.toString()),
+      ...matchedUserIds,
+      ...pendingIds
+    ].filter((id, idx, arr) => arr.indexOf(id) === idx);
+
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const query = {
-      _id: { $ne: req.user.id },
+      _id: { $ne: req.user.id, $nin: excludedIds },
       banned: { $ne: true },
       suspended: { $ne: true },
       $or: [

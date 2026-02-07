@@ -153,7 +153,7 @@ class SocketService {
     }
   }
   
-  emitWithRetry(event: string, data: any, retries: number = 3) {
+  async emitWithRetry(event: string, data: any, retries: number = 3) {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
       return;
@@ -161,7 +161,13 @@ class SocketService {
     
     console.log(`Socket not connected, attempting to reconnect for ${event}...`);
     
-    // Force reconnection
+    const connected = await this.ensureConnected();
+    if (connected && this.socket?.connected) {
+      this.socket.emit(event, data);
+      console.log(`Successfully emitted ${event} after reconnection`);
+      return;
+    }
+    
     if (this.socket) {
       this.socket.connect();
     }
@@ -172,15 +178,14 @@ class SocketService {
       if (this.socket?.connected) {
         clearInterval(retryInterval);
         this.socket.emit(event, data);
-        console.log(`Successfully emitted ${event} after reconnection`);
+        console.log(`Successfully emitted ${event} after ${attempts} retry attempts`);
       } else if (attempts >= retries) {
         clearInterval(retryInterval);
         console.error(`Failed to emit ${event} after ${retries} attempts`);
       } else {
-        // Try to reconnect on each attempt
         this.socket?.connect();
       }
-    }, 1000);
+    }, 2000);
   }
   
   ensureConnected(token?: string): Promise<boolean> {

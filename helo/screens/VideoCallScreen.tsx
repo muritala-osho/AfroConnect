@@ -72,6 +72,13 @@ export default function VideoCallScreen() {
       return;
     }
 
+    const isConnected = await socketService.ensureConnected(authToken || undefined);
+    if (!isConnected) {
+      setCallStatus('failed');
+      setErrorMessage('Connection issue. Please check your internet and try again.');
+      return;
+    }
+
     try {
       setCallStatus('connecting');
       
