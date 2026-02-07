@@ -92,6 +92,40 @@ const AI_SUGGESTIONS = [
   "What's the best trip you've ever taken?",
 ];
 
+const SwipeableMessage = React.memo(({ item, isMe, children, onReply, themeTextSecondary }: { item: Message; isMe: boolean; children: React.ReactNode; onReply: (item: Message) => void; themeTextSecondary: string }) => {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10 && gestureState.dx < 0;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dx < 0) {
+          translateX.setValue(Math.max(gestureState.dx, -80));
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -50) {
+          onReply(item);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+      },
+    })
+  ).current;
+
+  return (
+    <View style={{ overflow: 'hidden' }}>
+      <View style={[{ position: 'absolute', right: isMe ? undefined : 8, left: isMe ? 8 : undefined, top: 0, bottom: 0, justifyContent: 'center' }]}>
+        <Feather name="corner-up-left" size={20} color={themeTextSecondary} />
+      </View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+});
+
 export default function ChatDetailScreen({ navigation, route }: ChatDetailScreenProps) {
   const { theme, isDark, setThemeMode } = useTheme();
   const insets = useSafeAreaInsets();
@@ -250,7 +284,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     };
     const handleTyping = (data: any) => {
       const typingUserId = data.userId || data.senderId;
-      if ((data.chatId === matchId || data.matchId === matchId) && typingUserId === userId) {
+      if (typingUserId && String(typingUserId) !== String(myId)) {
         setIsTyping(true);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
         typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
@@ -323,7 +357,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   const handleTypingIndicator = useCallback(() => {
     if (matchId && token) {
-      socketService.emit('chat:typing', { chatId: matchId, userId: myId });
+      socketService.emit('chat:typing', { chatId: matchId, userId: myId, isTyping: true });
     }
   }, [matchId, token, myId]);
 
@@ -938,41 +972,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const SwipeableMessage = useCallback(({ item, isMe, children }: { item: Message; isMe: boolean; children: React.ReactNode }) => {
-    const translateX = useRef(new Animated.Value(0)).current;
-    const panResponder = useRef(
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10 && gestureState.dx < 0;
-        },
-        onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dx < 0) {
-            translateX.setValue(Math.max(gestureState.dx, -80));
-          }
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -50) {
-            setReplyingTo(item);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        },
-      })
-    ).current;
+  const handleSwipeReply = useCallback((item: Message) => {
+    setReplyingTo(item);
+  }, []);
 
-    return (
-      <View style={{ overflow: 'hidden' }}>
-        <View style={[{ position: 'absolute', right: isMe ? undefined : 8, left: isMe ? 8 : undefined, top: 0, bottom: 0, justifyContent: 'center' }]}>
-          <Feather name="corner-up-left" size={20} color={theme.textSecondary} />
-        </View>
-        <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
-          {children}
-        </Animated.View>
-      </View>
-    );
-  }, [theme.textSecondary]);
-
-  const renderMessage = ({ item, index }: { item: Message; index: number }) => {
+  const renderMessage = useCallback(({ item, index }: { item: Message; index: number }) => {
     const senderId = typeof item.sender === 'string' ? item.sender : item.sender?._id;
     const isMe = String(senderId) === String(myId);
     const prevMessage = index > 0 ? messages[index - 1] : null;
@@ -999,7 +1003,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             </View>
           </View>
         ) : (
-          <SwipeableMessage item={item} isMe={isMe}>
+          <SwipeableMessage item={item} isMe={isMe} onReply={handleSwipeReply} themeTextSecondary={theme.textSecondary}>
             <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={400}>
               <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
                 {!isMe && (
@@ -1042,16 +1046,19 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
                   {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
                     <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) WebBrowser.openBrowserAsync(url); }} style={styles.videoContainer}>
-                      <View style={styles.videoPlaceholder}>
-                        <Ionicons name="videocam" size={32} color="#FFF" />
-                        <ThemedText style={styles.videoLabel}>Video</ThemedText>
-                      </View>
-                      <View style={styles.videoPlayButton}>
-                        <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                      <Image 
+                        source={{ uri: (item.videoUrl || item.imageUrl || '').replace(/\.[^.]+$/, '.jpg') }}
+                        style={styles.videoThumbnail}
+                        contentFit="cover"
+                      />
+                      <View style={styles.videoOverlay}>
+                        <View style={styles.videoPlayButton}>
+                          <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                        </View>
                       </View>
                       <Pressable 
                         style={styles.imageSaveButton} 
-                        onPress={() => saveVideo(item.videoUrl || item.imageUrl!)}
+                        onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}
                       >
                         <Ionicons name="download-outline" size={16} color="#FFF" />
                       </Pressable>
@@ -1109,7 +1116,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         )}
       </View>
     );
-  };
+  }, [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply]);
+
+  const keyExtractor = useCallback((item: Message) => item._id, []);
 
   const currentTheme = CHAT_THEMES.find(t => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
@@ -1124,11 +1133,14 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         <FlatList
           ref={flatListRef}
           data={messages}
-          keyExtractor={(item) => item._id}
+          keyExtractor={keyExtractor}
           renderItem={renderMessage}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          maxToRenderPerBatch={10}
+          windowSize={10}
+          removeClippedSubviews={true}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={[styles.emptyIconContainer, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
@@ -1972,24 +1984,19 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     position: 'relative' as const,
   },
-  videoPlaceholder: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+  videoThumbnail: {
+    width: 200,
+    height: 150,
+    borderRadius: 12,
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
-  },
-  videoLabel: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-    marginTop: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
   },
   videoPlayButton: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },

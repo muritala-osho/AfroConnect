@@ -32,7 +32,8 @@ export default function IncomingCallHandler() {
   const soundRef = useRef<any>(null);
 
   useEffect(() => {
-    if (!user?.id || !token) return;
+    const myUserId = (user as any)?._id || user?.id;
+    if (!myUserId || !token) return;
 
     const handleIncomingCall = async (data: IncomingCallData) => {
       console.log('Incoming call received:', data);

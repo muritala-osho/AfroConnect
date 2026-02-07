@@ -303,7 +303,8 @@ io.on('connection', (socket) => {
     if (data.chatId) {
       socket.to(data.chatId).emit('chat:user-typing', {
         userId: data.userId,
-        isTyping: data.isTyping
+        isTyping: data.isTyping !== false,
+        chatId: data.chatId
       });
     }
   });

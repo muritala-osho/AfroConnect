@@ -114,11 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   useEffect(() => {
     // Connect socket for real-time features
-    if (user?.id && token) {
+    const uid = (user as any)?._id || user?.id;
+    if (uid && token) {
       try {
-        // User profile is complete, connect to socket with all features
         socketService.connect(token);
-        socketService.setUserOnline(user.id);
+        socketService.setUserOnline(uid);
       } catch (err) {
         console.error('Socket connection failed:', err);
       }
