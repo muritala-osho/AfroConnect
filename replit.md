@@ -98,6 +98,13 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Chat input bar: reduced padding throughout for compact layout (paddingTop 6, inputWrapper minHeight 40)
 - Translation: MyMemory API uses explicit source language code (default 'en') instead of invalid 'auto'
 - ProfileDetailScreen: map navigation passes full user object as otherUser param for correct location display
+- Agora Web SDK integration: VoiceCallScreen and VideoCallScreen now use agora-rtc-sdk-ng for real audio/video transmission; agoraService.ts utility handles channel join/leave, track creation, remote user subscription
+- Video calls show both users live: caller's local video via Agora track, remote user's video via Agora subscription with div playback on web; fallback to CameraView/static image on native
+- Voice calls transmit real audio: both users join same Agora channel with microphone tracks; mute toggle controls Agora audio track
+- Receiver token: incoming call recipients fetch their own Agora token (uid=0) to avoid uid collision with caller
+- Video message thumbnails: Cloudinary transformation (so_0,w_400,h_300,c_fill) generates proper first-frame thumbnails instead of showing camera icon
+- ImagePicker: migrated from deprecated MediaTypeOptions to MediaType array format
+- Chat persistence confirmed: all messages saved via Message.create() in MongoDB with no TTL/expiry, retrievable indefinitely via GET /api/chat/:matchId with pagination
 
 ## External Dependencies
 
