@@ -70,6 +70,11 @@ This architecture enables unified URL handling where the gateway proxies API req
 - ProfileDetailScreen: complete redesign with hero photo gradient, floating action bar (pass/message/like/superlike), quick info pills, photo gallery, colored interest tags, report button
 - Metro memory increased to 1024MB to prevent OOM crashes
 - UserDistanceMap: fixed location format handling (GeoJSON + lat/lng) and photo URI extraction
+- Rewind: premium-gated on both DiscoveryScreen and SwipeScreen with upgrade prompts
+- Passport Match: backend passportLocation field on User model, POST /users/passport-location route, nearby route uses passport coords for premium users; frontend modal with 10 city presets (NY, London, Paris, Lagos, Nairobi, Tokyo, Dubai, São Paulo, Johannesburg, Accra)
+- See Who Likes You: MatchesScreen blurs photos (blurRadius=15) and masks names for free users, lock icon overlay, tap navigates to Premium
+- Unlimited Likes: frontend shows "Out of Likes" upgrade prompt when 403 swipe limit hit
+- Chat real-time sync verified: socket.io broadcasts to room + receiver, frontend listens on chat:new-message and message:new, auto-scrolls, no refresh needed
 
 ## External Dependencies
 
