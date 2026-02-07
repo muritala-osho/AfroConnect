@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar, Alert } from 'react-native';
+import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar, Alert, Platform } from 'react-native';
 import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
 import agoraService from '@/services/agoraService';
+import { getApiBaseUrl } from '@/constants/config';
+import WebView from 'react-native-webview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,6 +50,14 @@ export default function VoiceCallScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const agoraJoined = useRef(false);
+  const webViewRef = useRef<WebView | null>(null);
+  const [webviewReady, setWebviewReady] = useState(false);
+
+  const sendToWebView = useCallback((msg: any) => {
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify(msg));
+    }
+  }, []);
 
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) {
@@ -140,7 +150,11 @@ export default function VoiceCallScreen() {
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
-      agoraService.leave();
+      if (Platform.OS === 'web') {
+        agoraService.leave();
+      } else {
+        sendToWebView({ action: 'leave' });
+      }
       socketService.off('call:accepted');
       socketService.off('call:declined');
       socketService.off('call:ended');
@@ -151,38 +165,54 @@ export default function VoiceCallScreen() {
     if (callStatus === 'connected' && callData && !agoraJoined.current) {
       agoraJoined.current = true;
       const joinAgora = async () => {
-        if (agoraService.isSupported()) {
-          let joinToken = callData.token;
-          let joinUid = callData.uid || 0;
-          if (isIncoming && authToken) {
-            try {
-              const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
-              if (res.success && res.data?.token) {
-                joinToken = res.data.token;
-                joinUid = 0;
-              }
-            } catch (e) {
-              console.log('Failed to get receiver token, using shared token');
+        let joinToken = callData.token;
+        let joinUid = callData.uid || 0;
+        if (isIncoming && authToken) {
+          try {
+            const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+            if (res.success && res.data?.token) {
+              joinToken = res.data.token;
+              joinUid = 0;
+            }
+          } catch (e) {
+            console.log('Failed to get receiver token, using shared token');
+          }
+        }
+
+        if (Platform.OS === 'web') {
+          if (agoraService.isSupported()) {
+            const joined = await agoraService.joinVoiceCall(
+              callData.appId,
+              callData.channelName,
+              joinToken,
+              joinUid
+            );
+            if (!joined) {
+              console.log('Agora voice join failed, call continues without RTC');
             }
           }
-          const joined = await agoraService.joinVoiceCall(
-            callData.appId,
-            callData.channelName,
-            joinToken,
-            joinUid
-          );
-          if (!joined) {
-            console.log('Agora voice join failed, call continues without RTC');
-          }
+        } else {
+          sendToWebView({
+            action: 'join',
+            appId: callData.appId,
+            channel: callData.channelName,
+            token: joinToken,
+            uid: joinUid,
+            callType: 'voice'
+          });
         }
       };
       joinAgora();
     }
-  }, [callStatus, callData]);
+  }, [callStatus, callData, webviewReady]);
 
   useEffect(() => {
     if (agoraJoined.current) {
-      agoraService.toggleMute(isMuted);
+      if (Platform.OS === 'web') {
+        agoraService.toggleMute(isMuted);
+      } else {
+        sendToWebView({ action: 'mute', muted: isMuted });
+      }
     }
   }, [isMuted]);
 
@@ -205,7 +235,11 @@ export default function VoiceCallScreen() {
   const handleEndCall = () => {
     const wasConnected = callStatus === 'connected';
     setCallStatus('ended');
-    agoraService.leave();
+    if (Platform.OS === 'web') {
+      agoraService.leave();
+    } else {
+      sendToWebView({ action: 'leave' });
+    }
     socketService.endCall({ 
       targetUserId: isIncoming ? callerId : userId,
       callType: 'audio',
@@ -236,7 +270,7 @@ export default function VoiceCallScreen() {
     switch (callStatus) {
       case 'initializing': return 'Initializing...';
       case 'connecting': return 'Connecting...';
-      case 'ringing': return isIncoming ? 'Incoming call...' : 'Ringing... 🔔';
+      case 'ringing': return isIncoming ? 'Incoming call...' : 'Ringing...';
       case 'connected': return formatDuration(callDuration);
       case 'ended': return 'Call ended';
       case 'declined': return 'Call declined';
@@ -245,9 +279,64 @@ export default function VoiceCallScreen() {
     }
   };
 
+  const handleWebViewMessage = useCallback((event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'joined') {
+        console.log('WebView Agora voice joined:', data.uid);
+      } else if (data.type === 'error') {
+        console.log('WebView Agora voice error:', data.message);
+      }
+    } catch (e) {}
+  }, []);
+
+  const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
+
   return (
     <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
       <StatusBar barStyle="light-content" />
+
+      {Platform.OS !== 'web' && callStatus === 'connected' && (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: agoraCallUrl }}
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          mediaCapturePermissionGrantType="grant"
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          onMessage={handleWebViewMessage}
+          onLoad={() => {
+            setWebviewReady(true);
+            if (callData && agoraJoined.current) {
+              const getTokenAndJoin = async () => {
+                let joinToken = callData.token;
+                let joinUid = callData.uid || 0;
+                if (isIncoming && authToken) {
+                  try {
+                    const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+                    if (res.success && res.data?.token) {
+                      joinToken = res.data.token;
+                      joinUid = 0;
+                    }
+                  } catch (e) {}
+                }
+                sendToWebView({
+                  action: 'join',
+                  appId: callData.appId,
+                  channel: callData.channelName,
+                  token: joinToken,
+                  uid: joinUid,
+                  callType: 'voice'
+                });
+              };
+              getTokenAndJoin();
+            }
+          }}
+        />
+      )}
+
       <Animated.View style={[styles.content, { opacity: fadeAnim, paddingTop: insets.top + 40 }]}>
         <Animated.View style={[styles.avatarContainer, { transform: [{ scale: callStatus === 'ringing' ? pulseAnim : 1 }] }]}>
           <View style={styles.avatarGlow} />
@@ -286,7 +375,7 @@ export default function VoiceCallScreen() {
                 </Pressable>
                 <Pressable style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]} onPress={() => setIsSpeakerOn(!isSpeakerOn)}>
                   <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={26} color="#FFF" />
-                  <ThemedText style={styles.controlLabel}>{isSpeakerOn ? 'Speaker' : 'Speaker'}</ThemedText>
+                  <ThemedText style={styles.controlLabel}>Speaker</ThemedText>
                 </Pressable>
               </View>
             )}

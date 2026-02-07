@@ -94,6 +94,11 @@ const AI_SUGGESTIONS = [
 
 const SwipeableMessage = React.memo(({ item, isMe, children, onReply, themeTextSecondary }: { item: Message; isMe: boolean; children: React.ReactNode; onReply: (item: Message) => void; themeTextSecondary: string }) => {
   const translateX = useRef(new Animated.Value(0)).current;
+  const itemRef = useRef(item);
+  const onReplyRef = useRef(onReply);
+  itemRef.current = item;
+  onReplyRef.current = onReply;
+  
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
@@ -106,7 +111,7 @@ const SwipeableMessage = React.memo(({ item, isMe, children, onReply, themeTextS
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dx < -50) {
-          onReply(item);
+          onReplyRef.current(itemRef.current);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
         Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();

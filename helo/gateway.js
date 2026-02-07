@@ -97,6 +97,9 @@ const server = http.createServer((req, res) => {
 
   if (url.startsWith('/admin-web')) {
     serveStatic(req, res);
+  } else if (url.startsWith('/public/')) {
+    console.log(`[GATEWAY] Routing ${method} ${url} to BACKEND (static)`);
+    backendProxy.web(req, res);
   } else if (url.startsWith('/api/') || url.startsWith('/socket.io/')) {
     // Forward /api and /socket.io to backend (port 3001)
     console.log(`[GATEWAY] Routing ${method} ${url} to BACKEND`);

@@ -105,6 +105,9 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Video message thumbnails: Cloudinary transformation (so_0,w_400,h_300,c_fill) generates proper first-frame thumbnails instead of showing camera icon
 - ImagePicker: migrated from deprecated MediaTypeOptions to MediaType array format
 - Chat persistence confirmed: all messages saved via Message.create() in MongoDB with no TTL/expiry, retrievable indefinitely via GET /api/chat/:matchId with pagination
+- SwipeableMessage reply fix: PanResponder stale closure resolved by storing item/onReply in refs, ensuring swipe-to-reply always triggers with current message
+- Native call WebView: VideoCallScreen and VoiceCallScreen use WebView-based Agora on native (phone), loading /public/agora-call.html which runs Agora Web SDK; commands sent via postMessage
+- Gateway routing: /public/* paths forwarded to backend for serving static call HTML
 
 ## External Dependencies
 

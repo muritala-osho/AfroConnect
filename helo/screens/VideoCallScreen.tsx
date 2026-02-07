@@ -8,12 +8,13 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import * as AudioModule from 'expo-audio';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
 import agoraService from '@/services/agoraService';
+import { getApiBaseUrl } from '@/constants/config';
+import WebView from 'react-native-webview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -45,7 +46,6 @@ export default function VideoCallScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const durationInterval = useRef<NodeJS.Timeout | null>(null);
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
-  const ringingAudioRef = useRef<any | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showControls, setShowControls] = useState(true);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -53,24 +53,8 @@ export default function VideoCallScreen() {
   const remoteVideoRef = useRef<HTMLDivElement | null>(null);
   const [remoteUserJoined, setRemoteUserJoined] = useState(false);
   const localVideoRef = useRef<HTMLDivElement | null>(null);
-
-  const playRingingTone = useCallback(async () => {
-    try {
-      console.log('Ringing tone playing (handled by system audio)');
-    } catch (error) {
-      console.log('Could not play ringing tone:', error);
-    }
-  }, []);
-
-  const stopRingingTone = useCallback(async () => {
-    if (ringingAudioRef.current) {
-      try {
-        await ringingAudioRef.current.stopAsync();
-      } catch (error) {
-        console.log('Error stopping ringing tone:', error);
-      }
-    }
-  }, []);
+  const webViewRef = useRef<WebView | null>(null);
+  const [webviewReady, setWebviewReady] = useState(false);
 
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) {
@@ -99,12 +83,8 @@ export default function VideoCallScreen() {
         setCallData(newCallData);
         setCallStatus('ringing');
         
-        // Start ringing tone
-        playRingingTone();
-        
-        // Send socket event to notify target user of incoming call
-        const userPhoto = user?.photos?.[0];
-        const photoUrl = typeof userPhoto === 'string' ? userPhoto : userPhoto?.url || '';
+        const userPhotoVal = user?.photos?.[0];
+        const photoUrl = typeof userPhotoVal === 'string' ? userPhotoVal : userPhotoVal?.url || '';
         socketService.initiateCall({
           targetUserId: userId,
           callData: newCallData,
@@ -115,10 +95,8 @@ export default function VideoCallScreen() {
           }
         });
         
-        // Set timeout for unanswered call (30 seconds)
         ringingTimeout.current = setTimeout(() => {
           if (callStatus === 'ringing') {
-            stopRingingTone();
             setCallStatus('failed');
             setErrorMessage('No answer');
             socketService.missedCall({ targetUserId: userId, callType: 'video' });
@@ -146,7 +124,6 @@ export default function VideoCallScreen() {
 
     if (isIncoming && incomingCallData) {
       if (callAccepted) {
-        // Call was already accepted in IncomingCallHandler, start connected
         setCallStatus('connected');
         durationInterval.current = setInterval(() => {
           setCallDuration(prev => prev + 1);
@@ -158,12 +135,10 @@ export default function VideoCallScreen() {
       initiateCall();
     }
 
-    // Listen for call accepted
     socketService.onCallAccepted((data) => {
       if (ringingTimeout.current) {
         clearTimeout(ringingTimeout.current);
       }
-      stopRingingTone();
       setCallStatus('connected');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       durationInterval.current = setInterval(() => {
@@ -171,7 +146,6 @@ export default function VideoCallScreen() {
       }, 1000);
     });
 
-    // Listen for call declined
     socketService.onCallDeclined((data) => {
       if (ringingTimeout.current) {
         clearTimeout(ringingTimeout.current);
@@ -183,7 +157,6 @@ export default function VideoCallScreen() {
       }, 2000);
     });
 
-    // Listen for call ended by other party
     socketService.onCallEnded((data) => {
       setCallStatus('ended');
       if (durationInterval.current) {
@@ -201,66 +174,96 @@ export default function VideoCallScreen() {
       if (ringingTimeout.current) {
         clearTimeout(ringingTimeout.current);
       }
-      agoraService.leave();
+      if (Platform.OS === 'web') {
+        agoraService.leave();
+      } else {
+        sendToWebView({ action: 'leave' });
+      }
       socketService.off('call:accepted');
       socketService.off('call:declined');
       socketService.off('call:ended');
     };
   }, []);
 
+  const sendToWebView = useCallback((msg: any) => {
+    if (webViewRef.current) {
+      webViewRef.current.postMessage(JSON.stringify(msg));
+    }
+  }, []);
+
   useEffect(() => {
     if (callStatus === 'connected' && callData && !agoraJoined.current) {
       agoraJoined.current = true;
       const joinAgora = async () => {
-        if (agoraService.isSupported()) {
-          agoraService.setRemoteUserHandlers(
-            (user) => {
-              setRemoteUserJoined(true);
-              if (user.videoTrack && remoteVideoRef.current) {
-                user.videoTrack.play(remoteVideoRef.current);
-              }
-            },
-            () => {
-              setRemoteUserJoined(false);
+        let joinToken = callData.token;
+        let joinUid = callData.uid || 0;
+        if (isIncoming && authToken) {
+          try {
+            const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+            if (res.success && res.data?.token) {
+              joinToken = res.data.token;
+              joinUid = 0;
             }
-          );
-          let joinToken = callData.token;
-          let joinUid = callData.uid || 0;
-          if (isIncoming && authToken) {
-            try {
-              const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
-              if (res.success && res.data?.token) {
-                joinToken = res.data.token;
-                joinUid = 0;
+          } catch (e) {
+            console.log('Failed to get receiver token, using shared token');
+          }
+        }
+
+        if (Platform.OS === 'web') {
+          if (agoraService.isSupported()) {
+            agoraService.setRemoteUserHandlers(
+              (user) => {
+                setRemoteUserJoined(true);
+                if (user.videoTrack && remoteVideoRef.current) {
+                  user.videoTrack.play(remoteVideoRef.current);
+                }
+              },
+              () => {
+                setRemoteUserJoined(false);
               }
-            } catch (e) {
-              console.log('Failed to get receiver token, using shared token');
+            );
+            const { videoTrack } = await agoraService.joinVideoCall(
+              callData.appId,
+              callData.channelName,
+              joinToken,
+              joinUid
+            );
+            if (videoTrack && localVideoRef.current) {
+              videoTrack.play(localVideoRef.current);
             }
           }
-          const { videoTrack } = await agoraService.joinVideoCall(
-            callData.appId,
-            callData.channelName,
-            joinToken,
-            joinUid
-          );
-          if (videoTrack && localVideoRef.current) {
-            videoTrack.play(localVideoRef.current);
-          }
+        } else {
+          sendToWebView({
+            action: 'join',
+            appId: callData.appId,
+            channel: callData.channelName,
+            token: joinToken,
+            uid: joinUid,
+            callType: 'video'
+          });
         }
       };
       joinAgora();
     }
-  }, [callStatus, callData]);
+  }, [callStatus, callData, webviewReady]);
 
   useEffect(() => {
     if (agoraJoined.current) {
-      agoraService.toggleMute(isMuted);
+      if (Platform.OS === 'web') {
+        agoraService.toggleMute(isMuted);
+      } else {
+        sendToWebView({ action: 'mute', muted: isMuted });
+      }
     }
   }, [isMuted]);
 
   useEffect(() => {
     if (agoraJoined.current) {
-      agoraService.toggleCamera(isCameraOff);
+      if (Platform.OS === 'web') {
+        agoraService.toggleCamera(isCameraOff);
+      } else {
+        sendToWebView({ action: 'camera', off: isCameraOff });
+      }
     }
   }, [isCameraOff]);
 
@@ -289,7 +292,11 @@ export default function VideoCallScreen() {
     if (ringingTimeout.current) {
       clearTimeout(ringingTimeout.current);
     }
-    agoraService.leave();
+    if (Platform.OS === 'web') {
+      agoraService.leave();
+    } else {
+      sendToWebView({ action: 'leave' });
+    }
     socketService.endCall({ 
       targetUserId: isIncoming ? callerId : userId,
       callType: 'video',
@@ -304,7 +311,6 @@ export default function VideoCallScreen() {
 
   const handleAcceptCall = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Notify the caller that call was accepted
     socketService.acceptCall({ callerId, callData: incomingCallData });
     setCallStatus('connected');
     durationInterval.current = setInterval(() => {
@@ -314,10 +320,8 @@ export default function VideoCallScreen() {
 
   const handleDeclineCall = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    stopRingingTone();
     setCallStatus('declined');
     try {
-      // Save declined call to history
       if (authToken && isIncoming) {
         await post('/call/decline', {
           callerId,
@@ -327,12 +331,11 @@ export default function VideoCallScreen() {
     } catch (error) {
       console.error('Error recording declined call:', error);
     }
-    // Notify the caller that call was declined - socket will save to chat
     socketService.declineCall({ callerId, callType: 'video' });
     setTimeout(() => {
       navigation.goBack();
     }, 1500);
-  }, [callerId, stopRingingTone, navigation]);
+  }, [callerId, navigation]);
 
   const toggleMute = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -348,7 +351,11 @@ export default function VideoCallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsFrontCamera(!isFrontCamera);
     if (agoraJoined.current) {
-      agoraService.switchCamera();
+      if (Platform.OS === 'web') {
+        agoraService.switchCamera();
+      } else {
+        sendToWebView({ action: 'switch-camera' });
+      }
     }
   };
 
@@ -365,25 +372,133 @@ export default function VideoCallScreen() {
     }
   };
 
+  const handleWebViewMessage = useCallback((event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'remote-user-joined') {
+        setRemoteUserJoined(true);
+      } else if (data.type === 'remote-user-left') {
+        setRemoteUserJoined(false);
+      } else if (data.type === 'joined') {
+        console.log('WebView Agora joined:', data.uid);
+      } else if (data.type === 'error') {
+        console.log('WebView Agora error:', data.message);
+      }
+    } catch (e) {}
+  }, []);
+
+  const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
+
+  const renderNativeCallView = () => {
+    if (callStatus === 'connected' && agoraJoined.current) {
+      return (
+        <View style={styles.remoteVideo}>
+          <WebView
+            ref={webViewRef}
+            source={{ uri: agoraCallUrl }}
+            style={{ flex: 1, backgroundColor: '#000' }}
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            mediaCapturePermissionGrantType="grant"
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            onMessage={handleWebViewMessage}
+            onLoad={() => {
+              setWebviewReady(true);
+              if (callData && agoraJoined.current) {
+                const getTokenAndJoin = async () => {
+                  let joinToken = callData.token;
+                  let joinUid = callData.uid || 0;
+                  if (isIncoming && authToken) {
+                    try {
+                      const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+                      if (res.success && res.data?.token) {
+                        joinToken = res.data.token;
+                        joinUid = 0;
+                      }
+                    } catch (e) {}
+                  }
+                  sendToWebView({
+                    action: 'join',
+                    appId: callData.appId,
+                    channel: callData.channelName,
+                    token: joinToken,
+                    uid: joinUid,
+                    callType: 'video'
+                  });
+                };
+                getTokenAndJoin();
+              }
+            }}
+          />
+        </View>
+      );
+    }
+    return (
+      <SafeImage
+        source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
+        style={styles.remoteVideo}
+        contentFit="cover"
+      />
+    );
+  };
+
+  const renderWebCallView = () => {
+    if (remoteUserJoined) {
+      return (
+        <View style={styles.remoteVideo}>
+          <div ref={remoteVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any }} />
+        </View>
+      );
+    }
+    return (
+      <SafeImage
+        source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
+        style={styles.remoteVideo}
+        contentFit="cover"
+      />
+    );
+  };
+
+  const renderLocalVideo = () => {
+    if (Platform.OS === 'web' && agoraJoined.current && !isCameraOff) {
+      return (
+        <View style={styles.selfVideo}>
+          <div ref={localVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any, borderRadius: 16 }} />
+        </View>
+      );
+    }
+    if (Platform.OS !== 'web' && callStatus === 'connected') {
+      return null;
+    }
+    if (isCameraOff) {
+      return (
+        <View style={styles.cameraOffPlaceholder}>
+          <Ionicons name="videocam-off" size={32} color="rgba(255,255,255,0.5)" />
+          <ThemedText style={styles.cameraOffText}>Camera Off</ThemedText>
+        </View>
+      );
+    }
+    if (cameraPermission?.granted && Platform.OS !== 'web') {
+      return <CameraView style={styles.selfVideo} facing={isFrontCamera ? 'front' : 'back'} />;
+    }
+    return (
+      <LinearGradient colors={['rgba(74, 144, 226, 0.4)', 'rgba(74, 144, 226, 0.1)']} style={styles.selfVideo}>
+        <Ionicons name="videocam" size={32} color="rgba(255,255,255,0.5)" />
+      </LinearGradient>
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       
-      {Platform.OS === 'web' && remoteUserJoined ? (
-        <View style={styles.remoteVideo}>
-          <div ref={remoteVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any }} />
-        </View>
-      ) : (
-        <SafeImage
-          source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
-          style={styles.remoteVideo}
-          contentFit="cover"
-        />
-      )}
+      {Platform.OS === 'web' ? renderWebCallView() : renderNativeCallView()}
       
       <LinearGradient
         colors={['rgba(0,0,0,0.6)', 'transparent', 'transparent', 'rgba(0,0,0,0.8)']}
         style={styles.overlay}
+        pointerEvents="none"
       />
 
       <Pressable 
@@ -413,27 +528,21 @@ export default function VideoCallScreen() {
         )}
       </Animated.View>
 
-      <View style={[styles.selfVideoContainer, { top: insets.top + 80 }]}>
-        {Platform.OS === 'web' && agoraJoined.current && !isCameraOff ? (
-          <View style={styles.selfVideo}>
-            <div ref={localVideoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' as any, borderRadius: 16 }} />
-          </View>
-        ) : isCameraOff ? (
-          <View style={styles.cameraOffPlaceholder}>
-            <Ionicons name="videocam-off" size={32} color="rgba(255,255,255,0.5)" />
-            <ThemedText style={styles.cameraOffText}>Camera Off</ThemedText>
-          </View>
-        ) : cameraPermission?.granted ? (
-          <CameraView style={styles.selfVideo} facing={isFrontCamera ? 'front' : 'back'} />
-        ) : (
-          <LinearGradient colors={['rgba(74, 144, 226, 0.4)', 'rgba(74, 144, 226, 0.1)']} style={styles.selfVideo}>
-            <Ionicons name="videocam" size={32} color="rgba(255,255,255,0.5)" />
-          </LinearGradient>
-        )}
-        <Pressable style={styles.flipButton} onPress={flipCamera}>
-          <Ionicons name="camera-reverse" size={18} color="#FFF" />
-        </Pressable>
-      </View>
+      {Platform.OS !== 'web' || !agoraJoined.current ? (
+        <View style={[styles.selfVideoContainer, { top: insets.top + 80 }]}>
+          {renderLocalVideo()}
+          <Pressable style={styles.flipButton} onPress={flipCamera}>
+            <Ionicons name="camera-reverse" size={18} color="#FFF" />
+          </Pressable>
+        </View>
+      ) : (
+        <View style={[styles.selfVideoContainer, { top: insets.top + 80 }]}>
+          {renderLocalVideo()}
+          <Pressable style={styles.flipButton} onPress={flipCamera}>
+            <Ionicons name="camera-reverse" size={18} color="#FFF" />
+          </Pressable>
+        </View>
+      )}
 
       {callStatus !== 'connected' && (
         <View style={styles.centerContent}>
@@ -590,10 +699,6 @@ const styles = StyleSheet.create({
     height: '100%',
     overflow: 'hidden',
     borderRadius: 12,
-  },
-  selfVideoImage: {
-    width: '100%',
-    height: '100%',
   },
   cameraOffPlaceholder: {
     width: '100%',

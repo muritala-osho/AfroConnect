@@ -184,6 +184,7 @@ app.use('/api/account', accountRoutes);
 app.use('/api/block', blockRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/api/stories', storiesRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/radar', radarRoutes);
