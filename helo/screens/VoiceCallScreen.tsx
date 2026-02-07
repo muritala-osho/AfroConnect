@@ -222,11 +222,37 @@ export default function VoiceCallScreen() {
       <View style={[styles.controls, { paddingBottom: insets.bottom + 40 }]}>
         {isIncoming && callStatus === 'ringing' ? (
           <View style={styles.incomingCallButtons}>
-            <Pressable onPress={handleDeclineCall}><LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.callActionGradient}><Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} /></LinearGradient></Pressable>
-            <Pressable onPress={handleAcceptCall}><LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.callActionGradient}><Ionicons name="call" size={32} color="#FFF" /></LinearGradient></Pressable>
+            <Pressable onPress={handleDeclineCall}>
+              <LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.callActionGradient}>
+                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </LinearGradient>
+            </Pressable>
+            <Pressable onPress={handleAcceptCall}>
+              <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.callActionGradient}>
+                <Ionicons name="call" size={32} color="#FFF" />
+              </LinearGradient>
+            </Pressable>
           </View>
         ) : (
-          <Pressable style={styles.endCallButton} onPress={handleEndCall}><LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.endCallGradient}><Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} /></LinearGradient></Pressable>
+          <View style={styles.connectedControls}>
+            {callStatus === 'connected' && (
+              <View style={styles.controlRow}>
+                <Pressable style={[styles.controlBtn, isMuted && styles.controlBtnActive]} onPress={() => setIsMuted(!isMuted)}>
+                  <Ionicons name={isMuted ? "mic-off" : "mic"} size={26} color="#FFF" />
+                  <ThemedText style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
+                </Pressable>
+                <Pressable style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]} onPress={() => setIsSpeakerOn(!isSpeakerOn)}>
+                  <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={26} color="#FFF" />
+                  <ThemedText style={styles.controlLabel}>{isSpeakerOn ? 'Speaker' : 'Speaker'}</ThemedText>
+                </Pressable>
+              </View>
+            )}
+            <Pressable style={styles.endCallButton} onPress={handleEndCall}>
+              <LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.endCallGradient}>
+                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </LinearGradient>
+            </Pressable>
+          </View>
         )}
       </View>
     </LinearGradient>
@@ -247,5 +273,10 @@ const styles = StyleSheet.create({
   incomingCallButtons: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
   callActionGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   endCallButton: { alignItems: 'center' },
-  endCallGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' }
+  endCallGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  connectedControls: { alignItems: 'center', gap: 32 },
+  controlRow: { flexDirection: 'row', justifyContent: 'center', gap: 40 },
+  controlBtn: { alignItems: 'center', gap: 8 },
+  controlBtnActive: { opacity: 0.7 },
+  controlLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
 });

@@ -512,7 +512,7 @@ export default function ProfileDetailScreen() {
 
             <Pressable
               style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => navigation.navigate('UserDistanceMap' as any, { userId: user._id, userName: user.name })}
+              onPress={() => navigation.navigate('UserDistanceMap' as any, { otherUser: user })}
             >
               <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
                 <Ionicons name="map" size={20} color="#00B2FF" />

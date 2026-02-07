@@ -56,7 +56,7 @@ function getLanguageCode(langName) {
 // @access  Private
 router.post('/translate', protect, async (req, res) => {
   try {
-    const { text, targetLanguage } = req.body;
+    const { text, targetLanguage, sourceLanguage } = req.body;
 
     if (!text || !targetLanguage) {
       return res.status(400).json({ success: false, message: "Text and targetLanguage are required" });
@@ -67,7 +67,13 @@ router.post('/translate', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: `Language "${targetLanguage}" not recognized. Try using a common language name or 2-letter code.` });
     }
 
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=auto|${targetCode}`;
+    let sourceCode = 'en';
+    if (sourceLanguage) {
+      const resolved = getLanguageCode(sourceLanguage);
+      if (resolved) sourceCode = resolved;
+    }
+
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=${sourceCode}|${targetCode}`;
     let data;
     try {
       const response = await fetch(url);

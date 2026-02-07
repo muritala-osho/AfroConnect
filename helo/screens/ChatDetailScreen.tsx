@@ -880,7 +880,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     if (!textToTranslate) return;
     setTranslating(true);
     try {
-      const response = await post<{ translatedText: string }>('/ai/translate', { text: textToTranslate, targetLanguage }, token);
+      const response = await post<{ translatedText: string }>('/ai/translate', { text: textToTranslate, targetLanguage, sourceLanguage: 'en' }, token);
       if (response.success && response.data?.translatedText) {
         setTranslatedText(response.data.translatedText);
       } else {
@@ -1292,7 +1292,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', paddingBottom: insets.bottom + 8 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', paddingBottom: Math.max(insets.bottom, 4) + 4 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}>
@@ -1714,20 +1714,20 @@ const styles = StyleSheet.create({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingTop: 10, borderTopWidth: 1 },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingTop: 6, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   recordingDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#F44336', marginRight: 10 },
   recordingTime: { fontSize: 18, fontWeight: '600' },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-  attachButton: { padding: 8, marginBottom: 4 },
-  inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 8, marginHorizontal: 4, minHeight: 44, maxHeight: 120 },
+  attachButton: { padding: 6, marginBottom: 2 },
+  inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, marginHorizontal: 4, minHeight: 40, maxHeight: 120 },
   textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingTop: 0, paddingBottom: 0 },
   emojiToggle: { padding: 4, marginLeft: 8 },
-  aiButton: { padding: 8, marginBottom: 4 },
-  sendButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  micButton: { padding: 10, marginBottom: 4 },
+  aiButton: { padding: 6, marginBottom: 2 },
+  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },
+  micButton: { padding: 8, marginBottom: 2 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   attachmentMenu: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   attachmentTitle: { fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 20 },

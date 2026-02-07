@@ -71,12 +71,31 @@ export default function IncomingCallHandler() {
       }, 2000);
       
       // Store interval to clear later
-      (soundRef as any).hapticInterval = hapticInterval;
+      soundRef.current = { hapticInterval };
     };
 
     socketService.onIncomingCall(handleIncomingCall);
 
-    // Setup listeners for incoming notifications
+    const handleCallEnded = () => {
+      setIsVisible(false);
+      setIncomingCall(null);
+      if (soundRef.current?.hapticInterval) {
+        clearInterval(soundRef.current.hapticInterval);
+        soundRef.current = null;
+      }
+    };
+    socketService.on('call:ended', handleCallEnded);
+
+    const handleCallAccepted = () => {
+      setIsVisible(false);
+      setIncomingCall(null);
+      if (soundRef.current?.hapticInterval) {
+        clearInterval(soundRef.current.hapticInterval);
+        soundRef.current = null;
+      }
+    };
+    socketService.on('call:accepted', handleCallAccepted);
+
     const unsubscribe = setupNotificationListeners(
       (notification) => {
         const data = notification.request.content.data;
@@ -106,6 +125,8 @@ export default function IncomingCallHandler() {
 
     return () => {
       socketService.off('call:incoming');
+      socketService.off('call:ended');
+      socketService.off('call:accepted');
       if (unsubscribe) unsubscribe();
       stopRingtone();
     };

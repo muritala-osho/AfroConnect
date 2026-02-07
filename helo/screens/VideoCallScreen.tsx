@@ -9,6 +9,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as AudioModule from 'expo-audio';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
@@ -46,6 +47,7 @@ export default function VideoCallScreen() {
   const ringingAudioRef = useRef<any | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [showControls, setShowControls] = useState(true);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
 
   const playRingingTone = useCallback(async () => {
     try {
@@ -129,6 +131,8 @@ export default function VideoCallScreen() {
   }, [authToken, userId, post, user]);
 
   useEffect(() => {
+    requestCameraPermission();
+
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 500,
@@ -344,16 +348,17 @@ export default function VideoCallScreen() {
             <Ionicons name="videocam-off" size={32} color="rgba(255,255,255,0.5)" />
             <ThemedText style={styles.cameraOffText}>Camera Off</ThemedText>
           </View>
+        ) : cameraPermission?.granted ? (
+          <CameraView
+            style={styles.selfVideo}
+            facing={isFrontCamera ? 'front' : 'back'}
+          />
         ) : (
           <LinearGradient
             colors={['rgba(74, 144, 226, 0.4)', 'rgba(74, 144, 226, 0.1)']}
             style={styles.selfVideo}
           >
-            <SafeImage
-              source={{ uri: user?.photos?.[0] || 'https://via.placeholder.com/200' }}
-              style={styles.selfVideoImage}
-              contentFit="cover"
-            />
+            <Ionicons name="videocam" size={32} color="rgba(255,255,255,0.5)" />
           </LinearGradient>
         )}
         <Pressable style={styles.flipButton} onPress={flipCamera}>
@@ -437,7 +442,10 @@ export default function VideoCallScreen() {
               <Ionicons name="camera-reverse" size={26} color="#FFF" />
             </Pressable>
 
-            <Pressable style={styles.controlButton}>
+            <Pressable style={styles.controlButton} onPress={() => {
+              handleEndCall();
+              (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
+            }}>
               <MaterialCommunityIcons name="message-text" size={26} color="#FFF" />
             </Pressable>
           </View>
