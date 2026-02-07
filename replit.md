@@ -112,6 +112,7 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Voice note playback: enhanced with URL validation, web HTML5 Audio fallback, background audio support
 - In-app video player: replaced external browser with expo-av Video modal for in-app playback with native controls
 - Reply messages: backend chat route now properly stores replyTo subdocument and videoUrl fields
+- Online/offline status: fixed field name mismatch (onlineStatus vs online), conversations endpoint now cross-references in-memory onlineUsers Map, socket setUserOnline waits for connection, server emits user:status on token auth
 
 ## External Dependencies
 
