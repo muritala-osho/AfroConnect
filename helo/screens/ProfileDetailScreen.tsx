@@ -238,9 +238,6 @@ export default function ProfileDetailScreen() {
     const locationText = country ? `${city}, ${country}` : city;
     quickInfoPills.push({ icon: 'location-outline', text: locationText, color: theme.primary });
   }
-  if (user.distance !== undefined) {
-    quickInfoPills.push({ icon: 'navigate-outline', text: `${Math.round(user.distance)} km`, color: '#4CAF50' });
-  }
   if (user.gender) {
     quickInfoPills.push({ icon: 'person-outline', text: user.gender, color: '#9B59B6' });
   }
@@ -417,7 +414,6 @@ export default function ProfileDetailScreen() {
                 <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Details</ThemedText>
               </View>
               <View style={styles.detailsGrid}>
-                {user.distance !== undefined && <DetailItem icon="navigate-outline" label="Distance" value={`${Math.round(user.distance)} km away`} />}
                 {user.gender && <DetailItem icon="person-outline" label="Gender" value={user.gender} />}
                 {user.lookingFor && <DetailItem icon="heart-outline" label="Looking for" value={user.lookingFor} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
@@ -516,17 +512,17 @@ export default function ProfileDetailScreen() {
 
             <Pressable
               style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => navigation.navigate('DistanceWeather' as any, { userId: user._id, userName: user.name })}
+              onPress={() => navigation.navigate('UserDistanceMap' as any, { userId: user._id, userName: user.name })}
             >
               <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
-                <Ionicons name="location" size={20} color="#00B2FF" />
+                <Ionicons name="map" size={20} color="#00B2FF" />
               </View>
               <View style={styles.distanceTextContent}>
                 <ThemedText style={[styles.distanceTitle, { color: theme.text }]}>
-                  Distance & Weather
+                  View on Map
                 </ThemedText>
                 <ThemedText style={[styles.distanceSubtitle, { color: theme.textSecondary }]}>
-                  See how far apart you are
+                  See their location on the map
                 </ThemedText>
               </View>
               <Feather name="chevron-right" size={18} color={theme.textSecondary} />

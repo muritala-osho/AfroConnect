@@ -183,6 +183,32 @@ router.post('/chat-image', protect, multiUpload, async (req, res) => {
   }
 });
 
+router.post('/chat-video', protect, multiUpload, async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No video uploaded' });
+    }
+
+    const b64 = Buffer.from(file.buffer).toString('base64');
+    const dataURI = `data:${file.mimetype};base64,${b64}`;
+
+    const result = await cloudinary.uploader.upload(dataURI, {
+      folder: 'afroconnect/chat-videos',
+      resource_type: 'video',
+    });
+
+    res.json({
+      success: true,
+      url: result.secure_url,
+      publicId: result.public_id
+    });
+  } catch (error) {
+    console.error('Chat video upload error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
+
 const handleAudioUpload = async (req, res) => {
   try {
     if (!req.file) {

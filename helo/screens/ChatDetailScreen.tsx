@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
-import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder } from "react-native";
+import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder, Linking } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -41,6 +41,7 @@ interface Message {
   text?: string;
   type: 'text' | 'image' | 'video' | 'audio' | 'system' | 'location' | 'call';
   imageUrl?: string;
+  videoUrl?: string;
   audioUrl?: string;
   createdAt: string;
   status?: 'sent' | 'delivered' | 'seen';
@@ -48,12 +49,6 @@ interface Message {
   deletedForEveryone?: boolean;
   deletedFor?: string[];
 }
-
-const TRANSLATE_LANGUAGES = [
-  'English', 'French', 'Spanish', 'Portuguese', 'Arabic', 'Swahili', 'Amharic',
-  'Yoruba', 'Hausa', 'Igbo', 'Zulu', 'Xhosa', 'Twi', 'Wolof', 'Shona',
-  'Chinese', 'Hindi', 'Japanese', 'Korean', 'German', 'Italian', 'Russian', 'Turkish', 'Dutch'
-];
 
 const EMOJI_LIST = ['😀', '😂', '😍', '🥰', '😘', '🤗', '😊', '🙂', '😉', '😎', '🤩', '🥳', '😋', '🤤', '😜', '🤪', '😝', '🤑', '🤔', '🤭', '🤫', '🤐', '😏', '😌', '😔', '😪', '🤒', '😷', '🤕', '🤢', '🤮', '🥵', '🥶', '😱', '😨', '😰', '😥', '😢', '😭', '😤', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '👍', '👎', '👏', '🙌', '🤝', '🤲', '🙏', '✌️', '🤟', '🤘', '🤙', '👋', '🖐️', '✋', '👌', '🤌', '🔥', '✨', '⭐', '🌟', '💫', '💥', '💢', '💦', '💨', '🎉', '🎊', '🎁', '🎈', '🎀', '🏆', '🥇', '🥈', '🥉'];
 
@@ -137,6 +132,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [showTranslateModal, setShowTranslateModal] = useState(false);
   const [translatedText, setTranslatedText] = useState('');
   const [translating, setTranslating] = useState(false);
+  const [translateTargetLang, setTranslateTargetLang] = useState('');
 
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -368,6 +364,43 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       } catch (error) {
         console.error('Image upload error:', error);
         Alert.alert('Error', 'Failed to upload image. Check your connection.');
+      }
+    }
+  };
+
+  const handlePickVideo = async () => {
+    setShowAttachmentMenu(false);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      quality: 0.8,
+      allowsEditing: true,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      try {
+        const formData = new FormData();
+        formData.append('video', {
+          uri: result.assets[0].uri,
+          type: 'video/mp4',
+          name: 'chat_video.mp4',
+        } as any);
+
+        const apiBase = getApiBaseUrl();
+        const uploadResponse = await fetch(`${apiBase}/api/upload/chat-video`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+
+        const uploadData = await uploadResponse.json();
+        if (uploadData.success && uploadData.url) {
+          await sendMessage('🎬 Video', 'video', { videoUrl: uploadData.url });
+        } else {
+          Alert.alert('Upload Failed', uploadData.message || 'Could not upload video. Please try again.');
+        }
+      } catch (error) {
+        console.error('Video upload error:', error);
+        Alert.alert('Error', 'Failed to upload video. Check your connection.');
       }
     }
   };
@@ -703,11 +736,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   }, []);
 
   const handleReply = useCallback(() => {
-    if (selectedMessage) {
-      setReplyingTo(selectedMessage);
-    }
+    const msg = selectedMessage;
     setShowMessageMenu(false);
     setSelectedMessage(null);
+    if (msg) {
+      setReplyingTo(msg);
+    }
   }, [selectedMessage]);
 
   const handleDeleteForMe = useCallback(async () => {
@@ -757,6 +791,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const handleTranslateOpen = useCallback(() => {
     setShowMessageMenu(false);
     setTranslatedText('');
+    setTranslateTargetLang('');
     setShowTranslateModal(true);
   }, []);
 
@@ -895,7 +930,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const senderId = typeof item.sender === 'string' ? item.sender : item.sender?._id;
     const currentUserId = user?.id || (user as any)?._id;
-    const isMe = senderId === currentUserId;
+    const isMe = String(senderId) === String(currentUserId);
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDateHeader = shouldShowDateHeader(item, prevMessage);
     const messageText = item.deletedForEveryone ? 'This message was deleted' : (item.content || item.text || '');
@@ -934,7 +969,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <View style={[
                   styles.messageBubble,
                   isMe ? styles.myBubble : styles.theirBubble,
-                  { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
+                  { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') },
+                  item.type === 'image' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
+                  item.type === 'video' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {}
                 ]}>
                   {item.replyTo && (
                     <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeftColor: isMe ? '#FFF' : theme.primary }]}>
@@ -942,7 +979,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                         {item.replyTo.senderName}
                       </ThemedText>
                       <ThemedText style={[styles.replyPreviewText, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]} numberOfLines={2}>
-                        {item.replyTo.type === 'image' ? '📷 Photo' : item.replyTo.type === 'audio' ? '🎤 Voice message' : item.replyTo.content}
+                        {item.replyTo.type === 'image' ? '📷 Photo' : item.replyTo.type === 'video' ? '🎬 Video' : item.replyTo.type === 'audio' ? '🎤 Voice message' : item.replyTo.content}
                       </ThemedText>
                     </View>
                   )}
@@ -956,6 +993,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       >
                         <Ionicons name="download-outline" size={16} color="#FFF" />
                       </Pressable>
+                    </Pressable>
+                  )}
+
+                  {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
+                    <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) Linking.openURL(url); }} style={styles.videoContainer}>
+                      <View style={styles.videoPlaceholder}>
+                        <Ionicons name="videocam" size={32} color="#FFF" />
+                        <ThemedText style={styles.videoLabel}>Video</ThemedText>
+                      </View>
+                      <View style={styles.videoPlayButton}>
+                        <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                      </View>
                     </Pressable>
                   )}
 
@@ -1172,7 +1221,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               })()}
             </ThemedText>
             <ThemedText style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
-              {replyingTo.type === 'image' ? '📷 Photo' : replyingTo.type === 'audio' ? '🎤 Voice message' : (replyingTo.content || replyingTo.text || '')}
+              {replyingTo.type === 'image' ? '📷 Photo' : replyingTo.type === 'video' ? '🎬 Video' : replyingTo.type === 'audio' ? '🎤 Voice message' : (replyingTo.content || replyingTo.text || '')}
             </ThemedText>
           </View>
           <Pressable onPress={() => setReplyingTo(null)} style={styles.replyBarClose}>
@@ -1270,6 +1319,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   <Feather name="image" size={24} color="#4ECDC4" />
                 </View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Gallery</ThemedText>
+              </Pressable>
+              
+              <Pressable style={styles.attachmentOption} onPress={handlePickVideo}>
+                <View style={[styles.attachmentIcon, { backgroundColor: '#9B59B620' }]}>
+                  <Feather name="video" size={24} color="#9B59B6" />
+                </View>
+                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
               </Pressable>
               
               <Pressable style={styles.attachmentOption} onPress={handleShareLocation}>
@@ -1444,7 +1500,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             {selectedMessage && (
               <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5' }]}>
                 <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
-                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === 'image' ? '📷 Photo' : '🎤 Voice')}
+                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === 'image' ? '📷 Photo' : selectedMessage.type === 'video' ? '🎬 Video' : '🎤 Voice')}
                 </ThemedText>
               </View>
             )}
@@ -1517,19 +1573,23 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               </View>
             ) : (
               <View>
-                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Select language</ThemedText>
-                <ScrollView style={styles.translateLanguageList} showsVerticalScrollIndicator={false}>
-                  {TRANSLATE_LANGUAGES.map((lang) => (
-                    <Pressable
-                      key={lang}
-                      style={[styles.translateLanguageItem, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}
-                      onPress={() => handleTranslate(lang)}
-                    >
-                      <ThemedText style={[styles.translateLanguageText, { color: theme.text }]}>{lang}</ThemedText>
-                      <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-                    </Pressable>
-                  ))}
-                </ScrollView>
+                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Enter target language</ThemedText>
+                <TextInput
+                  style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}
+                  placeholder="Type any language (e.g., Swahili, Korean, Tagalog...)"
+                  placeholderTextColor={theme.textSecondary}
+                  value={translateTargetLang}
+                  onChangeText={setTranslateTargetLang}
+                  autoFocus
+                />
+                <Pressable
+                  style={[styles.translateButton, { backgroundColor: theme.primary, opacity: translateTargetLang.trim() ? 1 : 0.5 }]}
+                  onPress={() => translateTargetLang.trim() && handleTranslate(translateTargetLang.trim())}
+                  disabled={!translateTargetLang.trim()}
+                >
+                  <MaterialCommunityIcons name="translate" size={20} color="#FFF" />
+                  <ThemedText style={styles.translateButtonText}>Translate</ThemedText>
+                </Pressable>
               </View>
             )}
           </View>
@@ -1571,7 +1631,7 @@ const styles = StyleSheet.create({
   myBubble: { borderBottomRightRadius: 4 },
   theirBubble: { borderBottomLeftRadius: 4 },
   messageText: { fontSize: 15, lineHeight: 21 },
-  messageImage: { width: 200, height: 150, borderRadius: 12, marginBottom: 6 },
+  messageImage: { width: 200, height: 150, borderRadius: 16, marginBottom: 6, overflow: 'hidden' as const },
   messageFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
   messageTime: { fontSize: 11 },
   typingIndicator: { paddingHorizontal: 16, paddingVertical: 8 },
@@ -1836,18 +1896,53 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  translateLanguageList: {
-    maxHeight: 350,
+  translateLangInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    marginBottom: 16,
   },
-  translateLanguageItem: {
+  translateButton: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
+    justifyContent: 'center' as const,
     paddingVertical: 14,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
+    borderRadius: 12,
+    gap: 8,
   },
-  translateLanguageText: {
-    fontSize: 15,
+  translateButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  videoContainer: {
+    width: 200,
+    height: 150,
+    borderRadius: 16,
+    overflow: 'hidden' as const,
+    marginBottom: 6,
+    position: 'relative' as const,
+  },
+  videoPlaceholder: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  videoLabel: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  videoPlayButton: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
 });

@@ -83,8 +83,12 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Chat long-press context menu: Reply, Translate, Delete for Me, Delete for Everyone (sender only, premium, 15min window)
 - Swipe-left-to-reply gesture on messages using Animated + PanResponder, with reply icon appearing on swipe
 - Reply functionality: reply preview bar above input, replyTo data in message payload, WhatsApp-style reply preview inside message bubbles
-- AI translation: translate modal with 24 languages (incl. Swahili, Amharic, Yoruba, Hausa, Igbo, Zulu, Xhosa, Twi, Wolof, Shona) using /ai/translate endpoint
+- AI translation: translate modal with free-text language input (supports ANY language worldwide) using /ai/translate endpoint
 - Message deletion: delete for me removes from local state, delete for everyone shows "This message was deleted" system message; socket listener for real-time delete sync
+- Video sending: chat supports video upload via /upload/chat-video endpoint, Cloudinary storage, video placeholder with play icon (opens in browser)
+- Message alignment: sender/receiver ID comparison uses String() cast to prevent type mismatch
+- Image messages: reduced bubble padding to remove colored border around sent images
+- ProfileDetailScreen: removed distance/weather card, replaced with "View on Map" button navigating to UserDistanceMap
 
 ## External Dependencies
 
