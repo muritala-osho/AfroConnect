@@ -107,7 +107,11 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Chat persistence confirmed: all messages saved via Message.create() in MongoDB with no TTL/expiry, retrievable indefinitely via GET /api/chat/:matchId with pagination
 - SwipeableMessage reply fix: PanResponder stale closure resolved by storing item/onReply in refs, ensuring swipe-to-reply always triggers with current message
 - Native call WebView: VideoCallScreen and VoiceCallScreen use WebView-based Agora on native (phone), loading /public/agora-call.html which runs Agora Web SDK; commands sent via postMessage
-- Gateway routing: /public/* paths forwarded to backend for serving static call HTML
+- Gateway routing: /public/* paths forwarded to backend for serving static call HTML; favicon.ico returns 204 to prevent Metro errors
+- Agora channel name: shortened to under 64 bytes using last-8-chars + base36 timestamp
+- Voice note playback: enhanced with URL validation, web HTML5 Audio fallback, background audio support
+- In-app video player: replaced external browser with expo-av Video modal for in-app playback with native controls
+- Reply messages: backend chat route now properly stores replyTo subdocument and videoUrl fields
 
 ## External Dependencies
 
