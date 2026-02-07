@@ -95,6 +95,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url === '/favicon.ico') {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
   if (url.startsWith('/admin-web')) {
     serveStatic(req, res);
   } else if (url.startsWith('/public/')) {

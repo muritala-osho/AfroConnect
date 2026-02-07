@@ -17,13 +17,12 @@ import * as Location from "expo-location";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
-import { Audio } from "expo-av";
+import { Audio, Video, ResizeMode } from "expo-av";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as WebBrowser from 'expo-web-browser';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -167,6 +166,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -633,6 +633,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   const playAudio = async (audioUrl: string, messageId: string) => {
     try {
+      if (!audioUrl || audioUrl.trim() === '') {
+        Alert.alert('Error', 'No audio URL available for this voice message');
+        return;
+      }
+
       if (soundRef.current) {
         try {
           await soundRef.current.stopAsync();
@@ -646,6 +651,63 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       if (playingAudioId === messageId) {
         setPlayingAudioId(null);
         setAudioProgress(0);
+        return;
+      }
+
+      if (Platform.OS === 'web') {
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+          });
+
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: audioUrl },
+            { shouldPlay: true, progressUpdateIntervalMillis: 100 },
+            (status: any) => {
+              if (status.isLoaded) {
+                if (status.durationMillis > 0) {
+                  setAudioProgress(status.positionMillis / status.durationMillis);
+                }
+                if (status.didJustFinish) {
+                  setPlayingAudioId(null);
+                  setAudioProgress(0);
+                  if (soundRef.current) {
+                    soundRef.current.unloadAsync().catch(() => {});
+                    soundRef.current = null;
+                  }
+                }
+              }
+            }
+          );
+          soundRef.current = sound;
+          setPlayingAudioId(messageId);
+        } catch (expoError) {
+          console.log('expo-av failed on web, trying HTML5 Audio fallback:', expoError);
+          try {
+            const htmlAudio = new window.Audio(audioUrl);
+            htmlAudio.onended = () => {
+              setPlayingAudioId(null);
+              setAudioProgress(0);
+            };
+            htmlAudio.ontimeupdate = () => {
+              if (htmlAudio.duration > 0) {
+                setAudioProgress(htmlAudio.currentTime / htmlAudio.duration);
+              }
+            };
+            htmlAudio.onerror = () => {
+              setPlayingAudioId(null);
+              setAudioProgress(0);
+              Alert.alert('Playback Error', 'Could not play this voice message. The audio format may not be supported.');
+            };
+            await htmlAudio.play();
+            setPlayingAudioId(messageId);
+          } catch (htmlError: any) {
+            console.error('HTML5 Audio fallback also failed:', htmlError);
+            Alert.alert('Playback Error', `Could not play voice message: ${htmlError.message || 'Unknown error'}`);
+          }
+        }
         return;
       }
 
@@ -677,9 +739,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       );
       soundRef.current = sound;
       setPlayingAudioId(messageId);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Audio playback error for URL:', audioUrl, error);
-      Alert.alert('Error', 'Could not play voice message');
+      Alert.alert('Playback Error', `Could not play voice message: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -1060,7 +1122,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   )}
 
                   {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
-                    <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) WebBrowser.openBrowserAsync(url); }} style={styles.videoContainer}>
+                    <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) setViewingVideo(url); }} style={styles.videoContainer}>
                       {failedThumbnails.has(item._id) ? (
                         <View style={[styles.videoThumbnail, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
                           <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
@@ -1580,6 +1642,29 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           </View>
           {viewingImage && (
             <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />
+          )}
+        </View>
+      </Modal>
+
+      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => setViewingVideo(null)}>
+        <View style={styles.imageViewerOverlay}>
+          <Pressable style={styles.imageViewerClose} onPress={() => setViewingVideo(null)}>
+            <Feather name="x" size={28} color="#FFF" />
+          </Pressable>
+          <View style={styles.imageViewerActions}>
+            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}>
+              <Ionicons name="download-outline" size={24} color="#FFF" />
+            </Pressable>
+          </View>
+          {viewingVideo && (
+            <Video
+              source={{ uri: viewingVideo }}
+              style={{ width: '100%', height: '80%' }}
+              useNativeControls
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay
+              isLooping={false}
+            />
           )}
         </View>
       </Modal>
