@@ -1,21 +1,36 @@
-import AgoraRTC, { IAgoraRTCClient, IMicrophoneAudioTrack, ICameraVideoTrack, IAgoraRTCRemoteUser } from 'agora-rtc-sdk-ng';
 import { Platform } from 'react-native';
 
-AgoraRTC.setLogLevel(3);
+let AgoraRTC: any = null;
 
 class AgoraService {
-  private client: IAgoraRTCClient | null = null;
-  private localAudioTrack: IMicrophoneAudioTrack | null = null;
-  private localVideoTrack: ICameraVideoTrack | null = null;
-  private onRemoteUserJoined: ((user: IAgoraRTCRemoteUser) => void) | null = null;
-  private onRemoteUserLeft: ((user: IAgoraRTCRemoteUser) => void) | null = null;
+  private client: any = null;
+  private localAudioTrack: any = null;
+  private localVideoTrack: any = null;
+  private onRemoteUserJoined: ((user: any) => void) | null = null;
+  private onRemoteUserLeft: ((user: any) => void) | null = null;
+  private initialized: boolean = false;
 
   isSupported(): boolean {
     return Platform.OS === 'web';
   }
 
-  async joinVoiceCall(appId: string, channel: string, token: string, uid: number): Promise<boolean> {
+  private async init(): Promise<boolean> {
     if (!this.isSupported()) return false;
+    if (this.initialized && AgoraRTC) return true;
+    try {
+      const module = await import('agora-rtc-sdk-ng');
+      AgoraRTC = module.default || module;
+      AgoraRTC.setLogLevel(3);
+      this.initialized = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to load Agora SDK:', error);
+      return false;
+    }
+  }
+
+  async joinVoiceCall(appId: string, channel: string, token: string, uid: number): Promise<boolean> {
+    if (!(await this.init())) return false;
     try {
       this.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
       this.setupRemoteHandlers();
@@ -29,8 +44,8 @@ class AgoraService {
     }
   }
 
-  async joinVideoCall(appId: string, channel: string, token: string, uid: number): Promise<{ audioTrack: IMicrophoneAudioTrack | null; videoTrack: ICameraVideoTrack | null }> {
-    if (!this.isSupported()) return { audioTrack: null, videoTrack: null };
+  async joinVideoCall(appId: string, channel: string, token: string, uid: number): Promise<{ audioTrack: any; videoTrack: any }> {
+    if (!(await this.init())) return { audioTrack: null, videoTrack: null };
     try {
       this.client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
       this.setupRemoteHandlers();
@@ -47,7 +62,7 @@ class AgoraService {
 
   private setupRemoteHandlers() {
     if (!this.client) return;
-    this.client.on('user-published', async (user, mediaType) => {
+    this.client.on('user-published', async (user: any, mediaType: string) => {
       await this.client!.subscribe(user, mediaType);
       if (mediaType === 'audio') {
         user.audioTrack?.play();
@@ -56,17 +71,17 @@ class AgoraService {
         this.onRemoteUserJoined?.(user);
       }
     });
-    this.client.on('user-unpublished', (user, mediaType) => {
+    this.client.on('user-unpublished', (user: any, mediaType: string) => {
       if (mediaType === 'video') {
         this.onRemoteUserLeft?.(user);
       }
     });
-    this.client.on('user-left', (user) => {
+    this.client.on('user-left', (user: any) => {
       this.onRemoteUserLeft?.(user);
     });
   }
 
-  setRemoteUserHandlers(onJoined: (user: IAgoraRTCRemoteUser) => void, onLeft: (user: IAgoraRTCRemoteUser) => void) {
+  setRemoteUserHandlers(onJoined: (user: any) => void, onLeft: (user: any) => void) {
     this.onRemoteUserJoined = onJoined;
     this.onRemoteUserLeft = onLeft;
   }
@@ -84,12 +99,12 @@ class AgoraService {
   }
 
   async switchCamera(): Promise<void> {
-    if (this.localVideoTrack) {
+    if (this.localVideoTrack && AgoraRTC) {
       try {
         const devices = await AgoraRTC.getCameras();
         if (devices.length > 1) {
           const currentLabel = this.localVideoTrack.getTrackLabel();
-          const currentIndex = devices.findIndex(d => d.label === currentLabel);
+          const currentIndex = devices.findIndex((d: any) => d.label === currentLabel);
           const nextDevice = devices[(currentIndex + 1) % devices.length];
           await this.localVideoTrack.setDevice(nextDevice.deviceId);
         }
@@ -122,7 +137,7 @@ class AgoraService {
     this.onRemoteUserLeft = null;
   }
 
-  getLocalVideoTrack(): ICameraVideoTrack | null {
+  getLocalVideoTrack(): any {
     return this.localVideoTrack;
   }
 }
