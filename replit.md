@@ -85,10 +85,13 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Reply functionality: reply preview bar above input, replyTo data in message payload, WhatsApp-style reply preview inside message bubbles
 - AI translation: translate modal with free-text language input (supports ANY language worldwide) using free MyMemory API (no GPT/API key needed)
 - Message deletion: delete for me removes from local state, delete for everyone shows "This message was deleted" system message; socket listener for real-time delete sync
-- Video sending: chat supports video upload via /upload/chat-video endpoint, Cloudinary storage, video placeholder with play icon (opens in browser)
-- Message alignment: sender/receiver ID comparison uses String() cast to prevent type mismatch
+- Video sending: chat supports video upload via /upload/chat-video endpoint, Cloudinary storage, video thumbnail with play overlay (opens via WebBrowser)
+- Message alignment: centralized myId via useMemo, User model toJSON virtuals enabled, bulletproof sender comparison
 - Image messages: reduced bubble padding to remove colored border around sent images
 - ProfileDetailScreen: removed distance/weather card, replaced with "View on Map" button navigating to UserDistanceMap
+- FlatList performance: SwipeableMessage extracted as React.memo component, FlatList optimized with keyExtractor/maxToRenderPerBatch/windowSize/removeClippedSubviews
+- Typing indicator: backend now includes chatId in user-typing emit, frontend simplified check (ignores self-typing)
+- Incoming call: IncomingCallHandler uses _id fallback for user ID, socket setUserOnline uses same pattern
 
 ## External Dependencies
 
