@@ -79,6 +79,12 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Push notifications: implemented Expo push notifications via expo-server-sdk for new chat messages (offline receiver) and incoming calls (offline target); utils/pushNotifications.js utility
 - Call flow: socket call:initiate → call:incoming to target → IncomingCallHandler shows UI; push notification sent if target offline; call:accept/decline/end/missed handlers with chat message logging
 - Stripe pricing: backend maps frontend-friendly IDs (price_daily/weekly/monthly/yearly) to actual Stripe prices by looking up active prices by interval
+- AI model: switched from gpt-4 to gpt-4o-mini for translate and chat-suggestions endpoints (more reliable, cheaper)
+- Chat long-press context menu: Reply, Translate, Delete for Me, Delete for Everyone (sender only, premium, 15min window)
+- Swipe-left-to-reply gesture on messages using Animated + PanResponder, with reply icon appearing on swipe
+- Reply functionality: reply preview bar above input, replyTo data in message payload, WhatsApp-style reply preview inside message bubbles
+- AI translation: translate modal with 24 languages (incl. Swahili, Amharic, Yoruba, Hausa, Igbo, Zulu, Xhosa, Twi, Wolof, Shona) using /ai/translate endpoint
+- Message deletion: delete for me removes from local state, delete for everyone shows "This message was deleted" system message; socket listener for real-time delete sync
 
 ## External Dependencies
 

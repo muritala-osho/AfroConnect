@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
-import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground } from "react-native";
+import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
@@ -43,7 +44,16 @@ interface Message {
   audioUrl?: string;
   createdAt: string;
   status?: 'sent' | 'delivered' | 'seen';
+  replyTo?: { messageId: string; content: string; type: string; senderName: string };
+  deletedForEveryone?: boolean;
+  deletedFor?: string[];
 }
+
+const TRANSLATE_LANGUAGES = [
+  'English', 'French', 'Spanish', 'Portuguese', 'Arabic', 'Swahili', 'Amharic',
+  'Yoruba', 'Hausa', 'Igbo', 'Zulu', 'Xhosa', 'Twi', 'Wolof', 'Shona',
+  'Chinese', 'Hindi', 'Japanese', 'Korean', 'German', 'Italian', 'Russian', 'Turkish', 'Dutch'
+];
 
 const EMOJI_LIST = ['😀', '😂', '😍', '🥰', '😘', '🤗', '😊', '🙂', '😉', '😎', '🤩', '🥳', '😋', '🤤', '😜', '🤪', '😝', '🤑', '🤔', '🤭', '🤫', '🤐', '😏', '😌', '😔', '😪', '🤒', '😷', '🤕', '🤢', '🤮', '🥵', '🥶', '😱', '😨', '😰', '😥', '😢', '😭', '😤', '😠', '🤬', '😈', '👿', '💀', '☠️', '💩', '🤡', '👹', '👺', '👻', '👽', '👾', '🤖', '🎃', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💔', '❣️', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '👍', '👎', '👏', '🙌', '🤝', '🤲', '🙏', '✌️', '🤟', '🤘', '🤙', '👋', '🖐️', '✋', '👌', '🤌', '🔥', '✨', '⭐', '🌟', '💫', '💥', '💢', '💦', '💨', '🎉', '🎊', '🎁', '🎈', '🎀', '🏆', '🥇', '🥈', '🥉'];
 
@@ -91,7 +101,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
-  const { get, post, put } = useApi();
+  const { get, post, put, del } = useApi();
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -121,6 +131,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [audioProgress, setAudioProgress] = useState<number>(0);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [showMessageMenu, setShowMessageMenu] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showTranslateModal, setShowTranslateModal] = useState(false);
+  const [translatedText, setTranslatedText] = useState('');
+  const [translating, setTranslating] = useState(false);
+
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -261,6 +278,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     Keyboard.dismiss();
     setShowEmojiPicker(false);
     setShowAISuggestions(false);
+
+    let replyData: any = undefined;
+    if (replyingTo) {
+      const replySenderId = typeof replyingTo.sender === 'string' ? replyingTo.sender : replyingTo.sender?._id;
+      const myId = user?.id || (user as any)?._id;
+      replyData = {
+        messageId: replyingTo._id,
+        content: replyingTo.content || replyingTo.text || '',
+        type: replyingTo.type,
+        senderName: String(replySenderId) === String(myId) ? 'You' : userName
+      };
+    }
     
     const tempMessage: Message = {
       _id: `temp_${Date.now()}`,
@@ -269,15 +298,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       type: type as any,
       createdAt: new Date().toISOString(),
       status: 'sent',
+      ...(replyData ? { replyTo: replyData } : {}),
       ...extraData
     };
     setMessages(prev => [...prev, tempMessage]);
+    setReplyingTo(null);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
       const response = await post<{ message: Message }>(`/chat/${matchId}/message`, { 
         content: textToSend, 
         type,
+        ...(replyData ? { replyTo: replyData } : {}),
         ...extraData
       }, token);
       if (response.success && response.data?.message) {
@@ -664,6 +696,111 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     );
   };
 
+  const handleMessageLongPress = useCallback((msg: Message) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedMessage(msg);
+    setShowMessageMenu(true);
+  }, []);
+
+  const handleReply = useCallback(() => {
+    if (selectedMessage) {
+      setReplyingTo(selectedMessage);
+    }
+    setShowMessageMenu(false);
+    setSelectedMessage(null);
+  }, [selectedMessage]);
+
+  const handleDeleteForMe = useCallback(async () => {
+    if (!selectedMessage || !token) return;
+    setShowMessageMenu(false);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/chat/message/${selectedMessage._id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success || response.ok) {
+        setMessages(prev => prev.filter(m => m._id !== selectedMessage._id));
+      } else {
+        Alert.alert('Error', data.message || 'Failed to delete message');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+    setSelectedMessage(null);
+  }, [selectedMessage, token]);
+
+  const handleDeleteForEveryone = useCallback(async () => {
+    if (!selectedMessage || !token) return;
+    setShowMessageMenu(false);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/chat/message/${selectedMessage._id}?deleteForEveryone=true`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (data.success || response.ok) {
+        setMessages(prev => prev.map(m =>
+          m._id === selectedMessage._id
+            ? { ...m, content: 'This message was deleted', text: 'This message was deleted', type: 'system' as const, deletedForEveryone: true }
+            : m
+        ));
+      } else {
+        Alert.alert('Error', data.message || 'Failed to delete message');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete message');
+    }
+    setSelectedMessage(null);
+  }, [selectedMessage, token]);
+
+  const handleTranslateOpen = useCallback(() => {
+    setShowMessageMenu(false);
+    setTranslatedText('');
+    setShowTranslateModal(true);
+  }, []);
+
+  const handleTranslate = useCallback(async (targetLanguage: string) => {
+    if (!selectedMessage || !token) return;
+    const textToTranslate = selectedMessage.content || selectedMessage.text || '';
+    if (!textToTranslate) return;
+    setTranslating(true);
+    try {
+      const response = await post<{ translatedText: string }>('/ai/translate', { text: textToTranslate, targetLanguage }, token);
+      if (response.success && response.data?.translatedText) {
+        setTranslatedText(response.data.translatedText);
+      } else {
+        Alert.alert('Error', 'Translation failed');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Translation failed');
+    } finally {
+      setTranslating(false);
+    }
+  }, [selectedMessage, token, post]);
+
+  const handleCopyTranslation = useCallback(async () => {
+    if (translatedText) {
+      await Clipboard.setStringAsync(translatedText);
+      Alert.alert('Copied', 'Translation copied to clipboard');
+    }
+  }, [translatedText]);
+
+  useEffect(() => {
+    if (!matchId) return;
+    const handleMessageDeleted = (data: any) => {
+      if (data.messageId) {
+        setMessages(prev => prev.map(m =>
+          m._id === data.messageId
+            ? { ...m, content: 'This message was deleted', text: 'This message was deleted', type: 'system' as const, deletedForEveryone: true }
+            : m
+        ));
+      }
+    };
+    socketService.on('chat:message-deleted', handleMessageDeleted);
+    return () => { socketService.off('chat:message-deleted'); };
+  }, [matchId]);
+
   const handleSubmitReport = async () => {
     if (!selectedReportReason) {
       Alert.alert('Select Reason', 'Please select a reason for reporting');
@@ -721,13 +858,47 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const SwipeableMessage = useCallback(({ item, isMe, children }: { item: Message; isMe: boolean; children: React.ReactNode }) => {
+    const translateX = useRef(new Animated.Value(0)).current;
+    const panResponder = useRef(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > 10 && Math.abs(gestureState.dy) < 10 && gestureState.dx < 0;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dx < 0) {
+            translateX.setValue(Math.max(gestureState.dx, -80));
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dx < -50) {
+            setReplyingTo(item);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }
+          Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
+        },
+      })
+    ).current;
+
+    return (
+      <View style={{ overflow: 'hidden' }}>
+        <View style={[{ position: 'absolute', right: isMe ? undefined : 8, left: isMe ? 8 : undefined, top: 0, bottom: 0, justifyContent: 'center' }]}>
+          <Feather name="corner-up-left" size={20} color={theme.textSecondary} />
+        </View>
+        <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+          {children}
+        </Animated.View>
+      </View>
+    );
+  }, [theme.textSecondary]);
+
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const senderId = typeof item.sender === 'string' ? item.sender : item.sender?._id;
     const currentUserId = user?.id || (user as any)?._id;
     const isMe = senderId === currentUserId;
     const prevMessage = index > 0 ? messages[index - 1] : null;
     const showDateHeader = shouldShowDateHeader(item, prevMessage);
-    const messageText = item.content || item.text || '';
+    const messageText = item.deletedForEveryone ? 'This message was deleted' : (item.content || item.text || '');
 
     return (
       <View>
@@ -741,86 +912,101 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           </View>
         )}
         
-        {(item.type === 'system' || item.type === 'call') ? (
+        {(item.type === 'system' || item.type === 'call' || item.deletedForEveryone) ? (
           <View style={styles.systemMessageContainer}>
             <View style={[styles.systemMessage, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-              <Ionicons name={item.type === 'call' ? 'call' : 'information-circle'} size={14} color="#FFF" style={{ marginRight: 6 }} />
+              <Ionicons name={item.type === 'call' ? 'call' : item.deletedForEveryone ? 'trash-outline' : 'information-circle'} size={14} color="#FFF" style={{ marginRight: 6 }} />
               <ThemedText style={styles.systemMessageText}>{messageText}</ThemedText>
             </View>
           </View>
         ) : (
-          <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
-            {!isMe && (
-              <Image
-                source={getPhotoSource(userPhoto) || { uri: 'https://via.placeholder.com/40' }}
-                style={styles.messageAvatar}
-                contentFit="cover"
-              />
-            )}
-            
-            <View style={[
-              styles.messageBubble,
-              isMe ? styles.myBubble : styles.theirBubble,
-              { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
-            ]}>
-              {item.type === 'image' && item.imageUrl && (
-                <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
-                  <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                  <Pressable 
-                    style={styles.imageSaveButton} 
-                    onPress={() => saveImage(item.imageUrl!)}
-                  >
-                    <Ionicons name="download-outline" size={16} color="#FFF" />
-                  </Pressable>
-                </Pressable>
-              )}
-
-              {item.type === 'audio' && item.audioUrl && (
-                <Pressable 
-                  style={[styles.audioPlayer, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }]}
-                  onPress={() => playAudio(item.audioUrl!, item._id)}
-                >
-                  <Ionicons 
-                    name={playingAudioId === item._id ? 'pause' : 'play'} 
-                    size={24} 
-                    color={isMe ? '#FFF' : theme.primary} 
-                  />
-                  <View style={styles.audioWaveform}>
-                    <View style={[styles.audioProgressBar, { backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)' }]}>
-                      <View style={[
-                        styles.audioProgressFill, 
-                        { 
-                          width: playingAudioId === item._id ? `${audioProgress * 100}%` : '0%',
-                          backgroundColor: isMe ? '#FFF' : theme.primary 
-                        }
-                      ]} />
-                    </View>
-                  </View>
-                  <Ionicons name="mic" size={14} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
-                </Pressable>
-              )}
-              
-              {messageText && item.type !== 'audio' ? (
-                <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
-                  {messageText}
-                </ThemedText>
-              ) : null}
-              
-              <View style={styles.messageFooter}>
-                <ThemedText style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
-                  {formatTime(item.createdAt)}
-                </ThemedText>
-                {isMe && (
-                  <Ionicons 
-                    name={item.status === 'seen' ? 'checkmark-done' : item.status === 'delivered' ? 'checkmark-done' : 'checkmark'} 
-                    size={14} 
-                    color={item.status === 'seen' ? '#4FC3F7' : 'rgba(255,255,255,0.5)'} 
-                    style={{ marginLeft: 4 }}
+          <SwipeableMessage item={item} isMe={isMe}>
+            <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={400}>
+              <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
+                {!isMe && (
+                  <Image
+                    source={getPhotoSource(userPhoto) || { uri: 'https://via.placeholder.com/40' }}
+                    style={styles.messageAvatar}
+                    contentFit="cover"
                   />
                 )}
+                
+                <View style={[
+                  styles.messageBubble,
+                  isMe ? styles.myBubble : styles.theirBubble,
+                  { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') }
+                ]}>
+                  {item.replyTo && (
+                    <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeftColor: isMe ? '#FFF' : theme.primary }]}>
+                      <ThemedText style={[styles.replyPreviewName, { color: isMe ? 'rgba(255,255,255,0.9)' : theme.primary }]} numberOfLines={1}>
+                        {item.replyTo.senderName}
+                      </ThemedText>
+                      <ThemedText style={[styles.replyPreviewText, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]} numberOfLines={2}>
+                        {item.replyTo.type === 'image' ? '📷 Photo' : item.replyTo.type === 'audio' ? '🎤 Voice message' : item.replyTo.content}
+                      </ThemedText>
+                    </View>
+                  )}
+
+                  {item.type === 'image' && item.imageUrl && (
+                    <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
+                      <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+                      <Pressable 
+                        style={styles.imageSaveButton} 
+                        onPress={() => saveImage(item.imageUrl!)}
+                      >
+                        <Ionicons name="download-outline" size={16} color="#FFF" />
+                      </Pressable>
+                    </Pressable>
+                  )}
+
+                  {item.type === 'audio' && item.audioUrl && (
+                    <Pressable 
+                      style={[styles.audioPlayer, { backgroundColor: isMe ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)' }]}
+                      onPress={() => playAudio(item.audioUrl!, item._id)}
+                    >
+                      <Ionicons 
+                        name={playingAudioId === item._id ? 'pause' : 'play'} 
+                        size={24} 
+                        color={isMe ? '#FFF' : theme.primary} 
+                      />
+                      <View style={styles.audioWaveform}>
+                        <View style={[styles.audioProgressBar, { backgroundColor: isMe ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)' }]}>
+                          <View style={[
+                            styles.audioProgressFill, 
+                            { 
+                              width: playingAudioId === item._id ? `${audioProgress * 100}%` : '0%',
+                              backgroundColor: isMe ? '#FFF' : theme.primary 
+                            }
+                          ]} />
+                        </View>
+                      </View>
+                      <Ionicons name="mic" size={14} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
+                    </Pressable>
+                  )}
+                  
+                  {messageText && item.type !== 'audio' ? (
+                    <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
+                      {messageText}
+                    </ThemedText>
+                  ) : null}
+                  
+                  <View style={styles.messageFooter}>
+                    <ThemedText style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
+                      {formatTime(item.createdAt)}
+                    </ThemedText>
+                    {isMe && (
+                      <Ionicons 
+                        name={item.status === 'seen' ? 'checkmark-done' : item.status === 'delivered' ? 'checkmark-done' : 'checkmark'} 
+                        size={14} 
+                        color={item.status === 'seen' ? '#4FC3F7' : 'rgba(255,255,255,0.5)'} 
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
+            </Pressable>
+          </SwipeableMessage>
         )}
       </View>
     );
@@ -971,6 +1157,27 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               </Pressable>
             ))}
           </ScrollView>
+        </View>
+      )}
+
+      {replyingTo && (
+        <View style={[styles.replyBar, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
+          <View style={[styles.replyBarAccent, { backgroundColor: theme.primary }]} />
+          <View style={styles.replyBarContent}>
+            <ThemedText style={[styles.replyBarName, { color: theme.primary }]} numberOfLines={1}>
+              {(() => {
+                const sid = typeof replyingTo.sender === 'string' ? replyingTo.sender : replyingTo.sender?._id;
+                const myId = user?.id || (user as any)?._id;
+                return String(sid) === String(myId) ? 'You' : userName;
+              })()}
+            </ThemedText>
+            <ThemedText style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
+              {replyingTo.type === 'image' ? '📷 Photo' : replyingTo.type === 'audio' ? '🎤 Voice message' : (replyingTo.content || replyingTo.text || '')}
+            </ThemedText>
+          </View>
+          <Pressable onPress={() => setReplyingTo(null)} style={styles.replyBarClose}>
+            <Feather name="x" size={20} color={theme.textSecondary} />
+          </Pressable>
         </View>
       )}
 
@@ -1230,6 +1437,104 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           )}
         </View>
       </Modal>
+
+      <Modal visible={showMessageMenu} transparent animationType="fade" onRequestClose={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
+        <Pressable style={styles.modalOverlay} onPress={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
+          <View style={[styles.messageMenuModal, { backgroundColor: theme.background }]}>
+            {selectedMessage && (
+              <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5' }]}>
+                <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
+                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === 'image' ? '📷 Photo' : '🎤 Voice')}
+                </ThemedText>
+              </View>
+            )}
+            
+            <Pressable style={styles.messageMenuItem} onPress={handleReply}>
+              <Feather name="corner-up-left" size={22} color={theme.primary} />
+              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Reply</ThemedText>
+            </Pressable>
+            
+            <Pressable style={styles.messageMenuItem} onPress={handleTranslateOpen}>
+              <MaterialCommunityIcons name="translate" size={22} color={theme.primary} />
+              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Translate</ThemedText>
+            </Pressable>
+            
+            <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
+              <Feather name="trash-2" size={22} color="#FF9800" />
+              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
+            </Pressable>
+            
+            {selectedMessage && (() => {
+              const sid = typeof selectedMessage.sender === 'string' ? selectedMessage.sender : selectedMessage.sender?._id;
+              const myId = user?.id || (user as any)?._id;
+              return String(sid) === String(myId);
+            })() && (
+              <Pressable style={styles.messageMenuItem} onPress={handleDeleteForEveryone}>
+                <Feather name="trash" size={22} color="#F44336" />
+                <ThemedText style={[styles.messageMenuItemText, { color: '#F44336' }]}>Delete for Everyone</ThemedText>
+              </Pressable>
+            )}
+            
+            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 12 }]} onPress={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
+              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={showTranslateModal} transparent animationType="slide" onRequestClose={() => { setShowTranslateModal(false); setSelectedMessage(null); }}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.translateModal, { backgroundColor: theme.background }]}>
+            <View style={styles.translateHeader}>
+              <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Translate Message</ThemedText>
+              <Pressable onPress={() => { setShowTranslateModal(false); setSelectedMessage(null); }}>
+                <Feather name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            
+            {selectedMessage && (
+              <View style={[styles.translateOriginal, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5' }]}>
+                <ThemedText style={[styles.translateOriginalLabel, { color: theme.textSecondary }]}>Original</ThemedText>
+                <ThemedText style={[styles.translateOriginalText, { color: theme.text }]} numberOfLines={3}>
+                  {selectedMessage.content || selectedMessage.text || ''}
+                </ThemedText>
+              </View>
+            )}
+            
+            {translating ? (
+              <View style={styles.translateLoading}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <ThemedText style={[styles.translateLoadingText, { color: theme.textSecondary }]}>Translating...</ThemedText>
+              </View>
+            ) : translatedText ? (
+              <View style={[styles.translateResult, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}>
+                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation</ThemedText>
+                <ThemedText style={[styles.translateResultText, { color: theme.text }]}>{translatedText}</ThemedText>
+                <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary }]} onPress={handleCopyTranslation}>
+                  <Feather name="copy" size={16} color="#FFF" />
+                  <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
+                </Pressable>
+              </View>
+            ) : (
+              <View>
+                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Select language</ThemedText>
+                <ScrollView style={styles.translateLanguageList} showsVerticalScrollIndicator={false}>
+                  {TRANSLATE_LANGUAGES.map((lang) => (
+                    <Pressable
+                      key={lang}
+                      style={[styles.translateLanguageItem, { borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}
+                      onPress={() => handleTranslate(lang)}
+                    >
+                      <ThemedText style={[styles.translateLanguageText, { color: theme.text }]}>{lang}</ThemedText>
+                      <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1391,5 +1696,158 @@ const styles = StyleSheet.create({
   imageViewerImage: {
     width: SCREEN_WIDTH,
     height: '80%',
+  },
+  replyPreviewInBubble: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderLeftWidth: 3,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  replyPreviewName: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 12,
+  },
+  replyBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  replyBarAccent: {
+    width: 4,
+    height: '100%',
+    borderRadius: 2,
+    minHeight: 36,
+  },
+  replyBarContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  replyBarName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  replyBarText: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  replyBarClose: {
+    padding: 8,
+  },
+  messageMenuModal: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+  },
+  messageMenuPreview: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  messageMenuPreviewText: {
+    fontSize: 14,
+  },
+  messageMenuItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  messageMenuItemText: {
+    fontSize: 16,
+    marginLeft: 16,
+    flex: 1,
+  },
+  translateModal: {
+    margin: 20,
+    borderRadius: 20,
+    padding: 24,
+    maxHeight: '80%',
+  },
+  translateHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 16,
+  },
+  translateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  translateOriginal: {
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  translateOriginalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  translateOriginalText: {
+    fontSize: 14,
+  },
+  translateLoading: {
+    alignItems: 'center' as const,
+    paddingVertical: 40,
+  },
+  translateLoadingText: {
+    marginTop: 12,
+    fontSize: 14,
+  },
+  translateResult: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  translateResultLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  translateResultText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  translateCopyBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    alignSelf: 'flex-end' as const,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  translateCopyText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
+  },
+  translatePickLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  translateLanguageList: {
+    maxHeight: 350,
+  },
+  translateLanguageItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+  },
+  translateLanguageText: {
+    fontSize: 15,
   },
 });
