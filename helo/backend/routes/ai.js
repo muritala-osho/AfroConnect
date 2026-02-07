@@ -14,8 +14,45 @@ if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY) {
   console.log('⚠️ OpenAI API Key not found - AI features will be limited to templates');
 }
 
+// Language code mapping for MyMemory API
+const LANG_NAME_TO_CODE = {
+  'english': 'en', 'french': 'fr', 'spanish': 'es', 'portuguese': 'pt', 'arabic': 'ar',
+  'swahili': 'sw', 'amharic': 'am', 'yoruba': 'yo', 'hausa': 'ha', 'igbo': 'ig',
+  'zulu': 'zu', 'xhosa': 'xh', 'twi': 'tw', 'wolof': 'wo', 'shona': 'sn',
+  'somali': 'so', 'oromo': 'om', 'tigrinya': 'ti', 'afrikaans': 'af', 'malagasy': 'mg',
+  'chinese': 'zh', 'mandarin': 'zh', 'cantonese': 'zh', 'hindi': 'hi', 'japanese': 'ja',
+  'korean': 'ko', 'german': 'de', 'italian': 'it', 'russian': 'ru', 'turkish': 'tr',
+  'dutch': 'nl', 'polish': 'pl', 'czech': 'cs', 'swedish': 'sv', 'danish': 'da',
+  'norwegian': 'no', 'finnish': 'fi', 'greek': 'el', 'hungarian': 'hu', 'romanian': 'ro',
+  'bulgarian': 'bg', 'croatian': 'hr', 'serbian': 'sr', 'ukrainian': 'uk', 'thai': 'th',
+  'vietnamese': 'vi', 'indonesian': 'id', 'malay': 'ms', 'tagalog': 'tl', 'filipino': 'tl',
+  'bengali': 'bn', 'tamil': 'ta', 'telugu': 'te', 'urdu': 'ur', 'persian': 'fa',
+  'farsi': 'fa', 'hebrew': 'he', 'georgian': 'ka', 'armenian': 'hy', 'nepali': 'ne',
+  'sinhala': 'si', 'khmer': 'km', 'lao': 'lo', 'burmese': 'my', 'mongolian': 'mn',
+  'kazakh': 'kk', 'uzbek': 'uz', 'azerbaijani': 'az', 'catalan': 'ca', 'basque': 'eu',
+  'galician': 'gl', 'maltese': 'mt', 'icelandic': 'is', 'estonian': 'et', 'latvian': 'lv',
+  'lithuanian': 'lt', 'albanian': 'sq', 'macedonian': 'mk', 'slovenian': 'sl', 'slovak': 'sk',
+  'welsh': 'cy', 'irish': 'ga', 'scottish gaelic': 'gd', 'esperanto': 'eo',
+  'latin': 'la', 'hawaiian': 'haw', 'samoan': 'sm', 'maori': 'mi',
+  'kinyarwanda': 'rw', 'lingala': 'ln', 'luganda': 'lg', 'tswana': 'tn',
+  'sesotho': 'st', 'tsonga': 'ts', 'swati': 'ss', 'venda': 've', 'ndebele': 'nr',
+  'punjabi': 'pa', 'gujarati': 'gu', 'marathi': 'mr', 'kannada': 'kn', 'malayalam': 'ml',
+  'odia': 'or', 'assamese': 'as', 'pashto': 'ps', 'sindhi': 'sd', 'kurdish': 'ku',
+};
+
+function getLanguageCode(langName) {
+  const normalized = langName.toLowerCase().trim();
+  if (LANG_NAME_TO_CODE[normalized]) return LANG_NAME_TO_CODE[normalized];
+  // If it's already a 2-letter code, use it directly
+  if (normalized.length === 2) return normalized;
+  // Try partial match
+  const partial = Object.keys(LANG_NAME_TO_CODE).find(k => k.includes(normalized) || normalized.includes(k));
+  if (partial) return LANG_NAME_TO_CODE[partial];
+  return null;
+}
+
 // @route   POST /api/ai/translate
-// @desc    Translate text to a target language
+// @desc    Translate text to a target language using MyMemory API
 // @access  Private
 router.post('/translate', protect, async (req, res) => {
   try {
@@ -25,30 +62,27 @@ router.post('/translate', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: "Text and targetLanguage are required" });
     }
 
-    if (!openai) {
-      return res.status(503).json({ success: false, message: "AI translation service unavailable" });
+    const targetCode = getLanguageCode(targetLanguage);
+    if (!targetCode) {
+      return res.status(400).json({ success: false, message: `Language "${targetLanguage}" not recognized. Try using a common language name or 2-letter code.` });
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a professional polyglot translator specialized in African languages. 
-          Translate the following text to ${targetLanguage}. 
-          Supported languages include ALL African languages (Swahili, Amharic, Zulu, Shona, Arabic, Wolof, etc.) as well as international ones. 
-          Return ONLY the translated text without any explanations or notes.`
-        },
-        {
-          role: "user",
-          content: text
-        }
-      ],
-      max_completion_tokens: 1000,
-    });
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=auto|${targetCode}`;
+    const response = await fetch(url);
+    const data = await response.json();
 
-    const translatedText = response.choices[0].message.content.trim();
-    res.json({ success: true, translatedText });
+    if (data.responseStatus === 200 && data.responseData?.translatedText) {
+      let translatedText = data.responseData.translatedText;
+      // MyMemory sometimes returns all caps for some languages, check match quality
+      if (data.responseData.match < 0.5 && data.matches && data.matches.length > 1) {
+        // Try to find a better match
+        const betterMatch = data.matches.find(m => m.translation && m.quality && parseInt(m.quality) > 50);
+        if (betterMatch) translatedText = betterMatch.translation;
+      }
+      res.json({ success: true, translatedText });
+    } else {
+      res.status(400).json({ success: false, message: data.responseDetails || 'Translation failed' });
+    }
   } catch (error) {
     console.error("Translation error:", error);
     res.status(500).json({ success: false, message: "Translation failed" });

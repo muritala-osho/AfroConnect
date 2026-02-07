@@ -661,7 +661,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       }
 
       try {
-        const { status } = await MediaLibrary.requestPermissionsAsync(true, ['photo', 'video']);
+        const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status === 'granted') {
           await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
           Alert.alert('Saved', 'Image saved to your gallery.');
@@ -682,6 +682,50 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     } catch (error) {
       console.error('Save image error:', error);
       Alert.alert('Error', 'Could not save image.');
+    }
+  };
+
+  const saveVideo = async (url: string) => {
+    try {
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `afroconnect_${Date.now()}.mp4`;
+        link.target = '_blank';
+        link.click();
+        return;
+      }
+
+      const fileUri = `${FileSystem.cacheDirectory}afroconnect_${Date.now()}.mp4`;
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri);
+
+      if (downloadResult.status !== 200) {
+        Alert.alert('Error', 'Failed to download video.');
+        return;
+      }
+
+      try {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === 'granted') {
+          await MediaLibrary.saveToLibraryAsync(downloadResult.uri);
+          Alert.alert('Saved!', 'Video saved to your gallery');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          return;
+        }
+      } catch (_permError) {}
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: 'video/mp4',
+          dialogTitle: 'Save Video',
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Error', 'Cannot save videos in this environment. Try a development build.');
+      }
+    } catch (error) {
+      console.error('Save video error:', error);
+      Alert.alert('Error', 'Failed to save video');
     }
   };
 
@@ -1005,6 +1049,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       <View style={styles.videoPlayButton}>
                         <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
                       </View>
+                      <Pressable 
+                        style={styles.imageSaveButton} 
+                        onPress={() => saveVideo(item.videoUrl || item.imageUrl!)}
+                      >
+                        <Ionicons name="download-outline" size={16} color="#FFF" />
+                      </Pressable>
                     </Pressable>
                   )}
 
@@ -1162,6 +1212,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       </View>
 
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
       {currentTheme?.image ? (
         <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
           {chatContent}
@@ -1230,7 +1281,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       )}
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
         <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', paddingBottom: insets.bottom + 8 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
