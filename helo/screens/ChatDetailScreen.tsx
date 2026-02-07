@@ -167,6 +167,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
@@ -633,8 +634,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const playAudio = async (audioUrl: string, messageId: string) => {
     try {
       if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch (cleanupErr) {
+          console.log('Audio cleanup error:', cleanupErr);
+        }
         soundRef.current = null;
       }
 
@@ -647,11 +652,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
       });
 
+      console.log('Playing audio URL:', audioUrl);
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: true },
+        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
         (status: any) => {
           if (status.isLoaded) {
             if (status.durationMillis > 0) {
@@ -660,7 +667,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             if (status.didJustFinish) {
               setPlayingAudioId(null);
               setAudioProgress(0);
-              soundRef.current = null;
+              if (soundRef.current) {
+                soundRef.current.unloadAsync().catch(() => {});
+                soundRef.current = null;
+              }
             }
           }
         }
@@ -668,7 +678,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       soundRef.current = sound;
       setPlayingAudioId(messageId);
     } catch (error) {
-      console.error('Audio playback error:', error);
+      console.error('Audio playback error for URL:', audioUrl, error);
       Alert.alert('Error', 'Could not play voice message');
     }
   };
@@ -1051,17 +1061,25 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
                   {item.type === 'video' && (item.videoUrl || item.imageUrl) && (
                     <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) WebBrowser.openBrowserAsync(url); }} style={styles.videoContainer}>
-                      <Image 
-                        source={{ uri: (() => {
-                          const url = item.videoUrl || item.imageUrl || '';
-                          if (url.includes('cloudinary.com')) {
-                            return url.replace('/upload/', '/upload/so_0,w_400,h_300,c_fill/').replace(/\.(mp4|mov|avi|webm)$/i, '.jpg');
-                          }
-                          return url.replace(/\.[^.]+$/, '.jpg');
-                        })() }}
-                        style={styles.videoThumbnail}
-                        contentFit="cover"
-                      />
+                      {failedThumbnails.has(item._id) ? (
+                        <View style={[styles.videoThumbnail, { backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }]}>
+                          <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
+                          <ThemedText style={{ color: '#FFF', fontSize: 12, marginTop: 4 }}>Tap to play</ThemedText>
+                        </View>
+                      ) : (
+                        <Image 
+                          source={{ uri: (() => {
+                            const url = item.videoUrl || item.imageUrl || '';
+                            if (url.includes('cloudinary.com')) {
+                              return url.replace('/upload/', '/upload/so_0,w_400,h_300,c_fill/').replace(/\.(mp4|mov|avi|webm)$/i, '.jpg');
+                            }
+                            return url.replace(/\.[^.]+$/, '.jpg');
+                          })() }}
+                          style={styles.videoThumbnail}
+                          contentFit="cover"
+                          onError={() => setFailedThumbnails(prev => new Set(prev).add(item._id))}
+                        />
+                      )}
                       <View style={styles.videoOverlay}>
                         <View style={styles.videoPlayButton}>
                           <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />

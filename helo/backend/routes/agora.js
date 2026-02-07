@@ -64,7 +64,7 @@ router.post('/call/initiate', protect, async (req, res) => {
       return res.status(500).json({ success: false, message: 'Agora credentials not configured' });
     }
     
-    const channelName = `call_${req.user._id}_${targetUserId}_${Date.now()}`;
+    const channelName = `c${String(req.user._id).slice(-8)}${String(targetUserId).slice(-8)}${Date.now().toString(36)}`;
     const uid = Math.floor(Math.random() * 100000);
     
     const expirationTimeInSeconds = 3600;

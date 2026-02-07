@@ -35,7 +35,7 @@ export default function VoiceCallScreen() {
   const route = useRoute<any>();
   const { userId, userName, userPhoto, isIncoming, callData: incomingCallData, callerId, callAccepted } = route.params || {};
   const { token: authToken, user } = useAuth();
-  const { post } = useApi();
+  const { post, get } = useApi();
   
   const [callStatus, setCallStatus] = useState<'initializing' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed' | 'declined'>('initializing');
   const [callDuration, setCallDuration] = useState(0);
@@ -169,7 +169,7 @@ export default function VoiceCallScreen() {
         let joinUid = callData.uid || 0;
         if (isIncoming && authToken) {
           try {
-            const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+            const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: callData.channelName, uid: 0, role: 'publisher' }, authToken);
             if (res.success && res.data?.token) {
               joinToken = res.data.token;
               joinUid = 0;
@@ -315,7 +315,7 @@ export default function VoiceCallScreen() {
                 let joinUid = callData.uid || 0;
                 if (isIncoming && authToken) {
                   try {
-                    const res = await post<{ token: string; uid: number }>(`/agora/token?channelName=${encodeURIComponent(callData.channelName)}&uid=0&role=publisher`, {}, authToken);
+                    const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: callData.channelName, uid: 0, role: 'publisher' }, authToken);
                     if (res.success && res.data?.token) {
                       joinToken = res.data.token;
                       joinUid = 0;

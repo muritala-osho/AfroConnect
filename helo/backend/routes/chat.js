@@ -517,11 +517,13 @@ router.post('/:matchId/message', protect, async (req, res) => {
       content, 
       type = 'text', 
       imageUrl, 
+      videoUrl,
       audioUrl, 
       audioDuration,
       latitude,
       longitude,
-      address
+      address,
+      replyTo
     } = req.body;
 
     const match = await Match.findById(matchId);
@@ -545,6 +547,10 @@ router.post('/:matchId/message', protect, async (req, res) => {
       messageData.imageUrl = imageUrl;
     }
     
+    if (type === 'video' && videoUrl) {
+      messageData.videoUrl = videoUrl;
+    }
+    
     if (type === 'audio' && audioUrl) {
       messageData.audioUrl = audioUrl;
       messageData.audioDuration = audioDuration || 0;
@@ -554,6 +560,15 @@ router.post('/:matchId/message', protect, async (req, res) => {
       messageData.latitude = latitude;
       messageData.longitude = longitude;
       messageData.address = address;
+    }
+
+    if (replyTo) {
+      messageData.replyTo = {
+        messageId: replyTo.messageId,
+        content: replyTo.content,
+        type: replyTo.type,
+        senderName: replyTo.senderName
+      };
     }
 
     const message = await Message.create(messageData);
