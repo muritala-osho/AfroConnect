@@ -62,9 +62,8 @@ router.post('/send', protect, async (req, res) => {
 
     const pushToken = user.pushToken;
 
-    // TODO: Integrate with Expo Push Notification service
-    // For now, just log it
-    console.log('Sending notification:', { userId, title, body, pushToken });
+    const { sendExpoPushNotification } = require('../utils/pushNotifications');
+    const result = await sendExpoPushNotification(pushToken, { title, body, data });
 
     res.json({
       success: true,

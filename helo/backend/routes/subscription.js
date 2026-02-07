@@ -86,21 +86,45 @@ router.post('/create-checkout', protect, async (req, res) => {
     const stripe = await getUncachableStripeClient();
     const user = await User.findById(req.user._id);
 
-    // Dynamic price handling: If the price ID doesn't exist, we'll try to find an active price with the same amount/interval
     let activePriceId = priceId;
     
+    const intervalMap = {
+      'price_daily': 'day',
+      'price_weekly': 'week', 
+      'price_monthly': 'month',
+      'price_yearly': 'year'
+    };
+    
+    const targetInterval = intervalMap[priceId];
+    
     try {
-      await stripe.prices.retrieve(priceId);
+      if (targetInterval) {
+        const prices = await stripe.prices.list({ active: true, limit: 20, expand: ['data.product'], recurring: { interval: targetInterval } });
+        if (prices.data.length > 0) {
+          activePriceId = prices.data[0].id;
+          console.log(`Mapped ${priceId} to Stripe price: ${activePriceId}`);
+        } else {
+          const allPrices = await stripe.prices.list({ active: true, limit: 10 });
+          if (allPrices.data.length > 0) {
+            activePriceId = allPrices.data[0].id;
+            console.log(`No ${targetInterval} price found, using fallback: ${activePriceId}`);
+          } else {
+            throw new Error('No active prices found in Stripe. Please create a product with prices in your Stripe dashboard.');
+          }
+        }
+      } else {
+        await stripe.prices.retrieve(priceId);
+      }
     } catch (e) {
-      console.log(`Price ID ${priceId} not found, searching for equivalent active price...`);
+      if (e.message?.includes('No active prices')) throw e;
+      console.log(`Price ID ${priceId} not found, searching for fallback...`);
       const prices = await stripe.prices.list({ active: true, limit: 10, expand: ['data.product'] });
-      // Find a price that matches the name if possible, or just pick the first one as a last resort fallback
       const fallback = prices.data.find(p => p.nickname === 'Premium' || p.lookup_key === 'premium') || prices.data[0];
       if (fallback) {
         console.log(`Using fallback price ID: ${fallback.id}`);
         activePriceId = fallback.id;
       } else {
-        throw new Error('No active prices found in Stripe dashboard. Please create a product and price in your Stripe test mode.');
+        throw new Error('No active prices found in Stripe dashboard.');
       }
     }
 

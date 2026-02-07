@@ -260,10 +260,14 @@ router.get('/nearby', protect, async (req, res) => {
     const blockedByIds = usersWhoBlockedMe.map(u => u._id);
 
     // Initial query: exclude self, blocked users, and people already swiped
-    let excludedIds = [...blockedUserIds, ...blockedByIds, req.user.id];
+    let excludedIds = [
+      ...blockedUserIds.map(id => id.toString()),
+      ...blockedByIds.map(id => id.toString()),
+      req.user.id.toString()
+    ];
     
     if (includeAll !== 'true') {
-      excludedIds = [...excludedIds, ...(currentUser.swipedRight || []), ...(currentUser.swipedLeft || [])];
+      excludedIds = [...excludedIds, ...(currentUser.swipedRight || []).map(id => id.toString()), ...(currentUser.swipedLeft || []).map(id => id.toString())];
       
       const Match = require('../models/Match');
       const matches = await Match.find({ users: req.user.id, status: 'active' });
@@ -284,6 +288,8 @@ router.get('/nearby', protect, async (req, res) => {
       });
       excludedIds = [...excludedIds, ...pendingIds];
     }
+
+    excludedIds = [...new Set(excludedIds)];
 
     const query = {
       _id: { $nin: excludedIds },

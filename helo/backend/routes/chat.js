@@ -324,6 +324,33 @@ router.post('/:matchId', protect, async (req, res) => {
       });
     }
 
+    const onlineUsers = req.app.get('onlineUsers');
+    const isReceiverOnline = onlineUsers && onlineUsers.has(receiver.toString());
+    if (!isReceiverOnline) {
+      try {
+        const { sendExpoPushNotification } = require('../utils/pushNotifications');
+        const receiverUser = await User.findById(receiver).select('pushToken pushNotificationsEnabled');
+        if (receiverUser?.pushToken && receiverUser.pushNotificationsEnabled) {
+          const senderName = req.user.name || 'Someone';
+          let notifBody = content || '';
+          if (type === 'image') notifBody = '📷 Sent a photo';
+          else if (type === 'audio') notifBody = '🎵 Sent a voice message';
+          else if (type === 'location') notifBody = '📍 Shared a location';
+          else if (notifBody.length > 100) notifBody = notifBody.substring(0, 97) + '...';
+          
+          await sendExpoPushNotification(receiverUser.pushToken, {
+            title: senderName,
+            body: notifBody,
+            data: { type: 'message', matchId: matchId.toString(), senderId: req.user._id.toString() },
+            sound: 'default',
+            channelId: 'messages'
+          });
+        }
+      } catch (err) {
+        console.error('Failed to send message push notification:', err);
+      }
+    }
+
     res.status(201).json({ success: true, message });
   } catch (error) {
     console.error('Send message error:', error);

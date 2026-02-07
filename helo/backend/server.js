@@ -23,6 +23,8 @@ console.log('Cloudinary config check:', {
   api_secret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
 });
 
+const { sendExpoPushNotification } = require('./utils/pushNotifications');
+
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const matchRoutes = require('./routes/match');
@@ -223,6 +225,7 @@ const User = require('./models/User');
 
 // Make io available to routes
 app.set('io', io);
+app.set('onlineUsers', onlineUsers);
 
 const updateUserOnlineStatus = async (userId, status) => {
   try {
@@ -424,7 +427,6 @@ io.on('connection', (socket) => {
     if (targetUserId) {
       const callerId = socket.userId || callerInfo?.id;
       
-      // Store call info for potential missed call
       socket.pendingCall = {
         targetUserId,
         callerId,
@@ -441,6 +443,27 @@ io.on('connection', (socket) => {
         callerId: callerId
       });
       console.log(`Call initiated from ${callerId} to ${targetUserId}`);
+      
+      const isTargetOnline = onlineUsers.has(targetUserId);
+      if (!isTargetOnline) {
+        try {
+          const targetUser = await User.findById(targetUserId).select('pushToken pushNotificationsEnabled');
+          if (targetUser?.pushToken && targetUser.pushNotificationsEnabled) {
+            const callerName = callerInfo?.name || 'Someone';
+            const callType = callData?.callType || 'voice';
+            await sendExpoPushNotification(targetUser.pushToken, {
+              title: `Incoming ${callType} call`,
+              body: `${callerName} is calling you...`,
+              data: { type: 'call', callerId, callType, channelName: callData.channelName },
+              priority: 'high',
+              sound: 'default',
+              channelId: 'calls'
+            });
+          }
+        } catch (err) {
+          console.error('Failed to send call push notification:', err);
+        }
+      }
     }
   });
 
