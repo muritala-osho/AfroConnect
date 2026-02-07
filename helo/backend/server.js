@@ -256,6 +256,7 @@ io.on('connection', (socket) => {
         socket.join(socket.userId);
         console.log('User authenticated from token:', socket.userId);
         updateUserOnlineStatus(socket.userId, 'online');
+        io.emit('user:status', { userId: socket.userId, isOnline: true });
       }
     } catch (err) {
       console.log('Socket token verification failed:', err.message);

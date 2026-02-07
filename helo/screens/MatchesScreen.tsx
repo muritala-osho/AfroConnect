@@ -143,7 +143,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               age: otherUser?.age || 0,
               bio: otherUser?.bio || '',
               photos: otherUser?.photos || [],
-              online: otherUser?.onlineStatus || false,
+              online: otherUser?.onlineStatus === 'online',
               location: displayLocation,
               country: locationCountry,
               countryCode: countryCode,

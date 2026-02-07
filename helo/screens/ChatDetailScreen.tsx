@@ -251,9 +251,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           setMatchId(mId);
           const otherUser = match.users.find((u: any) => u._id === userId || u.id === userId);
           if (otherUser) {
-            setIsOnline(otherUser.isOnline || false);
+            setIsOnline(otherUser.onlineStatus === 'online' || false);
             setOtherUserVerified(otherUser.verified || false);
-            if (otherUser.lastSeen) setLastSeenDate(new Date(otherUser.lastSeen));
+            if (otherUser.lastActive) setLastSeenDate(new Date(otherUser.lastActive));
           }
           const messagesResponse = await get<{ messages: Message[] }>(`/chat/${mId}`, token);
           if (messagesResponse.success && messagesResponse.data) {

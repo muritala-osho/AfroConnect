@@ -23,7 +23,7 @@ router.get('/conversations', protect, async (req, res) => {
     const matches = await Match.find({
       users: req.user._id
     })
-      .populate('users', 'name photos online lastActive blockedUsers verified')
+      .populate('users', 'name photos onlineStatus lastActive blockedUsers verified')
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
       .lean();
@@ -51,6 +51,7 @@ router.get('/conversations', protect, async (req, res) => {
     const unreadCountsMap = new Map(unreadCountsAgg.map(m => [m._id.toString(), m.count]));
 
     // Build conversations from cached data
+    const onlineUsers = req.app.get('onlineUsers');
     const currentUserId = req.user._id.toString();
     const conversations = matches.map((match) => {
       const otherUser = match.users.find(u => u._id.toString() !== currentUserId);
@@ -81,7 +82,7 @@ router.get('/conversations', protect, async (req, res) => {
           id: otherUser._id,
           name: otherUser.name,
           photo: otherUser.photos?.[0]?.url || otherUser.photos?.[0],
-          online: otherUser.online || false,
+          online: (onlineUsers && onlineUsers.has(otherUser._id.toString())) || otherUser.onlineStatus === 'online',
           verified: otherUser.verified || false
         },
         lastMessage: lastMessage?.content || '',

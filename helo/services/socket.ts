@@ -278,7 +278,13 @@ class SocketService {
   }
 
   setUserOnline(userId: string) {
-    this.emit('user:online', userId);
+    if (this.socket?.connected) {
+      this.emit('user:online', userId);
+    } else {
+      this.onConnect(() => {
+        this.emit('user:online', userId);
+      });
+    }
   }
 
   onUserStatus(callback: (data: { userId: string; status: string }) => void) {
