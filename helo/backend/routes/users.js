@@ -233,17 +233,14 @@ router.get('/search', protect, async (req, res) => {
 // @access  Private
 router.get('/nearby', protect, async (req, res) => {
   try {
-    const { lat, lng, maxDistance, minAge, maxAge, genders, includeAll } = req.query;
+    const { lat, lng, maxDistance, minAge, maxAge, genders } = req.query;
 
-    // Ensure the user has verified their email before fetching nearby users
     if (!req.user.emailVerified && process.env.NODE_ENV === 'production') {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    // Discovery: Worldwide priority if specified, otherwise nearby
     const currentUser = await User.findById(req.user.id);
 
-    // Passport mode for premium users
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
     if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
@@ -252,76 +249,66 @@ router.get('/nearby', protect, async (req, res) => {
     }
 
     const blockedUserIds = currentUser.blockedUsers || [];
-    
-    // Also get users who have blocked the current user
+
     const usersWhoBlockedMe = await User.find({
       blockedUsers: req.user.id
     }).select('_id');
     const blockedByIds = usersWhoBlockedMe.map(u => u._id);
 
-    // Initial query: exclude self, blocked users, and people already swiped
     let excludedIds = [
       ...blockedUserIds.map(id => id.toString()),
       ...blockedByIds.map(id => id.toString()),
-      req.user.id.toString()
+      req.user.id.toString(),
+      ...(currentUser.swipedRight || []).map(id => id.toString()),
+      ...(currentUser.swipedLeft || []).map(id => id.toString())
     ];
-    
-    if (includeAll !== 'true') {
-      excludedIds = [...excludedIds, ...(currentUser.swipedRight || []).map(id => id.toString()), ...(currentUser.swipedLeft || []).map(id => id.toString())];
-      
-      const Match = require('../models/Match');
-      const matches = await Match.find({ users: req.user.id, status: 'active' });
-      const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
-      excludedIds = [...excludedIds, ...matchedUserIds];
 
-      const FriendRequest = require('../models/FriendRequest');
-      const pendingRequests = await FriendRequest.find({
-        $or: [
-          { sender: req.user._id, status: 'pending' },
-          { receiver: req.user._id, status: 'pending' }
-        ]
-      }).select('sender receiver');
-      const pendingIds = pendingRequests.map(r => {
-        const sid = r.sender.toString();
-        const rid = r.receiver.toString();
-        return sid === req.user._id.toString() ? rid : sid;
-      });
-      excludedIds = [...excludedIds, ...pendingIds];
-    }
+    const Match = require('../models/Match');
+    const matches = await Match.find({ users: req.user.id, status: 'active' });
+    const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
+    excludedIds = [...excludedIds, ...matchedUserIds];
+
+    const FriendRequest = require('../models/FriendRequest');
+    const pendingRequests = await FriendRequest.find({
+      $or: [
+        { sender: req.user._id, status: 'pending' },
+        { receiver: req.user._id, status: 'pending' }
+      ]
+    }).select('sender receiver');
+    const pendingIds = pendingRequests.map(r => {
+      const sid = r.sender.toString();
+      const rid = r.receiver.toString();
+      return sid === req.user._id.toString() ? rid : sid;
+    });
+    excludedIds = [...excludedIds, ...pendingIds];
 
     excludedIds = [...new Set(excludedIds)];
 
     const query = {
       _id: { $nin: excludedIds },
+      banned: { $ne: true },
+      suspended: { $ne: true },
     };
 
-    // If verifiedOnly is passed, filter by verified status
     if (req.query.verifiedOnly === 'true') {
       query.verified = true;
     }
 
-    // Filter by online status if requested
     if (req.query.onlineOnly === 'true') {
-      query.online = true;
+      query.onlineStatus = 'online';
     }
 
-    // If testing/includeAll, we skip strict filters to show cards
-    if (includeAll === 'true') {
-      console.log('IncludeAll mode: skipping strict filters and expanding query');
-    } else {
-      // Age filter
-      const minAgeFilter = minAge ? parseInt(minAge) : currentUser.preferences?.ageRange?.min || 18;
-      const maxAgeFilter = maxAge ? parseInt(maxAge) : currentUser.preferences?.ageRange?.max || 100;
-      query.age = { $gte: minAgeFilter, $lte: maxAgeFilter };
+    const minAgeFilter = minAge ? parseInt(minAge) : currentUser.preferences?.ageRange?.min || 18;
+    const maxAgeFilter = maxAge ? parseInt(maxAge) : currentUser.preferences?.ageRange?.max || 100;
+    query.age = { $gte: minAgeFilter, $lte: maxAgeFilter };
 
-      if (genders) {
-        const genderArray = genders.split(',');
-        query.gender = { $in: genderArray };
-      } else {
-        const genderPref = currentUser.preferences?.genderPreference || 'both';
-        if (genderPref === 'male') query.gender = 'male';
-        else if (genderPref === 'female') query.gender = 'female';
-      }
+    if (genders) {
+      const genderArray = genders.split(',');
+      query.gender = { $in: genderArray };
+    } else {
+      const genderPref = currentUser.preferences?.genderPreference || 'both';
+      if (genderPref === 'male') query.gender = 'male';
+      else if (genderPref === 'female') query.gender = 'female';
     }
 
     let maxDist = maxDistance ? parseInt(maxDistance) : 50;
@@ -329,13 +316,11 @@ router.get('/nearby', protect, async (req, res) => {
       const storedDist = currentUser.preferences.maxDistance;
       maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
     }
-    
+
     const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
     const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
 
-    // Don't use geo query - fetch users with any location format and filter in memory
-    // This ensures compatibility with both location.coordinates and location.lat/lng formats
-    if ((effectiveLat || effectiveLng) && includeAll !== 'true') {
+    if (effectiveLat || effectiveLng) {
       query.$or = [
         { 'location.coordinates': { $exists: true } },
         { 'location.lat': { $exists: true } }
@@ -345,12 +330,13 @@ router.get('/nearby', protect, async (req, res) => {
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
-    
+
+    const myInterests = currentUser.interests || [];
+
     users = users.map(user => {
       const userObj = user.toObject();
       let score = 0;
 
-      // Distance calculation - support both location formats
       let distanceKm = null;
       if (effectiveLat && effectiveLng) {
         let userLat, userLng;
@@ -362,39 +348,39 @@ router.get('/nearby', protect, async (req, res) => {
           userLat = user.location.lat;
           userLng = user.location.lng;
         }
-        
+
         if (userLat != null && userLng != null) {
-          distanceKm = calculateDistance(
-            effectiveLat,
-            effectiveLng,
-            userLat,
-            userLng
-          );
+          distanceKm = calculateDistance(effectiveLat, effectiveLng, userLat, userLng);
         }
       }
       if (distanceKm === null) {
         distanceKm = 99999;
       }
 
-      // Boost nearby users
-      score += (maxDist - distanceKm);
+      score += Math.max(0, maxDist - distanceKm);
 
-      // Personality match
+      if (myInterests.length > 0 && user.interests?.length > 0) {
+        const mySet = new Set(myInterests.map(i => i.toLowerCase()));
+        const shared = user.interests.filter(i => mySet.has(i.toLowerCase()));
+        score += shared.length * 10;
+      }
+
       if (currentUser.lifestyle?.personalityType && user.lifestyle?.personalityType === currentUser.lifestyle?.personalityType) {
         score += 30;
+      }
+
+      if (user.verified) {
+        score += 5;
       }
 
       return { ...userObj, score, distance: distanceKm };
     });
 
-    // Sort: Nearby first, then personality
     users.sort((a, b) => b.score - a.score);
 
     const isPremium = currentUser.premium?.isActive;
 
-    // For free users, limit discovery to maxDistance (default 10km)
-    // Premium users can see users worldwide
-    if (!isPremium && effectiveLat && effectiveLng && includeAll !== 'true') {
+    if (!isPremium && effectiveLat && effectiveLng) {
       users = users.filter(u => u.distance <= maxDist);
     }
 
@@ -403,9 +389,9 @@ router.get('/nearby', protect, async (req, res) => {
     users = users.map(user => {
       const privacy = user.privacySettings || {};
       const isOnline = user.onlineStatus === 'online' || user.online;
-      
+
       const distanceVisible = isPremium || privacy.showDistance !== false;
-      
+
       return {
         ...user,
         age: privacy.hideAge ? null : user.age,
@@ -416,7 +402,7 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
-    console.log(`[NEARBY] Returning ${users.length} users`);
+    console.log(`[DISCOVERY] Returning ${users.length} users (maxDist=${maxDist}km, premium=${!!isPremium})`);
     res.json({
       success: true,
       users

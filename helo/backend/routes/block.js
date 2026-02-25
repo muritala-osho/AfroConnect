@@ -4,6 +4,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const Match = require('../models/Match');
+const Message = require('../models/Message');
 
 // @route   POST /api/block/:userId
 // @desc    Block a user
@@ -29,13 +30,59 @@ router.post('/:userId', protect, async (req, res) => {
     }
     
     user.blockedUsers.push(userToBlock);
+
+    user.swipedRight = (user.swipedRight || []).filter(
+      id => id.toString() !== userToBlock
+    );
+    user.swipedLeft = (user.swipedLeft || []).filter(
+      id => id.toString() !== userToBlock
+    );
+
     await user.save();
-    
-    // Remove any existing match
+
+    const otherUser = await User.findById(userToBlock);
+    if (otherUser) {
+      otherUser.swipedRight = (otherUser.swipedRight || []).filter(
+        id => id.toString() !== req.user._id.toString()
+      );
+      otherUser.swipedLeft = (otherUser.swipedLeft || []).filter(
+        id => id.toString() !== req.user._id.toString()
+      );
+      await otherUser.save();
+    }
+
+    const deletedMatches = await Match.find({
+      users: { $all: [req.user._id, userToBlock] }
+    }).select('_id');
+    const matchIds = deletedMatches.map(m => m._id);
+
     await Match.deleteMany({
       users: { $all: [req.user._id, userToBlock] }
     });
-    
+
+    if (matchIds.length > 0) {
+      await Message.deleteMany({
+        matchId: { $in: matchIds }
+      });
+    }
+
+    await Message.deleteMany({
+      $or: [
+        { sender: req.user._id, receiver: userToBlock },
+        { sender: userToBlock, receiver: req.user._id }
+      ]
+    });
+
+    const FriendRequest = require('../models/FriendRequest');
+    await FriendRequest.deleteMany({
+      $or: [
+        { sender: req.user._id, receiver: userToBlock },
+        { sender: userToBlock, receiver: req.user._id }
+      ]
+    });
+
+    console.log(`[BLOCK] User ${req.user._id} blocked ${userToBlock} - removed match, messages, friend requests, swipe history`);
+
     res.json({
       success: true,
       message: 'User blocked successfully'
@@ -50,21 +97,35 @@ router.post('/:userId', protect, async (req, res) => {
 });
 
 // @route   DELETE /api/block/:userId
-// @desc    Unblock a user
+// @desc    Unblock a user - makes them discoverable again but does NOT restore match
 // @access  Private
 router.delete('/:userId', protect, async (req, res) => {
   try {
     const userToUnblock = req.params.userId;
     
     const user = await User.findById(req.user._id);
+    
+    const wasBlocked = user.blockedUsers.some(
+      id => id.toString() === userToUnblock
+    );
+
+    if (!wasBlocked) {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not blocked'
+      });
+    }
+
     user.blockedUsers = user.blockedUsers.filter(
       id => id.toString() !== userToUnblock
     );
     await user.save();
+
+    console.log(`[UNBLOCK] User ${req.user._id} unblocked ${userToUnblock} - user is now discoverable again (no auto-restore match)`);
     
     res.json({
       success: true,
-      message: 'User unblocked successfully'
+      message: 'User unblocked successfully. They will appear in discovery again but previous match is not restored.'
     });
   } catch (error) {
     console.error('Unblock user error:', error);

@@ -119,6 +119,8 @@ This architecture enables unified URL handling where the gateway proxies API req
 - Call state tracking: backend marks both caller and callee sockets with activeCall on accept, clears on end/decline/disconnect
 - Agora audio fix: agora-call.html subscribe handler improved with try-catch and explicit audio/video track play logging
 - Stories open visibility: restricted to matched users who have exchanged at least one chat message (+ self); /active endpoint checks Match + Message collections
+- Block/unblock: blocking removes match, all chat messages (by matchId + sender/receiver), friend requests, and swipe history for both users; unblocking only makes the user discoverable again without auto-restoring any previous match
+- Discovery filter: removed `includeAll` bypass; always excludes blocked (both directions), self, already matched, swiped (left+right), and pending friend requests; adds interest overlap scoring (+10 per shared interest), personality match (+30), verified boost (+5); filters banned/suspended users; free users limited to maxDistance (default 50km)
 
 ## External Dependencies
 
