@@ -43,6 +43,7 @@ interface Story {
   createdAt: string;
   viewedBy?: string[];
   viewers?: StoryViewer[];
+  viewCount?: number;
 }
 
 interface StoryUser {
@@ -674,20 +675,16 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           <Pressable
             style={[styles.bottomActions, { justifyContent: 'center' }]}
             onPress={() => {
-              if (currentStory.viewers && currentStory.viewers.length > 0) {
-                pauseProgress();
-                setShowViewers(true);
-              }
+              pauseProgress();
+              setShowViewers(true);
             }}
           >
             <View style={styles.viewersRow}>
               <Ionicons name="eye-outline" size={16} color="rgba(255,255,255,0.7)" />
               <ThemedText style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginLeft: 6 }}>
-                Viewed by {currentStory.viewers?.length || currentStory.viewedBy?.length || 0} people
+                Viewed by {currentStory.viewCount ?? currentStory.viewers?.length ?? currentStory.viewedBy?.length ?? 0} {(currentStory.viewCount ?? currentStory.viewers?.length ?? currentStory.viewedBy?.length ?? 0) === 1 ? 'person' : 'people'}
               </ThemedText>
-              {currentStory.viewers && currentStory.viewers.length > 0 && (
-                <Ionicons name="chevron-up" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
-              )}
+              <Ionicons name="chevron-up" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
             </View>
           </Pressable>
         )}
@@ -712,7 +709,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           <Pressable style={styles.viewerModalContent} onPress={() => {}}>
             <View style={styles.viewerModalHandle} />
             <ThemedText style={styles.viewerModalTitle}>
-              Viewed by {currentStory.viewers?.length || currentStory.viewedBy?.length || 0}
+              Viewed by {currentStory.viewCount ?? currentStory.viewers?.length ?? currentStory.viewedBy?.length ?? 0}
             </ThemedText>
             {currentStory.viewers && currentStory.viewers.length > 0 ? (
               <ScrollView style={styles.viewerList} showsVerticalScrollIndicator={false}>
@@ -739,9 +736,11 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               </ScrollView>
             ) : (
               <View style={styles.viewerEmptyState}>
-                <Ionicons name="eye-off-outline" size={32} color="rgba(255,255,255,0.3)" />
+                <Ionicons name="eye-outline" size={32} color="rgba(255,255,255,0.3)" />
                 <ThemedText style={styles.viewerEmptyText}>
-                  Viewer details are available with Premium
+                  {(currentStory.viewCount ?? currentStory.viewedBy?.length ?? 0) > 0
+                    ? `${currentStory.viewCount ?? currentStory.viewedBy?.length ?? 0} ${(currentStory.viewCount ?? currentStory.viewedBy?.length ?? 0) === 1 ? 'person' : 'people'} viewed your story.\nUpgrade to Premium to see who.`
+                    : 'No views yet'}
                 </ThemedText>
               </View>
             )}

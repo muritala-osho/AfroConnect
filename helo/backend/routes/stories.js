@@ -199,10 +199,13 @@ router.get('/my-stories', protect, async (req, res) => {
       success: true, 
       stories: stories.map(s => {
         const storyObj = s.toObject();
+        const viewCount = s.views ? s.views.length : 0;
         return {
           ...storyObj,
           imageUrl: s.imageUrl || s.mediaUrl,
           mediaUrl: s.mediaUrl || s.imageUrl,
+          viewCount,
+          viewedBy: s.views.map(v => v.user?._id?.toString()),
           viewers: isPremium ? s.views.map(v => ({
             id: v.user?._id,
             name: v.user?.name,

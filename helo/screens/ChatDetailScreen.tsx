@@ -149,6 +149,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [sending, setSending] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
   const [lastSeenDate, setLastSeenDate] = useState<Date | null>(null);
@@ -299,6 +300,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   };
 
   const getStatusText = useCallback(() => {
+    if (isOtherRecording) return "recording voice...";
     if (isTyping) return "typing...";
     if (isOnline) return "Online";
     if (!lastSeenDate) return "Offline";
@@ -403,13 +405,20 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
       }
     };
+    const handleRecordingVoice = (data: any) => {
+      if (data.userId && String(data.userId) !== String(myId)) {
+        setIsOtherRecording(!!data.isRecording);
+      }
+    };
     socketService.on('chat:new-message', handleNewMessage);
     socketService.on('message:new', handleNewMessage);
     socketService.on('chat:user-typing', handleTyping);
+    socketService.on('chat:recording-voice', handleRecordingVoice);
     return () => {
       socketService.off('chat:new-message');
       socketService.off('message:new');
       socketService.off('chat:user-typing');
+      socketService.off('chat:recording-voice');
     };
   }, [matchId, userId, myId]);
 
@@ -656,6 +665,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
       
+      if (matchId) {
+        socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: true });
+      }
+      
       recordingIntervalRef.current = setInterval(() => {
         recordingDurationRef.current += 1;
         setRecordingDuration(prev => prev + 1);
@@ -689,6 +702,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       const duration = recordingDurationRef.current;
       recordingRef.current = null;
       setIsRecording(false);
+      
+      if (matchId) {
+        socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: false });
+      }
       
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({
@@ -784,6 +801,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       }
     } catch (error) {
       console.log('Cancel recording cleanup:', error);
+    }
+    
+    if (matchId) {
+      socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: false });
     }
     
     setIsRecording(false);
@@ -1524,6 +1545,15 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         />
       )}
 
+      {isOtherRecording && !isTyping && (
+        <View style={styles.typingIndicator}>
+          <View style={[styles.typingBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}>
+            <Feather name="mic" size={14} color="#F44336" />
+            <ThemedText style={[styles.typingLabel, { color: '#F44336', marginLeft: 6 }]}>recording voice</ThemedText>
+          </View>
+        </View>
+      )}
+
       {isTyping && (
         <View style={styles.typingIndicator}>
           <View style={[styles.typingBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}>
@@ -1568,7 +1598,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <Image source={require("@/assets/icons/verified-tick.png")} style={styles.verifiedBadge} contentFit="contain" />
               )}
             </View>
-            <ThemedText style={[styles.headerStatus, { color: isTyping ? theme.primary : (isOnline ? '#4CAF50' : theme.textSecondary) }]}>
+            <ThemedText style={[styles.headerStatus, { color: isOtherRecording ? '#F44336' : (isTyping ? theme.primary : (isOnline ? '#4CAF50' : theme.textSecondary)) }]}>
               {getStatusText()}
             </ThemedText>
           </View>
