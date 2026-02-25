@@ -197,6 +197,11 @@ const userSchema = new mongoose.Schema({
     enum: ['relationship', 'friendship', 'casual', 'networking', 'not_sure', 'not sure'],
     default: 'relationship'
   },
+  relationshipGoal: {
+    type: String,
+    enum: ['short_term', 'long_term', 'friendship', 'networking', 'casual', 'marriage', 'open_to_everything', 'not_sure_yet'],
+    default: null
+  },
   preferences: {
     ageRange: {
       min: { type: Number, default: 18 },
@@ -242,7 +247,7 @@ const userSchema = new mongoose.Schema({
     },
     workout: {
       type: String,
-      enum: ['never', 'rarely', 'sometimes', 'regularly', 'very_active', 'prefer_not_to_say'],
+      enum: ['never', 'rarely', 'sometimes', 'often', 'daily', 'regularly', 'very_active', 'prefer_not_to_say'],
       default: null
     },
     religion: {
@@ -258,17 +263,17 @@ const userSchema = new mongoose.Schema({
     },
     communicationStyle: {
       type: String,
-      enum: ['introverted', 'ambiverted', 'extroverted', 'prefer_not_to_say'],
+      enum: ['introverted', 'ambiverted', 'extroverted', 'ambivert', 'big_talker', 'listener', 'texter', 'caller', 'prefer_not_to_say'],
       default: null
     },
     loveStyle: {
       type: String,
-      enum: ['romantic', 'playful', 'passionate', 'intellectual', 'caring', 'adventurous', 'prefer_not_to_say'],
+      enum: ['romantic', 'playful', 'passionate', 'intellectual', 'caring', 'adventurous', 'practical', 'selfless', 'physical', 'acts_of_service', 'words_of_affirmation', 'quality_time', 'gift_giving', 'prefer_not_to_say'],
       default: null
     },
     personalityType: {
       type: String,
-      maxlength: 4, // e.g. INFJ
+      maxlength: 50,
       trim: true
     },
     hasKids: {

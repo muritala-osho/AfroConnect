@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -15,8 +15,6 @@ interface PremiumBadgeProps {
   style?: any;
 }
 
-const AnimatedView = Animated.createAnimatedComponent(View);
-
 const SIZES = {
   small: { badge: 20, icon: 10, glow: 28 },
   medium: { badge: 26, icon: 14, glow: 36 },
@@ -27,7 +25,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
   const glowScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.6);
 
-  React.useEffect(() => {
+  useEffect(() => {
     glowScale.value = withRepeat(
       withSequence(
         withTiming(1.4, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
@@ -55,7 +53,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
 
   return (
     <View style={[styles.container, style]}>
-      <AnimatedView
+      <Animated.View
         style={[
           styles.glow,
           {

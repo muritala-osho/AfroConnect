@@ -1279,47 +1279,69 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                     </Pressable>
                   )}
 
-                  {item.type === 'location' && item.latitude != null && item.longitude != null && (
-                    <Pressable
-                      onPress={() => {
-                        const lat = item.latitude!;
-                        const lng = item.longitude!;
-                        const label = item.address || `${lat}, ${lng}`;
-                        const url = Platform.select({
-                          ios: `maps:0,0?q=${label}@${lat},${lng}`,
-                          android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
-                          default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
-                        });
-                        Linking.openURL(url!).catch(() => {
-                          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
-                        });
-                      }}
-                      style={styles.locationBubble}
-                    >
-                      <View style={styles.locationMapContainer}>
-                        <Image
-                          source={{ uri: `https://tile.openstreetmap.org/${14}/${Math.floor((item.longitude! + 180) / 360 * Math.pow(2, 14))}/${Math.floor((1 - Math.log(Math.tan(item.latitude! * Math.PI / 180) + 1 / Math.cos(item.latitude! * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 14))}.png` }}
-                          style={styles.locationMapImage}
-                          contentFit="cover"
-                        />
-                        <View style={styles.locationPinOverlay}>
-                          <Ionicons name="location-sharp" size={32} color="#E53935" />
+                  {item.type === 'location' && item.latitude != null && item.longitude != null && (() => {
+                    const lat = item.latitude!;
+                    const lng = item.longitude!;
+                    const z = 15;
+                    const n = Math.pow(2, z);
+                    const cx = Math.floor((lng + 180) / 360 * n);
+                    const cy = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+                    const tiles = [];
+                    for (let dy = -1; dy <= 1; dy++) {
+                      for (let dx = -1; dx <= 1; dx++) {
+                        tiles.push({ x: cx + dx, y: cy + dy, dx, dy });
+                      }
+                    }
+                    return (
+                      <Pressable
+                        onPress={() => {
+                          const label = item.address || `${lat}, ${lng}`;
+                          const url = Platform.select({
+                            ios: `maps:0,0?q=${label}@${lat},${lng}`,
+                            android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+                            default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+                          });
+                          Linking.openURL(url!).catch(() => {
+                            Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                          });
+                        }}
+                        style={styles.locationBubble}
+                      >
+                        <View style={styles.locationMapContainer}>
+                          <View style={styles.locationTileGrid}>
+                            {tiles.map((t, i) => (
+                              <Image
+                                key={i}
+                                source={{ uri: `https://tile.openstreetmap.org/${z}/${t.x}/${t.y}.png` }}
+                                style={styles.locationTile}
+                                contentFit="cover"
+                              />
+                            ))}
+                          </View>
+                          <View style={styles.locationPinOverlay}>
+                            <View style={styles.locationPinShadow} />
+                            <Ionicons name="location-sharp" size={36} color="#E53935" style={{ marginTop: -18 }} />
+                          </View>
                         </View>
-                      </View>
-                      <View style={styles.locationInfoRow}>
-                        <Ionicons name="location-outline" size={16} color={isMe ? 'rgba(255,255,255,0.8)' : theme.textSecondary} style={{ marginRight: 6 }} />
-                        <ThemedText style={[styles.locationAddress, { color: isMe ? '#FFF' : theme.text }]} numberOfLines={2}>
-                          {item.address || `${item.latitude!.toFixed(4)}, ${item.longitude!.toFixed(4)}`}
-                        </ThemedText>
-                      </View>
-                      <View style={styles.locationTapHint}>
-                        <ThemedText style={[styles.locationTapText, { color: isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary }]}>
-                          Tap to open map
-                        </ThemedText>
-                        <Feather name="external-link" size={12} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
-                      </View>
-                    </Pressable>
-                  )}
+                        <View style={[styles.locationInfoRow, { backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)' }]}>
+                          <View style={[styles.locationIconCircle, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : theme.primary + '15' }]}>
+                            <Ionicons name="navigate" size={14} color={isMe ? '#FFF' : theme.primary} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <ThemedText style={[styles.locationAddress, { color: isMe ? '#FFF' : theme.text }]} numberOfLines={2}>
+                              {item.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}
+                            </ThemedText>
+                            <View style={styles.locationTapHint}>
+                              <ThemedText style={[styles.locationTapText, { color: isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary }]}>
+                                Tap to open in maps
+                              </ThemedText>
+                              <Feather name="external-link" size={10} color={isMe ? 'rgba(255,255,255,0.5)' : theme.textSecondary} />
+                            </View>
+                          </View>
+                        </View>
+                      </Pressable>
+                    );
+                  })()}
                   
                   {messageText && item.type !== 'audio' && item.type !== 'location' ? (
                     <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
@@ -2271,48 +2293,71 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
   },
   locationBubble: {
-    width: 220,
-    borderRadius: 12,
+    width: 240,
+    borderRadius: 16,
     overflow: 'hidden' as const,
     marginBottom: 4,
   },
   locationMapContainer: {
-    width: 220,
-    height: 130,
+    width: 240,
+    height: 150,
     position: 'relative' as const,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: '#E8E8E8',
+    overflow: 'hidden' as const,
   },
-  locationMapImage: {
-    width: 220,
-    height: 130,
+  locationTileGrid: {
+    width: 256 * 3,
+    height: 256 * 3,
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    position: 'absolute' as const,
+    top: -(256 * 3 - 150) / 2,
+    left: -(256 * 3 - 240) / 2,
+  },
+  locationTile: {
+    width: 256,
+    height: 256,
   },
   locationPinOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
   },
+  locationPinShadow: {
+    position: 'absolute' as const,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    top: '52%' as any,
+  },
   locationInfoRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  locationIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   locationAddress: {
     fontSize: 13,
-    fontWeight: '500' as const,
+    fontWeight: '600' as const,
     flex: 1,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   locationTapHint: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    justifyContent: 'flex-end' as const,
-    paddingHorizontal: 8,
-    paddingBottom: 6,
-    gap: 4,
+    gap: 3,
+    marginTop: 2,
   },
   locationTapText: {
-    fontSize: 11,
+    fontSize: 10,
   },
 });

@@ -122,7 +122,7 @@ router.put('/me', protect, async (req, res) => {
     const updates = req.body;
     const allowedUpdates = [
       'name', 'age', 'gender', 'bio', 'interests', 'photos', 'lookingFor', 
-      'preferences', 'location', 'favoriteSong', 'zodiacSign', 
+      'preferences', 'location', 'favoriteSong', 'zodiacSign', 'relationshipGoal',
       'jobTitle', 'education', 'livingIn', 'lifestyle', 'ethnicity', 
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
       'pets', 'relationshipStatus'
