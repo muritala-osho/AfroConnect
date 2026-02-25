@@ -19,6 +19,10 @@ const matchSchema = new mongoose.Schema({
     type: String,
     enum: ['active', 'unmatched', 'blocked'],
     default: 'active'
+  },
+  screenshotProtection: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

@@ -234,16 +234,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   }, [userId]);
 
   useEffect(() => {
-    const loadScreenshotProtection = async () => {
-      const saved = await AsyncStorage.getItem(`screenshot_protection_${userId}`);
-      if (saved === 'true') {
-        setScreenshotProtection(true);
-        if (Platform.OS !== 'web') {
-          try { await ScreenCapture.preventScreenCaptureAsync(); } catch (e) {}
-        }
-      }
-    };
-    loadScreenshotProtection();
     return () => {
       if (Platform.OS !== 'web') {
         try { ScreenCapture.allowScreenCaptureAsync(); } catch (e) {}
@@ -251,10 +241,35 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     };
   }, [userId]);
 
+  useEffect(() => {
+    if (!matchId) return;
+    const handleProtectionUpdate = (data: any) => {
+      if (data.chatId === matchId) {
+        setScreenshotProtection(data.enabled);
+        if (Platform.OS !== 'web') {
+          try {
+            if (data.enabled) {
+              ScreenCapture.preventScreenCaptureAsync();
+            } else {
+              ScreenCapture.allowScreenCaptureAsync();
+            }
+          } catch (e) {}
+        }
+        if (String(data.updatedBy) !== String(myId)) {
+          Alert.alert(
+            data.enabled ? 'Screenshot Protection Enabled' : 'Screenshot Protection Disabled',
+            data.enabled ? `${userName} enabled screenshot protection for this chat.` : `${userName} disabled screenshot protection for this chat.`
+          );
+        }
+      }
+    };
+    socketService.on('chat:screenshot-protection-updated', handleProtectionUpdate);
+    return () => { socketService.off('chat:screenshot-protection-updated'); };
+  }, [matchId, myId, userName]);
+
   const toggleScreenshotProtection = useCallback(async () => {
     const newValue = !screenshotProtection;
     setScreenshotProtection(newValue);
-    await AsyncStorage.setItem(`screenshot_protection_${userId}`, String(newValue));
     if (Platform.OS !== 'web') {
       try {
         if (newValue) {
@@ -264,11 +279,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         }
       } catch (e) {}
     }
+    if (matchId) {
+      socketService.emit('chat:screenshot-protection', {
+        chatId: matchId,
+        enabled: newValue,
+        userId: myId
+      });
+    }
     Alert.alert(
       newValue ? 'Screenshot Protection On' : 'Screenshot Protection Off',
-      newValue ? 'Screenshots and screen recording are now blocked in this chat.' : 'Screenshot protection has been disabled for this chat.'
+      newValue ? 'Screenshots and screen recording are now blocked for both users in this chat.' : 'Screenshot protection has been disabled for this chat.'
     );
-  }, [screenshotProtection, userId]);
+  }, [screenshotProtection, matchId, myId]);
 
   const saveChatTheme = async (themeId: string) => {
     setChatTheme(themeId);
@@ -328,6 +350,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         if (match) {
           const mId = match._id || match.id;
           setMatchId(mId);
+          if (match.screenshotProtection) {
+            setScreenshotProtection(true);
+            if (Platform.OS !== 'web') {
+              try { await ScreenCapture.preventScreenCaptureAsync(); } catch (e) {}
+            }
+          }
           const otherUser = match.users.find((u: any) => u._id === userId || u.id === userId);
           if (otherUser) {
             setIsOnline(otherUser.onlineStatus === 'online' || false);

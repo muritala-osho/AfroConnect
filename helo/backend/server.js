@@ -368,6 +368,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Screenshot protection toggle
+  socket.on('chat:screenshot-protection', async (data) => {
+    if (data.chatId) {
+      try {
+        const Match = require('./models/Match');
+        await Match.findByIdAndUpdate(data.chatId, { screenshotProtection: data.enabled });
+      } catch (e) {
+        console.error('Screenshot protection update error:', e);
+      }
+      io.to(data.chatId).emit('chat:screenshot-protection-updated', {
+        chatId: data.chatId,
+        enabled: data.enabled,
+        updatedBy: data.userId
+      });
+    }
+  });
+
   // Helper function to save call message to chat
   async function saveCallMessage(callerId, receiverId, callType, callStatus, duration = null) {
     try {
