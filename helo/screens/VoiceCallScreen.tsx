@@ -9,6 +9,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
@@ -37,7 +38,7 @@ export default function VoiceCallScreen() {
   const { token: authToken, user } = useAuth();
   const { post, get } = useApi();
   
-  const [callStatus, setCallStatus] = useState<'initializing' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed' | 'declined'>('initializing');
+  const [callStatus, setCallStatus] = useState<'idle' | 'initializing' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed' | 'declined' | 'busy' | 'missed'>('initializing');
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
@@ -52,10 +53,40 @@ export default function VoiceCallScreen() {
   const agoraJoined = useRef(false);
   const webViewRef = useRef<WebView | null>(null);
   const [webviewReady, setWebviewReady] = useState(false);
+  const ringtoneRef = useRef<Audio.Sound | null>(null);
 
   const sendToWebView = useCallback((msg: any) => {
     if (webViewRef.current) {
       webViewRef.current.postMessage(JSON.stringify(msg));
+    }
+  }, []);
+
+  const playRingtone = useCallback(async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+      });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+        { shouldPlay: true, isLooping: true, volume: 0.7 }
+      );
+      ringtoneRef.current = sound;
+    } catch (err) {
+      console.log('Ringtone error:', err);
+    }
+  }, []);
+
+  const stopRingtone = useCallback(async () => {
+    try {
+      if (ringtoneRef.current) {
+        await ringtoneRef.current.stopAsync();
+        await ringtoneRef.current.unloadAsync();
+        ringtoneRef.current = null;
+      }
+    } catch (err) {
+      console.log('Stop ringtone error:', err);
     }
   }, []);
 
@@ -96,11 +127,10 @@ export default function VoiceCallScreen() {
         });
         
         ringingTimeout.current = setTimeout(() => {
-          if (callStatus === 'ringing') {
-            setCallStatus('failed');
-            setErrorMessage('No answer');
-            socketService.missedCall({ targetUserId: userId, callType: 'audio' });
-          }
+          setCallStatus('missed');
+          setErrorMessage('No answer');
+          socketService.missedCall({ targetUserId: userId, callType: 'audio' });
+          setTimeout(() => navigation.goBack(), 2000);
         }, 30000);
       } else {
         setCallStatus('failed');
@@ -147,6 +177,13 @@ export default function VoiceCallScreen() {
       setTimeout(() => navigation.goBack(), 1000);
     });
 
+    socketService.on('call:busy', () => {
+      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      setCallStatus('busy');
+      setErrorMessage('User is busy');
+      setTimeout(() => navigation.goBack(), 2500);
+    });
+
     return () => {
       if (durationInterval.current) clearInterval(durationInterval.current);
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
@@ -158,8 +195,19 @@ export default function VoiceCallScreen() {
       socketService.off('call:accepted');
       socketService.off('call:declined');
       socketService.off('call:ended');
+      socketService.off('call:busy');
     };
   }, []);
+
+  // Ringing tone effect
+  useEffect(() => {
+    if (callStatus === 'ringing' && !isIncoming) {
+      playRingtone();
+    } else {
+      stopRingtone();
+    }
+    return () => { stopRingtone(); };
+  }, [callStatus]);
 
   useEffect(() => {
     if (callStatus === 'connected' && callData && !agoraJoined.current) {
@@ -235,6 +283,7 @@ export default function VoiceCallScreen() {
   const handleEndCall = () => {
     const wasConnected = callStatus === 'connected';
     setCallStatus('ended');
+    stopRingtone();
     if (Platform.OS === 'web') {
       agoraService.leave();
     } else {
@@ -256,6 +305,7 @@ export default function VoiceCallScreen() {
 
   const handleDeclineCall = async () => {
     setCallStatus('declined');
+    stopRingtone();
     socketService.declineCall({ callerId, callType: 'audio' });
     setTimeout(() => navigation.goBack(), 1500);
   };
@@ -268,12 +318,15 @@ export default function VoiceCallScreen() {
 
   const getStatusText = () => {
     switch (callStatus) {
+      case 'idle': return '';
       case 'initializing': return 'Initializing...';
       case 'connecting': return 'Connecting...';
       case 'ringing': return isIncoming ? 'Incoming call...' : 'Ringing...';
       case 'connected': return formatDuration(callDuration);
       case 'ended': return 'Call ended';
       case 'declined': return 'Call declined';
+      case 'busy': return 'User is busy';
+      case 'missed': return 'No answer';
       case 'failed': return errorMessage || 'Call failed';
       default: return '';
     }
@@ -343,11 +396,23 @@ export default function VoiceCallScreen() {
           <SafeImage source={{ uri: userPhoto || 'https://via.placeholder.com/150' }} style={styles.avatar} />
         </Animated.View>
         <ThemedText style={styles.userName}>{userName || 'Unknown'}</ThemedText>
-        <ThemedText style={styles.callStatus}>{getStatusText()}</ThemedText>
+        <ThemedText style={styles.callStatusText}>{getStatusText()}</ThemedText>
         {callStatus === 'ringing' && !isIncoming && (
           <View style={styles.ringingIndicator}>
-            <MaterialCommunityIcons name="bell-ring" size={24} color="#FFD700" />
-            <ThemedText style={styles.ringingText}>Waiting for answer...</ThemedText>
+            <MaterialCommunityIcons name="phone-ring" size={24} color="#FFD700" />
+            <ThemedText style={styles.ringingText}>Ringing...</ThemedText>
+          </View>
+        )}
+        {callStatus === 'busy' && (
+          <View style={[styles.ringingIndicator, { backgroundColor: 'rgba(255, 82, 82, 0.15)' }]}>
+            <Ionicons name="call" size={24} color="#FF5252" style={{ transform: [{ rotate: '135deg' }] }} />
+            <ThemedText style={[styles.ringingText, { color: '#FF5252' }]}>User is on another call</ThemedText>
+          </View>
+        )}
+        {callStatus === 'missed' && (
+          <View style={[styles.ringingIndicator, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
+            <Ionicons name="call" size={24} color="#FF9800" style={{ transform: [{ rotate: '135deg' }] }} />
+            <ThemedText style={[styles.ringingText, { color: '#FF9800' }]}>No answer</ThemedText>
           </View>
         )}
       </Animated.View>
@@ -358,10 +423,20 @@ export default function VoiceCallScreen() {
               <LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.callActionGradient}>
                 <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
               </LinearGradient>
+              <ThemedText style={styles.actionLabel}>Decline</ThemedText>
             </Pressable>
             <Pressable onPress={handleAcceptCall}>
               <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.callActionGradient}>
                 <Ionicons name="call" size={32} color="#FFF" />
+              </LinearGradient>
+              <ThemedText style={styles.actionLabel}>Accept</ThemedText>
+            </Pressable>
+          </View>
+        ) : callStatus === 'busy' || callStatus === 'missed' || callStatus === 'declined' || callStatus === 'ended' ? (
+          <View style={styles.connectedControls}>
+            <Pressable style={styles.endCallButton} onPress={() => navigation.goBack()}>
+              <LinearGradient colors={['#555', '#333']} style={styles.endCallGradient}>
+                <Ionicons name="close" size={32} color="#FFF" />
               </LinearGradient>
             </Pressable>
           </View>
@@ -398,12 +473,13 @@ const styles = StyleSheet.create({
   avatarGlow: { position: 'absolute', width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(74, 144, 226, 0.3)' },
   avatar: { width: 150, height: 150, borderRadius: 75, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
   userName: { fontSize: 28, fontWeight: '700', color: '#FFF', marginBottom: 8 },
-  callStatus: { fontSize: 18, color: 'rgba(255,255,255,0.7)', marginBottom: 32 },
+  callStatusText: { fontSize: 18, color: 'rgba(255,255,255,0.7)', marginBottom: 32 },
   ringingIndicator: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, backgroundColor: 'rgba(255, 215, 0, 0.15)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   ringingText: { color: '#FFD700', fontWeight: '600', fontSize: 14 },
   controls: { paddingHorizontal: 24 },
   incomingCallButtons: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
   callActionGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  actionLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, textAlign: 'center', marginTop: 8 },
   endCallButton: { alignItems: 'center' },
   endCallGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
   connectedControls: { alignItems: 'center', gap: 32 },

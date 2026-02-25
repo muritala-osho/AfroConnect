@@ -86,7 +86,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           const fetchedStories = response.data.stories;
           setStories(fetchedStories);
           if (fetchedStories.length > 0) {
-            markStoryViewed(fetchedStories[0]?._id);
+            markStoryViewed(fetchedStories[0]._id);
           }
         } else if (!response.success) {
           const errorMsg = (response as any).message || "Unable to view stories";
@@ -123,23 +123,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     };
   }, [currentIndex, stories.length, paused]);
 
-  const api = useApi();
-  const markStoryViewed = async (storyId: string) => {
-    if (!token || !storyId) return;
-    try {
-      await post(`/stories/${storyId}/view`, {}, token);
-    } catch (error) {
-      console.log("View tracking error:", error);
-    }
-  };
-
-  const isOwnStory = 
-    String(userId) === String(user?.id) || 
-    String(userId) === String((user as any)?._id) ||
-    (route.params as any)?.isOwnStory === true;
   
-  // Debug logging
-  console.log('[StoryViewer] isOwnStory check:', { userId, 'user.id': user?.id, 'user._id': (user as any)?._id, isOwnStory, 'route.isOwnStory': (route.params as any)?.isOwnStory });
 
   const handleDeleteStory = async () => {
     if (!token || !currentStory) return;

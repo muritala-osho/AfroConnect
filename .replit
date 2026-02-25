@@ -20,6 +20,7 @@ args = "AfroConnect All-in-One"
 [[workflows.workflow]]
 name = "AfroConnect All-in-One"
 author = "agent"
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -31,7 +32,7 @@ outputType = "webview"
 
 [[ports]]
 localPort = 3001
-externalPort = 3003
+externalPort = 80
 
 [[ports]]
 localPort = 3002
@@ -39,20 +40,12 @@ externalPort = 3002
 
 [[ports]]
 localPort = 3003
-externalPort = 3000
+externalPort = 3003
 
 [[ports]]
 localPort = 5000
-externalPort = 80
+externalPort = 5000
 
 [[ports]]
 localPort = 8081
 externalPort = 8081
-
-[[ports]]
-localPort = 8082
-externalPort = 3001
-
-[[ports]]
-localPort = 19006
-externalPort = 4200

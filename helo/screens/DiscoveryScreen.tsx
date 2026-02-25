@@ -55,6 +55,7 @@ interface DiscoverUser {
   id: string;
   name: string;
   age: number | null;
+  livingIn?: string;
   bio: string;
   photos: any[];
   interests: string[];

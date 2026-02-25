@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import { useAuth } from '@/hooks/useAuth';
 import socketService from '@/services/socket';
 import { useNavigation } from '@react-navigation/native';
@@ -27,9 +28,40 @@ export default function IncomingCallHandler() {
   const navigation = useNavigation<any>();
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [inActiveCall, setInActiveCall] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(-200)).current;
   const soundRef = useRef<any>(null);
+  const ringtoneRef = useRef<Audio.Sound | null>(null);
+
+  const playRingtone = async () => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+      });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+        { shouldPlay: true, isLooping: true, volume: 0.8 }
+      );
+      ringtoneRef.current = sound;
+    } catch (err) {
+      console.log('Ringtone play error:', err);
+    }
+  };
+
+  const stopRingtoneSound = async () => {
+    try {
+      if (ringtoneRef.current) {
+        await ringtoneRef.current.stopAsync();
+        await ringtoneRef.current.unloadAsync();
+        ringtoneRef.current = null;
+      }
+    } catch (err) {
+      console.log('Ringtone stop error:', err);
+    }
+  };
 
   useEffect(() => {
     const myUserId = (user as any)?._id || user?.id;
@@ -37,12 +69,19 @@ export default function IncomingCallHandler() {
 
     const handleIncomingCall = async (data: IncomingCallData) => {
       console.log('Incoming call received:', data);
+
+      // If already in a call or viewing another incoming call, auto-decline
+      if (inActiveCall || isVisible) {
+        console.log('User is busy, auto-declining call from', data.callerId);
+        socketService.declineCall({ callerId: data.callerId, callType: data.callData?.callType || 'audio' });
+        return;
+      }
+
       setIncomingCall(data);
       setIsVisible(true);
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       
-      // Send local notification for the incoming call
       const callType = data.callData?.callType || 'voice';
       const { sendLocalNotification } = require('@/services/notifications');
       sendLocalNotification(
@@ -50,6 +89,9 @@ export default function IncomingCallHandler() {
         `${data.callerInfo?.name || 'Someone'} is calling you...`,
         { type: 'call', callerId: data.callerId }
       );
+
+      // Play ringtone
+      await playRingtone();
       
       Animated.spring(slideAnim, {
         toValue: 0,
@@ -65,12 +107,10 @@ export default function IncomingCallHandler() {
         ])
       ).start();
 
-      // Continuous haptic feedback while ringing
       const hapticInterval = setInterval(() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }, 2000);
       
-      // Store interval to clear later
       soundRef.current = { hapticInterval };
     };
 
@@ -79,20 +119,15 @@ export default function IncomingCallHandler() {
     const handleCallEnded = () => {
       setIsVisible(false);
       setIncomingCall(null);
-      if (soundRef.current?.hapticInterval) {
-        clearInterval(soundRef.current.hapticInterval);
-        soundRef.current = null;
-      }
+      setInActiveCall(false);
+      stopRingtone();
     };
     socketService.on('call:ended', handleCallEnded);
 
     const handleCallAccepted = () => {
       setIsVisible(false);
       setIncomingCall(null);
-      if (soundRef.current?.hapticInterval) {
-        clearInterval(soundRef.current.hapticInterval);
-        soundRef.current = null;
-      }
+      stopRingtone();
     };
     socketService.on('call:accepted', handleCallAccepted);
 
@@ -130,13 +165,14 @@ export default function IncomingCallHandler() {
       if (unsubscribe) unsubscribe();
       stopRingtone();
     };
-  }, [user?.id, token]);
+  }, [user?.id, token, inActiveCall, isVisible]);
 
-  const stopRingtone = () => {
+  const stopRingtone = async () => {
     if (soundRef.current?.hapticInterval) {
       clearInterval(soundRef.current.hapticInterval);
       soundRef.current = null;
     }
+    await stopRingtoneSound();
   };
 
   const handleAccept = async () => {
@@ -145,13 +181,13 @@ export default function IncomingCallHandler() {
     await stopRingtone();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    // Send accept event to caller BEFORE navigating
     socketService.acceptCall({ 
       callerId: incomingCall.callerId, 
       callData: incomingCall.callData 
     });
     
     setIsVisible(false);
+    setInActiveCall(true);
     
     const callType = incomingCall.callData?.callType || 'voice';
     const screenName = callType === 'video' ? 'VideoCall' : 'VoiceCall';
@@ -163,7 +199,7 @@ export default function IncomingCallHandler() {
       isIncoming: true,
       callData: incomingCall.callData,
       callerId: incomingCall.callerId,
-      callAccepted: true, // Mark that call was already accepted
+      callAccepted: true,
     });
     
     setIncomingCall(null);
@@ -221,7 +257,7 @@ export default function IncomingCallHandler() {
                 <ThemedText style={styles.callerName}>
                   {incomingCall.callerInfo?.name || 'Unknown'}
                 </ThemedText>
-                <ThemedText style={styles.callType}>
+                <ThemedText style={styles.callTypeText}>
                   Incoming {isVideoCall ? 'video' : 'voice'} call...
                 </ThemedText>
               </View>
@@ -284,7 +320,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  callType: {
+  callTypeText: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.7)',
     marginTop: 4,

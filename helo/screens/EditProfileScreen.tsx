@@ -104,6 +104,7 @@ const PETS_OPTIONS = [
   { value: 'none', label: 'No pets' },
   { value: 'dog', label: 'Dog' },
   { value: 'cat', label: 'Cat' },
+  { value: 'parrot', label: 'Parrot' },
   { value: 'other', label: 'Other' },
   { value: 'allergic', label: 'Allergic to pets' },
 ];
@@ -128,12 +129,30 @@ const INTEREST_OPTIONS = [
   { id: 'movies', label: 'Movies', icon: 'film' },
   { id: 'reading', label: 'Reading', icon: 'book' },
   { id: 'photography', label: 'Photography', icon: 'camera' },
-  { id: 'dancing', label: 'Dancing', icon: ' footsteps' },
+  { id: 'dancing', label: 'Dancing', icon: 'footsteps' },
   { id: 'coding', label: 'Coding', icon: 'code-slash' },
   { id: 'sports', label: 'Sports', icon: 'basketball' },
   { id: 'fashion', label: 'Fashion', icon: 'shirt' },
   { id: 'nature', label: 'Nature', icon: 'leaf' },
   { id: 'technology', label: 'Technology', icon: 'hardware-chip' },
+  { id: 'business', label: 'Business', icon: 'briefcase'},
+  { id: 'outdoors', label: 'Outdoors', icon: 'road'}, 
+  { id: 'socializing', label: 'Socializing', icon: 'people'},
+  { id: 'wellness', label: 'Wellness', icon: 'heart-half'},
+  { id: 'creativity', label: 'Creativity', icon: 'brush'},
+  { id: 'values', label: 'Values', icon: 'diamond'},
+  { id: 'food', label: 'Food', icon: 'fast-food'},
+];
+
+const relationshipGoals = [ 
+  { id: 'short_term', label: 'Short-term relationship', icon: 'heart'},
+  { id: 'long-term', label: 'Long-term relationship', icon: 'heart'},
+  { id: 'friendship', label: 'Friendship', icon: 'people'},
+  { id: 'networking', label: 'Networking', icon: 'briefcase'},
+  { id: 'casual', label: 'Casual dating', icon: 'flame'},
+  { id: 'marriage', label: 'Marriage', icon: 'home'},
+  { id: 'open_to_everything', label: 'Open to everything'},
+  { id: 'not_sure_yet', label: 'Not sure yet'},
 ];
 
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
@@ -174,6 +193,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [petsModalVisible, setPetsModalVisible] = useState(false);
   const [relationshipStatusModalVisible, setRelationshipStatusModalVisible] = useState(false);
   const [interestsModalVisible, setInterestsModalVisible] = useState(false);
+  const [relationshipGoalsModalVisible,setRelationshipGoalsModalVisible] = useState(false);
+  const [selectedGoals, setSelectedGoals] = useState<string[]>(user?.relationshipGoals || []);
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -198,6 +219,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           if (data.relationshipStatus) setRelationshipStatus(data.relationshipStatus);
           if (data.personalityType) setPersonalityType(data.personalityType);
           if (data.interests) setInterests(data.interests);
+          if (data.relationshipGoals) setRelationshipGoals(data.relationshipGoals);
         }
       } catch (e) {
         console.error("Failed to load edit profile draft:", e);
@@ -236,6 +258,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           personalityType: personalityType.trim() || undefined,
         },
         interests: interests,
+        relationshipGoals: selectedGoals,
         language: user?.language || 'en'
       } as any);
       
@@ -478,6 +501,10 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         </View>
       </ScreenKeyboardAwareScrollView>
 
+      
+
+      
+
       <OptionModal visible={lookingForModalVisible} onClose={() => setLookingForModalVisible(false)} title="Looking For" options={LOOKING_FOR_OPTIONS} selectedValue={lookingFor} onSelect={setLookingFor} />
       <OptionModal visible={smokingModalVisible} onClose={() => setSmokingModalVisible(false)} title="Smoking" options={SMOKING_OPTIONS} selectedValue={smoking} onSelect={setSmoking} />
       <OptionModal visible={drinkingModalVisible} onClose={() => setDrinkingModalVisible(false)} title="Drinking" options={DRINKING_OPTIONS} selectedValue={drinking} onSelect={setDrinking} />
@@ -488,8 +515,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={petsModalVisible} onClose={() => setPetsModalVisible(false)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
       <OptionModal visible={relationshipStatusModalVisible} onClose={() => setRelationshipStatusModalVisible(false)} title="Relationship Status" options={RELATIONSHIP_STATUS_OPTIONS} selectedValue={relationshipStatus} onSelect={setRelationshipStatus} />
       
-      <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
-
+      <InterestModal visible={relationshipGoalsModalVisible} onClose={() => setRelationshipGoalsModalVisible(false)} options={relationshipGoals} />
       <AlertComponent />
     </View>
   );

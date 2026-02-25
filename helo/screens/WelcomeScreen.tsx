@@ -173,9 +173,10 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 
                 <ThemedText style={styles.sectionTitle}>Connect with Us</ThemedText>
                 <View style={styles.socialRow}>
-                  <Pressable onPress={() => openSocial('https://instagram.com/afroconnect')}><Ionicons name="logo-instagram" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial('https://instagram.com/afro.connect1')}><Ionicons name="logo-instagram" size={32} color={theme.primary} /></Pressable>
                   <Pressable onPress={() => openSocial('https://twitter.com/afroconnect')}><Ionicons name="logo-twitter" size={32} color={theme.primary} /></Pressable>
                   <Pressable onPress={() => openSocial('https://linkedin.com/company/afroconnect')}><Ionicons name="logo-linkedin" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial('https://tiktok.com/@afroconnect1')}><Ionicons name="logo-tiktok" size={32} color={theme.primary} /></Pressable>
                 </View>
 
                 <ThemedText style={styles.sectionTitle}>Contact Us</ThemedText>

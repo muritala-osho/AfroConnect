@@ -113,6 +113,12 @@ This architecture enables unified URL handling where the gateway proxies API req
 - In-app video player: replaced external browser with expo-av Video modal for in-app playback with native controls
 - Reply messages: backend chat route now properly stores replyTo subdocument and videoUrl fields
 - Online/offline status: fixed field name mismatch (onlineStatus vs online), conversations endpoint now cross-references in-memory onlineUsers Map, socket setUserOnline waits for connection, server emits user:status on token auth
+- Call states: IDLE, CALLING/CONNECTING, RINGING, CONNECTED, ENDED, DECLINED, BUSY, MISSED with proper state transitions
+- Ringing tone: caller hears looping ringtone during RINGING state (expo-av Audio from mixkit), stops on connect/decline/end
+- Busy handling: backend checks target socket for activeCall/pendingCall, emits call:busy; caller sees "User is busy" UI; IncomingCallHandler auto-declines second calls
+- Call state tracking: backend marks both caller and callee sockets with activeCall on accept, clears on end/decline/disconnect
+- Agora audio fix: agora-call.html subscribe handler improved with try-catch and explicit audio/video track play logging
+- Stories open visibility: restricted to matched users who have exchanged at least one chat message (+ self); /active endpoint checks Match + Message collections
 
 ## External Dependencies
 

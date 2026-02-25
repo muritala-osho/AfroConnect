@@ -429,6 +429,17 @@ io.on('connection', (socket) => {
     const { targetUserId, callData, callerInfo } = data;
     if (targetUserId) {
       const callerId = socket.userId || callerInfo?.id;
+
+      // Check if target user is busy (already in a call)
+      const targetSocketId = onlineUsers.get(targetUserId);
+      if (targetSocketId) {
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket && (targetSocket.activeCall || targetSocket.pendingCall)) {
+          io.to(callerId).emit('call:busy', { targetUserId });
+          console.log(`User ${targetUserId} is busy, notifying ${callerId}`);
+          return;
+        }
+      }
       
       socket.pendingCall = {
         targetUserId,
@@ -474,12 +485,25 @@ io.on('connection', (socket) => {
   socket.on('call:accept', (data) => {
     const { callerId, callData } = data;
     if (callerId) {
-      // Store call start time for duration calculation
       socket.activeCall = {
         callerId,
         startTime: Date.now(),
         callType: callData?.callType || 'audio'
       };
+
+      // Also mark caller socket as in active call
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        const callerSocket = io.sockets.sockets.get(callerSocketId);
+        if (callerSocket) {
+          callerSocket.activeCall = {
+            callerId: socket.userId,
+            startTime: Date.now(),
+            callType: callData?.callType || 'audio'
+          };
+          callerSocket.pendingCall = null;
+        }
+      }
       
       io.to(callerId).emit('call:accepted', {
         acceptedBy: socket.userId,
@@ -493,8 +517,15 @@ io.on('connection', (socket) => {
   socket.on('call:decline', async (data) => {
     const { callerId, callType } = data;
     if (callerId) {
-      // Save declined call message
       await saveCallMessage(callerId, socket.userId, callType || 'audio', 'declined');
+
+      // Clear pending call on both sides
+      socket.pendingCall = null;
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        const callerSocket = io.sockets.sockets.get(callerSocketId);
+        if (callerSocket) callerSocket.pendingCall = null;
+      }
       
       io.to(callerId).emit('call:declined', {
         declinedBy: socket.userId
@@ -510,11 +541,21 @@ io.on('connection', (socket) => {
       const callerId = socket.userId;
       
       if (wasAnswered && duration) {
-        // Completed call with duration
         await saveCallMessage(callerId, targetUserId, callType || 'audio', 'completed', duration);
       } else if (!wasAnswered) {
-        // Missed call (caller hung up before answer)
         await saveCallMessage(callerId, targetUserId, callType || 'audio', 'missed');
+      }
+
+      // Clear active call state for both parties
+      socket.activeCall = null;
+      socket.pendingCall = null;
+      const targetSocketId = onlineUsers.get(targetUserId);
+      if (targetSocketId) {
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) {
+          targetSocket.activeCall = null;
+          targetSocket.pendingCall = null;
+        }
       }
       
       io.to(targetUserId).emit('call:ended', {

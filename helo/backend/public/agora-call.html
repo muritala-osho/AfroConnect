@@ -46,24 +46,38 @@
       client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
       client.on('user-published', async (user, mediaType) => {
-        await client.subscribe(user, mediaType);
-        if (mediaType === 'audio' && user.audioTrack) {
-          user.audioTrack.play();
+        try {
+          await client.subscribe(user, mediaType);
+          console.log('Subscribed to', mediaType, 'from user', user.uid);
+          if (mediaType === 'audio') {
+            if (user.audioTrack) {
+              user.audioTrack.play();
+              console.log('Playing remote audio track');
+            }
+          }
+          if (mediaType === 'video') {
+            if (user.videoTrack) {
+              document.getElementById('status').classList.add('hidden');
+              user.videoTrack.play('remote-video');
+              console.log('Playing remote video track');
+            }
+          }
+          sendToRN('remote-user-joined', { uid: user.uid, mediaType });
+        } catch (subErr) {
+          console.error('Subscribe error:', subErr);
+          sendToRN('error', { message: 'Failed to subscribe: ' + subErr.message });
         }
-        if (mediaType === 'video' && user.videoTrack) {
-          document.getElementById('status').classList.add('hidden');
-          user.videoTrack.play('remote-video');
-        }
-        sendToRN('remote-user-joined', { uid: user.uid });
       });
 
       client.on('user-unpublished', (user, mediaType) => {
+        console.log('User unpublished', mediaType, user.uid);
         if (mediaType === 'video') {
           sendToRN('remote-user-left', { uid: user.uid });
         }
       });
 
       client.on('user-left', (user) => {
+        console.log('User left', user.uid);
         sendToRN('remote-user-left', { uid: user.uid });
       });
 

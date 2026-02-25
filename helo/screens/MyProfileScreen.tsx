@@ -68,6 +68,7 @@ const EDUCATION_LABELS: { [key: string]: string } = {
   prefer_not_to_say: 'Prefer not to say',
 };
 
+
 const LIFESTYLE_LABELS: { [key: string]: string } = {
   never: 'Never',
   socially: 'Socially',

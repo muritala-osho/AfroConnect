@@ -363,7 +363,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             onPress={() => setContactModalVisible(true)} 
           />
           <SettingItem 
-            icon="heart" 
+            icon="phone" 
             label="Help & Support" 
             onPress={() => Linking.openURL('mailto:support@afroconnect.app')} 
           />

@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const Story = require('../models/Story');
 const Match = require('../models/Match');
 const User = require('../models/User');
+const Message = require('../models/Message');
 
 // @route   POST /api/stories
 // @desc    Create a new story
@@ -48,23 +49,50 @@ router.post('/', protect, async (req, res) => {
 });
 
 // @route   GET /api/stories/active
-// @desc    Get users with active stories (matches + self)
+// @desc    Get stories from matched users who have chatted + self
 // @access  Private
 router.get('/active', protect, async (req, res) => {
   try {
-    // Get current user's blocked list
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
-    const blockedUserIds = currentUser?.blockedUsers || [];
+    const blockedUserIds = (currentUser?.blockedUsers || []).map(id => id.toString());
     
-    // Also exclude users who blocked the current user
     const usersWhoBlockedMe = await User.find({
       blockedUsers: req.user._id
     }).select('_id');
     const allBlockedIds = [...blockedUserIds, ...usersWhoBlockedMe.map(u => u._id.toString())];
 
-    // Get active stories from all users except blocked ones
+    // Get active matches for this user
+    const matches = await Match.find({
+      users: req.user._id,
+      status: 'active'
+    }).lean();
+
+    const matchedUserIds = matches.map(m =>
+      m.users.find(id => id.toString() !== req.user._id.toString())
+    ).filter(Boolean);
+
+    // Check which matches have at least one message exchanged
+    const matchIds = matches.map(m => m._id);
+    const matchesWithMessages = await Message.aggregate([
+      { $match: { matchId: { $in: matchIds } } },
+      { $group: { _id: '$matchId' } }
+    ]);
+    const matchIdsWithChat = new Set(matchesWithMessages.map(m => m._id.toString()));
+
+    // Filter to only matched users who have chatted
+    const chattedUserIds = [];
+    for (const match of matches) {
+      if (matchIdsWithChat.has(match._id.toString())) {
+        const otherUserId = match.users.find(id => id.toString() !== req.user._id.toString());
+        if (otherUserId) chattedUserIds.push(otherUserId);
+      }
+    }
+
+    // Include self + chatted matched users, exclude blocked
+    const allowedUserIds = [req.user._id, ...chattedUserIds];
+
     const stories = await Story.find({
-      user: { $nin: allBlockedIds },
+      user: { $in: allowedUserIds, $nin: allBlockedIds },
       expiresAt: { $gt: Date.now() }
     })
     .populate('user', 'name photos')
