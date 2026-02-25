@@ -1471,12 +1471,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     <ThemedText style={styles.profileAge}>{currentUser.age}</ThemedText>
                   )}
                   {(currentUser as any).premium?.isActive && (
-                    <PremiumBadge size="small" style={{ marginLeft: 6 }} />
+                    <View style={{ alignSelf: 'center', marginLeft: 6 }}>
+                      <PremiumBadge size="small" />
+                    </View>
                   )}
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 
-                      style={{ width: 24, height: 24, marginLeft: 6 }} 
+                      style={{ width: 22, height: 22, marginLeft: 6, alignSelf: 'center' }} 
                       contentFit="contain"
                     />
                   )}
@@ -1949,21 +1951,27 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
+    flexWrap: "wrap",
     marginBottom: 8,
+    gap: 2,
   },
   profileName: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "800",
     color: "#FFF",
-    marginRight: 4,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   profileAge: {
-    fontSize: 26,
-    fontWeight: "400",
-    color: "rgba(255,255,255,0.85)",
-    marginLeft: 2,
-    marginRight: 4,
+    fontSize: 28,
+    fontWeight: "300",
+    color: "rgba(255,255,255,0.9)",
+    marginLeft: 6,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   locationRow: {
     flexDirection: "row",

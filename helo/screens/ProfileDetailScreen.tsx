@@ -307,15 +307,21 @@ export default function ProfileDetailScreen() {
           <View style={styles.nameOverlay}>
             <View style={styles.nameRow}>
               <ThemedText style={styles.name}>
-                {user.name}{user.age ? `, ${user.age}` : ''}
+                {user.name}
               </ThemedText>
+              {user.age ? (
+                <ThemedText style={styles.nameAge}>{user.age}</ThemedText>
+              ) : null}
               {user.premium?.isActive && (
-                <PremiumBadge size="medium" />
+                <View style={{ alignSelf: 'center', marginLeft: 6 }}>
+                  <PremiumBadge size="medium" />
+                </View>
               )}
               {user.verified && (
                 <Image
                   source={require("@/assets/icons/verified-tick.png")}
-                  style={{ width: 24, height: 24, marginLeft: 6 }}
+                  style={{ width: 22, height: 22, marginLeft: 6, alignSelf: 'center' }}
+                  resizeMode="contain"
                 />
               )}
             </View>
@@ -639,15 +645,26 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    flexWrap: 'wrap',
+    gap: 2,
   },
   name: {
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
     color: '#FFF',
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+  },
+  nameAge: {
+    fontSize: 28,
+    fontWeight: '300',
+    color: 'rgba(255,255,255,0.9)',
+    marginLeft: 8,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   premiumBadge: {
     width: 24,
