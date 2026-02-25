@@ -1464,12 +1464,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
               <View style={styles.cardInfoOverlay}>
                 <View style={styles.nameRow}>
-                  <ThemedText style={styles.profileName} numberOfLines={1}>
-                    {currentUser.name?.split(' ')[0]}{currentUser.age != null ? `, ` : ''}
+                  <ThemedText style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit={false}>
+                    {currentUser.name?.split(' ')[0]}
+                    {currentUser.age != null && (
+                      <ThemedText style={styles.profileAge}>, {currentUser.age}</ThemedText>
+                    )}
                   </ThemedText>
-                  {currentUser.age != null && (
-                    <ThemedText style={styles.profileAge}>{currentUser.age}</ThemedText>
-                  )}
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 
@@ -1648,8 +1648,9 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 2,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
+    paddingLeft: 4,
   },
   headerRight: {
     flex: 1,
@@ -1958,6 +1959,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
     color: "#FFF",
+    flexShrink: 1,
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,

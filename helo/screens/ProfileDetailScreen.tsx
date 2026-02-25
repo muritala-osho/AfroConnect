@@ -306,12 +306,12 @@ export default function ProfileDetailScreen() {
 
           <View style={styles.nameOverlay}>
             <View style={styles.nameRow}>
-              <ThemedText style={styles.name}>
-                {user.name}{user.age ? ', ' : ''}
+              <ThemedText style={styles.name} numberOfLines={1}>
+                {user.name}
+                {user.age ? (
+                  <ThemedText style={styles.nameAge}>, {user.age}</ThemedText>
+                ) : null}
               </ThemedText>
-              {user.age ? (
-                <ThemedText style={styles.nameAge}>{user.age}</ThemedText>
-              ) : null}
               {user.verified && (
                 <Image
                   source={require("@/assets/icons/verified-tick.png")}
@@ -649,6 +649,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: '800',
     color: '#FFF',
+    flexShrink: 1,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
