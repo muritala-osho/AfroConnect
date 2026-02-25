@@ -52,6 +52,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const themeOptions: { value: ThemeMode; label: string; icon: string }[] = [
     { value: 'light', label: 'Light', icon: 'sun' },
     { value: 'dark', label: 'Dark', icon: 'moon' },
+    { value: 'grey', label: 'Grey', icon: 'cloud' },
     { value: 'system', label: 'System', icon: 'monitor' },
   ];
 
@@ -329,6 +330,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             label="Theme" 
             value={themeOptions.find(t => t.value === themeMode)?.label} 
             onPress={() => setThemeModalVisible(true)} 
+          />
+          <SettingItem 
+            icon="sliders" 
+            label="Customize Interface" 
+            onPress={() => navigation.navigate('CustomizeInterface')} 
           />
           <SettingItem 
             icon="globe" 

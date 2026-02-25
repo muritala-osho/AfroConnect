@@ -142,8 +142,7 @@ const userSchema = new mongoose.Schema({
   },
   expireAt: {
     type: Date,
-    index: { expires: '30m' },
-    // Only set this for unverified users
+    index: { expires: '24h' },
     default: function() {
       return this.emailVerified ? undefined : new Date();
     }
@@ -493,6 +492,9 @@ userSchema.index({ email: 1 }, { unique: true });
 
 // Hash password before saving
 userSchema.pre('save', async function() {
+  if (this.emailVerified && this.expireAt) {
+    this.expireAt = undefined;
+  }
   if (!this.isModified('password')) {
     return;
   }

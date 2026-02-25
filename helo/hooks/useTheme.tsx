@@ -3,7 +3,7 @@ import { useColorScheme as useSystemColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors } from "@/constants/theme";
 
-export type ThemeMode = "light" | "dark" | "system";
+export type ThemeMode = "light" | "dark" | "grey" | "system";
 
 const THEME_STORAGE_KEY = "app_theme_preference";
 
@@ -30,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const loadThemePreference = async () => {
     try {
       const stored = await AsyncStorage.getItem(THEME_STORAGE_KEY);
-      if (stored && (stored === "light" || stored === "dark" || stored === "system")) {
+      if (stored && (stored === "light" || stored === "dark" || stored === "grey" || stored === "system")) {
         setThemeModeState(stored as ThemeMode);
       }
     } catch (error) {
@@ -51,7 +51,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const effectiveTheme = themeMode === "system" ? systemColorScheme : themeMode;
   const isDark = effectiveTheme === "dark";
-  const theme = Colors[isDark ? "dark" : "light"];
+  const themeKey = themeMode === "grey" ? "grey" : (isDark ? "dark" : "light");
+  const theme = Colors[themeKey];
 
   return (
     <ThemeContext.Provider value={{ theme, themeMode, isDark, setThemeMode }}>

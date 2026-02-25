@@ -13,8 +13,6 @@ router.post('/', protect, async (req, res) => {
   try {
     const { type, content, textContent, backgroundColor, mediaUrl, thumbnail, durationHours } = req.body;
 
-    const bgColor = Array.isArray(backgroundColor) ? backgroundColor[0] : backgroundColor;
-    
     // Default 24 hours
     let hours = 24;
     
@@ -31,7 +29,7 @@ router.post('/', protect, async (req, res) => {
       type,
       content: content || (type === 'text' ? textContent : (type === 'image' ? 'Photo story' : 'Video story')),
       textContent,
-      backgroundColor: bgColor,
+      backgroundColor: backgroundColor,
       mediaUrl,
       imageUrl: mediaUrl,
       thumbnail,

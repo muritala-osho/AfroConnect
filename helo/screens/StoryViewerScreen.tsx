@@ -82,6 +82,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
 
   const progressAnim = useRef(new Animated.Value(0)).current;
   const progressAnimation = useRef<Animated.CompositeAnimation | null>(null);
+  const videoDurationSet = useRef(false);
 
   useEffect(() => {
     if (!token) return;
@@ -124,6 +125,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   }, [userId, token, user?.id]);
 
   useEffect(() => {
+    videoDurationSet.current = false;
     if (stories.length > 0 && !paused) {
       startProgress();
     }
@@ -427,7 +429,8 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             shouldPlay={!paused}
             isLooping={false}
             onPlaybackStatusUpdate={(status: any) => {
-              if (status.isLoaded && status.durationMillis && videoDuration !== status.durationMillis) {
+              if (status.isLoaded && status.durationMillis && !videoDurationSet.current) {
+                videoDurationSet.current = true;
                 setVideoDuration(status.durationMillis);
                 if (!paused) {
                   startProgress(status.durationMillis);

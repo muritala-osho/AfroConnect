@@ -27,7 +27,7 @@ Preferred communication style: Simple, everyday language.
 ### Core System Design
 - **API Hook Pattern**: Custom `useApi` hook for memoized request functions.
 - **Photo Normalization**: Utility functions for various image sources.
-- **Theme and Language Systems**: Dynamic theme switching with system preference detection and multi-language support (12 languages).
+- **Theme and Language Systems**: Dynamic theme switching with 4 modes (Light, Dark, Grey, System) and multi-language support (12 languages). Interface customization screen (`helo/screens/CustomizeInterfaceScreen.tsx`) for accent color, font size, chat bubble style, compact mode, animations, and haptic feedback preferences.
 - **Error Handling**: Class-based error boundaries for UI crash recovery.
 - **Discovery and Matching**: Advanced filtering (location, preferences, excluding already matched/swiped/blocked users), interest overlap scoring (+10 per shared interest), personality matching (+30), and verified user boosts (+5). Local/Global discovery toggle: Local shows nearby matches within maxDistance, Global (premium) shows worldwide users with country picker.
 - **Block/Unblock**: Blocking removes match, all chat messages, friend requests, and swipe history for both users. Unblocking only makes user discoverable again without auto-restoring match.
@@ -38,6 +38,7 @@ Preferred communication style: Simple, everyday language.
 - **Admin Dashboard**: Full admin web panel at `/admin-web` with real API integration (`helo/admin-dashboard/services/adminApi.ts`). JWT auth with isAdmin check, auto-logout on 401. Views: DashboardHome (stats, activity monitoring), UserManagement (search, ban/unban), ReportsQueue (resolve reports), Payments (subscription revenue), IDVerification (approve/reject). Backend endpoints in `helo/backend/routes/admin.js` including DELETE stories and GET single user detail.
 - **Location Sharing**: Instagram-style map preview bubbles in chat using OpenStreetMap tiles. Shows static map thumbnail with pin overlay, address text, and tap-to-open in native maps app.
 - **Voice Recording**: Tap-to-record flow with proper cleanup on unmount, iOS audio mode reset after recording, upload to Cloudinary via `/api/upload/audio`.
+- **User TTL Safety**: Unverified users auto-deleted after 24 hours (TTL index on `expireAt`). Verified users have `expireAt` cleared on save via pre-save hook. Startup migration clears stale `expireAt` values on verified users.
 
 ## External Dependencies
 

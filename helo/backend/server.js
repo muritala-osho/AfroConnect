@@ -141,7 +141,33 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
   // For now, let's just allow it to attempt connection if it's mongo, otherwise log warning
   if (connectionString.startsWith('mongodb')) {
     mongoose.connect(connectionString)
-      .then(() => console.log('✅ MongoDB Connected'))
+      .then(async () => {
+        console.log('✅ MongoDB Connected');
+        try {
+          const User = require('./models/User');
+          const result = await User.updateMany(
+            { emailVerified: true, expireAt: { $ne: null } },
+            { $unset: { expireAt: 1 } }
+          );
+          if (result.modifiedCount > 0) {
+            console.log(`🔧 Cleared expireAt for ${result.modifiedCount} verified users`);
+          }
+          try {
+            const collection = mongoose.connection.collection('users');
+            const indexes = await collection.indexes();
+            const ttlIndex = indexes.find(idx => idx.key && idx.key.expireAt === 1 && idx.expireAfterSeconds !== undefined);
+            if (ttlIndex && ttlIndex.expireAfterSeconds !== 86400) {
+              await collection.dropIndex(ttlIndex.name);
+              await collection.createIndex({ expireAt: 1 }, { expireAfterSeconds: 86400 });
+              console.log('🔧 Updated TTL index to 24 hours');
+            }
+          } catch (idxErr) {
+            console.log('TTL index check skipped:', idxErr.message);
+          }
+        } catch (migrationErr) {
+          console.log('Migration check skipped:', migrationErr.message);
+        }
+      })
       .catch(err => {
         console.error('❌ MongoDB Connection Error:', err);
       });
