@@ -43,6 +43,7 @@ import DistanceWeatherScreen from "@/screens/DistanceWeatherScreen";
 import ProfileCommentsScreen from "@/screens/ProfileCommentsScreen";
 import MatchPopupScreen from "@/screens/MatchPopupScreen";
 import CustomizeInterfaceScreen from "@/screens/CustomizeInterfaceScreen";
+import SocialMediaScreen from "@/screens/SocialMediaScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -101,6 +102,7 @@ export type RootStackParamList = {
     appeal?: { status: string; message?: string; lastAppealRejectedAt?: string } | null;
   };
   CustomizeInterface: undefined;
+  SocialMedia: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -205,6 +207,7 @@ export default function RootNavigator() {
             <Stack.Screen name="MatchPopup" component={MatchPopupScreen} options={{ presentation: "fullScreenModal", animation: "fade" }} />
             <Stack.Screen name="AppealBanned" component={AppealBannedScreen} />
             <Stack.Screen name="CustomizeInterface" component={CustomizeInterfaceScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="SocialMedia" component={SocialMediaScreen} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

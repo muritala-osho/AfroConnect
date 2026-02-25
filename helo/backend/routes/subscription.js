@@ -3,29 +3,23 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { getUncachableStripeClient, getStripePublishableKey } = require('../stripe/stripeClient');
-const { Pool } = require('pg');
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 5
-});
-
-// Simplified PLANS for a single Premium plan with different durations
 const PREMIUM_INFO = {
   name: 'AfroConnect Premium',
   description: 'The ultimate dating experience with all features unlocked',
   features: [
-    'Unlimited swipes',
-    'See who likes you',
-    'Unlimited rewinds',
-    '10 Super Likes per day',
-    '10 Boosts per month',
-    'Advanced filters',
-    'Read receipts',
-    'Priority matching',
-    'Incognito mode',
-    'Status blocking',
-    'Nonstop calls'
+    'Unlimited Likes',
+    'See Who Likes You',
+    '10 Super Likes Daily',
+    'Unlimited Rewinds',
+    'Incognito Mode',
+    '1 Free Boost Monthly',
+    'Global Discovery',
+    'Unlimited Calls',
+    'Story Viewer Details',
+    'Advanced Filters',
+    'Premium Badge',
+    'No Distance Limits'
   ]
 };
 

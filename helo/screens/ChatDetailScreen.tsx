@@ -135,7 +135,7 @@ const SwipeableMessage = React.memo(({ item, isMe, children, onReply, themeTextS
 });
 
 export default function ChatDetailScreen({ navigation, route }: ChatDetailScreenProps) {
-  const { theme, isDark, setThemeMode } = useTheme();
+  const { theme, isDark, setThemeMode, chatBubbleStyle, hapticFeedback: hapticEnabled } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
@@ -186,6 +186,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const recordingDurationRef = useRef<number>(0);
   const soundRef = useRef<Audio.Sound | null>(null);
 
   const [typingDotAnim1] = useState(new Animated.Value(0));
@@ -607,20 +608,26 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         playsInSilentModeIOS: true,
       });
       
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
       recordingRef.current = recording;
       setIsRecording(true);
       setRecordingDuration(0);
+      recordingDurationRef.current = 0;
       
       recordingIntervalRef.current = setInterval(() => {
+        recordingDurationRef.current += 1;
         setRecordingDuration(prev => prev + 1);
       }, 1000);
       
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error('Recording error:', error);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
       Alert.alert('Error', 'Could not start recording. Please try again.');
     }
   };
@@ -638,6 +645,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       }
       
       const recording = recordingRef.current;
+      const duration = recordingDurationRef.current;
       recordingRef.current = null;
       setIsRecording(false);
       
@@ -645,10 +653,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
-      });
+      }).catch(() => {});
       const uri = recording.getURI();
       
-      if (uri && recordingDuration >= 1) {
+      if (uri && duration >= 1) {
         try {
           const formData = new FormData();
           formData.append('audio', {
@@ -656,7 +664,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             type: 'audio/m4a',
             name: 'voice_message.m4a',
           } as any);
-          formData.append('duration', recordingDuration.toString());
+          formData.append('duration', duration.toString());
           
           const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
             method: 'POST',
@@ -666,22 +674,33 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           
           const uploadData = await uploadResponse.json();
           if (uploadData.success && uploadData.url) {
-            await sendMessage(`🎤 Voice message (${recordingDuration}s)`, 'audio', { 
+            await sendMessage(`🎤 Voice message (${duration}s)`, 'audio', { 
               audioUrl: uploadData.url,
-              audioDuration: recordingDuration 
+              audioDuration: duration 
             });
           } else {
-            Alert.alert('Upload Failed', 'Could not upload voice message');
+            Alert.alert('Upload Failed', uploadData.message || 'Could not upload voice message');
           }
         } catch (error) {
+          console.error('Voice upload error:', error);
           Alert.alert('Error', 'Failed to upload voice message');
         }
+      } else if (uri && duration < 1) {
+        Alert.alert('Too Short', 'Voice message must be at least 1 second long');
       }
       
       setRecordingDuration(0);
+      recordingDurationRef.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
       console.error('Stop recording error:', error);
+      setIsRecording(false);
+      setRecordingDuration(0);
+      recordingDurationRef.current = 0;
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
     }
   };
 
@@ -694,6 +713,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     if (!recordingRef.current) {
       setIsRecording(false);
       setRecordingDuration(0);
+      recordingDurationRef.current = 0;
       return;
     }
     
@@ -705,7 +725,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           playsInSilentModeIOS: true,
-        });
+        }).catch(() => {});
       } else {
         recordingRef.current = null;
       }
@@ -715,6 +735,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     
     setIsRecording(false);
     setRecordingDuration(0);
+    recordingDurationRef.current = 0;
   };
 
   const playAudio = async (audioUrl: string, messageId: string) => {
@@ -838,15 +859,17 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         soundRef.current = null;
       }
       if (recordingRef.current) {
-        try {
-          recordingRef.current.stopAndUnloadAsync().catch(() => {});
-        } catch (e) {}
+        const rec = recordingRef.current;
         recordingRef.current = null;
+        rec.stopAndUnloadAsync()
+          .then(() => Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }))
+          .catch(() => {});
       }
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
       }
+      recordingDurationRef.current = 0;
     };
   }, []);
 
@@ -1192,6 +1215,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   styles.messageBubble,
                   isMe ? styles.myBubble : styles.theirBubble,
                   { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') },
+                  chatBubbleStyle === 'sharp' && { borderRadius: 6 },
+                  chatBubbleStyle === 'sharp' && (isMe ? { borderBottomRightRadius: 2 } : { borderBottomLeftRadius: 2 }),
+                  chatBubbleStyle === 'minimal' && { borderRadius: 14, borderBottomRightRadius: isMe ? 14 : undefined, borderBottomLeftRadius: !isMe ? 14 : undefined },
                   item.type === 'image' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
                   item.type === 'video' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
                   item.type === 'location' ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {}

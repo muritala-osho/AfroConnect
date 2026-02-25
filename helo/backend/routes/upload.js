@@ -15,7 +15,7 @@ cloudinary.config({
 const storage = multer.memoryStorage();
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/mp4a-latm', 'audio/3gpp', 'audio/3gpp2', 'audio/amr'];
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/mp4a-latm', 'audio/3gpp', 'audio/3gpp2', 'audio/amr', 'application/octet-stream'];
 const ALLOWED_FILE_TYPES = [
   'application/pdf',
   'application/msword',

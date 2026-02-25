@@ -537,9 +537,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         }
 
         const stories = await fetchStories();
-        if (stories.length > 0) {
-          setStoryUsers(stories);
-        }
+        setStoryUsers(stories);
         
         if (!search) {
           try {

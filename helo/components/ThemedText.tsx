@@ -7,6 +7,7 @@ export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
   type?: "h1" | "h2" | "h3" | "h4" | "body" | "small" | "link";
+  skipFontScale?: boolean;
 };
 
 export function ThemedText({
@@ -14,9 +15,10 @@ export function ThemedText({
   lightColor,
   darkColor,
   type = "body",
+  skipFontScale = false,
   ...rest
 }: ThemedTextProps) {
-  const { theme, isDark } = useTheme();
+  const { theme, isDark, fontScale } = useTheme();
 
   const getColor = () => {
     if (isDark && darkColor) {
@@ -35,24 +37,34 @@ export function ThemedText({
   };
 
   const getTypeStyle = () => {
-    switch (type) {
-      case "h1":
-        return Typography.h1;
-      case "h2":
-        return Typography.h2;
-      case "h3":
-        return Typography.h3;
-      case "h4":
-        return Typography.h4;
-      case "body":
-        return Typography.body;
-      case "small":
-        return Typography.small;
-      case "link":
-        return Typography.link;
-      default:
-        return Typography.body;
-    }
+    const baseStyle = (() => {
+      switch (type) {
+        case "h1":
+          return Typography.h1;
+        case "h2":
+          return Typography.h2;
+        case "h3":
+          return Typography.h3;
+        case "h4":
+          return Typography.h4;
+        case "body":
+          return Typography.body;
+        case "small":
+          return Typography.small;
+        case "link":
+          return Typography.link;
+        default:
+          return Typography.body;
+      }
+    })();
+
+    if (skipFontScale || fontScale === 1) return baseStyle;
+
+    return {
+      ...baseStyle,
+      fontSize: baseStyle.fontSize ? Math.round(baseStyle.fontSize * fontScale) : undefined,
+      lineHeight: baseStyle.lineHeight ? Math.round(baseStyle.lineHeight * fontScale) : undefined,
+    };
   };
 
   return (

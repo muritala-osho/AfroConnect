@@ -374,6 +374,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             onPress={() => Linking.openURL('mailto:support@afroconnect.app')} 
           />
           <SettingItem 
+            icon="share-2" 
+            label="Follow Us" 
+            onPress={() => navigation.navigate('SocialMedia' as any)} 
+          />
+          <SettingItem 
             icon="file-text" 
             label="Privacy Policy" 
             onPress={() => navigation.navigate('Legal', { type: 'privacy' })} 

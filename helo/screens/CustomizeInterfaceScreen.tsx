@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   StyleSheet,
@@ -9,10 +9,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
-import { useTheme, ThemeMode } from "@/hooks/useTheme";
+import { useTheme, ThemeMode, FontSizeOption, ChatBubbleStyle } from "@/hooks/useTheme";
 import { Feather } from "@expo/vector-icons";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 
 const ACCENT_COLORS = [
@@ -26,68 +25,31 @@ const ACCENT_COLORS = [
   { label: "Gold", value: "#F59E0B" },
 ];
 
-const FONT_SIZES = [
+const FONT_SIZES: { label: string; value: FontSizeOption; scale: number }[] = [
   { label: "Small", value: "small", scale: 0.85 },
   { label: "Default", value: "default", scale: 1 },
   { label: "Large", value: "large", scale: 1.15 },
 ];
 
-const CHAT_BUBBLE_STYLES = [
+const CHAT_BUBBLE_STYLES: { label: string; value: ChatBubbleStyle }[] = [
   { label: "Rounded", value: "rounded" },
   { label: "Sharp", value: "sharp" },
   { label: "Minimal", value: "minimal" },
 ];
 
-const STORAGE_KEYS = {
-  accentColor: "customize_accent_color",
-  fontSize: "customize_font_size",
-  chatBubble: "customize_chat_bubble",
-  compactMode: "customize_compact_mode",
-  animationsEnabled: "customize_animations",
-  hapticFeedback: "customize_haptic",
-};
-
 export default function CustomizeInterfaceScreen({ navigation }: any) {
-  const { theme, themeMode, setThemeMode, isDark, accentColor: themeAccent, setAccentColor: setThemeAccent } = useTheme();
+  const {
+    theme, themeMode, isDark, accentColor: themeAccent,
+    fontSize, chatBubbleStyle, compactMode, animationsEnabled, hapticFeedback,
+    setThemeMode, setAccentColor: setThemeAccent,
+    setFontSize, setChatBubbleStyle, setCompactMode, setAnimationsEnabled, setHapticFeedback,
+  } = useTheme();
   const accentColor = themeAccent || "#4A90D9";
-  const [fontSize, setFontSize] = useState("default");
-  const [chatBubble, setChatBubble] = useState("rounded");
-  const [compactMode, setCompactMode] = useState(false);
-  const [animationsEnabled, setAnimationsEnabled] = useState(true);
-  const [hapticFeedback, setHapticFeedback] = useState(true);
 
-  useEffect(() => {
-    loadPreferences();
-  }, []);
-
-  const loadPreferences = async () => {
-    try {
-      const stored = await AsyncStorage.multiGet(Object.values(STORAGE_KEYS));
-      stored.forEach(([key, value]) => {
-        if (!value) return;
-        if (key === STORAGE_KEYS.fontSize) setFontSize(value);
-        if (key === STORAGE_KEYS.chatBubble) setChatBubble(value);
-        if (key === STORAGE_KEYS.compactMode) setCompactMode(value === "true");
-        if (key === STORAGE_KEYS.animationsEnabled) setAnimationsEnabled(value === "true");
-        if (key === STORAGE_KEYS.hapticFeedback) setHapticFeedback(value === "true");
-      });
-    } catch (e) {}
-  };
-
-  const setAccentColor = (color: string) => {
-    setThemeAccent(color);
+  const doHaptic = () => {
     if (hapticFeedback && Platform.OS !== "web") {
       try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
     }
-  };
-
-  const savePreference = async (key: string, value: string) => {
-    try {
-      await AsyncStorage.setItem(key, value);
-      if (hapticFeedback && Platform.OS !== "web") {
-        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
-      }
-    } catch (e) {}
   };
 
   const themeOptions: { value: ThemeMode; label: string; icon: string }[] = [
@@ -122,7 +84,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                     { backgroundColor: theme.cardBackground, borderColor: theme.border },
                     themeMode === opt.value && { borderColor: accentColor, borderWidth: 2 },
                   ]}
-                  onPress={() => setThemeMode(opt.value)}
+                  onPress={() => { setThemeMode(opt.value); doHaptic(); }}
                 >
                   <Feather
                     name={opt.icon as any}
@@ -151,9 +113,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                     { backgroundColor: color.value },
                     accentColor === color.value && styles.colorSelected,
                   ]}
-                  onPress={() => {
-                    setAccentColor(color.value);
-                  }}
+                  onPress={() => { setThemeAccent(color.value); doHaptic(); }}
                 >
                   {accentColor === color.value && (
                     <Feather name="check" size={16} color="#FFF" />
@@ -176,16 +136,14 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                     { backgroundColor: theme.cardBackground, borderColor: theme.border },
                     fontSize === opt.value && { borderColor: accentColor, borderWidth: 2 },
                   ]}
-                  onPress={() => {
-                    setFontSize(opt.value);
-                    savePreference(STORAGE_KEYS.fontSize, opt.value);
-                  }}
+                  onPress={() => { setFontSize(opt.value); doHaptic(); }}
                 >
                   <ThemedText
                     style={[
                       styles.fontSample,
                       { color: theme.text, fontSize: 14 * opt.scale },
                     ]}
+                    skipFontScale
                   >
                     Aa
                   </ThemedText>
@@ -194,6 +152,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                       styles.fontLabel,
                       { color: fontSize === opt.value ? accentColor : theme.textSecondary },
                     ]}
+                    skipFontScale
                   >
                     {opt.label}
                   </ThemedText>
@@ -215,12 +174,9 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                     style={[
                       styles.bubbleOption,
                       { backgroundColor: theme.cardBackground, borderColor: theme.border },
-                      chatBubble === opt.value && { borderColor: accentColor, borderWidth: 2 },
+                      chatBubbleStyle === opt.value && { borderColor: accentColor, borderWidth: 2 },
                     ]}
-                    onPress={() => {
-                      setChatBubble(opt.value);
-                      savePreference(STORAGE_KEYS.chatBubble, opt.value);
-                    }}
+                    onPress={() => { setChatBubbleStyle(opt.value); doHaptic(); }}
                   >
                     <View
                       style={[
@@ -232,13 +188,14 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                         },
                       ]}
                     >
-                      <ThemedText style={styles.bubbleText}>Hello!</ThemedText>
+                      <ThemedText style={styles.bubbleText} skipFontScale>Hello!</ThemedText>
                     </View>
                     <ThemedText
                       style={[
                         styles.bubbleLabel,
-                        { color: chatBubble === opt.value ? accentColor : theme.textSecondary },
+                        { color: chatBubbleStyle === opt.value ? accentColor : theme.textSecondary },
                       ]}
+                      skipFontScale
                     >
                       {opt.label}
                     </ThemedText>
@@ -261,10 +218,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
               </View>
               <Switch
                 value={compactMode}
-                onValueChange={(val) => {
-                  setCompactMode(val);
-                  savePreference(STORAGE_KEYS.compactMode, String(val));
-                }}
+                onValueChange={(val) => { setCompactMode(val); doHaptic(); }}
                 trackColor={{ false: theme.border, true: accentColor + "80" }}
                 thumbColor={compactMode ? accentColor : theme.textTertiary}
               />
@@ -282,10 +236,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
               </View>
               <Switch
                 value={animationsEnabled}
-                onValueChange={(val) => {
-                  setAnimationsEnabled(val);
-                  savePreference(STORAGE_KEYS.animationsEnabled, String(val));
-                }}
+                onValueChange={(val) => { setAnimationsEnabled(val); doHaptic(); }}
                 trackColor={{ false: theme.border, true: accentColor + "80" }}
                 thumbColor={animationsEnabled ? accentColor : theme.textTertiary}
               />
@@ -303,10 +254,7 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
               </View>
               <Switch
                 value={hapticFeedback}
-                onValueChange={(val) => {
-                  setHapticFeedback(val);
-                  savePreference(STORAGE_KEYS.hapticFeedback, String(val));
-                }}
+                onValueChange={(val) => { setHapticFeedback(val); }}
                 trackColor={{ false: theme.border, true: accentColor + "80" }}
                 thumbColor={hapticFeedback ? accentColor : theme.textTertiary}
               />

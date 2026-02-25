@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, StyleSheet, Pressable, FlatList, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
 import Animated, { 
   useSharedValue, 
@@ -63,6 +63,74 @@ const getCountryFlag = (countryCode?: string): string => {
     .map(char => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
 };
+
+const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibilityColor, t }: {
+  item: MatchWithUser;
+  isTall: boolean;
+  isLast: boolean;
+  onPress: (userId: string) => void;
+  getCompatibilityColor: (score: number) => string;
+  t: (key: any) => string;
+}) => {
+  const photoSource = item.user.photos && item.user.photos[0] ? getPhotoSource(item.user.photos[0]) : null;
+  const score = item.compatibilityScore || 0;
+  const cardHeight = isTall ? TALL_CARD_HEIGHT : SHORT_CARD_HEIGHT;
+
+  return (
+    <Pressable
+      style={[styles.matchCard, { height: cardHeight, marginBottom: isLast ? 0 : CARD_GAP }]}
+      onPress={() => onPress(item.user.id)}
+    >
+      {photoSource ? (
+        <Image
+          source={photoSource}
+          style={styles.matchPhoto}
+          contentFit="cover"
+        />
+      ) : (
+        <View style={[styles.matchPhoto, styles.noPhotoContainer]}>
+          <Feather name="user" size={50} color="#666" />
+        </View>
+      )}
+
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.8)']}
+        style={styles.cardGradient}
+      />
+
+      <View style={[styles.matchBadge, { backgroundColor: getCompatibilityColor(score) }]}>
+        <ThemedText style={styles.matchBadgeText}>{t('match')} {score}%</ThemedText>
+      </View>
+
+      {item.user.online && (
+        <View style={styles.onlineDot} />
+      )}
+
+      <View style={styles.cardInfo}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <ThemedText style={styles.cardName} numberOfLines={1}>
+            {item.user.name}, {item.user.age}
+          </ThemedText>
+          {item.user.verified && (
+            <ExpoImage
+              source={require("@/assets/icons/verified-tick.png")}
+              style={{ width: 18, height: 18, marginLeft: 4 }}
+              contentFit="contain"
+            />
+          )}
+        </View>
+        {item.user.location ? (
+          <View style={styles.locationRow}>
+            <Feather name="map-pin" size={10} color="rgba(255,255,255,0.7)" />
+            <ThemedText style={styles.cardLocation} numberOfLines={1}>
+              {item.user.location} {getCountryFlag(item.user.countryCode)}
+            </ThemedText>
+          </View>
+        ) : null}
+      </View>
+    </Pressable>
+  );
+});
 
 export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const { theme } = useTheme();
@@ -185,67 +253,23 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     return '#888';
   };
 
-  const renderMatchCard = (item: MatchWithUser, isTall: boolean, isLast: boolean = false) => {
-    const photoSource = item.user.photos && item.user.photos[0] ? getPhotoSource(item.user.photos[0]) : null;
-    const score = item.compatibilityScore || 0;
-    const cardHeight = isTall ? TALL_CARD_HEIGHT : SHORT_CARD_HEIGHT;
-    
+  const handleMatchCardPress = useCallback((userId: string) => {
+    navigation.navigate("ProfileDetail", { userId });
+  }, [navigation]);
+
+  const renderMatchCard = useCallback((item: MatchWithUser, isTall: boolean, isLast: boolean = false) => {
     return (
-      <Pressable
+      <MatchCardItem
         key={item.id}
-        style={[styles.matchCard, { height: cardHeight, marginBottom: isLast ? 0 : CARD_GAP }]}
-        onPress={() => navigation.navigate("ProfileDetail", { userId: item.user.id })}
-      >
-        {photoSource ? (
-          <Image
-            source={photoSource}
-            style={styles.matchPhoto}
-            contentFit="cover"
-          />
-        ) : (
-          <View style={[styles.matchPhoto, styles.noPhotoContainer]}>
-            <Feather name="user" size={50} color="#666" />
-          </View>
-        )}
-        
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.8)']}
-          style={styles.cardGradient}
-        />
-        
-        <View style={[styles.matchBadge, { backgroundColor: getCompatibilityColor(score) }]}>
-          <ThemedText style={styles.matchBadgeText}>{t('match')} {score}%</ThemedText>
-        </View>
-        
-        {item.user.online && (
-          <View style={styles.onlineDot} />
-        )}
-        
-        <View style={styles.cardInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <ThemedText style={styles.cardName} numberOfLines={1}>
-              {item.user.name}, {item.user.age}
-            </ThemedText>
-            {item.user.verified && (
-              <ExpoImage 
-                source={require("@/assets/icons/verified-tick.png")} 
-                style={{ width: 18, height: 18, marginLeft: 4 }} 
-                contentFit="contain"
-              />
-            )}
-          </View>
-          {item.user.location ? (
-            <View style={styles.locationRow}>
-              <Feather name="map-pin" size={10} color="rgba(255,255,255,0.7)" />
-              <ThemedText style={styles.cardLocation} numberOfLines={1}>
-                {item.user.location} {getCountryFlag(item.user.countryCode)}
-              </ThemedText>
-            </View>
-          ) : null}
-        </View>
-      </Pressable>
+        item={item}
+        isTall={isTall}
+        isLast={isLast}
+        onPress={handleMatchCardPress}
+        getCompatibilityColor={getCompatibilityColor}
+        t={t}
+      />
     );
-  };
+  }, [handleMatchCardPress, t]);
 
   const handleLikeBack = async (likeUserId: string) => {
     if (!token) return;
@@ -521,7 +545,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
         <FlatList
           data={[activeTab]}
-          keyExtractor={() => activeTab}
+          keyExtractor={(item) => item}
           renderItem={() => (
             <>
               {activeTab === 'matches' && renderMasonryGrid()}
@@ -532,6 +556,8 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}
           initialNumToRender={1}
+          maxToRenderPerBatch={1}
+          windowSize={3}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
