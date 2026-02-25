@@ -228,6 +228,11 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: t('education'),
       value: EDUCATION_LABELS[(user as any).education] || (user as any).education,
     },
+    (user as any)?.relationshipGoal && {
+      icon: 'target' as const,
+      label: 'Relationship Goal',
+      value: (user as any).relationshipGoal,
+    },
     (user as any)?.livingIn && {
       icon: 'map' as const,
       label: t('livingIn'),
@@ -272,6 +277,26 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       icon: 'heart' as const,
       label: 'Relationship',
       value: (user as any).lifestyle.relationshipStatus,
+    },
+    (user as any)?.lifestyle?.workout && {
+      icon: 'activity' as const,
+      label: 'Workout',
+      value: LIFESTYLE_LABELS[(user as any).lifestyle.workout] || (user as any).lifestyle.workout,
+    },
+    (user as any)?.lifestyle?.communicationStyle && {
+      icon: 'message-circle' as const,
+      label: 'Communication',
+      value: (user as any).lifestyle.communicationStyle,
+    },
+    (user as any)?.lifestyle?.loveStyle && {
+      icon: 'heart' as const,
+      label: 'Love Style',
+      value: (user as any).lifestyle.loveStyle,
+    },
+    ((user as any)?.location?.city || (user as any)?.location?.address) && {
+      icon: 'map-pin' as const,
+      label: 'Location',
+      value: `${(user as any).location?.city || (user as any).location?.address || ''}${(user as any).location?.country ? `, ${(user as any).location.country}` : ''}`,
     },
   ].filter(Boolean);
 
@@ -362,12 +387,18 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               </ThemedText>
               {user?.premium?.isActive && <PremiumBadge size="medium" />}
             </View>
-            {(user as any)?.livingIn && (
+            {((user as any)?.livingIn || (user as any)?.location?.city || (user as any)?.location?.address) && (
               <View style={styles.locationRow}>
-                <Feather name="map" size={14} color="rgba(255,255,255,0.8)" />
-                <ThemedText style={styles.heroLocation} numberOfLines={1} ellipsizeMode="tail">{(user as any).livingIn}</ThemedText>
+                <Feather name="map-pin" size={14} color="rgba(255,255,255,0.8)" />
+                <ThemedText style={styles.heroLocation} numberOfLines={1} ellipsizeMode="tail">
+                  {(user as any).livingIn || `${(user as any).location?.city || (user as any).location?.address || ''}${(user as any).location?.country ? `, ${(user as any).location.country}` : ''}`}
+                </ThemedText>
               </View>
             )}
+            <View style={styles.locationRow}>
+              <Feather name="clock" size={14} color="rgba(255,255,255,0.8)" />
+              <ThemedText style={styles.heroLocation} numberOfLines={1}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} local time</ThemedText>
+            </View>
           </View>
 
           <Pressable 

@@ -335,6 +335,12 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               </View>
             )}
+            <View style={styles.locationRow}>
+              <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
+              <ThemedText style={styles.locationText}>
+                {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} local time
+              </ThemedText>
+            </View>
           </View>
 
           <Pressable style={[styles.floatBack, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
