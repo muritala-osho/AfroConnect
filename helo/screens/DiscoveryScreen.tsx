@@ -1644,18 +1644,18 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    zIndex: 2,
   },
   headerCenter: {
-    flex: 2,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   headerRight: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    zIndex: 2,
   },
   headerIconButton: {
     padding: 8,

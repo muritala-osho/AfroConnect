@@ -770,7 +770,25 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         return;
       }
 
-      const wasPlaying = playingAudioId === messageId;
+      if (soundRef.current) {
+        try {
+          const status: any = await soundRef.current.getStatusAsync();
+          if (status.isLoaded) {
+            if (playingAudioId === messageId && status.isPlaying) {
+              await soundRef.current.pauseAsync();
+              setPlayingAudioId('paused:' + messageId);
+              return;
+            }
+            if (playingAudioId === 'paused:' + messageId && !status.isPlaying) {
+              await soundRef.current.playAsync();
+              setPlayingAudioId(messageId);
+              return;
+            }
+          }
+        } catch (e) {
+          console.log('Status check error:', e);
+        }
+      }
 
       if (soundRef.current) {
         try {
@@ -782,11 +800,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         soundRef.current = null;
       }
 
-      if (wasPlaying) {
-        setPlayingAudioId(null);
-        setAudioProgress(0);
-        return;
-      }
+      setPlayingAudioId(null);
+      setAudioProgress(0);
 
       if (Platform.OS === 'web') {
         try {
@@ -1322,7 +1337,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                           <View style={[
                             styles.audioProgressFill, 
                             { 
-                              width: playingAudioId === item._id ? `${audioProgress * 100}%` : '0%',
+                              width: (playingAudioId === item._id || playingAudioId === 'paused:' + item._id) ? `${audioProgress * 100}%` : '0%',
                               backgroundColor: isMe ? '#FFF' : theme.primary 
                             }
                           ]} />
@@ -1549,7 +1564,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}>
       {currentTheme?.image ? (
         <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
           {chatContent}
