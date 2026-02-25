@@ -11,6 +11,7 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { Feather } from '@expo/vector-icons';
+import { useTheme } from '@/hooks/useTheme';
 
 interface PremiumBadgeProps {
   size?: 'small' | 'medium' | 'large';
@@ -23,11 +24,37 @@ const SIZES = {
   large: { badge: 34, icon: 18, glow: 48, outerGlow: 58 },
 };
 
+const GLOW_COLORS = {
+  light: {
+    outerGlow: '#FFD700',
+    innerGlow: '#FFB800',
+    shimmerFrom: '#FFB800',
+    shimmerTo: '#FFD700',
+    shadow: '#FFD700',
+    border: 'rgba(255, 255, 255, 0.4)',
+    glowMaxOpacity: 0.45,
+    outerGlowMaxOpacity: 0.2,
+  },
+  dark: {
+    outerGlow: '#FFC107',
+    innerGlow: '#FFAB00',
+    shimmerFrom: '#FFAB00',
+    shimmerTo: '#FFD54F',
+    shadow: '#FFC107',
+    border: 'rgba(255, 215, 0, 0.35)',
+    glowMaxOpacity: 0.55,
+    outerGlowMaxOpacity: 0.3,
+  },
+};
+
 export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
+  const { isDark } = useTheme();
+  const colors = isDark ? GLOW_COLORS.dark : GLOW_COLORS.light;
+
   const glowScale = useSharedValue(1);
-  const glowOpacity = useSharedValue(0.5);
+  const glowOpacity = useSharedValue(colors.glowMaxOpacity);
   const outerGlowScale = useSharedValue(1);
-  const outerGlowOpacity = useSharedValue(0.3);
+  const outerGlowOpacity = useSharedValue(colors.outerGlowMaxOpacity);
   const badgeScale = useSharedValue(1);
   const shimmer = useSharedValue(0);
 
@@ -42,8 +69,8 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
     );
     glowOpacity.value = withRepeat(
       withSequence(
-        withTiming(0.15, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
-        withTiming(0.5, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+        withTiming(0.1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(colors.glowMaxOpacity, { duration: 1500, easing: Easing.inOut(Easing.ease) })
       ),
       -1,
       false
@@ -65,7 +92,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
         400,
         withSequence(
           withTiming(0.05, { duration: 1800, easing: Easing.inOut(Easing.ease) }),
-          withTiming(0.25, { duration: 1800, easing: Easing.inOut(Easing.ease) })
+          withTiming(colors.outerGlowMaxOpacity, { duration: 1800, easing: Easing.inOut(Easing.ease) })
         )
       ),
       -1,
@@ -89,7 +116,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
       -1,
       false
     );
-  }, []);
+  }, [isDark]);
 
   const glowStyle = useAnimatedStyle(() => ({
     transform: [{ scale: glowScale.value }],
@@ -109,7 +136,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
     const backgroundColor = interpolateColor(
       shimmer.value,
       [0, 1],
-      ['#FFB800', '#FFD700']
+      [colors.shimmerFrom, colors.shimmerTo]
     );
     return { backgroundColor };
   });
@@ -125,6 +152,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
             width: dims.outerGlow,
             height: dims.outerGlow,
             borderRadius: dims.outerGlow / 2,
+            backgroundColor: colors.outerGlow,
           },
           outerGlowStyle,
         ]}
@@ -136,6 +164,7 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
             width: dims.glow,
             height: dims.glow,
             borderRadius: dims.glow / 2,
+            backgroundColor: colors.innerGlow,
           },
           glowStyle,
         ]}
@@ -147,6 +176,8 @@ export function PremiumBadge({ size = 'medium', style }: PremiumBadgeProps) {
             width: dims.badge,
             height: dims.badge,
             borderRadius: dims.badge / 2,
+            shadowColor: colors.shadow,
+            borderColor: colors.border,
           },
           badgeAnimStyle,
           shimmerStyle,
@@ -166,21 +197,17 @@ const styles = StyleSheet.create({
   },
   outerGlow: {
     position: 'absolute',
-    backgroundColor: '#FFD700',
   },
   glow: {
     position: 'absolute',
-    backgroundColor: '#FFB800',
   },
   badge: {
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FFD700',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 8,
     elevation: 8,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
 });

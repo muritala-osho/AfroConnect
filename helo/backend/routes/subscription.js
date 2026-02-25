@@ -76,7 +76,7 @@ router.get('/status', protect, async (req, res) => {
 
 router.post('/create-checkout', protect, async (req, res) => {
   try {
-    const { priceId } = req.body;
+    const { priceId, interval } = req.body;
     const stripe = await getUncachableStripeClient();
     const user = await User.findById(req.user._id);
 
@@ -89,7 +89,9 @@ router.post('/create-checkout', protect, async (req, res) => {
       'price_yearly': 'year'
     };
     
-    const targetInterval = intervalMap[priceId];
+    const validIntervals = ['day', 'week', 'month', 'year'];
+    const rawInterval = intervalMap[priceId] || interval;
+    const targetInterval = validIntervals.includes(rawInterval) ? rawInterval : 'month';
     
     try {
       if (targetInterval) {
@@ -128,7 +130,10 @@ router.post('/create-checkout', protect, async (req, res) => {
       mode: 'subscription',
       success_url: `https://${process.env.REPLIT_DEV_DOMAIN}/payment-success`,
       cancel_url: `https://${process.env.REPLIT_DEV_DOMAIN}/payment-cancel`,
-      metadata: { userId: user._id.toString() }
+      metadata: { userId: user._id.toString() },
+      subscription_data: {
+        metadata: { userId: user._id.toString() }
+      }
     };
 
     if (user.premium?.stripeCustomerId) {

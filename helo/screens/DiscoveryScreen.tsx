@@ -98,7 +98,7 @@ const PASSPORT_CITIES = [
 ];
 
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { user, token, updateProfile } = useAuth();
   const { t } = useTranslation();
@@ -1463,21 +1463,33 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
 
               <View style={styles.cardInfoOverlay}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-                  <ThemedText style={styles.profileName}>
-                    {currentUser.name}{currentUser.age !== null ? `, ${currentUser.age}` : ''}
+                <View style={styles.nameRow}>
+                  <ThemedText style={styles.profileName} numberOfLines={1}>
+                    {currentUser.name?.split(' ')[0]}
                   </ThemedText>
+                  {currentUser.age !== null && currentUser.age !== undefined && (
+                    <ThemedText style={styles.profileAge}>{currentUser.age}</ThemedText>
+                  )}
                   {(currentUser as any).premium?.isActive && (
-                    <PremiumBadge size="small" />
+                    <PremiumBadge size="small" style={{ marginLeft: 6 }} />
                   )}
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 
-                      style={{ width: 28, height: 28, marginLeft: 8 }} 
+                      style={{ width: 24, height: 24, marginLeft: 6 }} 
                       contentFit="contain"
                     />
                   )}
                 </View>
+
+                {(currentUser as any).location?.city && (
+                  <View style={styles.locationRow}>
+                    <Feather name="map-pin" size={13} color="rgba(255,255,255,0.7)" />
+                    <ThemedText style={styles.locationText} numberOfLines={1}>
+                      {(currentUser as any).location.city}{(currentUser as any).location.country ? `, ${(currentUser as any).location.country}` : ''}
+                    </ThemedText>
+                  </View>
+                )}
 
                 <Pressable 
                   style={styles.basicsRow}
@@ -1523,7 +1535,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         <View style={[styles.actionRow, { paddingBottom: insets.bottom + 8 }]}>
           <Animated.View style={rewindButtonStyle}>
             <Pressable
-              style={[styles.rewindButton, userHistory.current.length === 0 && styles.disabledButton]}
+              style={[styles.rewindButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }, userHistory.current.length === 0 && styles.disabledButton]}
               onPress={handleRewind}
               disabled={isAnimating || userHistory.current.length === 0}
             >
@@ -1533,7 +1545,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
           <Animated.View style={passButtonStyle}>
             <Pressable
-              style={styles.passButton}
+              style={[styles.passButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }]}
               onPress={handlePass}
               disabled={isAnimating}
             >
@@ -1543,7 +1555,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
           <Animated.View style={starButtonStyle}>
             <Pressable
-              style={styles.starButton}
+              style={[styles.starButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }]}
               onPress={handleSuperLike}
               disabled={isAnimating}
             >
@@ -1553,7 +1565,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
           <Animated.View style={likeButtonStyle}>
             <Pressable
-              style={styles.likeButton}
+              style={[styles.likeButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }]}
               onPress={handleLike}
               disabled={isAnimating}
             >
@@ -1562,7 +1574,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </Animated.View>
           
           <Pressable
-            style={styles.boostButton}
+            style={[styles.boostButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }]}
             onPress={async () => {
               if (Platform.OS !== 'web') {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -1878,7 +1890,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 12,
+    borderRadius: 16,
     overflow: "hidden",
     backgroundColor: "#1E1E1E",
   },
@@ -1942,9 +1954,27 @@ const styles = StyleSheet.create({
   },
   profileName: {
     fontSize: 28,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#FFF",
-    marginRight: 8,
+    marginRight: 4,
+  },
+  profileAge: {
+    fontSize: 26,
+    fontWeight: "400",
+    color: "rgba(255,255,255,0.85)",
+    marginLeft: 2,
+    marginRight: 4,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 10,
+  },
+  locationText: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "500",
   },
   verifiedBadge: {
     width: 22,
@@ -2070,67 +2100,62 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#1e1e1e",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   passButton: {
     width: 65,
     height: 65,
     borderRadius: 32.5,
-    backgroundColor: "#1e1e1e",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   starButton: {
     width: 55,
     height: 55,
     borderRadius: 27.5,
-    backgroundColor: "#1e1e1e",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   likeButton: {
     width: 65,
     height: 65,
     borderRadius: 32.5,
-    backgroundColor: "#1e1e1e",
     alignItems: "center",
     justifyContent: "center",
     overflow: 'hidden',
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   boostButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#1e1e1e",
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
   },
   messageButton: {
     width: 54,

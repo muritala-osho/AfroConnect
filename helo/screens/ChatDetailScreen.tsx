@@ -595,12 +595,24 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       Alert.alert('Not Supported', 'Voice recording is only available in the mobile app');
       return;
     }
+
+    if (isRecording || recordingRef.current) return;
     
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
         Alert.alert('Permission Needed', 'Microphone permission is required');
         return;
+      }
+
+      if (soundRef.current) {
+        try {
+          await soundRef.current.stopAsync();
+          await soundRef.current.unloadAsync();
+        } catch (_) {}
+        soundRef.current = null;
+        setPlayingAudioId(null);
+        setAudioProgress(0);
       }
       
       await Audio.setAudioModeAsync({
@@ -624,6 +636,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error('Recording error:', error);
+      recordingRef.current = null;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
@@ -658,11 +671,23 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       
       if (uri && duration >= 1) {
         try {
+          const ext = uri.split('.').pop()?.toLowerCase() || 'm4a';
+          const mimeMap: Record<string, string> = {
+            'm4a': 'audio/m4a',
+            'mp4': 'audio/mp4',
+            'caf': 'audio/x-caf',
+            'wav': 'audio/wav',
+            '3gp': 'audio/3gpp',
+            'aac': 'audio/aac',
+            'webm': 'audio/webm',
+          };
+          const mimeType = mimeMap[ext] || (Platform.OS === 'android' ? 'application/octet-stream' : 'audio/m4a');
+          const fileName = `voice_message.${ext}`;
           const formData = new FormData();
           formData.append('audio', {
             uri,
-            type: 'audio/m4a',
-            name: 'voice_message.m4a',
+            type: mimeType,
+            name: fileName,
           } as any);
           formData.append('duration', duration.toString());
           
@@ -745,6 +770,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         return;
       }
 
+      const wasPlaying = playingAudioId === messageId;
+
       if (soundRef.current) {
         try {
           await soundRef.current.stopAsync();
@@ -755,7 +782,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         soundRef.current = null;
       }
 
-      if (playingAudioId === messageId) {
+      if (wasPlaying) {
         setPlayingAudioId(null);
         setAudioProgress(0);
         return;
@@ -1310,8 +1337,16 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                     const lng = item.longitude!;
                     const z = 15;
                     const n = Math.pow(2, z);
-                    const cx = Math.floor((lng + 180) / 360 * n);
-                    const cy = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+                    const fx = (lng + 180) / 360 * n;
+                    const fy = (1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n;
+                    const cx = Math.floor(fx);
+                    const cy = Math.floor(fy);
+                    const subTileX = (fx - cx) * 256;
+                    const subTileY = (fy - cy) * 256;
+                    const MAP_W = 240;
+                    const MAP_H = 160;
+                    const gridLeft = -(256 + subTileX - MAP_W / 2);
+                    const gridTop = -(256 + subTileY - MAP_H / 2);
                     const tiles = [];
                     for (let dy = -1; dy <= 1; dy++) {
                       for (let dx = -1; dx <= 1; dx++) {
@@ -1334,7 +1369,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                         style={styles.locationBubble}
                       >
                         <View style={styles.locationMapContainer}>
-                          <View style={styles.locationTileGrid}>
+                          <View style={[styles.locationTileGrid, { top: gridTop, left: gridLeft }]}>
                             {tiles.map((t, i) => (
                               <Image
                                 key={i}
@@ -1344,13 +1379,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                               />
                             ))}
                           </View>
+                          <View style={styles.locationGradientOverlay}>
+                            <View style={styles.locationGradientLayer1} />
+                            <View style={styles.locationGradientLayer2} />
+                            <View style={styles.locationGradientLayer3} />
+                          </View>
                           <View style={styles.locationPinOverlay}>
                             <View style={styles.locationPinShadow} />
-                            <Ionicons name="location-sharp" size={36} color="#E53935" style={{ marginTop: -18 }} />
+                            <Ionicons name="location-sharp" size={32} color="#E53935" style={{ marginTop: -16, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 4 }} />
                           </View>
                         </View>
-                        <View style={[styles.locationInfoRow, { backgroundColor: isMe ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)' }]}>
-                          <View style={[styles.locationIconCircle, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : theme.primary + '15' }]}>
+                        <View style={[styles.locationInfoRow, { backgroundColor: isMe ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.03)' }]}>
+                          <View style={[styles.locationIconCircle, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : theme.primary + '18' }]}>
                             <Ionicons name="navigate" size={14} color={isMe ? '#FFF' : theme.primary} />
                           </View>
                           <View style={{ flex: 1 }}>
@@ -2326,10 +2366,12 @@ const styles = StyleSheet.create({
   },
   locationMapContainer: {
     width: 240,
-    height: 150,
+    height: 160,
     position: 'relative' as const,
-    backgroundColor: '#E8E8E8',
+    backgroundColor: '#E0E0E0',
     overflow: 'hidden' as const,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
   },
   locationTileGrid: {
     width: 256 * 3,
@@ -2337,12 +2379,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     flexWrap: 'wrap' as const,
     position: 'absolute' as const,
-    top: -(256 * 3 - 150) / 2,
-    left: -(256 * 3 - 240) / 2,
   },
   locationTile: {
     width: 256,
     height: 256,
+  },
+  locationGradientOverlay: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+  },
+  locationGradientLayer1: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 50,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  locationGradientLayer2: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 30,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  locationGradientLayer3: {
+    position: 'absolute' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 12,
+    backgroundColor: 'rgba(0,0,0,0.1)',
   },
   locationPinOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -2351,16 +2422,16 @@ const styles = StyleSheet.create({
   },
   locationPinShadow: {
     position: 'absolute' as const,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    top: '52%' as any,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    top: '53%' as any,
   },
   locationInfoRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 10,
   },

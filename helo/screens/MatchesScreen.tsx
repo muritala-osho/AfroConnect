@@ -353,7 +353,28 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     );
   };
 
-  const renderLikesMasonryGrid = () => {
+  const likesColumnData = useMemo(() => {
+    const left: { item: any; isTall: boolean; isLast: boolean }[] = [];
+    const right: { item: any; isTall: boolean; isLast: boolean }[] = [];
+    let i = 0;
+    let patternIndex = 0;
+    while (i < whoLikesMe.length) {
+      const isFirstPattern = patternIndex % 2 === 0;
+      if (isFirstPattern) {
+        if (i < whoLikesMe.length) { left.push({ item: whoLikesMe[i], isTall: true, isLast: i === whoLikesMe.length - 1 }); i++; }
+        if (i < whoLikesMe.length) { right.push({ item: whoLikesMe[i], isTall: false, isLast: i === whoLikesMe.length - 1 }); i++; }
+        if (i < whoLikesMe.length) { right.push({ item: whoLikesMe[i], isTall: false, isLast: i === whoLikesMe.length - 1 }); i++; }
+      } else {
+        if (i < whoLikesMe.length) { left.push({ item: whoLikesMe[i], isTall: false, isLast: i === whoLikesMe.length - 1 }); i++; }
+        if (i < whoLikesMe.length) { left.push({ item: whoLikesMe[i], isTall: false, isLast: i === whoLikesMe.length - 1 }); i++; }
+        if (i < whoLikesMe.length) { right.push({ item: whoLikesMe[i], isTall: true, isLast: i === whoLikesMe.length - 1 }); i++; }
+      }
+      patternIndex++;
+    }
+    return { left, right };
+  }, [whoLikesMe]);
+
+  const renderLikesMasonryGrid = useCallback(() => {
     if (whoLikesMe.length === 0) {
       return (
         <View style={styles.emptyState}>
@@ -366,126 +387,55 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       );
     }
 
-    const leftColumn: React.ReactNode[] = [];
-    const rightColumn: React.ReactNode[] = [];
-    
-    let i = 0;
-    let patternIndex = 0;
-    
-    while (i < whoLikesMe.length) {
-      const isFirstPattern = patternIndex % 2 === 0;
-      
-      if (isFirstPattern) {
-        if (i < whoLikesMe.length) {
-          leftColumn.push(renderLikeCard(whoLikesMe[i], true, i === whoLikesMe.length - 1));
-          i++;
-        }
-        
-        if (i < whoLikesMe.length) {
-          rightColumn.push(renderLikeCard(whoLikesMe[i], false, i === whoLikesMe.length - 1));
-          i++;
-        }
-        if (i < whoLikesMe.length) {
-          rightColumn.push(renderLikeCard(whoLikesMe[i], false, i === whoLikesMe.length - 1));
-          i++;
-        }
-      } else {
-        if (i < whoLikesMe.length) {
-          leftColumn.push(renderLikeCard(whoLikesMe[i], false, i === whoLikesMe.length - 1));
-          i++;
-        }
-        if (i < whoLikesMe.length) {
-          leftColumn.push(renderLikeCard(whoLikesMe[i], false, i === whoLikesMe.length - 1));
-          i++;
-        }
-        
-        if (i < whoLikesMe.length) {
-          rightColumn.push(renderLikeCard(whoLikesMe[i], true, i === whoLikesMe.length - 1));
-          i++;
-        }
-      }
-      
-      patternIndex++;
-    }
-
     return (
       <View style={styles.masonryContainer}>
         <View style={[styles.column, { marginRight: CARD_GAP / 2 }]}>
-          {leftColumn}
+          {likesColumnData.left.map(({ item, isTall, isLast }) => renderLikeCard(item, isTall, isLast))}
         </View>
         <View style={[styles.column, { marginLeft: CARD_GAP / 2 }]}>
-          {rightColumn}
+          {likesColumnData.right.map(({ item, isTall, isLast }) => renderLikeCard(item, isTall, isLast))}
         </View>
       </View>
     );
-  };
+  }, [whoLikesMe, likesColumnData, theme.textSecondary, theme.text]);
 
-  const renderMasonryGrid = () => {
+  const matchesColumnData = useMemo(() => {
+    const left: { item: MatchWithUser; isTall: boolean; isLast: boolean }[] = [];
+    const right: { item: MatchWithUser; isTall: boolean; isLast: boolean }[] = [];
+    let i = 0;
+    let patternIndex = 0;
+    while (i < matches.length) {
+      const isFirstPattern = patternIndex % 2 === 0;
+      if (isFirstPattern) {
+        if (i < matches.length) { left.push({ item: matches[i], isTall: true, isLast: i === matches.length - 1 }); i++; }
+        if (i < matches.length) { right.push({ item: matches[i], isTall: false, isLast: i === matches.length - 1 }); i++; }
+        if (i < matches.length) { right.push({ item: matches[i], isTall: false, isLast: i === matches.length - 1 }); i++; }
+      } else {
+        if (i < matches.length) { left.push({ item: matches[i], isTall: false, isLast: i === matches.length - 1 }); i++; }
+        if (i < matches.length) { left.push({ item: matches[i], isTall: false, isLast: i === matches.length - 1 }); i++; }
+        if (i < matches.length) { right.push({ item: matches[i], isTall: true, isLast: i === matches.length - 1 }); i++; }
+      }
+      patternIndex++;
+    }
+    return { left, right };
+  }, [matches]);
+
+  const renderMasonryGrid = useCallback(() => {
     if (matches.length === 0) {
       return renderEmptyState();
     }
 
-    const leftColumn: React.ReactNode[] = [];
-    const rightColumn: React.ReactNode[] = [];
-    
-    let leftIndex = 0;
-    let rightIndex = 0;
-    let i = 0;
-    let patternIndex = 0;
-    
-    while (i < matches.length) {
-      const isFirstPattern = patternIndex % 2 === 0;
-      
-      if (isFirstPattern) {
-        if (i < matches.length) {
-          leftColumn.push(renderMatchCard(matches[i], true, i === matches.length - 1));
-          i++;
-          leftIndex++;
-        }
-        
-        if (i < matches.length) {
-          rightColumn.push(renderMatchCard(matches[i], false, i === matches.length - 1));
-          i++;
-          rightIndex++;
-        }
-        if (i < matches.length) {
-          rightColumn.push(renderMatchCard(matches[i], false, i === matches.length - 1));
-          i++;
-          rightIndex++;
-        }
-      } else {
-        if (i < matches.length) {
-          leftColumn.push(renderMatchCard(matches[i], false, i === matches.length - 1));
-          i++;
-          leftIndex++;
-        }
-        if (i < matches.length) {
-          leftColumn.push(renderMatchCard(matches[i], false, i === matches.length - 1));
-          i++;
-          leftIndex++;
-        }
-        
-        if (i < matches.length) {
-          rightColumn.push(renderMatchCard(matches[i], true, i === matches.length - 1));
-          i++;
-          rightIndex++;
-        }
-      }
-      
-      patternIndex++;
-    }
-
     return (
       <View style={styles.masonryContainer}>
         <View style={[styles.column, { marginRight: CARD_GAP / 2 }]}>
-          {leftColumn}
+          {matchesColumnData.left.map(({ item, isTall, isLast }) => renderMatchCard(item, isTall, isLast))}
         </View>
         <View style={[styles.column, { marginLeft: CARD_GAP / 2 }]}>
-          {rightColumn}
+          {matchesColumnData.right.map(({ item, isTall, isLast }) => renderMatchCard(item, isTall, isLast))}
         </View>
       </View>
     );
-  };
+  }, [matches, matchesColumnData, renderMatchCard]);
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -552,6 +502,11 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               {activeTab === 'likes' && renderLikesMasonryGrid()}
             </>
           )}
+          getItemLayout={(_, index) => ({
+            length: TALL_CARD_HEIGHT * 3,
+            offset: TALL_CARD_HEIGHT * 3 * index,
+            index,
+          })}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={true}

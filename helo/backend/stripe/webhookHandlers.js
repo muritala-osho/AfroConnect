@@ -40,10 +40,36 @@ const PLAN_FEATURES = {
   }
 };
 
+async function handleCheckoutCompleted(session) {
+  try {
+    const userId = session.metadata?.userId;
+    const customerId = session.customer;
+    
+    if (userId && customerId) {
+      await User.findByIdAndUpdate(userId, {
+        'premium.stripeCustomerId': customerId
+      });
+      console.log(`Linked Stripe customer ${customerId} to user ${userId}`);
+    }
+  } catch (error) {
+    console.error('Error handling checkout completed:', error);
+  }
+}
+
 async function handleSubscriptionUpdated(subscription) {
   try {
     const customerId = subscription.customer;
-    const user = await User.findOne({ 'premium.stripeCustomerId': customerId });
+    let user = await User.findOne({ 'premium.stripeCustomerId': customerId });
+    
+    if (!user && subscription.metadata?.userId) {
+      user = await User.findById(subscription.metadata.userId);
+      if (user) {
+        await User.findByIdAndUpdate(user._id, {
+          'premium.stripeCustomerId': customerId
+        });
+        console.log(`Linked Stripe customer ${customerId} to user ${user._id} via metadata`);
+      }
+    }
     
     if (!user) {
       console.log('No user found for customer:', customerId);
@@ -156,6 +182,9 @@ class WebhookHandlers {
 
     if (event) {
       switch (event.type) {
+        case 'checkout.session.completed':
+          await handleCheckoutCompleted(event.data.object);
+          break;
         case 'customer.subscription.created':
         case 'customer.subscription.updated':
           await handleSubscriptionUpdated(event.data.object);
@@ -170,4 +199,4 @@ class WebhookHandlers {
   }
 }
 
-module.exports = { WebhookHandlers, PLAN_FEATURES };
+module.exports = { WebhookHandlers, PLAN_FEATURES, handleCheckoutCompleted };
