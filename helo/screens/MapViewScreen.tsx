@@ -133,20 +133,37 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
     if (!token) return;
 
     try {
-      const response = await get<{ users: any[] }>('/users/discover', token);
+      const response = await get<{ users: any[] }>(`/users/nearby?lat=${lat}&lng=${lng}&maxDistance=100`, token);
       
       if (response.success && response.data?.users) {
         const usersWithDistance = response.data.users
-          .filter((u: any) => u._id !== user?.id && u.location?.lat && u.location?.lng)
-          .map((u: any) => ({
-            id: u._id,
-            name: u.name,
-            age: u.age,
-            photos: u.photos,
-            location: u.location,
-            online: u.online,
-            distance: calculateDistance(lat, lng, u.location.lat, u.location.lng),
-          }))
+          .filter((u: any) => {
+            if (u._id === user?.id) return false;
+            const hasCoords = u.location?.coordinates?.length >= 2 &&
+              !(u.location.coordinates[0] === 0 && u.location.coordinates[1] === 0);
+            const hasLatLng = u.location?.lat && u.location?.lng;
+            return hasCoords || hasLatLng;
+          })
+          .map((u: any) => {
+            let userLat: number, userLng: number;
+            if (u.location?.coordinates?.length >= 2 &&
+                !(u.location.coordinates[0] === 0 && u.location.coordinates[1] === 0)) {
+              userLng = u.location.coordinates[0];
+              userLat = u.location.coordinates[1];
+            } else {
+              userLat = u.location.lat;
+              userLng = u.location.lng;
+            }
+            return {
+              id: u._id,
+              name: u.name,
+              age: u.age,
+              photos: u.photos,
+              location: { lat: userLat, lng: userLng },
+              online: u.online,
+              distance: u.distance != null ? u.distance : calculateDistance(lat, lng, userLat, userLng),
+            };
+          })
           .slice(0, 20);
         
         setUsers(usersWithDistance);

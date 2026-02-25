@@ -316,18 +316,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-          <Pressable 
-            style={styles.heroContainer}
-            onPress={() => {
-              if (user?.id) {
-                navigation.navigate("StoryViewer", { 
-                  userId: user.id, 
-                  userName: user.name, 
-                  userPhoto: user.photos?.[0]?.url || user.photos?.[0] || (user as any).profilePhoto
-                });
-              }
-            }}
-          >
+          <View style={styles.heroContainer}>
           {photoSource ? (
             <SafeImage
               source={photoSource}
@@ -410,7 +399,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
           >
             <Feather name="settings" size={22} color="#fff" />
           </Pressable>
-        </Pressable>
+        </View>
 
         <View style={styles.actionButtonsRow}>
           <Pressable 
