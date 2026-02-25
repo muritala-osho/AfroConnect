@@ -1648,9 +1648,8 @@ const styles = StyleSheet.create({
   },
   headerCenter: {
     flex: 2,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingLeft: 4,
   },
   headerRight: {
     flex: 1,
