@@ -188,6 +188,42 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
+  const [typingDotAnim1] = useState(new Animated.Value(0));
+  const [typingDotAnim2] = useState(new Animated.Value(0));
+  const [typingDotAnim3] = useState(new Animated.Value(0));
+  const [recordingPulse] = useState(new Animated.Value(1));
+
+  useEffect(() => {
+    if (isTyping) {
+      const createDotAnimation = (anim: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0, duration: 300, useNativeDriver: true }),
+          ])
+        );
+      const a1 = createDotAnimation(typingDotAnim1, 0);
+      const a2 = createDotAnimation(typingDotAnim2, 150);
+      const a3 = createDotAnimation(typingDotAnim3, 300);
+      a1.start(); a2.start(); a3.start();
+      return () => { a1.stop(); a2.stop(); a3.stop(); typingDotAnim1.setValue(0); typingDotAnim2.setValue(0); typingDotAnim3.setValue(0); };
+    }
+  }, [isTyping]);
+
+  useEffect(() => {
+    if (isRecording) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(recordingPulse, { toValue: 1.4, duration: 600, useNativeDriver: true }),
+          Animated.timing(recordingPulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => { pulse.stop(); recordingPulse.setValue(1); };
+    }
+  }, [isRecording]);
+
   useEffect(() => {
     const loadChatTheme = async () => {
       const savedTheme = await AsyncStorage.getItem(`chat_theme_${userId}`);
@@ -1359,12 +1395,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
       {isTyping && (
         <View style={styles.typingIndicator}>
-          <View style={[styles.typingBubble, { backgroundColor: 'rgba(255,255,255,0.9)' }]}>
+          <View style={[styles.typingBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}>
             <View style={styles.typingDots}>
-              <View style={[styles.typingDot, { backgroundColor: theme.textSecondary }]} />
-              <View style={[styles.typingDot, { backgroundColor: theme.textSecondary, marginHorizontal: 4 }]} />
-              <View style={[styles.typingDot, { backgroundColor: theme.textSecondary }]} />
+              <Animated.View style={[styles.typingDot, { backgroundColor: theme.primary, transform: [{ scale: typingDotAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) }], opacity: typingDotAnim1.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]} />
+              <Animated.View style={[styles.typingDot, { backgroundColor: theme.primary, marginHorizontal: 5, transform: [{ scale: typingDotAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) }], opacity: typingDotAnim2.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]} />
+              <Animated.View style={[styles.typingDot, { backgroundColor: theme.primary, transform: [{ scale: typingDotAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.2] }) }], opacity: typingDotAnim3.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }]} />
             </View>
+            <ThemedText style={[styles.typingLabel, { color: theme.textSecondary }]}>typing</ThemedText>
           </View>
         </View>
       )}
@@ -1499,10 +1536,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <Feather name="x" size={24} color="#F44336" />
               </Pressable>
               <View style={styles.recordingInfo}>
-                <View style={styles.recordingDot} />
+                <Animated.View style={[styles.recordingDot, { transform: [{ scale: recordingPulse }] }]} />
                 <ThemedText style={[styles.recordingTime, { color: theme.text }]}>
                   {formatRecordingTime(recordingDuration)}
                 </ThemedText>
+                <ThemedText style={[styles.recordingLabel, { color: theme.textSecondary }]}>Recording</ThemedText>
               </View>
               <Pressable onPress={stopRecording} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}>
                 <Feather name="send" size={20} color="#FFF" />
@@ -1924,10 +1962,11 @@ const styles = StyleSheet.create({
   messageImage: { width: 200, height: 150, borderRadius: 16, marginBottom: 6, overflow: 'hidden' as const },
   messageFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
   messageTime: { fontSize: 11 },
-  typingIndicator: { paddingHorizontal: 16, paddingVertical: 8 },
-  typingBubble: { alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, borderBottomLeftRadius: 4 },
+  typingIndicator: { paddingHorizontal: 16, paddingVertical: 6 },
+  typingBubble: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderBottomLeftRadius: 4, gap: 8 },
   typingDots: { flexDirection: 'row', alignItems: 'center' },
-  typingDot: { width: 8, height: 8, borderRadius: 4, opacity: 0.6 },
+  typingDot: { width: 7, height: 7, borderRadius: 4 },
+  typingLabel: { fontSize: 12, fontWeight: '500' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
   emptyIconContainer: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
@@ -1944,12 +1983,13 @@ const styles = StyleSheet.create({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 12, paddingTop: 6, borderTopWidth: 1 },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingTop: 8, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cancelRecordButton: { padding: 12 },
-  recordingInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  recordingDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#F44336', marginRight: 10 },
+  recordingInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  recordingDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#F44336' },
   recordingTime: { fontSize: 18, fontWeight: '600' },
+  recordingLabel: { fontSize: 13, fontWeight: '500' },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   attachButton: { padding: 6, marginBottom: 2 },
   inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, marginHorizontal: 4, minHeight: 40, maxHeight: 120 },

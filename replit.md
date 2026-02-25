@@ -37,7 +37,10 @@ Preferred communication style: Simple, everyday language.
 - **Security**: Screenshot protection toggle per chat using expo-screen-capture on native platforms. Per-chat preference persisted via AsyncStorage.
 - **Admin Dashboard**: Full admin web panel at `/admin-web` with real API integration (`helo/admin-dashboard/services/adminApi.ts`). JWT auth with isAdmin check, auto-logout on 401. Views: DashboardHome (stats, activity monitoring), UserManagement (search, ban/unban), ReportsQueue (resolve reports), Payments (subscription revenue), IDVerification (approve/reject). Backend endpoints in `helo/backend/routes/admin.js` including DELETE stories and GET single user detail.
 - **Location Sharing**: Instagram-style map preview bubbles in chat using OpenStreetMap tiles. Shows static map thumbnail with pin overlay, address text, and tap-to-open in native maps app.
-- **Voice Recording**: Tap-to-record flow with proper cleanup on unmount, iOS audio mode reset after recording, upload to Cloudinary via `/api/upload/audio`.
+- **Profile Detail Display**: Full user detail view on ProfileDetailScreen with two sections: Details (gender, looking for, relationship goal, zodiac, job, education, personality type, communication style, love style, relationship status, religion, ethnicity) and Lifestyle (smoking, drinking, workout, pets, has kids, wants kids). Quick info pills show location, gender, zodiac, looking for, relationship goal, and personality type.
+- **Chat Typing Indicator**: Animated bouncing dots with scale/opacity animation using Animated API. Theme-aware bubble background (dark/light mode). Shows "typing" label next to dots.
+- **Voice Recording**: Tap-to-record flow with pulsing red dot animation, duration timer, "Recording" label, proper cleanup on unmount, iOS audio mode reset after recording, upload to Cloudinary via `/api/upload/audio`.
+- **Compatibility System**: Quiz-based compatibility scoring across 5 categories (lifestyle, values, personality, relationship, future). Score displayed on ProfileDetailScreen with percentage, match quality badge, and per-category breakdown bars.
 - **User TTL Safety**: Unverified users auto-deleted after 24 hours (TTL index on `expireAt`). Verified users have `expireAt` cleared on save via pre-save hook. Startup migration clears stale `expireAt` values on verified users.
 
 ## External Dependencies

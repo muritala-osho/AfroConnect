@@ -249,6 +249,12 @@ export default function ProfileDetailScreen() {
   if (user.lookingFor) {
     quickInfoPills.push({ icon: 'heart-outline', text: user.lookingFor, color: '#E91E63' });
   }
+  if (user.relationshipGoal) {
+    quickInfoPills.push({ icon: 'ribbon-outline', text: user.relationshipGoal, color: '#9C27B0' });
+  }
+  if (user.lifestyle?.personalityType) {
+    quickInfoPills.push({ icon: 'bulb-outline', text: user.lifestyle.personalityType, color: '#FF5722' });
+  }
 
   const additionalPhotos = user.photos && user.photos.length > 1
     ? user.photos.filter((_: any, i: number) => i !== currentPhotoIndex)
@@ -416,15 +422,35 @@ export default function ProfileDetailScreen() {
               <View style={styles.detailsGrid}>
                 {user.gender && <DetailItem icon="person-outline" label="Gender" value={user.gender} />}
                 {user.lookingFor && <DetailItem icon="heart-outline" label="Looking for" value={user.lookingFor} />}
+                {user.relationshipGoal && <DetailItem icon="ribbon-outline" label="Relationship Goal" value={user.relationshipGoal} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
                 {user.jobTitle && <DetailItem icon="briefcase-outline" label="Job" value={user.jobTitle} />}
                 {user.education && <DetailItem icon="school-outline" label="Education" value={user.education} />}
-                {user.lifestyle?.pets && <DetailItem icon="paw-outline" label="Pets" value={user.lifestyle.pets} />}
+                {user.lifestyle?.personalityType && <DetailItem icon="bulb-outline" label="Personality" value={user.lifestyle.personalityType} />}
+                {user.lifestyle?.communicationStyle && <DetailItem icon="chatbubbles-outline" label="Communication" value={user.lifestyle.communicationStyle} />}
+                {user.lifestyle?.loveStyle && <DetailItem icon="heart-circle-outline" label="Love Style" value={user.lifestyle.loveStyle} />}
                 {user.lifestyle?.relationshipStatus && <DetailItem icon="heart-half-outline" label="Relationship" value={user.lifestyle.relationshipStatus} />}
                 {user.lifestyle?.religion && <DetailItem icon="sunny-outline" label="Religion" value={user.lifestyle.religion} />}
                 {user.lifestyle?.ethnicity && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle.ethnicity} />}
               </View>
             </View>
+
+            {(user.lifestyle?.smoking || user.lifestyle?.drinking || user.lifestyle?.workout || user.lifestyle?.pets || user.lifestyle?.hasKids != null || user.lifestyle?.wantsKids != null) && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="leaf-outline" size={18} color={theme.primary} />
+                  <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Lifestyle</ThemedText>
+                </View>
+                <View style={styles.detailsGrid}>
+                  {user.lifestyle?.smoking && <DetailItem icon="flame-outline" label="Smoking" value={user.lifestyle.smoking} />}
+                  {user.lifestyle?.drinking && <DetailItem icon="wine-outline" label="Drinking" value={user.lifestyle.drinking} />}
+                  {user.lifestyle?.workout && <DetailItem icon="barbell-outline" label="Workout" value={user.lifestyle.workout} />}
+                  {user.lifestyle?.pets && <DetailItem icon="paw-outline" label="Pets" value={user.lifestyle.pets} />}
+                  {user.lifestyle?.hasKids != null && <DetailItem icon="people-outline" label="Has Kids" value={user.lifestyle.hasKids ? 'Yes' : 'No'} />}
+                  {user.lifestyle?.wantsKids != null && <DetailItem icon="happy-outline" label="Wants Kids" value={user.lifestyle.wantsKids ? 'Yes' : 'No'} />}
+                </View>
+              </View>
+            )}
 
             {user.interests && user.interests.length > 0 && (
               <View style={styles.section}>

@@ -499,12 +499,17 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
   }
 
   return (
-    <View style={[styles.scoreCard, { backgroundColor: colors.card }]}>
+    <View style={[styles.scoreCard, { backgroundColor: colors.card || colors.surface }]}>
       <View style={styles.scoreHeader}>
         <Ionicons name="heart-circle" size={24} color={scoreColor} />
         <Text style={[styles.scoreTitle, { color: colors.text }]}>
           Compatibility
         </Text>
+        <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
+          <Text style={[styles.scoreBadgeText, { color: scoreColor }]}>
+            {compatibility >= 80 ? 'Great Match!' : compatibility >= 60 ? 'Good Match' : compatibility >= 40 ? 'Okay' : 'Low'}
+          </Text>
+        </View>
       </View>
       
       <View style={styles.scoreMain}>
@@ -768,6 +773,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+    flex: 1,
+  },
+  scoreBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  scoreBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   scoreMain: {
     flexDirection: 'row',
