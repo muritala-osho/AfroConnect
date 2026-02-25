@@ -145,6 +145,11 @@ router.post('/swipe', protect, async (req, res) => {
       if (!currentUser.swipedLeft.includes(targetUserId)) {
         currentUser.swipedLeft.push(targetUserId);
       }
+      const FriendRequest = require('../models/FriendRequest');
+      await FriendRequest.updateMany(
+        { sender: targetUserId, receiver: currentUser._id, status: 'pending' },
+        { status: 'rejected' }
+      );
     }
 
     await currentUser.save();
