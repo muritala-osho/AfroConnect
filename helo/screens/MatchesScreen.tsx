@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { View, StyleSheet, Pressable, FlatList, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -476,7 +476,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       </ThemedText>
       <Pressable
         style={[styles.emptyButton, { backgroundColor: theme.primary, marginTop: 20 }]}
-        onPress={() => navigation.navigate("Swipe")}
+        onPress={() => (navigation as any).navigate("MainTabs", { screen: "Discovery" })}
       >
         <ThemedText style={[styles.emptyButtonText, { color: theme.buttonText }]}>
           {t('startSwiping')}
@@ -519,9 +519,19 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           </Pressable>
         </View>
 
-        <ScrollView
+        <FlatList
+          data={[activeTab]}
+          keyExtractor={() => activeTab}
+          renderItem={() => (
+            <>
+              {activeTab === 'matches' && renderMasonryGrid()}
+              {activeTab === 'likes' && renderLikesMasonryGrid()}
+            </>
+          )}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={true}
+          initialNumToRender={1}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -529,10 +539,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               tintColor={theme.primary}
             />
           }
-        >
-          {activeTab === 'matches' && renderMasonryGrid()}
-          {activeTab === 'likes' && renderLikesMasonryGrid()}
-        </ScrollView>
+        />
       </ThemedView>
     </GestureHandlerRootView>
   );

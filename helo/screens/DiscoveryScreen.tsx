@@ -38,6 +38,7 @@ import { getApiBaseUrl } from "@/constants/config";
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { PremiumBadge } from "@/components/PremiumBadge";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -71,6 +72,7 @@ interface DiscoverUser {
   religion?: string;
   personalityType?: string;
   needsVerification?: boolean;
+  premium?: { isActive: boolean };
 }
 
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
@@ -379,7 +381,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             verified: u.verified || false,
             location: u.location,
             isBoosted: u.isBoosted || false,
-            needsVerification: u.needsVerification || false
+            needsVerification: u.needsVerification || false,
+            premium: u.premium || undefined
           };
         });
 
@@ -1464,6 +1467,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                   <ThemedText style={styles.profileName}>
                     {currentUser.name}{currentUser.age !== null ? `, ${currentUser.age}` : ''}
                   </ThemedText>
+                  {(currentUser as any).premium?.isActive && (
+                    <PremiumBadge size="small" />
+                  )}
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 

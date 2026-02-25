@@ -47,14 +47,18 @@ const PRICING_TIERS: PriceTier[] = [
 ];
 
 const PREMIUM_FEATURES = [
-  { icon: 'heart-multiple', text: 'Unlimited Likes', color: '#FF6B6B' },
-  { icon: 'eye', text: 'See Who Likes You', color: '#4CAF50' },
-  { icon: 'lightning-bolt', text: '5 Super Likes Daily', color: '#FFD93D' },
-  { icon: 'undo-variant', text: 'Unlimited Rewinds', color: '#9C27B0' },
-  { icon: 'incognito', text: 'Incognito Mode', color: '#607D8B' },
-  { icon: 'rocket-launch', text: '1 Free Boost Monthly', color: '#FF9800' },
-  { icon: 'earth', text: 'Passport - Match Anywhere', color: '#2196F3' },
-  { icon: 'phone', text: 'Unlimited Calls', color: '#00BCD4' },
+  { icon: 'heart-multiple', text: 'Unlimited Likes', color: '#FF6B6B', desc: 'Swipe without limits' },
+  { icon: 'eye', text: 'See Who Likes You', color: '#4CAF50', desc: 'View all your admirers' },
+  { icon: 'lightning-bolt', text: '10 Super Likes Daily', color: '#FFD93D', desc: 'Stand out from the crowd' },
+  { icon: 'undo-variant', text: 'Unlimited Rewinds', color: '#9C27B0', desc: 'Undo accidental swipes' },
+  { icon: 'incognito', text: 'Incognito Mode', color: '#607D8B', desc: 'Browse without being seen' },
+  { icon: 'rocket-launch', text: '1 Free Boost Monthly', color: '#FF9800', desc: 'Get more visibility' },
+  { icon: 'earth', text: 'Global Discovery', color: '#2196F3', desc: 'Match worldwide by country' },
+  { icon: 'phone', text: 'Unlimited Calls', color: '#00BCD4', desc: 'Voice & video without limits' },
+  { icon: 'eye-check', text: 'Story Viewer Details', color: '#E91E63', desc: 'See who viewed your stories' },
+  { icon: 'filter-variant', text: 'Advanced Filters', color: '#795548', desc: 'Refine your matches' },
+  { icon: 'shield-star', text: 'Premium Badge', color: '#FFD700', desc: 'Exclusive animated profile badge' },
+  { icon: 'map-marker-radius', text: 'No Distance Limits', color: '#3F51B5', desc: 'See matches everywhere' },
 ];
 
 export default function PremiumScreen({ navigation }: any) {
@@ -250,7 +254,10 @@ export default function PremiumScreen({ navigation }: any) {
                 <View style={[styles.featureIcon, { backgroundColor: feature.color + '20' }]}>
                   <MaterialCommunityIcons name={feature.icon as any} size={22} color={feature.color} />
                 </View>
-                <Text style={styles.featureText}>{feature.text}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.featureText}>{feature.text}</Text>
+                  <Text style={styles.featureDesc}>{feature.desc}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -531,8 +538,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
+  featureDesc: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 2,
+  },
   featureText: {
-    flex: 1,
     fontSize: 12,
     fontWeight: '600',
     color: '#FFF',

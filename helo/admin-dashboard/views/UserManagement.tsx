@@ -1,20 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Filter, UserX, AlertTriangle, Eye, Sparkles, CheckCircle2, X, 
   MapPin, Calendar, Mail, MessageSquare, History, ShieldAlert, Award, Heart,
-  Briefcase, GraduationCap, Info, Camera, Tag, Cigarette, Wine, HandMetal
+  Briefcase, GraduationCap, Info, Camera, Tag, Cigarette, Wine, HandMetal, Loader2
 } from 'lucide-react';
-import { User } from '../types';
 import { analyzeUserContent, ModerationResult } from '../services/geminiService';
+import { adminApi } from '../services/adminApi';
 
-interface UserManagementProps {
-  users: User[];
-  onUpdateUser: (updatedUser: User) => void;
-  onDeleteUser: (userId: string) => void;
-}
-
-const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, onDeleteUser }) => {
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+const UserManagement: React.FC = () => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'activity' | 'safety'>('bio');
   const [aiAnalysis, setAiAnalysis] = useState<ModerationResult | null>(null);
@@ -22,16 +18,41 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned' | 'warned'>('all');
 
-  const filteredUsers = useMemo(() => {
-    return users.filter(user => {
-      const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            user.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
-      return matchesSearch && matchesStatus;
-    });
-  }, [users, searchQuery, statusFilter]);
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const params: any = { limit: 50 };
+      if (searchQuery) params.search = searchQuery;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      const data = await adminApi.getUsers(params);
+      if (data.success) {
+        setUsers(data.users || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch users:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleUserClick = (user: User) => {
+  useEffect(() => {
+    fetchUsers();
+  }, [statusFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const mapUserStatus = (user: any) => {
+    if (user.banned) return 'banned';
+    if (user.suspended) return 'suspended';
+    return 'active';
+  };
+
+  const handleUserClick = (user: any) => {
     setSelectedUser(user);
     setIsModalOpen(true);
     setAiAnalysis(null);
@@ -42,7 +63,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
     if (!selectedUser) return;
     setIsAnalyzing(true);
     try {
-      const result = await analyzeUserContent(selectedUser.bio, ['Citizen behavior audit']);
+      const result = await analyzeUserContent(selectedUser.bio || '', ['Citizen behavior audit']);
       setAiAnalysis(result);
     } catch (err) {
       console.error(err);
@@ -51,26 +72,30 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
     }
   };
 
-  const handleToggleBan = () => {
+  const handleToggleBan = async () => {
     if (!selectedUser) return;
-    const newStatus = selectedUser.status === 'banned' ? 'active' : 'banned';
-    const updated = { ...selectedUser, status: newStatus as any };
-    onUpdateUser(updated);
-    setSelectedUser(updated);
+    const isBanned = selectedUser.banned;
+    try {
+      const data = await adminApi.banUser(selectedUser._id, !isBanned, 'Admin action from dashboard');
+      if (data.success) {
+        const updated = { ...selectedUser, banned: !isBanned };
+        setSelectedUser(updated);
+        setUsers(prev => prev.map(u => u._id === updated._id ? updated : u));
+      }
+    } catch (err) {
+      console.error('Ban toggle failed:', err);
+    }
   };
 
-  const handleToggleVerify = () => {
-    if (!selectedUser) return;
-    const newVerification = selectedUser.verificationStatus === 'verified' ? 'unverified' : 'verified';
-    const updated = { ...selectedUser, verificationStatus: newVerification as any };
-    onUpdateUser(updated);
-    setSelectedUser(updated);
-  };
-
-  const handleDelete = (userId: string) => {
-    if (window.confirm("Are you sure you want to permanently delete this account? This cannot be undone.")) {
-      onDeleteUser(userId);
-      setIsModalOpen(false);
+  const handleDelete = async (userId: string) => {
+    if (window.confirm("Are you sure you want to permanently ban this account?")) {
+      try {
+        await adminApi.banUser(userId, true, 'Permanently banned by admin');
+        setUsers(prev => prev.filter(u => u._id !== userId));
+        setIsModalOpen(false);
+      } catch (err) {
+        console.error('Delete failed:', err);
+      }
     }
   };
 
@@ -79,7 +104,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Citizen Management</h1>
-          <p className="text-gray-500 dark:text-slate-400 font-medium">Overseeing {users.length} active platform identities</p>
+          <p className="text-gray-500 dark:text-slate-400 font-medium">Overseeing {users.length} platform identities</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="relative group">
@@ -103,14 +128,18 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
               <option value="banned">Banned</option>
-              <option value="warned">Warned</option>
             </select>
           </div>
         </div>
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
-        {filteredUsers.length > 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-cyan-500" />
+            <span className="ml-3 text-sm font-bold text-slate-400">Loading citizens...</span>
+          </div>
+        ) : users.length > 0 ? (
           <table className="w-full text-left">
             <thead className="bg-gray-50/50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
               <tr>
@@ -122,40 +151,42 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-              {filteredUsers.map((user) => (
+              {users.map((user) => {
+                const status = mapUserStatus(user);
+                return (
                 <tr 
-                  key={user.id} 
+                  key={user._id} 
                   className="hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 transition-colors group cursor-pointer"
                   onClick={() => handleUserClick(user)}
                 >
                   <td className="px-8 py-5">
                     <div className="flex items-center">
-                      <img src={user.avatar} className="h-12 w-12 rounded-2xl object-cover mr-4 ring-2 ring-gray-100 dark:ring-slate-800 group-hover:scale-105 transition-transform" alt={user.name} />
+                      <img src={user.photos?.[0] || `https://ui-avatars.com/api/?name=${user.name}&background=14b8a6&color=fff`} className="h-12 w-12 rounded-2xl object-cover mr-4 ring-2 ring-gray-100 dark:ring-slate-800 group-hover:scale-105 transition-transform" alt={user.name} />
                       <div>
                         <div className="text-sm font-black text-gray-900 dark:text-white">{user.name}</div>
                         <div className="text-xs text-gray-400 dark:text-slate-500 font-medium">{user.email}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-sm font-medium text-gray-600 dark:text-slate-400">{user.location}</td>
+                  <td className="px-8 py-5 text-sm font-medium text-gray-600 dark:text-slate-400">{user.location?.city || user.location?.country || '—'}</td>
                   <td className="px-8 py-5">
                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                      user.status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 
-                      user.status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400' : 
+                      status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 
+                      status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400' : 
                       'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400'
                     }`}>
-                      {user.status}
+                      {status}
                     </span>
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center text-xs font-bold">
-                      {user.verificationStatus === 'verified' ? (
+                      {user.verified ? (
                         <CheckCircle2 size={16} className="text-cyan-500 mr-2" />
                       ) : (
                         <AlertTriangle size={16} className="text-amber-500 mr-2" />
                       )}
-                      <span className={user.verificationStatus === 'verified' ? 'text-cyan-600 dark:text-cyan-400' : 'text-amber-600 dark:text-amber-400'}>
-                        {user.verificationStatus.toUpperCase()}
+                      <span className={user.verified ? 'text-cyan-600 dark:text-cyan-400' : 'text-amber-600 dark:text-amber-400'}>
+                        {user.verified ? 'VERIFIED' : 'UNVERIFIED'}
                       </span>
                     </div>
                   </td>
@@ -168,7 +199,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                         <Eye size={18} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(user.id)}
+                        onClick={() => handleDelete(user._id)}
                         className="p-2.5 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all shadow-sm"
                       >
                         <UserX size={18} />
@@ -176,7 +207,8 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         ) : (
@@ -194,12 +226,10 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-xl animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl border border-white/10 flex flex-col">
 
-            {/* Modal Header/Hero - FIXED Layout with no blur on background for clarity */}
             <div className="relative h-80 bg-slate-900 shrink-0">
                <div className="absolute inset-0 opacity-40 overflow-hidden">
-                 {/* Removed blur-xl to fix the "it's blur" issue */}
                  <img 
-                    src={selectedUser.photos[0] || selectedUser.avatar} 
+                    src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${selectedUser.name}&background=14b8a6&color=fff`} 
                     className="w-full h-full object-cover brightness-50" 
                     alt="" 
                  />
@@ -217,28 +247,27 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
               <div className="flex flex-col md:flex-row items-center md:items-end gap-10 -mt-32 mb-10 relative z-10">
                 <div className="relative shrink-0">
                   <div className="p-2 bg-white dark:bg-slate-900 rounded-[3.5rem] shadow-2xl ring-1 ring-black/5">
-                    {/* Primary Avatar remains sharp */}
                     <img 
-                      src={selectedUser.avatar} 
+                      src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${selectedUser.name}&background=14b8a6&color=fff&size=200`} 
                       className="h-52 w-52 rounded-[3rem] object-cover" 
                       alt={selectedUser.name} 
                     />
                   </div>
-                  <div className={`absolute bottom-6 right-6 h-7 w-7 rounded-full border-4 border-white dark:border-slate-900 shadow-lg ${selectedUser.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                  <div className={`absolute bottom-6 right-6 h-7 w-7 rounded-full border-4 border-white dark:border-slate-900 shadow-lg ${!selectedUser.banned ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
                 </div>
 
                 <div className="flex-1 pb-4 text-center md:text-left">
                   <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-3">
-                    <h2 className="text-4xl font-black text-white drop-shadow-2xl">{selectedUser.name}, {selectedUser.age}</h2>
-                    {selectedUser.verificationStatus === 'verified' && (
+                    <h2 className="text-4xl font-black text-white drop-shadow-2xl">{selectedUser.name}{selectedUser.age ? `, ${selectedUser.age}` : ''}</h2>
+                    {selectedUser.verified && (
                       <span className="bg-cyan-500 text-white px-5 py-2 rounded-full text-[10px] font-black flex items-center gap-1.5 uppercase tracking-widest shadow-lg shadow-cyan-500/30">
                         <Award size={14} /> VERIFIED CITIZEN
                       </span>
                     )}
                   </div>
                   <div className="flex flex-wrap justify-center md:justify-start gap-8 text-slate-100 font-bold text-sm">
-                    <span className="flex items-center gap-2 drop-shadow-md"><MapPin size={18} className="text-cyan-400" /> {selectedUser.location}</span>
-                    <span className="flex items-center gap-2 drop-shadow-md"><Calendar size={18} className="text-cyan-400" /> Active: {selectedUser.lastActive}</span>
+                    <span className="flex items-center gap-2 drop-shadow-md"><MapPin size={18} className="text-cyan-400" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
+                    <span className="flex items-center gap-2 drop-shadow-md"><Calendar size={18} className="text-cyan-400" /> {selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleDateString() : 'Unknown'}</span>
                   </div>
                 </div>
 
@@ -246,18 +275,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                   <button 
                     onClick={handleToggleBan}
                     className={`px-10 py-5 text-xs font-black rounded-[2rem] transition-all uppercase tracking-widest shadow-2xl flex items-center gap-3 active:scale-95 ${
-                      selectedUser.status === 'banned' 
+                      selectedUser.banned 
                         ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20' 
                         : 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-500/20'
                     }`}
                   >
-                    {selectedUser.status === 'banned' ? <CheckCircle2 size={18}/> : <UserX size={18}/>}
-                    {selectedUser.status === 'banned' ? 'Restore Access' : 'Suspend Access'}
+                    {selectedUser.banned ? <CheckCircle2 size={18}/> : <UserX size={18}/>}
+                    {selectedUser.banned ? 'Restore Access' : 'Suspend Access'}
                   </button>
                 </div>
               </div>
 
-              {/* Tabs Navigation */}
               <div className="flex border-b border-gray-100 dark:border-slate-800 mb-8 sticky top-0 bg-white dark:bg-slate-900 z-10 py-2">
                 {[
                   { id: 'bio', label: 'Identity Profile', icon: <Eye size={16} /> },
@@ -278,19 +306,17 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                 ))}
               </div>
 
-              {/* Tab Content */}
               <div className="pb-12">
                 {activeProfileTab === 'bio' && (
                   <div className="space-y-12 animate-fadeIn">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                       <div className="lg:col-span-2 space-y-10">
-                        {/* Photos Gallery - Ensured sharpness */}
                         <div className="space-y-6">
                            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                              <Camera size={14} /> Registered Media Gallery
                            </h3>
                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                             {selectedUser.photos.map((photo, i) => (
+                             {(selectedUser.photos || []).map((photo: string, i: number) => (
                                <div key={i} className="aspect-[3/4] rounded-[2.5rem] overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm hover:scale-[1.03] transition-transform group cursor-zoom-in">
                                  <img src={photo} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" alt={`Gallery ${i}`} />
                                </div>
@@ -301,7 +327,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                         <div className="p-10 bg-slate-50 dark:bg-slate-800/40 rounded-[3rem] border border-gray-100 dark:border-slate-800/50">
                           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Official Bio</h3>
                           <p className="text-xl font-medium text-slate-700 dark:text-slate-200 leading-relaxed italic">
-                            "{selectedUser.bio}"
+                            "{selectedUser.bio || 'No bio provided'}"
                           </p>
                         </div>
 
@@ -310,7 +336,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                              <Tag size={14} /> Personality Nodes
                            </h3>
                            <div className="flex flex-wrap gap-3">
-                             {selectedUser.interests.map((interest, i) => (
+                             {(selectedUser.interests || []).map((interest: string, i: number) => (
                                <span key={i} className="px-6 py-3 bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-gray-100 dark:border-slate-700 shadow-sm">
                                  {interest}
                                </span>
@@ -381,23 +407,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                       <div className="p-10 bg-indigo-50 dark:bg-indigo-500/5 rounded-[3rem] border border-indigo-100 dark:border-indigo-500/20">
                         <div className="flex items-center gap-4 mb-3 text-indigo-600">
                           <MessageSquare size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Total Messages</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Gender</span>
                         </div>
-                        <p className="text-4xl font-black dark:text-white">1,482</p>
+                        <p className="text-4xl font-black dark:text-white capitalize">{selectedUser.gender || '—'}</p>
                       </div>
                       <div className="p-10 bg-rose-50 dark:bg-rose-500/5 rounded-[3rem] border border-rose-100 dark:border-rose-500/20">
                         <div className="flex items-center gap-4 mb-3 text-rose-600">
                           <Heart size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Global Matches</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Looking For</span>
                         </div>
-                        <p className="text-4xl font-black dark:text-white">124</p>
+                        <p className="text-4xl font-black dark:text-white capitalize">{selectedUser.lookingFor || '—'}</p>
                       </div>
                       <div className="p-10 bg-teal-50 dark:bg-teal-500/5 rounded-[3rem] border border-teal-100 dark:border-teal-500/20">
                         <div className="flex items-center gap-4 mb-3 text-teal-600">
                           <History size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Daily Average</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Joined</span>
                         </div>
-                        <p className="text-4xl font-black dark:text-white">42m</p>
+                        <p className="text-2xl font-black dark:text-white">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : '—'}</p>
                       </div>
                     </div>
                   </div>
@@ -467,13 +493,13 @@ const UserManagement: React.FC<UserManagementProps> = ({ users, onUpdateUser, on
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                        <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
                           <div>
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Global Reports</p>
-                             <p className="text-5xl font-black text-rose-500 leading-none">{selectedUser.reportCount}</p>
+                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Account Status</p>
+                             <p className="text-5xl font-black text-rose-500 leading-none">{selectedUser.banned ? 'BANNED' : selectedUser.warnings || 0}</p>
                           </div>
                           <ShieldAlert size={48} className="text-rose-500 opacity-20" />
                        </div>
                        <button 
-                         onClick={() => handleDelete(selectedUser.id)}
+                         onClick={() => handleDelete(selectedUser._id)}
                          className="p-10 bg-rose-500/5 hover:bg-rose-500/10 rounded-[3rem] border border-rose-500/20 text-rose-600 flex items-center justify-between transition-all group"
                        >
                          <div className="text-left">

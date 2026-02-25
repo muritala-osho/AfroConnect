@@ -44,6 +44,9 @@ interface Message {
   imageUrl?: string;
   videoUrl?: string;
   audioUrl?: string;
+  latitude?: number;
+  longitude?: number;
+  address?: string;
   createdAt: string;
   status?: 'sent' | 'delivered' | 'seen';
   replyTo?: { messageId: string; content: string; type: string; senderName: string };
@@ -603,6 +606,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       setIsRecording(false);
       
       await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
       const uri = recording.getURI();
       
       if (uri && recordingDuration >= 1) {
@@ -659,6 +666,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         const recording = recordingRef.current;
         recordingRef.current = null;
         await recording.stopAndUnloadAsync();
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        });
       } else {
         recordingRef.current = null;
       }
@@ -787,7 +798,18 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   useEffect(() => {
     return () => {
       if (soundRef.current) {
-        soundRef.current.unloadAsync();
+        soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+      if (recordingRef.current) {
+        try {
+          recordingRef.current.stopAndUnloadAsync().catch(() => {});
+        } catch (e) {}
+        recordingRef.current = null;
+      }
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
       }
     };
   }, []);
@@ -1135,7 +1157,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   isMe ? styles.myBubble : styles.theirBubble,
                   { backgroundColor: isMe ? theme.primary : (isDark ? 'rgba(42,42,42,0.95)' : 'rgba(255,255,255,0.95)') },
                   item.type === 'image' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
-                  item.type === 'video' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {}
+                  item.type === 'video' && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
+                  item.type === 'location' ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {}
                 ]}>
                   {item.replyTo && (
                     <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeftColor: isMe ? '#FFF' : theme.primary }]}>
@@ -1219,8 +1242,50 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       <Ionicons name="mic" size={14} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
                     </Pressable>
                   )}
+
+                  {item.type === 'location' && item.latitude != null && item.longitude != null && (
+                    <Pressable
+                      onPress={() => {
+                        const lat = item.latitude!;
+                        const lng = item.longitude!;
+                        const label = item.address || `${lat}, ${lng}`;
+                        const url = Platform.select({
+                          ios: `maps:0,0?q=${label}@${lat},${lng}`,
+                          android: `geo:${lat},${lng}?q=${lat},${lng}(${label})`,
+                          default: `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+                        });
+                        Linking.openURL(url!).catch(() => {
+                          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`);
+                        });
+                      }}
+                      style={styles.locationBubble}
+                    >
+                      <View style={styles.locationMapContainer}>
+                        <Image
+                          source={{ uri: `https://tile.openstreetmap.org/${14}/${Math.floor((item.longitude! + 180) / 360 * Math.pow(2, 14))}/${Math.floor((1 - Math.log(Math.tan(item.latitude! * Math.PI / 180) + 1 / Math.cos(item.latitude! * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, 14))}.png` }}
+                          style={styles.locationMapImage}
+                          contentFit="cover"
+                        />
+                        <View style={styles.locationPinOverlay}>
+                          <Ionicons name="location-sharp" size={32} color="#E53935" />
+                        </View>
+                      </View>
+                      <View style={styles.locationInfoRow}>
+                        <Ionicons name="location-outline" size={16} color={isMe ? 'rgba(255,255,255,0.8)' : theme.textSecondary} style={{ marginRight: 6 }} />
+                        <ThemedText style={[styles.locationAddress, { color: isMe ? '#FFF' : theme.text }]} numberOfLines={2}>
+                          {item.address || `${item.latitude!.toFixed(4)}, ${item.longitude!.toFixed(4)}`}
+                        </ThemedText>
+                      </View>
+                      <View style={styles.locationTapHint}>
+                        <ThemedText style={[styles.locationTapText, { color: isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary }]}>
+                          Tap to open map
+                        </ThemedText>
+                        <Feather name="external-link" size={12} color={isMe ? 'rgba(255,255,255,0.6)' : theme.textSecondary} />
+                      </View>
+                    </Pressable>
+                  )}
                   
-                  {messageText && item.type !== 'audio' ? (
+                  {messageText && item.type !== 'audio' && item.type !== 'location' ? (
                     <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
                       {messageText}
                     </ThemedText>
@@ -1486,8 +1551,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               ) : (
                 <Pressable 
                   style={styles.micButton}
-                  onPressIn={startRecording}
-                  onPressOut={stopRecording}
+                  onPress={startRecording}
                 >
                   <Feather name="mic" size={24} color={theme.primary} />
                 </Pressable>
@@ -2165,5 +2229,50 @@ const styles = StyleSheet.create({
   videoPlayButton: {
     justifyContent: 'center' as const,
     alignItems: 'center' as const,
+  },
+  locationBubble: {
+    width: 220,
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+    marginBottom: 4,
+  },
+  locationMapContainer: {
+    width: 220,
+    height: 130,
+    position: 'relative' as const,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  locationMapImage: {
+    width: 220,
+    height: 130,
+  },
+  locationPinOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+  },
+  locationInfoRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 2,
+  },
+  locationAddress: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    flex: 1,
+    lineHeight: 18,
+  },
+  locationTapHint: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    paddingHorizontal: 8,
+    paddingBottom: 6,
+    gap: 4,
+  },
+  locationTapText: {
+    fontSize: 11,
   },
 });

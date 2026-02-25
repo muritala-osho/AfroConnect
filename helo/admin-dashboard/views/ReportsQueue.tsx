@@ -1,26 +1,41 @@
-import React, { useState } from 'react';
-import { ShieldAlert, CheckCircle2, XCircle, MoreHorizontal, User, AlertCircle, Eye, Trash2, ShieldCheck, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ShieldAlert, CheckCircle2, XCircle, MoreHorizontal, User, AlertCircle, Eye, Trash2, ShieldCheck, MessageCircle, Loader2 } from 'lucide-react';
+import { adminApi } from '../services/adminApi';
 
 const ReportsQueue: React.FC = () => {
-  const [reports, setReports] = useState([
-    { id: 'REP-001', reporter: 'Sarah Jenkins', target: 'Marcus Chen', reason: 'Harassment', status: 'pending', date: '10m ago', text: 'Used inappropriate language during chat and made me feel very uncomfortable after I declined a meeting.' },
-    { id: 'REP-002', reporter: 'Alex Rivera', target: 'John Doe', reason: 'Fake Profile', status: 'pending', date: '1h ago', text: 'This user is using stolen photos from an Instagram influencer I follow. He is clearly not who he says he is.' },
-    { id: 'REP-003', reporter: 'Jessica Wu', target: 'Sam Smith', reason: 'Scam', status: 'resolved', date: '5h ago', text: 'Asked for money repeatedly for "emergency medical bills" after only matching for two days.' },
-  ]);
+  const [reports, setReports] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeFilter, setActiveFilter] = useState('pending');
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
+  const [stats, setStats] = useState({ pending: 0, resolved: 0 });
 
-  const [selectedReport, setSelectedReport] = useState<typeof reports[0] | null>(null);
-
-  const handleStatusChange = (id: string, newStatus: string) => {
-    setReports(prev => prev.map(r => r.id === id ? { ...r, status: newStatus as any } : r));
-    if (selectedReport?.id === id) {
-      setSelectedReport(prev => prev ? { ...prev, status: newStatus as any } : null);
+  const fetchReports = async (status: string) => {
+    setLoading(true);
+    try {
+      const data = await adminApi.getReports(status);
+      if (data.success) {
+        setReports(data.reports || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch reports:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemove = (id: string) => {
-    if (confirm("Delete this report record?")) {
-      setReports(prev => prev.filter(r => r.id !== id));
-      setSelectedReport(null);
+  useEffect(() => {
+    fetchReports(activeFilter);
+  }, [activeFilter]);
+
+  const handleResolve = async (reportId: string, action: string) => {
+    try {
+      const data = await adminApi.resolveReport(reportId, action);
+      if (data.success) {
+        setReports(prev => prev.filter(r => r._id !== reportId));
+        setSelectedReport(null);
+      }
+    } catch (err) {
+      console.error('Failed to resolve report:', err);
     }
   };
 
@@ -32,21 +47,29 @@ const ReportsQueue: React.FC = () => {
           <p className="text-gray-500 dark:text-slate-400 font-medium">Monitoring community integrity and resolving conflicts</p>
         </div>
         <div className="flex bg-white dark:bg-slate-900 p-1 rounded-2xl border border-gray-100 dark:border-slate-800">
-           <button className="px-4 py-2 text-[10px] font-black uppercase bg-teal-600 text-white rounded-xl shadow-lg">Pending (12)</button>
-           <button className="px-4 py-2 text-[10px] font-black uppercase text-slate-400">Escalated (4)</button>
-           <button className="px-4 py-2 text-[10px] font-black uppercase text-slate-400">Resolved (142)</button>
+           <button 
+             onClick={() => setActiveFilter('pending')}
+             className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl ${activeFilter === 'pending' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400'}`}
+           >
+             Pending
+           </button>
+           <button 
+             onClick={() => setActiveFilter('resolved')}
+             className={`px-4 py-2 text-[10px] font-black uppercase rounded-xl ${activeFilter === 'resolved' ? 'bg-teal-600 text-white shadow-lg' : 'text-slate-400'}`}
+           >
+             Resolved
+           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
-          { label: 'Critical Incident', val: '12', color: 'text-rose-500 bg-rose-50', icon: <ShieldAlert /> },
-          { label: 'Resolution Rate', val: '94.2%', color: 'text-emerald-500 bg-emerald-50', icon: <CheckCircle2 /> },
-          { label: 'Avg. S.L.A.', val: '14m', color: 'text-cyan-500 bg-cyan-50', icon: <AlertCircle /> },
+          { label: 'Reports Loaded', val: String(reports.length), color: 'text-rose-500 bg-rose-50', icon: <ShieldAlert /> },
+          { label: 'Filter', val: activeFilter.toUpperCase(), color: 'text-emerald-500 bg-emerald-50', icon: <CheckCircle2 /> },
+          { label: 'Status', val: loading ? '...' : 'Ready', color: 'text-cyan-500 bg-cyan-50', icon: <AlertCircle /> },
         ].map((stat, i) => (
           <div key={i} className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-gray-100 dark:border-slate-800 flex items-center gap-4 shadow-sm hover:translate-y-[-2px] transition-all">
             <div className={`p-4 rounded-2xl ${stat.color} dark:bg-opacity-10`}>
-              {/* Fix: Cast icon to React.ReactElement<any> to resolve the "size does not exist" type error and add validation check */}
               {React.isValidElement(stat.icon) && React.cloneElement(stat.icon as React.ReactElement<any>, { size: 24 })}
             </div>
             <div>
@@ -58,6 +81,12 @@ const ReportsQueue: React.FC = () => {
       </div>
 
       <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={32} className="animate-spin text-cyan-500" />
+            <span className="ml-3 text-sm font-bold text-slate-400">Loading reports...</span>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 dark:bg-slate-800/50">
@@ -70,24 +99,24 @@ const ReportsQueue: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-              {reports.map((report) => (
-                <tr key={report.id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
+              {reports.length > 0 ? reports.map((report) => (
+                <tr key={report._id} className="hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors">
                   <td className="px-8 py-5">
-                    <p className="text-sm font-black dark:text-white leading-none mb-1">{report.id}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{report.date}</p>
+                    <p className="text-sm font-black dark:text-white leading-none mb-1">{report._id?.slice(-6).toUpperCase()}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{report.createdAt ? new Date(report.createdAt).toLocaleDateString() : '—'}</p>
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-cyan-100 flex items-center justify-center text-[10px] font-black text-cyan-700">{report.reporter[0]}</div>
-                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{report.reporter}</span>
+                      <div className="h-6 w-6 rounded-full bg-cyan-100 flex items-center justify-center text-[10px] font-black text-cyan-700">{(report.reporter?.name || 'R')[0]}</div>
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{report.reporter?.name || 'Unknown'}</span>
                       <span className="text-slate-300">→</span>
-                      <div className="h-6 w-6 rounded-full bg-rose-100 flex items-center justify-center text-[10px] font-black text-rose-700">{report.target[0]}</div>
-                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{report.target}</span>
+                      <div className="h-6 w-6 rounded-full bg-rose-100 flex items-center justify-center text-[10px] font-black text-rose-700">{(report.reportedUser?.name || 'T')[0]}</div>
+                      <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{report.reportedUser?.name || 'Unknown'}</span>
                     </div>
                   </td>
                   <td className="px-8 py-5">
                     <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-lg text-[9px] font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider">
-                      {report.reason}
+                      {report.reason || 'Other'}
                     </span>
                   </td>
                   <td className="px-8 py-5">
@@ -107,30 +136,31 @@ const ReportsQueue: React.FC = () => {
                       >
                         <Eye size={18} />
                       </button>
-                      <button 
-                        onClick={() => handleStatusChange(report.id, 'resolved')}
-                        className="p-2.5 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl hover:bg-emerald-100 transition-all shadow-sm"
-                        title="Mark Resolved"
-                      >
-                        <ShieldCheck size={18} />
-                      </button>
-                      <button 
-                        onClick={() => handleRemove(report.id)}
-                        className="p-2.5 text-rose-600 bg-rose-50 dark:bg-rose-500/10 rounded-xl hover:bg-rose-100 transition-all shadow-sm"
-                        title="Archive Record"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {report.status === 'pending' && (
+                        <button 
+                          onClick={() => handleResolve(report._id, 'dismiss')}
+                          className="p-2.5 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl hover:bg-emerald-100 transition-all shadow-sm"
+                          title="Mark Resolved"
+                        >
+                          <ShieldCheck size={18} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan={5} className="px-8 py-20 text-center">
+                    <p className="text-sm font-bold text-slate-400">No reports found</p>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
-      {/* Report Context Modal */}
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-md animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-[3rem] w-full max-w-xl overflow-hidden shadow-2xl border border-white/10">
@@ -138,7 +168,7 @@ const ReportsQueue: React.FC = () => {
               <div className="flex items-start justify-between mb-8">
                 <div>
                   <h3 className="text-[10px] font-black text-rose-500 uppercase tracking-[0.2em] mb-2">Safety Incident Investigation</h3>
-                  <h2 className="text-3xl font-black dark:text-white leading-tight">{selectedReport.id}</h2>
+                  <h2 className="text-3xl font-black dark:text-white leading-tight">{selectedReport._id?.slice(-6).toUpperCase()}</h2>
                 </div>
                 <button 
                   onClick={() => setSelectedReport(null)}
@@ -152,35 +182,40 @@ const ReportsQueue: React.FC = () => {
                  <div className="flex gap-4">
                     <div className="flex-1 p-6 bg-gray-50 dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700">
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Reporter</p>
-                      <p className="font-bold dark:text-white">{selectedReport.reporter}</p>
+                      <p className="font-bold dark:text-white">{selectedReport.reporter?.name || 'Unknown'}</p>
                     </div>
                     <div className="flex-1 p-6 bg-gray-50 dark:bg-slate-800 rounded-3xl border border-gray-100 dark:border-slate-700">
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Target</p>
-                      <p className="font-bold dark:text-white">{selectedReport.target}</p>
+                      <p className="font-bold dark:text-white">{selectedReport.reportedUser?.name || 'Unknown'}</p>
                     </div>
                  </div>
 
                  <div className="p-8 bg-rose-50/50 dark:bg-rose-500/5 rounded-[2.5rem] border border-rose-100 dark:border-rose-500/20">
                     <div className="flex items-center gap-2 mb-4 text-rose-600">
                       <MessageCircle size={18} />
-                      <h4 className="text-xs font-black uppercase tracking-widest">Incident Testimony</h4>
+                      <h4 className="text-xs font-black uppercase tracking-widest">Incident Details</h4>
                     </div>
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed italic">
-                      "{selectedReport.text}"
+                      "{selectedReport.description || selectedReport.reason || 'No details provided'}"
                     </p>
                  </div>
 
-                 <div className="flex gap-4">
-                    <button 
-                      onClick={() => { handleStatusChange(selectedReport.id, 'resolved'); setSelectedReport(null); }}
-                      className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20"
-                    >
-                      Verify & Dismiss
-                    </button>
-                    <button className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 shadow-xl shadow-rose-500/20">
-                      Escalate to Ban
-                    </button>
-                 </div>
+                 {selectedReport.status === 'pending' && (
+                   <div className="flex gap-4">
+                      <button 
+                        onClick={() => handleResolve(selectedReport._id, 'dismiss')}
+                        className="flex-1 py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-xl shadow-emerald-500/20"
+                      >
+                        Verify & Dismiss
+                      </button>
+                      <button 
+                        onClick={() => handleResolve(selectedReport._id, 'ban')}
+                        className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-700 shadow-xl shadow-rose-500/20"
+                      >
+                        Escalate to Ban
+                      </button>
+                   </div>
+                 )}
               </div>
             </div>
           </div>

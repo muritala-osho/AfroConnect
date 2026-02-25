@@ -24,6 +24,7 @@ import { getPhotoSource } from "@/utils/photos";
 import ActivityStatus from "@/components/ActivityStatus";
 import ProfilePrompts from "@/components/ProfilePrompts";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
@@ -303,9 +304,7 @@ export default function ProfileDetailScreen() {
                 {user.name}{user.age ? `, ${user.age}` : ''}
               </ThemedText>
               {user.premium?.isActive && (
-                <View style={styles.premiumBadge}>
-                  <Feather name="star" size={12} color="#FFD700" />
-                </View>
+                <PremiumBadge size="medium" />
               )}
               {user.verified && (
                 <Image

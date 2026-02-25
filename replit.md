@@ -33,8 +33,11 @@ Preferred communication style: Simple, everyday language.
 - **Block/Unblock**: Blocking removes match, all chat messages, friend requests, and swipe history for both users. Unblocking only makes user discoverable again without auto-restoring match.
 - **Communication**: Real-time chat with message deletion, translation, and reply features. Agora Web SDK integration for robust voice and video calls with state management, ringing tones, busy detection, and offline push notifications.
 - **Stories**: Ephemeral stories visible only to matched users who have exchanged messages. Story view tracking with viewer list modal (premium shows names/photos, free shows count).
-- **Premium Features**: Stripe integration for premium subscriptions, enabling features like "See Who Likes You," "Passport Match," unlimited likes, Global Discovery with country filter, story viewer details, and advanced story viewing options.
+- **Premium Features**: Stripe integration for premium subscriptions with 12 features: Unlimited Likes, See Who Likes You, 10 Super Likes Daily, Unlimited Rewinds, Incognito Mode, Monthly Free Boost, Global Discovery with Country Picker, Unlimited Voice/Video Calls, Story Viewer Details, Advanced Filters, Premium Badge, No Distance Limits. Animated gold PremiumBadge component (`helo/components/PremiumBadge.tsx`) with pulsing glow shown on MyProfileScreen, ProfileDetailScreen, and DiscoveryScreen cards.
 - **Security**: Screenshot protection toggle per chat using expo-screen-capture on native platforms. Per-chat preference persisted via AsyncStorage.
+- **Admin Dashboard**: Full admin web panel at `/admin-web` with real API integration (`helo/admin-dashboard/services/adminApi.ts`). JWT auth with isAdmin check, auto-logout on 401. Views: DashboardHome (stats, activity monitoring), UserManagement (search, ban/unban), ReportsQueue (resolve reports), Payments (subscription revenue), IDVerification (approve/reject). Backend endpoints in `helo/backend/routes/admin.js` including DELETE stories and GET single user detail.
+- **Location Sharing**: Instagram-style map preview bubbles in chat using OpenStreetMap tiles. Shows static map thumbnail with pin overlay, address text, and tap-to-open in native maps app.
+- **Voice Recording**: Tap-to-record flow with proper cleanup on unmount, iOS audio mode reset after recording, upload to Cloudinary via `/api/upload/audio`.
 
 ## External Dependencies
 

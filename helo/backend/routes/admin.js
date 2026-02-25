@@ -632,4 +632,38 @@ router.get('/proxy-profile/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/users/:userId
+// @desc    Get single user detail
+// @access  Private/Admin
+router.get('/users/:userId', protect, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    res.json({ success: true, user });
+  } catch (error) {
+    console.error('Get user detail error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/admin/stories/:storyId
+// @desc    Remove a story
+// @access  Private/Admin
+router.delete('/stories/:storyId', protect, isAdmin, async (req, res) => {
+  try {
+    const Story = require('../models/Story');
+    const story = await Story.findById(req.params.storyId);
+    if (!story) {
+      return res.status(404).json({ success: false, message: 'Story not found' });
+    }
+    await Story.findByIdAndDelete(req.params.storyId);
+    res.json({ success: true, message: 'Story removed successfully' });
+  } catch (error) {
+    console.error('Delete story error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

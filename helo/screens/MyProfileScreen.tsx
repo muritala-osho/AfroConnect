@@ -19,6 +19,7 @@ import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MyProfileScreenNavigationProp = CompositeNavigationProp<
@@ -359,6 +360,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={styles.heroAge}>  {user.age}</ThemedText>
                 )}
               </ThemedText>
+              {user?.premium?.isActive && <PremiumBadge size="medium" />}
             </View>
             {(user as any)?.livingIn && (
               <View style={styles.locationRow}>

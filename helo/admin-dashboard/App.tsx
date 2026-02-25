@@ -10,8 +10,8 @@ import SystemSettings from './views/SystemSettings';
 import IDVerification from './views/IDVerification';
 import AdminProfile from './views/AdminProfile';
 import { AuthState, AdminRole, User } from './types';
-import { LogIn, ShieldCheck, Github, Sun, Moon, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { MOCK_USERS } from './constants';
+import { LogIn, ShieldCheck, Github, Sun, Moon, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
+import { adminApi, clearToken } from './services/adminApi';
 
 const AfroLogo = () => (
   <svg width="100%" height="100%" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -35,11 +35,10 @@ const App: React.FC = () => {
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('afroconnect_users');
-    return saved ? JSON.parse(saved) : MOCK_USERS;
-  });
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
 
@@ -57,10 +56,6 @@ const App: React.FC = () => {
   }, [auth]);
 
   useEffect(() => {
-    localStorage.setItem('afroconnect_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 4000);
       return () => clearTimeout(timer);
@@ -73,33 +68,40 @@ const App: React.FC = () => {
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAuth({
-      isAuthenticated: true,
-      user: {
-        name: 'Dominic Adotei',
-        role: AdminRole.SUPER_ADMIN,
-        email: 'ceo@afroconnect.ai',
-        avatar: undefined
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const data = await adminApi.login(loginEmail, loginPassword);
+      if (!data.user?.isAdmin) {
+        clearToken();
+        setLoginError('Access denied. Admin privileges required.');
+        setLoginLoading(false);
+        return;
       }
-    });
-    showToast("Root access authorized. Synchronizing workspace...", "success");
+      setAuth({
+        isAuthenticated: true,
+        user: {
+          name: data.user.name,
+          role: AdminRole.SUPER_ADMIN,
+          email: data.user.email,
+          avatar: data.user.photos?.[0] || undefined
+        }
+      });
+      showToast("Root access authorized. Synchronizing workspace...", "success");
+    } catch (err: any) {
+      setLoginError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
   const handleLogout = () => {
     setAuth({ isAuthenticated: false, user: null });
     localStorage.removeItem('afroconnect_auth');
+    clearToken();
     showToast("Session terminated safely.", "success");
-  };
-
-  const handleUpdateUser = (updatedUser: User) => {
-    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    setUsers(prev => prev.filter(u => u.id !== userId));
-    showToast("Citizen record purged successfully.", "success");
   };
 
   const handleUpdateAdminProfile = (updatedAdmin: any) => {
@@ -133,6 +135,8 @@ const App: React.FC = () => {
                 <input 
                   type="email" 
                   placeholder="admin@afroconnect.ai"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
                   className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all dark:text-white font-medium"
                   required
                 />
@@ -142,17 +146,26 @@ const App: React.FC = () => {
                 <input 
                   type="password" 
                   placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
                   className="w-full px-6 py-4 rounded-2xl bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 outline-none transition-all dark:text-white font-medium"
                   required
                 />
               </div>
             </div>
+            {loginError && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl">
+                <AlertCircle size={16} className="text-rose-500 shrink-0" />
+                <span className="text-xs font-bold text-rose-600 dark:text-rose-400">{loginError}</span>
+              </div>
+            )}
             <button 
               type="submit" 
-              className="w-full py-5 bg-teal-600 dark:bg-teal-500 text-white font-black rounded-2xl hover:bg-teal-700 dark:hover:bg-teal-600 shadow-xl shadow-teal-500/20 transition-all flex items-center justify-center uppercase tracking-widest text-xs active:scale-[0.98]"
+              disabled={loginLoading}
+              className="w-full py-5 bg-teal-600 dark:bg-teal-500 text-white font-black rounded-2xl hover:bg-teal-700 dark:hover:bg-teal-600 shadow-xl shadow-teal-500/20 transition-all flex items-center justify-center uppercase tracking-widest text-xs active:scale-[0.98] disabled:opacity-60"
             >
-              <LogIn size={20} className="mr-3" />
-              Authorize Access
+              {loginLoading ? <Loader2 size={20} className="mr-3 animate-spin" /> : <LogIn size={20} className="mr-3" />}
+              {loginLoading ? 'Authenticating...' : 'Authorize Access'}
             </button>
           </form>
           <div className="px-10 pb-10 text-center">
@@ -207,13 +220,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard' && <DashboardHome />}
-            {activeTab === 'users' && (
-              <UserManagement 
-                users={users} 
-                onUpdateUser={handleUpdateUser} 
-                onDeleteUser={handleDeleteUser} 
-              />
-            )}
+            {activeTab === 'users' && <UserManagement />}
             {activeTab === 'analytics' && <Analytics />}
             {activeTab === 'payments' && <Payments />}
             {activeTab === 'reports' && <ReportsQueue />}
@@ -221,7 +228,6 @@ const App: React.FC = () => {
             {activeTab === 'verification' && <IDVerification />}
             {activeTab === 'profile' && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} />}
 
-            {/* Catch-all for other tabs */}
             {!['dashboard', 'users', 'analytics', 'payments', 'reports', 'settings', 'verification', 'profile'].includes(activeTab) && (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-slate-800 animate-fadeIn">
                 <div className="bg-teal-50 dark:bg-teal-500/10 p-10 rounded-[2.5rem] mb-10 shadow-inner group">
@@ -242,7 +248,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Custom Toast System */}
         {notification && (
           <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] animate-fadeIn">
             <div className={`px-8 py-4 rounded-3xl shadow-2xl flex items-center gap-4 border backdrop-blur-md ${
