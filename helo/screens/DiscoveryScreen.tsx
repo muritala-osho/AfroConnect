@@ -75,6 +75,13 @@ interface DiscoverUser {
 
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
 
+const FALLBACK_COUNTRIES = [
+  'Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Tanzania', 'Uganda',
+  'Ethiopia', 'Cameroon', 'Senegal', 'Ivory Coast', 'Zimbabwe',
+  'USA', 'UK', 'Canada', 'France', 'Germany', 'Brazil', 'India',
+  'Australia', 'UAE', 'Japan', 'Netherlands', 'Italy', 'Spain',
+];
+
 const PASSPORT_CITIES = [
   { name: 'New York', lat: 40.7128, lng: -74.0060, country: 'USA' },
   { name: 'London', lat: 51.5074, lng: -0.1278, country: 'UK' },
@@ -111,6 +118,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [passportActive, setPassportActive] = useState(false);
   const [passportCity, setPassportCity] = useState('');
   const [showPassportModal, setShowPassportModal] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countries, setCountries] = useState<string[]>([]);
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
   
@@ -135,6 +145,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const starButtonScale = useSharedValue(1);
 
 
+
+  const fetchCountries = useCallback(async () => {
+    if (!token) return;
+    try {
+      const response = await api.get<{ success: boolean; countries: string[] }>('/users/countries', {}, token);
+      if (response.success && response.data?.countries) {
+        setCountries(response.data.countries);
+      }
+    } catch (error) {
+      console.error('Failed to fetch countries:', error);
+    }
+  }, [token, api]);
 
   const checkLocationPermission = useCallback(async () => {
     const { status } = await Location.getForegroundPermissionsAsync();
@@ -273,6 +295,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         params.maxDistance = user.preferences?.maxDistance || 50;
       } else if (discoveryType === 'global') {
         params.global = true;
+        if (selectedCountry) {
+          params.country = selectedCountry;
+        }
       }
 
       if ((user.preferences as any)?.ageRange) {
@@ -378,7 +403,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     } finally {
       setLoading(false);
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender]);
+  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry]);
 
   // Stable reference to track if initial load happened
   const hasInitiallyLoaded = useRef(false);
@@ -402,7 +427,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       ageMin: user?.preferences?.ageRange?.min,
       ageMax: user?.preferences?.ageRange?.max,
       gender: user?.gender,
-      discoveryType: discoveryType
+      discoveryType: discoveryType,
+      selectedCountry: selectedCountry
     });
     
     // Load on initial mount or when preferences actually change
@@ -420,7 +446,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       };
       loadData();
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType]);
+  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
 
   // Radar scanning on focus - reduced dependencies to prevent infinite loops
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -482,10 +508,24 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       );
       return;
     }
+    if (type === 'global') {
+      fetchCountries();
+      setShowCountryPicker(true);
+      return;
+    }
     setDiscoveryType(type);
+    setSelectedCountry(null);
     setUsers([]);
     setLoading(true);
     loadPotentialMatches();
+  };
+
+  const handleSelectCountry = (country: string | null) => {
+    setSelectedCountry(country);
+    setShowCountryPicker(false);
+    setDiscoveryType('global');
+    setUsers([]);
+    setLoading(true);
   };
 
   const renderFilters = () => (
@@ -1248,6 +1288,73 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             </Pressable>
           </View>
         )}
+
+        {discoveryType === 'global' && (
+          <View style={[styles.passportBadge, { backgroundColor: theme.primary }]}>
+            <Feather name="globe" size={14} color="#FFF" />
+            <ThemedText style={styles.passportBadgeText}>
+              {selectedCountry ? `Global: ${selectedCountry}` : 'Global: All Countries'}
+            </ThemedText>
+            <Pressable onPress={() => { fetchCountries(); setShowCountryPicker(true); }}>
+              <Feather name="edit-2" size={14} color="#FFF" />
+            </Pressable>
+            <Pressable onPress={() => { setDiscoveryType('local'); setSelectedCountry(null); setUsers([]); setLoading(true); }}>
+              <Feather name="x" size={16} color="#FFF" />
+            </Pressable>
+          </View>
+        )}
+
+        <Modal
+          visible={showCountryPicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowCountryPicker(false)}
+        >
+          <View style={styles.passportModalOverlay}>
+            <View style={[styles.passportModalContent, { backgroundColor: theme.surface }]}>
+              <View style={styles.passportModalHeader}>
+                <ThemedText style={[styles.passportModalTitle, { color: theme.text }]}>
+                  Choose a Country
+                </ThemedText>
+                <Pressable onPress={() => setShowCountryPicker(false)}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <ScrollView style={styles.passportCityList}>
+                <Pressable
+                  style={[
+                    styles.passportCityItem,
+                    { borderBottomColor: theme.border },
+                    selectedCountry === null && { backgroundColor: theme.primary + '15' }
+                  ]}
+                  onPress={() => handleSelectCountry(null)}
+                >
+                  <View>
+                    <ThemedText style={[styles.passportCityName, { color: theme.text }]}>All Countries</ThemedText>
+                    <ThemedText style={[styles.passportCityCountry, { color: theme.textSecondary }]}>Show users worldwide</ThemedText>
+                  </View>
+                  {selectedCountry === null && discoveryType === 'global' && <Feather name="check" size={20} color={theme.primary} />}
+                </Pressable>
+                {(countries.length > 0 ? countries : FALLBACK_COUNTRIES).map((country) => (
+                  <Pressable
+                    key={country}
+                    style={[
+                      styles.passportCityItem,
+                      { borderBottomColor: theme.border },
+                      selectedCountry === country && { backgroundColor: theme.primary + '15' }
+                    ]}
+                    onPress={() => handleSelectCountry(country)}
+                  >
+                    <View>
+                      <ThemedText style={[styles.passportCityName, { color: theme.text }]}>{country}</ThemedText>
+                    </View>
+                    {selectedCountry === country && <Feather name="check" size={20} color={theme.primary} />}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
 
         <Modal
           visible={showPassportModal}

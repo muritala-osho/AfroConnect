@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -26,6 +26,13 @@ interface StoryViewerScreenProps {
   route: StoryViewerScreenRouteProp;
 }
 
+interface StoryViewer {
+  id: string;
+  name: string;
+  photo?: string;
+  viewedAt: string;
+}
+
 interface Story {
   _id: string;
   type: "image" | "text" | "video";
@@ -35,6 +42,7 @@ interface Story {
   backgroundColor?: string[];
   createdAt: string;
   viewedBy?: string[];
+  viewers?: StoryViewer[];
 }
 
 interface StoryUser {
@@ -47,7 +55,7 @@ interface StoryUser {
 export default function StoryViewerScreen({ navigation, route }: StoryViewerScreenProps) {
   const { theme } = useTheme();
   const { token, user } = useAuth();
-  const { get, post, del } = useApi();
+  const { get, post, put, del } = useApi();
   const insets = useSafeAreaInsets();
   const { userId, userName, userPhoto } = route.params as any;
 
@@ -66,6 +74,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const [isSaving, setIsSaving] = useState(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(STORY_DURATION);
+  const [showViewers, setShowViewers] = useState(false);
+
+  const isOwnStory = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id);
 
   const REACTIONS = ["❤️", "🔥", "😍", "😂", "😮", "😢"];
 
@@ -123,7 +134,14 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     };
   }, [currentIndex, stories.length, paused]);
 
-  
+  const markStoryViewed = async (storyId: string) => {
+    if (!token || !storyId || isOwnStory) return;
+    try {
+      await post(`/stories/${storyId}/view`, {}, token);
+    } catch (error) {
+      console.error("Mark story viewed error:", error);
+    }
+  };
 
   const handleDeleteStory = async () => {
     if (!token || !currentStory) return;
@@ -138,7 +156,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           style: "destructive",
           onPress: async () => {
             try {
-              const response = await api.del(`/stories/${currentStory._id}`, token);
+              const response = await del(`/stories/${currentStory._id}`, token);
               if (response.success) {
                 if (Platform.OS !== 'web') {
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -175,7 +193,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         backgroundColor: currentStory.backgroundColor
       };
       
-      const response = await api.put<{ success: boolean; message: string }>(`/stories/${currentStory._id}`, putData, token);
+      const response = await put<{ success: boolean; message: string }>(`/stories/${currentStory._id}`, putData, token);
       
       if (response.success) {
         if (Platform.OS !== 'web') {
@@ -650,13 +668,83 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             </View>
           </View>
         ) : (
-          <View style={[styles.bottomActions, { justifyContent: 'center' }]}>
-            <ThemedText style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>
-              Viewed by {currentStory.viewedBy?.length || 0} people
-            </ThemedText>
-          </View>
+          <Pressable
+            style={[styles.bottomActions, { justifyContent: 'center' }]}
+            onPress={() => {
+              if (currentStory.viewers && currentStory.viewers.length > 0) {
+                pauseProgress();
+                setShowViewers(true);
+              }
+            }}
+          >
+            <View style={styles.viewersRow}>
+              <Ionicons name="eye-outline" size={16} color="rgba(255,255,255,0.7)" />
+              <ThemedText style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginLeft: 6 }}>
+                Viewed by {currentStory.viewers?.length || currentStory.viewedBy?.length || 0} people
+              </ThemedText>
+              {currentStory.viewers && currentStory.viewers.length > 0 && (
+                <Ionicons name="chevron-up" size={14} color="rgba(255,255,255,0.5)" style={{ marginLeft: 4 }} />
+              )}
+            </View>
+          </Pressable>
         )}
       </LinearGradient>
+
+      <Modal
+        visible={showViewers}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setShowViewers(false);
+          resumeProgress();
+        }}
+      >
+        <Pressable
+          style={styles.viewerModalOverlay}
+          onPress={() => {
+            setShowViewers(false);
+            resumeProgress();
+          }}
+        >
+          <Pressable style={styles.viewerModalContent} onPress={() => {}}>
+            <View style={styles.viewerModalHandle} />
+            <ThemedText style={styles.viewerModalTitle}>
+              Viewed by {currentStory.viewers?.length || currentStory.viewedBy?.length || 0}
+            </ThemedText>
+            {currentStory.viewers && currentStory.viewers.length > 0 ? (
+              <ScrollView style={styles.viewerList} showsVerticalScrollIndicator={false}>
+                {currentStory.viewers.map((viewer) => (
+                  <Pressable
+                    key={viewer.id}
+                    style={styles.viewerItem}
+                    onPress={() => {
+                      setShowViewers(false);
+                      resumeProgress();
+                      navigation.navigate("ProfileDetail", { userId: viewer.id });
+                    }}
+                  >
+                    <Image
+                      source={viewer.photo ? getPhotoSource(viewer.photo) : { uri: "https://via.placeholder.com/40" }}
+                      style={styles.viewerAvatar}
+                    />
+                    <View style={styles.viewerInfo}>
+                      <ThemedText style={styles.viewerName}>{viewer.name}</ThemedText>
+                      <ThemedText style={styles.viewerTime}>{formatTime(viewer.viewedAt)}</ThemedText>
+                    </View>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.viewerEmptyState}>
+                <Ionicons name="eye-off-outline" size={32} color="rgba(255,255,255,0.3)" />
+                <ThemedText style={styles.viewerEmptyText}>
+                  Viewer details are available with Premium
+                </ThemedText>
+              </View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -940,5 +1028,76 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  viewersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  viewerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  viewerModalContent: {
+    backgroundColor: '#1a1a1a',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+    maxHeight: SCREEN_HEIGHT * 0.6,
+  },
+  viewerModalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+  },
+  viewerModalTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  viewerList: {
+    maxHeight: SCREEN_HEIGHT * 0.4,
+  },
+  viewerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  viewerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  viewerInfo: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  viewerName: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  viewerTime: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  viewerEmptyState: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  viewerEmptyText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });

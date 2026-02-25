@@ -23,6 +23,7 @@ import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ScreenCapture from "expo-screen-capture";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -176,6 +177,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [translatedText, setTranslatedText] = useState('');
   const [translating, setTranslating] = useState(false);
   const [translateTargetLang, setTranslateTargetLang] = useState('');
+  const [screenshotProtection, setScreenshotProtection] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -190,6 +192,43 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     };
     loadChatTheme();
   }, [userId]);
+
+  useEffect(() => {
+    const loadScreenshotProtection = async () => {
+      const saved = await AsyncStorage.getItem(`screenshot_protection_${userId}`);
+      if (saved === 'true') {
+        setScreenshotProtection(true);
+        if (Platform.OS !== 'web') {
+          try { await ScreenCapture.preventScreenCaptureAsync(); } catch (e) {}
+        }
+      }
+    };
+    loadScreenshotProtection();
+    return () => {
+      if (Platform.OS !== 'web') {
+        try { ScreenCapture.allowScreenCaptureAsync(); } catch (e) {}
+      }
+    };
+  }, [userId]);
+
+  const toggleScreenshotProtection = useCallback(async () => {
+    const newValue = !screenshotProtection;
+    setScreenshotProtection(newValue);
+    await AsyncStorage.setItem(`screenshot_protection_${userId}`, String(newValue));
+    if (Platform.OS !== 'web') {
+      try {
+        if (newValue) {
+          await ScreenCapture.preventScreenCaptureAsync();
+        } else {
+          await ScreenCapture.allowScreenCaptureAsync();
+        }
+      } catch (e) {}
+    }
+    Alert.alert(
+      newValue ? 'Screenshot Protection On' : 'Screenshot Protection Off',
+      newValue ? 'Screenshots and screen recording are now blocked in this chat.' : 'Screenshot protection has been disabled for this chat.'
+    );
+  }, [screenshotProtection, userId]);
 
   const saveChatTheme = async (themeId: string) => {
     setChatTheme(themeId);
@@ -1303,6 +1342,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </Pressable>
         
         <View style={styles.headerActions}>
+          {screenshotProtection && (
+            <View style={styles.headerActionButton}>
+              <Feather name="shield" size={20} color="#4CAF50" />
+            </View>
+          )}
           <Pressable onPress={handleVoiceCall} style={styles.headerActionButton}>
             <Feather name="phone" size={22} color={theme.primary} />
           </Pressable>
@@ -1499,6 +1543,14 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         <Pressable style={styles.modalOverlay} onPress={() => setShowOptionsMenu(false)}>
           <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.optionsTitle, { color: theme.text }]}>Options</ThemedText>
+            
+            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); toggleScreenshotProtection(); }}>
+              <Feather name="shield" size={22} color={screenshotProtection ? '#4CAF50' : theme.text} />
+              <ThemedText style={[styles.optionText, { color: theme.text }]}>
+                {screenshotProtection ? 'Disable Screenshot Protection' : 'Enable Screenshot Protection'}
+              </ThemedText>
+              {screenshotProtection && <Feather name="check-circle" size={18} color="#4CAF50" />}
+            </Pressable>
             
             <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowThemeModal(true); }}>
               <Feather name="image" size={22} color={theme.primary} />

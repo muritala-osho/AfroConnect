@@ -484,6 +484,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                         styles.genderButtonText,
                         { color: filters.gender === g ? theme.buttonText : theme.text },
                       ]}
+                      numberOfLines={1}
                     >
                       {g === "any" ? t('everyone') : g === "male" ? t('male') : t('female')}
                     </ThemedText>
@@ -738,6 +739,7 @@ const styles = StyleSheet.create({
     ...Typography.body,
     fontWeight: "600",
     marginBottom: Spacing.sm,
+    flexShrink: 1,
   },
   slider: {
     width: "100%",
@@ -764,6 +766,7 @@ const styles = StyleSheet.create({
   genderButtonText: {
     ...Typography.small,
     fontWeight: "600",
+    flexShrink: 1,
   },
   applyButton: {
     height: 44,
@@ -803,6 +806,7 @@ const styles = StyleSheet.create({
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
+    width: RADAR_SIZE,
     height: RADAR_SIZE,
     alignSelf: "center",
   },
@@ -810,6 +814,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: RADAR_SIZE,
     height: RADAR_SIZE,
+    left: 0,
+    top: 0,
   },
   pulseRing: {
     position: "absolute",

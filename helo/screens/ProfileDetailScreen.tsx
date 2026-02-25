@@ -10,7 +10,7 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import { useTheme } from "@/hooks/useTheme";
@@ -72,6 +72,7 @@ export default function ProfileDetailScreen() {
   const { get, post } = useApi();
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { userId, isFromLikes, isFromVisitors } = route.params || {};
 
   const [user, setUser] = useState<any>(null);
@@ -274,7 +275,7 @@ export default function ProfileDetailScreen() {
           )}
 
           {user.photos && user.photos.length > 1 && (
-            <View style={styles.photoIndicators}>
+            <View style={[styles.photoIndicators, { top: insets.top + 10 }]}>
               {user.photos.map((_: any, index: number) => (
                 <View
                   key={index}
@@ -331,7 +332,7 @@ export default function ProfileDetailScreen() {
             )}
           </View>
 
-          <Pressable style={styles.floatBack} onPress={() => navigation.goBack()}>
+          <Pressable style={[styles.floatBack, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </Pressable>
         </Pressable>
@@ -562,7 +563,6 @@ const styles = StyleSheet.create({
   },
   photoIndicators: {
     position: 'absolute',
-    top: 50,
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'center',
@@ -577,7 +577,6 @@ const styles = StyleSheet.create({
   },
   floatBack: {
     position: 'absolute',
-    top: 50,
     left: 16,
     width: 42,
     height: 42,
@@ -653,10 +652,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   contentWrapper: {
-    marginTop: -20,
+    marginTop: -24,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     overflow: 'hidden',
+    position: 'relative',
+    zIndex: 2,
   },
   actionBar: {
     flexDirection: 'row',
@@ -777,7 +778,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   detailItem: {
-    width: (SCREEN_WIDTH - 50) / 2,
+    width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,

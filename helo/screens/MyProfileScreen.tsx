@@ -19,6 +19,7 @@ import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MyProfileScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, "MyProfile">,
@@ -100,6 +101,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
   const { del } = useApi();
   const { t } = useTranslation();
   const { showAlert, AlertComponent } = useThemedAlert();
+  const insets = useSafeAreaInsets();
   const [selectedPhoto, setSelectedPhoto] = useState<number>(0);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [currentHeroPhoto, setCurrentHeroPhoto] = useState(0);
@@ -317,7 +319,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             style={styles.heroGradient}
           />
 
-          <View style={styles.tapControls}>
+          <View style={[styles.tapControls, { top: insets.top + 30 }]} pointerEvents="box-none">
             <Pressable 
               style={styles.tapArea} 
               onPress={() => {
@@ -332,7 +334,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             />
           </View>
 
-          <View style={styles.photoIndicators}>
+          <View style={[styles.photoIndicators, { top: insets.top + 10 }]}>
             {user?.photos?.map((_, index) => (
               <Pressable
                 key={index}
@@ -340,7 +342,10 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                 hitSlop={10}
                 style={[
                   styles.photoIndicator,
-                  { backgroundColor: index === currentHeroPhoto ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  { 
+                    backgroundColor: index === currentHeroPhoto ? '#fff' : 'rgba(255,255,255,0.4)',
+                    maxWidth: totalPhotos > 6 ? 40 : totalPhotos > 4 ? 50 : 60,
+                  }
                 ]}
               />
             ))}
@@ -348,7 +353,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
 
           <View style={styles.heroContent}>
             <View style={styles.nameRow}>
-              <ThemedText style={styles.heroName} numberOfLines={1}>
+              <ThemedText style={styles.heroName} numberOfLines={1} ellipsizeMode="tail">
                 {user?.name || "User"}
                 {user?.age && !(user as any)?.privacySettings?.hideAge && (
                   <ThemedText style={styles.heroAge}>  {user.age}</ThemedText>
@@ -358,13 +363,13 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             {(user as any)?.livingIn && (
               <View style={styles.locationRow}>
                 <Feather name="map" size={14} color="rgba(255,255,255,0.8)" />
-                <ThemedText style={styles.heroLocation}>{(user as any).livingIn}</ThemedText>
+                <ThemedText style={styles.heroLocation} numberOfLines={1} ellipsizeMode="tail">{(user as any).livingIn}</ThemedText>
               </View>
             )}
           </View>
 
           <Pressable 
-            style={styles.settingsButton}
+            style={[styles.settingsButton, { top: insets.top + 10 }]}
             onPress={(e) => {
               e.stopPropagation();
               navigation.navigate("Settings");
@@ -710,22 +715,20 @@ const styles = StyleSheet.create({
   },
   photoIndicators: {
     position: 'absolute',
-    top: 50,
     left: 0,
     right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 4,
     paddingHorizontal: Spacing.md,
-    zIndex: 10,
+    zIndex: 15,
   },
   tapControls: {
     position: 'absolute',
-    top: 60,
     bottom: 0,
     left: 0,
     right: 0,
-    zIndex: 5,
+    zIndex: 2,
     flexDirection: 'row',
   },
   tapArea: {
@@ -735,21 +738,20 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 3,
     borderRadius: 2,
-    maxWidth: 60,
   },
   heroContent: {
     position: 'absolute',
     bottom: 20,
     left: Spacing.lg,
     right: Spacing.lg,
+    zIndex: 3,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
   },
   heroName: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "800",
     color: "#fff",
     textShadowColor: "rgba(0,0,0,0.5)",
@@ -757,6 +759,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
     includeFontPadding: false,
     paddingBottom: 4,
+    flexShrink: 1,
   },
   heroAge: {
     fontSize: 28,
@@ -773,14 +776,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginTop: 4,
+    flexShrink: 1,
   },
   heroLocation: {
     fontSize: 16,
     color: 'rgba(255,255,255,0.8)',
+    flexShrink: 1,
   },
   settingsButton: {
     position: 'absolute',
-    top: 50,
     right: Spacing.md,
     width: 40,
     height: 40,
@@ -788,6 +792,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 20,
   },
   actionButtonsRow: {
     flexDirection: 'row',

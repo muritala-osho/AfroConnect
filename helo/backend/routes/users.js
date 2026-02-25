@@ -228,18 +228,47 @@ router.get('/search', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/users/countries
+// @desc    Get distinct countries from user locations
+// @access  Private
+router.get('/countries', protect, async (req, res) => {
+  try {
+    const countries = await User.distinct('location.country', {
+      'location.country': { $exists: true, $nin: [null, ''] },
+      banned: { $ne: true },
+      suspended: { $ne: true }
+    });
+
+    const filtered = countries.filter(c => c && c.trim() !== '').sort();
+
+    res.json({
+      success: true,
+      countries: filtered
+    });
+  } catch (error) {
+    console.error('Countries list error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/users/nearby
 // @desc    Get nearby users based on location and preferences
 // @access  Private
 router.get('/nearby', protect, async (req, res) => {
   try {
     const { lat, lng, maxDistance, minAge, maxAge, genders } = req.query;
+    const isGlobal = req.query.global === 'true';
+    const countryFilter = req.query.country;
 
     if (!req.user.emailVerified && process.env.NODE_ENV === 'production') {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
     const currentUser = await User.findById(req.user.id);
+
+    if (isGlobal && !currentUser.premium?.isActive) {
+      return res.status(403).json({ success: false, message: 'Global discovery is a Premium feature' });
+    }
 
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
@@ -317,15 +346,24 @@ router.get('/nearby', protect, async (req, res) => {
       maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
     }
 
+    if (isGlobal) {
+      if (countryFilter) {
+        query['location.country'] = { $regex: new RegExp(countryFilter, 'i') };
+      }
+    } else {
+      const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
+      const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+
+      if (effectiveLat || effectiveLng) {
+        query.$or = [
+          { 'location.coordinates': { $exists: true } },
+          { 'location.lat': { $exists: true } }
+        ];
+      }
+    }
+
     const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
     const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
-
-    if (effectiveLat || effectiveLng) {
-      query.$or = [
-        { 'location.coordinates': { $exists: true } },
-        { 'location.lat': { $exists: true } }
-      ];
-    }
 
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
@@ -357,7 +395,9 @@ router.get('/nearby', protect, async (req, res) => {
         distanceKm = 99999;
       }
 
-      score += Math.max(0, maxDist - distanceKm);
+      if (!isGlobal) {
+        score += Math.max(0, maxDist - distanceKm);
+      }
 
       if (myInterests.length > 0 && user.interests?.length > 0) {
         const mySet = new Set(myInterests.map(i => i.toLowerCase()));
@@ -380,7 +420,7 @@ router.get('/nearby', protect, async (req, res) => {
 
     const isPremium = currentUser.premium?.isActive;
 
-    if (!isPremium && effectiveLat && effectiveLng) {
+    if (!isGlobal && !isPremium && effectiveLat && effectiveLng) {
       users = users.filter(u => u.distance <= maxDist);
     }
 
@@ -402,7 +442,7 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
-    console.log(`[DISCOVERY] Returning ${users.length} users (maxDist=${maxDist}km, premium=${!!isPremium})`);
+    console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
     res.json({
       success: true,
       users
