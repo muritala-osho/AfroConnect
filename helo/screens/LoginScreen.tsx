@@ -121,11 +121,11 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </View>
 
           <View style={styles.inputContainer}>
-            <ThemedText style={[styles.label, { color: theme.text }]}>Password</ThemedText>
-            <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <ThemedText style={[styles.label, { color: theme.text, fontWeight: '700' }]}>Password</ThemedText>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5 }]}>
               <Feather name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, { color: theme.text }]}
+                style={[styles.input, { color: theme.text, fontWeight: '600' }]}
                 placeholder="Enter your password"
                 placeholderTextColor={theme.textSecondary}
                 value={password}
@@ -139,28 +139,22 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 onPress={() => setShowPassword(!showPassword)}
               >
                 <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={styles.linksRow}>
+            <Pressable onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}>
+              <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
+                Terms of Service
+              </ThemedText>
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate("ForgotPassword")}>
+              <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
+                Forgot password?
+              </ThemedText>
             </Pressable>
           </View>
-        </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: -Spacing.sm }}>
-          <Pressable 
-            style={{ flexDirection: 'row', alignItems: 'center' }}
-            onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}
-          >
-            <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
-              Terms of Service
-            </ThemedText>
-          </Pressable>
-          
-          <Pressable 
-            onPress={() => navigation.navigate("ForgotPassword")}
-          >
-            <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
-              Forgot password?
-            </ThemedText>
-          </Pressable>
-        </View>
 
           <Pressable
             style={[styles.button, { backgroundColor: theme.primary }, Shadow.button]}
@@ -189,6 +183,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           </Pressable>
         </View>
       </View>
+      <AlertComponent />
     </ScreenKeyboardAwareScrollView>
   );
 }
@@ -269,9 +264,10 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
     paddingRight: Spacing.md,
   },
-  forgotPassword: {
-    alignSelf: "flex-end",
-    marginTop: -Spacing.sm,
+  linksRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   forgotPasswordText: {
     ...Typography.caption,
