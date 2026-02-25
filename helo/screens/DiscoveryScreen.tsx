@@ -1465,22 +1465,20 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               <View style={styles.cardInfoOverlay}>
                 <View style={styles.nameRow}>
                   <ThemedText style={styles.profileName} numberOfLines={1}>
-                    {currentUser.name?.split(' ')[0]}
+                    {currentUser.name?.split(' ')[0]}{currentUser.age != null ? `, ` : ''}
                   </ThemedText>
-                  {currentUser.age !== null && currentUser.age !== undefined && (
+                  {currentUser.age != null && (
                     <ThemedText style={styles.profileAge}>{currentUser.age}</ThemedText>
-                  )}
-                  {(currentUser as any).premium?.isActive && (
-                    <View style={{ alignSelf: 'center', marginLeft: 6 }}>
-                      <PremiumBadge size="small" />
-                    </View>
                   )}
                   {currentUser.verified && (
                     <Image 
                       source={require("@/assets/icons/verified-tick.png")} 
-                      style={{ width: 22, height: 22, marginLeft: 6, alignSelf: 'center' }} 
+                      style={styles.verifiedTick} 
                       contentFit="contain"
                     />
+                  )}
+                  {(currentUser as any).premium?.isActive && (
+                    <PremiumBadge size="small" style={{ marginLeft: 4 }} />
                   )}
                 </View>
 
@@ -1684,23 +1682,25 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(128, 128, 128, 0.1)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(128, 128, 128, 0.2)',
+    borderRadius: 22,
     padding: 3,
-    width: 150,
+    width: 170,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.15)',
   },
   toggleButton: {
     flex: 1,
-    paddingVertical: 6,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
+    borderRadius: 20,
     flexDirection: 'row',
   },
   toggleText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.5)',
   },
   activeToggleText: {
     color: '#000',
@@ -1951,27 +1951,29 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: "row",
-    alignItems: "baseline",
-    flexWrap: "wrap",
-    marginBottom: 8,
-    gap: 2,
+    alignItems: "center",
+    marginBottom: 6,
   },
   profileName: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "800",
     color: "#FFF",
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   profileAge: {
     fontSize: 28,
-    fontWeight: "300",
-    color: "rgba(255,255,255,0.9)",
+    fontWeight: "400",
+    color: "#FFF",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+  },
+  verifiedTick: {
+    width: 22,
+    height: 22,
     marginLeft: 6,
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   locationRow: {
     flexDirection: "row",
