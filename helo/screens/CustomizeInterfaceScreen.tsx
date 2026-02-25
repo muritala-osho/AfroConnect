@@ -48,8 +48,8 @@ const STORAGE_KEYS = {
 };
 
 export default function CustomizeInterfaceScreen({ navigation }: any) {
-  const { theme, themeMode, setThemeMode, isDark } = useTheme();
-  const [accentColor, setAccentColor] = useState("#4A90D9");
+  const { theme, themeMode, setThemeMode, isDark, accentColor: themeAccent, setAccentColor: setThemeAccent } = useTheme();
+  const accentColor = themeAccent || "#4A90D9";
   const [fontSize, setFontSize] = useState("default");
   const [chatBubble, setChatBubble] = useState("rounded");
   const [compactMode, setCompactMode] = useState(false);
@@ -65,7 +65,6 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
       const stored = await AsyncStorage.multiGet(Object.values(STORAGE_KEYS));
       stored.forEach(([key, value]) => {
         if (!value) return;
-        if (key === STORAGE_KEYS.accentColor) setAccentColor(value);
         if (key === STORAGE_KEYS.fontSize) setFontSize(value);
         if (key === STORAGE_KEYS.chatBubble) setChatBubble(value);
         if (key === STORAGE_KEYS.compactMode) setCompactMode(value === "true");
@@ -73,6 +72,13 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
         if (key === STORAGE_KEYS.hapticFeedback) setHapticFeedback(value === "true");
       });
     } catch (e) {}
+  };
+
+  const setAccentColor = (color: string) => {
+    setThemeAccent(color);
+    if (hapticFeedback && Platform.OS !== "web") {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
+    }
   };
 
   const savePreference = async (key: string, value: string) => {
@@ -147,7 +153,6 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
                   ]}
                   onPress={() => {
                     setAccentColor(color.value);
-                    savePreference(STORAGE_KEYS.accentColor, color.value);
                   }}
                 >
                   {accentColor === color.value && (

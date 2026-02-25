@@ -27,7 +27,7 @@ Preferred communication style: Simple, everyday language.
 ### Core System Design
 - **API Hook Pattern**: Custom `useApi` hook for memoized request functions.
 - **Photo Normalization**: Utility functions for various image sources.
-- **Theme and Language Systems**: Dynamic theme switching with 4 modes (Light, Dark, Grey, System) and multi-language support (12 languages). Interface customization screen (`helo/screens/CustomizeInterfaceScreen.tsx`) for accent color, font size, chat bubble style, compact mode, animations, and haptic feedback preferences.
+- **Theme and Language Systems**: Dynamic theme switching with 4 modes (Light, Dark, Grey, System) and multi-language support (12 languages). User-selected accent color (8 options) is applied globally via `useTheme` hook — overrides `primary`, `primaryLight`, `link`, `tabIconSelected`, `like`, and gradient colors across all screens. Interface customization screen (`helo/screens/CustomizeInterfaceScreen.tsx`) for accent color, font size, chat bubble style, compact mode, animations, and haptic feedback preferences.
 - **Error Handling**: Class-based error boundaries for UI crash recovery.
 - **Discovery and Matching**: Advanced filtering (location, preferences, excluding already matched/swiped/blocked users), interest overlap scoring (+10 per shared interest), personality matching (+30), and verified user boosts (+5). Local/Global discovery toggle: Local shows nearby matches within maxDistance, Global (premium) shows worldwide users with country picker.
 - **Block/Unblock**: Blocking removes match, all chat messages, friend requests, and swipe history for both users. Unblocking only makes user discoverable again without auto-restoring match.
