@@ -218,7 +218,16 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               verified: otherUser?.verified || false,
             } as StoredUser & { location?: string; country?: string; countryCode?: string; verified?: boolean },
             matchedAt: match.matchedAt || new Date().toISOString(),
-            compatibilityScore: match.compatibilityScore || Math.floor(Math.random() * 30 + 70),
+            compatibilityScore: match.compatibilityScore || (() => {
+              const odId = otherUser?._id || match._id || '';
+              const idStr = String(odId);
+              let hash = 0;
+              for (let ci = 0; ci < idStr.length; ci++) {
+                hash = ((hash << 5) - hash) + idStr.charCodeAt(ci);
+                hash |= 0;
+              }
+              return 70 + (Math.abs(hash) % 31);
+            })(),
             isPerfectMatch: match.isPerfectMatch || false,
             isSuggested: match.isSuggested || false,
           };

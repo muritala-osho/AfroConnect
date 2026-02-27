@@ -1661,8 +1661,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       {/* BODY & INPUT SECTION */}
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
+        behavior="padding"
+        keyboardVerticalOffset={insets.top + 56}
       >
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
