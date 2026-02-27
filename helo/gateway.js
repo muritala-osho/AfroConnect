@@ -48,8 +48,9 @@ expoProxy.on('error', (err, req, res) => {
 
 // Helper to serve static files for the web admin dashboard
 const serveStatic = (req, res) => {
-  let filePath = path.join(__dirname, 'admin-dashboard', req.url.replace('/admin-web', ''));
-  if (req.url === '/admin-web' || req.url === '/admin-web/') {
+  const reqPath = req.url.split('?')[0];
+  let filePath = path.join(__dirname, 'admin-dashboard', reqPath.replace('/admin-web', '') || '/');
+  if (reqPath === '/admin-web' || reqPath === '/admin-web/') {
     filePath = path.join(__dirname, 'admin-dashboard', 'index.html');
   }
 
@@ -101,7 +102,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (url.startsWith('/admin-web')) {
+  const cleanUrl = url.split('?')[0];
+  if (cleanUrl === '/admin-web' || cleanUrl.startsWith('/admin-web/') || cleanUrl.startsWith('/admin-web.')) {
     serveStatic(req, res);
   } else if (url.startsWith('/public/')) {
     console.log(`[GATEWAY] Routing ${method} ${url} to BACKEND (static)`);

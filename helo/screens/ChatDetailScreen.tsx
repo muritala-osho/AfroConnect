@@ -1534,7 +1534,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         )}
       </View>
     );
-  }, [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply]);
+  }, [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress]);
 
   const keyExtractor = useCallback((item: Message) => item._id, []);
 
@@ -1765,7 +1765,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   placeholderTextColor={theme.textSecondary}
                   value={message}
                   autoCorrect={true}
-                  atuoCapitalize="sentences"
+                  autoCapitalize="sentences"
                   blurOnSubmit={false}
                   onChangeText={(text) => {
                     setMessage(text);
@@ -2526,7 +2526,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 50,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    backgroundColor: 'rgba(0,0,0,0.08)',
   },
   locationGradientLayer2: {
     position: 'absolute' as const,
@@ -2534,7 +2534,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 30,
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   locationGradientLayer3: {
     position: 'absolute' as const,
@@ -2542,7 +2542,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 12,
-    backgroundColor: 'rgba(0,0,0,0.1)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   locationPinOverlay: {
     ...StyleSheet.absoluteFillObject,
