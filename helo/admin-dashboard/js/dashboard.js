@@ -16,7 +16,114 @@ function logout() {
   location.reload();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function showDashboard(user) {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('dashboardContainer').style.display = 'flex';
+  if (user) {
+    const nameEl = document.getElementById('adminName');
+    if (nameEl) nameEl.textContent = user.name || 'Admin';
+    const roleEl = document.getElementById('adminRole');
+    if (roleEl) roleEl.textContent = user.isAdmin ? 'Super Admin' : 'Admin';
+    const avatarEl = document.getElementById('adminAvatar');
+    if (avatarEl && user.photos && user.photos[0]) avatarEl.src = user.photos[0];
+  }
+  initDashboardEvents();
+  loadDashboardStats();
+  loadUsers();
+  loadReports();
+  loadPayments();
+  loadSupportTickets();
+  setTimeout(initCharts, 100);
+}
+
+function showLogin() {
+  document.getElementById('loginOverlay').classList.remove('hidden');
+  document.getElementById('dashboardContainer').style.display = 'none';
+}
+
+async function validateToken() {
+  if (!authToken) return false;
+  try {
+    const res = await fetch(`${API_BASE}/api/users/me`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const user = data.user || data.data;
+    if (!user || !user.isAdmin) return false;
+    localStorage.setItem('admin_user', JSON.stringify(user));
+    return user;
+  } catch (e) {
+    return false;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const loginForm = document.getElementById('loginForm');
+
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    const errorEl = document.getElementById('loginError');
+    const btn = document.getElementById('loginBtn');
+    const btnText = document.getElementById('loginBtnText');
+    const spinner = document.getElementById('loginSpinner');
+
+    errorEl.style.display = 'none';
+    btn.disabled = true;
+    btnText.textContent = 'Signing in...';
+    spinner.style.display = 'inline-block';
+
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+
+      const user = data.user || data.data;
+      const token = data.token;
+
+      if (!user || !user.isAdmin) {
+        throw new Error('Access denied. Admin privileges required.');
+      }
+
+      authToken = token;
+      localStorage.setItem('admin_token', token);
+      localStorage.setItem('admin_user', JSON.stringify(user));
+      showDashboard(user);
+    } catch (err) {
+      errorEl.textContent = err.message || 'Login failed. Please try again.';
+      errorEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btnText.textContent = 'Sign In';
+      spinner.style.display = 'none';
+    }
+  });
+
+  if (authToken) {
+    const user = await validateToken();
+    if (user) {
+      showDashboard(user);
+    } else {
+      authToken = '';
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+      showLogin();
+    }
+  } else {
+    showLogin();
+  }
+});
+
+function initDashboardEvents() {
   const navItems = document.querySelectorAll('.sidebar nav li');
   const tabContents = document.querySelectorAll('.tab-content');
   const themeToggle = document.getElementById('themeToggle');
@@ -53,13 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
     profileTrigger.addEventListener('click', () => profileModal.classList.add('active'));
     profileModal.querySelectorAll('.close').forEach(c => c.addEventListener('click', () => profileModal.classList.remove('active')));
   }
-
-  loadDashboardStats();
-  loadUsers();
-  loadReports();
-  loadPayments();
-  loadSupportTickets();
-});
+}
 
 async function loadDashboardStats() {
   try {
@@ -303,6 +404,3 @@ function initCharts() {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(initCharts, 100);
-});

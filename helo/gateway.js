@@ -123,6 +123,20 @@ const server = http.createServer((req, res) => {
   const cleanUrl = url.split('?')[0];
   if (cleanUrl === '/admin-web' || cleanUrl.startsWith('/admin-web/') || cleanUrl.startsWith('/admin-web.')) {
     serveStatic(req, res);
+  } else if (cleanUrl.startsWith('/assets/')) {
+    const assetsDir = path.join(__dirname, 'assets');
+    const assetPath = path.resolve(path.join(__dirname, cleanUrl));
+    if (!assetPath.startsWith(assetsDir)) { res.writeHead(403); res.end('Forbidden'); return; }
+    const extname = path.extname(assetPath);
+    let ct = 'application/octet-stream';
+    if (extname === '.png') ct = 'image/png';
+    else if (extname === '.jpg' || extname === '.jpeg') ct = 'image/jpeg';
+    else if (extname === '.svg') ct = 'image/svg+xml';
+    else if (extname === '.gif') ct = 'image/gif';
+    fs.readFile(assetPath, (err, content) => {
+      if (err) { res.writeHead(404); res.end('Not found'); }
+      else { res.writeHead(200, { 'Content-Type': ct, 'Cache-Control': 'public, max-age=86400' }); res.end(content); }
+    });
   } else if (url.startsWith('/public/')) {
     console.log(`[GATEWAY] Routing ${method} ${url} to BACKEND (static)`);
     backendProxy.web(req, res);

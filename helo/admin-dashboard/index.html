@@ -9,11 +9,42 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="dark-theme">
-    <div class="container">
+    <div id="loginOverlay" class="login-overlay">
+        <div class="login-card">
+            <div class="login-logo">
+                <img src="/assets/afroconnect-logo.png" alt="AfroConnect" onerror="this.style.display='none'">
+                <h1>AfroConnect</h1>
+                <p>Admin Dashboard</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="login-form-group">
+                    <label for="loginEmail">Email</label>
+                    <div class="login-input-wrapper">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="loginEmail" placeholder="admin@afroconnect.com" required>
+                    </div>
+                </div>
+                <div class="login-form-group">
+                    <label for="loginPassword">Password</label>
+                    <div class="login-input-wrapper">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="loginPassword" placeholder="Enter your password" required>
+                    </div>
+                </div>
+                <div id="loginError" class="login-error" style="display:none"></div>
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span id="loginBtnText">Sign In</span>
+                    <span id="loginSpinner" class="login-spinner" style="display:none"></span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="dashboardContainer" style="display:none">
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="logo">
-                <img src="../assets/afroconnect-logo.png" alt="AfroConnect" onerror="this.src='https://via.placeholder.com/150x40?text=AfroConnect'">
+                <img src="/assets/afroconnect-logo.png" alt="AfroConnect" onerror="this.style.display='none'">
                 <span>AfroConnect</span>
             </div>
             <nav>

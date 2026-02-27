@@ -27,9 +27,12 @@ const UserManagement: React.FC = () => {
       const data = await adminApi.getUsers(params);
       if (data.success) {
         setUsers(data.users || []);
+      } else {
+        setUsers([]);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
+      setUsers([]);
     } finally {
       setLoading(false);
     }

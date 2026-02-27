@@ -261,6 +261,25 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   }, []);
 
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const vv = typeof window !== 'undefined' ? (window as any).visualViewport : null;
+    if (!vv) return;
+    const handleResize = () => {
+      const kbHeight = Math.max(0, window.innerHeight - vv.height);
+      setKeyboardHeight(kbHeight > 50 ? kbHeight : 0);
+      if (kbHeight > 50) {
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    };
+    vv.addEventListener('resize', handleResize);
+    vv.addEventListener('scroll', handleResize);
+    return () => {
+      vv.removeEventListener('resize', handleResize);
+      vv.removeEventListener('scroll', handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
     const loadChatTheme = async () => {
       const savedTheme = await AsyncStorage.getItem(`chat_theme_${userId}`);
       if (savedTheme) setChatTheme(savedTheme);
@@ -1675,8 +1694,9 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       {/* BODY & INPUT SECTION */}
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior="padding"
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
+        enabled={Platform.OS !== 'web'}
       >
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
@@ -1747,7 +1767,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', paddingBottom: keyboardHeight > 0 ? 4 : Math.max(insets.bottom, 4) + 4, marginBottom: Platform.OS === 'android' ? keyboardHeight : 0 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', paddingBottom: keyboardHeight > 0 ? 4 : Math.max(insets.bottom, 4) + 4, marginBottom: (Platform.OS === 'android' || Platform.OS === 'web') ? keyboardHeight : 0 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}>
