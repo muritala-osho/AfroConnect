@@ -10,5 +10,7 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
-  "dependencies": {}
+  "dependencies": {
+    "react-native-iap": "^14.7.12"
+  }
 }

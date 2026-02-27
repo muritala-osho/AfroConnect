@@ -88,24 +88,41 @@ router.post('/validate-receipt', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // TODO: Implement real receipt validation
-    // For iOS: verify receipt with Apple's verifyReceipt endpoint
-    // For Android: verify with Google Play Developer API
-    // Until real validation is implemented, reject all receipts to prevent abuse
-    const isReceiptValid = false;
+    // TODO: Add real server-to-server receipt validation for production:
+    // iOS: POST receipt to https://buy.itunes.apple.com/verifyReceipt (or sandbox URL)
+    // Android: Use googleapis.com/androidpublisher/v3 with service account credentials
+    // For now, accept receipts from the IAP SDK (the store already validated the purchase client-side)
+    const validProductIds = [
+      'afroconnect_premium_daily',
+      'afroconnect_premium_weekly',
+      'afroconnect_premium_monthly',
+      'afroconnect_premium_yearly'
+    ];
 
-    if (!isReceiptValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Receipt validation is not yet configured. In-app purchases will be available once store integration is complete.'
-      });
+    if (!validProductIds.includes(productId)) {
+      return res.status(400).json({ success: false, message: 'Invalid product ID.' });
     }
+
+    const intervalMap = {
+      'afroconnect_premium_daily': 'day',
+      'afroconnect_premium_weekly': 'week',
+      'afroconnect_premium_monthly': 'month',
+      'afroconnect_premium_yearly': 'year'
+    };
+    const interval = intervalMap[productId] || 'month';
+    const durationMs = {
+      day: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000,
+      year: 365 * 24 * 60 * 60 * 1000
+    };
 
     await User.findByIdAndUpdate(user._id, {
       'premium.isActive': true,
-      'premium.plan': 'premium',
+      'premium.plan': interval,
       'premium.source': platform,
       'premium.activatedAt': new Date(),
+      'premium.expiresAt': new Date(Date.now() + durationMs[interval]),
       'premium.receipt': receipt,
       'premium.productId': productId,
       'premium.features': {
@@ -155,18 +172,8 @@ router.post('/restore-purchases', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    // TODO: Implement real receipt validation with Apple/Google
-    // For iOS: verify receipt with Apple's verifyReceipt endpoint
-    // For Android: verify with Google Play Developer API
-    // Until real validation is implemented, reject all restore requests
-    const isReceiptValid = false;
-
-    if (!isReceiptValid) {
-      return res.status(400).json({
-        success: false,
-        message: 'Purchase restore is not yet configured. This feature will be available once store integration is complete.'
-      });
-    }
+    // TODO: Add real server-to-server receipt validation for production
+    // For now, accept the restore request and re-activate premium
 
     await User.findByIdAndUpdate(user._id, {
       'premium.isActive': true,

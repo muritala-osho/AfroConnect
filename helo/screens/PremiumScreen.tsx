@@ -25,6 +25,7 @@ import Animated, {
   withTiming,
   interpolate,
 } from 'react-native-reanimated';
+import { iapService } from '@/services/iapService';
 
 const { width } = Dimensions.get('window');
 
@@ -39,10 +40,10 @@ interface PriceTier {
 }
 
 const PRICING_TIERS: PriceTier[] = [
-  { id: 'price_daily', interval: 'day', amount: 99, currency: 'USD', label: 'Daily', savings: undefined },
-  { id: 'price_weekly', interval: 'week', amount: 499, currency: 'USD', label: 'Weekly', savings: 'Save 28%' },
-  { id: 'price_monthly', interval: 'month', amount: 999, currency: 'USD', label: 'Monthly', savings: 'Save 67%', popular: true },
-  { id: 'price_yearly', interval: 'year', amount: 4999, currency: 'USD', label: 'Yearly', savings: 'Save 86%' },
+  { id: iapService.PRODUCT_IDS.DAILY, interval: 'day', amount: 99, currency: 'USD', label: 'Daily', savings: undefined },
+  { id: iapService.PRODUCT_IDS.WEEKLY, interval: 'week', amount: 499, currency: 'USD', label: 'Weekly', savings: 'Save 28%' },
+  { id: iapService.PRODUCT_IDS.MONTHLY, interval: 'month', amount: 999, currency: 'USD', label: 'Monthly', savings: 'Save 67%', popular: true },
+  { id: iapService.PRODUCT_IDS.YEARLY, interval: 'year', amount: 4999, currency: 'USD', label: 'Yearly', savings: 'Save 86%' },
 ];
 
 const PREMIUM_FEATURES = [
@@ -63,11 +64,12 @@ const PREMIUM_FEATURES = [
 export default function PremiumScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { token, user } = useAuth();
-  const { get } = useApi();
+  const { get, post } = useApi();
   
   const [selectedTier, setSelectedTier] = useState<PriceTier>(PRICING_TIERS[2]);
   const [processing, setProcessing] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [iapReady, setIapReady] = useState(false);
 
   const cardScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.5);
@@ -88,7 +90,53 @@ export default function PremiumScreen({ navigation }: any) {
 
   useEffect(() => {
     checkSubscriptionStatus();
+    initIAP();
+    return () => {
+      iapService.endConnection();
+    };
   }, [token]);
+
+  const initIAP = async () => {
+    if (Platform.OS === 'web') return;
+    const available = await iapService.loadIAP();
+    setIapReady(available);
+
+    if (available) {
+      const removePurchaseListener = iapService.addPurchaseListener(async (purchase: any) => {
+        const receipt = Platform.OS === 'ios'
+          ? purchase.transactionReceipt
+          : purchase.purchaseToken;
+        if (receipt && token) {
+          try {
+            const response = await post<{ subscription?: any }>(
+              '/subscription/validate-receipt',
+              {
+                platform: Platform.OS === 'ios' ? 'ios' : 'android',
+                receipt,
+                productId: purchase.productId,
+              },
+              token
+            );
+            if (response.success) {
+              setIsActive(true);
+              await iapService.finishTransaction(purchase);
+              Alert.alert('Welcome to Premium!', 'Your subscription is now active. Enjoy all the premium features!');
+            }
+          } catch (error) {
+            console.log('Receipt validation failed:', error);
+          }
+        }
+        setProcessing(false);
+      });
+
+      const removeErrorListener = iapService.addErrorListener((error: any) => {
+        if (error.code !== 'E_USER_CANCELLED') {
+          Alert.alert('Purchase Error', 'Something went wrong. Please try again.');
+        }
+        setProcessing(false);
+      });
+    }
+  };
 
   const checkSubscriptionStatus = async () => {
     if (!token) return;
@@ -123,11 +171,66 @@ export default function PremiumScreen({ navigation }: any) {
 
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) {}
 
-    const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play Store';
-    Alert.alert(
-      'Coming Soon',
-      `In-app purchases through the ${storeName} will be available soon. You'll be able to subscribe to the ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}.`
-    );
+    if (!iapReady) {
+      const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play Store';
+      Alert.alert(
+        'Coming Soon',
+        `In-app purchases through the ${storeName} will be available soon. You'll be able to subscribe to the ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}.`
+      );
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      await iapService.requestSubscription(selectedTier.id);
+    } catch (error: any) {
+      if (error?.message === 'CANCELLED') {
+        setProcessing(false);
+        return;
+      }
+      Alert.alert('Purchase Error', 'Unable to process your purchase. Please try again.');
+      setProcessing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please log in to restore purchases.');
+      return;
+    }
+
+    if (Platform.OS === 'web') return;
+
+    setProcessing(true);
+    try {
+      const history = await iapService.getPurchaseHistory();
+      if (history && history.length > 0) {
+        const latest = history[0];
+        const receipt = Platform.OS === 'ios'
+          ? latest.transactionReceipt
+          : latest.purchaseToken;
+        const response = await post<{ subscription?: any }>(
+          '/subscription/restore-purchases',
+          {
+            platform: Platform.OS === 'ios' ? 'ios' : 'android',
+            receipt,
+          },
+          token
+        );
+        if (response.success) {
+          setIsActive(true);
+          Alert.alert('Restored!', 'Your premium subscription has been restored.');
+        } else {
+          Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
+        }
+      } else {
+        Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
+      }
+    } catch (error) {
+      Alert.alert('Restore Failed', 'Unable to restore purchases. Please try again.');
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const glowStyle = useAnimatedStyle(() => ({
@@ -297,6 +400,13 @@ export default function PremiumScreen({ navigation }: any) {
               </LinearGradient>
             </TouchableOpacity>
             
+            {Platform.OS !== 'web' && !isActive && (
+              <TouchableOpacity onPress={handleRestore} disabled={processing} style={{ marginTop: 8, paddingVertical: 6 }}>
+                <Text style={[styles.termsText, { textDecorationLine: 'underline' }]}>
+                  Restore Purchases
+                </Text>
+              </TouchableOpacity>
+            )}
             <Text style={styles.termsText}>
               By subscribing, you agree to our Terms of Service. Cancel anytime.
             </Text>

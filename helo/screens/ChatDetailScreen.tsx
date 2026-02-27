@@ -266,7 +266,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      setKeyboardHeight(kbHeight > 50 ? kbHeight : 0);
+      setKeyboardHeight(kbHeight > 50 ? kbHeight + 10 : 0);
       if (kbHeight > 50) {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
       }
