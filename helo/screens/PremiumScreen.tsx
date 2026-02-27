@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
-  Linking,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -64,7 +63,7 @@ const PREMIUM_FEATURES = [
 export default function PremiumScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { token, user } = useAuth();
-  const { get, post } = useApi();
+  const { get } = useApi();
   
   const [selectedTier, setSelectedTier] = useState<PriceTier>(PRICING_TIERS[2]);
   const [processing, setProcessing] = useState(false);
@@ -114,28 +113,21 @@ export default function PremiumScreen({ navigation }: any) {
       return;
     }
 
-    if (Platform.OS !== 'web') {
-      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) {}
-    }
-
-    setProcessing(true);
-    try {
-      const response = await post<{ url?: string }>(
-        '/subscription/create-checkout',
-        { priceId: selectedTier.id, interval: selectedTier.interval },
-        token
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Mobile Only',
+        'In-app purchases are only available on the mobile app. Please use the iOS or Android app to subscribe.'
       );
-
-      if (response.success && response.data?.url) {
-        Linking.openURL(response.data.url);
-      } else {
-        Alert.alert('Success!', `You selected the ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}. Stripe checkout will open once configured.`);
-      }
-    } catch (error) {
-      Alert.alert('Info', `Selected: ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}`);
-    } finally {
-      setProcessing(false);
+      return;
     }
+
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch (e) {}
+
+    const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play Store';
+    Alert.alert(
+      'Coming Soon',
+      `In-app purchases through the ${storeName} will be available soon. You'll be able to subscribe to the ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}.`
+    );
   };
 
   const glowStyle = useAnimatedStyle(() => ({

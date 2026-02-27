@@ -330,15 +330,15 @@ async function loadDashboardStats() {
 
     const statCards = document.querySelectorAll('#dashboard .stat-card');
 
-    if (statsRes && statsRes.data) {
-      const s = statsRes.data;
+    if (statsRes && statsRes.stats) {
+      const s = statsRes.stats;
       if (statCards[0]) statCards[0].querySelector('h3').textContent = (s.totalUsers || 0).toLocaleString();
       if (statCards[2]) statCards[2].querySelector('h3').textContent = (s.totalMatches || 0).toLocaleString();
       if (statCards[3]) statCards[3].querySelector('h3').textContent = '$' + (s.monthlyRevenue || 0).toLocaleString();
     }
 
-    if (activityRes && activityRes.data) {
-      const a = activityRes.data;
+    if (activityRes && activityRes.activity) {
+      const a = activityRes.activity;
       if (statCards[1]) statCards[1].querySelector('h3').textContent = (a.active24h || a.onlineNow || 0).toLocaleString();
     }
   } catch (e) {
@@ -351,7 +351,7 @@ async function loadUsers() {
   if (!tbody) return;
   try {
     const res = await apiCall('/api/admin/users');
-    const users = res.data || [];
+    const users = res.users || [];
     if (!users.length) {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No users found</td></tr>';
       return;
@@ -423,7 +423,7 @@ async function toggleBan(userId, ban) {
 async function loadReports() {
   try {
     const res = await apiCall('/api/admin/reports?status=pending');
-    const reports = res.data || [];
+    const reports = res.reports || [];
     const container = document.getElementById('reportsContainer');
     if (!container) return;
     if (!reports.length) {
@@ -469,8 +469,8 @@ async function resolveReport(reportId, action) {
 async function loadPayments() {
   try {
     const res = await apiCall('/api/admin/subscriptions-revenue');
-    if (res.data) {
-      const d = res.data;
+    if (res.subscriptions) {
+      const d = res.subscriptions;
       const totalEl = document.getElementById('totalSubRevenue');
       const activeEl = document.getElementById('activeSubs');
       const churnEl = document.getElementById('churnRate');
@@ -482,7 +482,7 @@ async function loadPayments() {
         arpuEl.textContent = '$' + (d.estimatedMonthlyRevenue / d.totalActive).toFixed(2);
       }
 
-      const planBreakdown = d.planBreakdown || {};
+      const planBreakdown = d.plansBreakdown || {};
       const tbody = document.getElementById('paymentsTableBody');
       if (tbody) {
         const plans = Object.entries(planBreakdown);
@@ -511,8 +511,8 @@ async function loadSupportTickets() {
   const tbody = document.getElementById('supportTableBody');
   if (!tbody) return;
   try {
-    const res = await apiCall('/api/support/tickets');
-    const tickets = res.data || res.tickets || [];
+    const res = await apiCall('/api/support/tickets').catch(() => ({}));
+    const tickets = res.tickets || res.data || [];
     if (!tickets.length) {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No support tickets</td></tr>';
       return;
@@ -549,18 +549,18 @@ async function initCharts() {
       apiCall('/api/admin/users').catch(() => null)
     ]);
 
-    if (statsRes && statsRes.data) {
-      totalUsers = statsRes.data.totalUsers || 0;
-      totalRevenue = statsRes.data.monthlyRevenue || 0;
+    if (statsRes && statsRes.stats) {
+      totalUsers = statsRes.stats.totalUsers || 0;
+      totalRevenue = statsRes.stats.monthlyRevenue || 0;
     }
 
-    if (revenueRes && revenueRes.data) {
-      totalRevenue = revenueRes.data.estimatedMonthlyRevenue || totalRevenue;
-      planBreakdown = revenueRes.data.planBreakdown || {};
+    if (revenueRes && revenueRes.subscriptions) {
+      totalRevenue = revenueRes.subscriptions.estimatedMonthlyRevenue || totalRevenue;
+      planBreakdown = revenueRes.subscriptions.plansBreakdown || {};
     }
 
-    if (usersRes && usersRes.data) {
-      usersRes.data.forEach(u => {
+    if (usersRes && usersRes.users) {
+      usersRes.users.forEach(u => {
         const country = u.location?.country || 'Unknown';
         userCountByCountry[country] = (userCountByCountry[country] || 0) + 1;
       });

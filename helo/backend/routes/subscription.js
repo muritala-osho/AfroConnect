@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const { getUncachableStripeClient, getStripePublishableKey } = require('../stripe/stripeClient');
 
 const PREMIUM_INFO = {
   name: 'AfroConnect Premium',
@@ -23,22 +22,18 @@ const PREMIUM_INFO = {
   ]
 };
 
-// Default prices for the single plan with different intervals
-// IMPORTANT: These IDs MUST match existing prices in your Stripe dashboard
-// If you see "No such price" errors, update these with your actual price IDs
 const DEFAULT_PRICES = [
-  { id: 'price_1SpImVIWqwrt8zrdSAKeqXhw', amount: 999, currency: 'usd', interval: 'month', name: 'Premium Monthly' }
+  { id: 'premium_monthly', amount: 999, currency: 'usd', interval: 'month', name: 'Premium Monthly' }
 ];
 
 router.get('/plans', async (req, res) => {
   try {
-    // Return a structured plans array for frontend compatibility
     const plans = [
       {
         id: 'premium_plan',
         name: PREMIUM_INFO.name,
         description: PREMIUM_INFO.description,
-        planKey: 'platinum', // Mapping to premium color in frontend
+        planKey: 'platinum',
         info: PREMIUM_INFO,
         prices: DEFAULT_PRICES
       }
@@ -74,80 +69,140 @@ router.get('/status', protect, async (req, res) => {
   }
 });
 
-router.post('/create-checkout', protect, async (req, res) => {
+router.post('/validate-receipt', protect, async (req, res) => {
   try {
-    const { priceId, interval } = req.body;
-    const stripe = await getUncachableStripeClient();
+    const { platform, receipt, productId } = req.body;
+
+    if (!platform || !['android', 'ios'].includes(platform)) {
+      return res.status(400).json({ success: false, message: 'Invalid platform. Must be "android" or "ios".' });
+    }
+
+    if (!receipt || receipt === 'pending_iap_integration') {
+      return res.status(400).json({ success: false, message: 'Valid purchase receipt is required.' });
+    }
+
+    if (!productId) {
+      return res.status(400).json({ success: false, message: 'Product ID is required.' });
+    }
+
     const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    let activePriceId = priceId;
-    
-    const intervalMap = {
-      'price_daily': 'day',
-      'price_weekly': 'week', 
-      'price_monthly': 'month',
-      'price_yearly': 'year'
-    };
-    
-    const validIntervals = ['day', 'week', 'month', 'year'];
-    const rawInterval = intervalMap[priceId] || interval;
-    const targetInterval = validIntervals.includes(rawInterval) ? rawInterval : 'month';
-    
-    try {
-      if (targetInterval) {
-        const prices = await stripe.prices.list({ active: true, limit: 20, expand: ['data.product'], recurring: { interval: targetInterval } });
-        if (prices.data.length > 0) {
-          activePriceId = prices.data[0].id;
-          console.log(`Mapped ${priceId} to Stripe price: ${activePriceId}`);
-        } else {
-          const allPrices = await stripe.prices.list({ active: true, limit: 10 });
-          if (allPrices.data.length > 0) {
-            activePriceId = allPrices.data[0].id;
-            console.log(`No ${targetInterval} price found, using fallback: ${activePriceId}`);
-          } else {
-            throw new Error('No active prices found in Stripe. Please create a product with prices in your Stripe dashboard.');
-          }
-        }
-      } else {
-        await stripe.prices.retrieve(priceId);
-      }
-    } catch (e) {
-      if (e.message?.includes('No active prices')) throw e;
-      console.log(`Price ID ${priceId} not found, searching for fallback...`);
-      const prices = await stripe.prices.list({ active: true, limit: 10, expand: ['data.product'] });
-      const fallback = prices.data.find(p => p.nickname === 'Premium' || p.lookup_key === 'premium') || prices.data[0];
-      if (fallback) {
-        console.log(`Using fallback price ID: ${fallback.id}`);
-        activePriceId = fallback.id;
-      } else {
-        throw new Error('No active prices found in Stripe dashboard.');
-      }
+    // TODO: Implement real receipt validation
+    // For iOS: verify receipt with Apple's verifyReceipt endpoint
+    // For Android: verify with Google Play Developer API
+    // Until real validation is implemented, reject all receipts to prevent abuse
+    const isReceiptValid = false;
+
+    if (!isReceiptValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Receipt validation is not yet configured. In-app purchases will be available once store integration is complete.'
+      });
     }
 
-    const sessionOptions = {
-      payment_method_types: ['card'],
-      line_items: [{ price: activePriceId, quantity: 1 }],
-      mode: 'subscription',
-      success_url: `https://${process.env.REPLIT_DEV_DOMAIN}/payment-success`,
-      cancel_url: `https://${process.env.REPLIT_DEV_DOMAIN}/payment-cancel`,
-      metadata: { userId: user._id.toString() },
-      subscription_data: {
-        metadata: { userId: user._id.toString() }
+    await User.findByIdAndUpdate(user._id, {
+      'premium.isActive': true,
+      'premium.plan': 'premium',
+      'premium.source': platform,
+      'premium.activatedAt': new Date(),
+      'premium.receipt': receipt,
+      'premium.productId': productId,
+      'premium.features': {
+        unlimitedSwipes: true,
+        seeWhoLikesYou: true,
+        unlimitedRewinds: true,
+        boostPerMonth: 10,
+        superLikesPerDay: 999,
+        noAds: true,
+        advancedFilters: true,
+        readReceipts: true,
+        priorityMatches: true,
+        incognitoMode: true
       }
-    };
+    });
 
-    if (user.premium?.stripeCustomerId) {
-      sessionOptions.customer = user.premium.stripeCustomerId;
-    } else {
-      sessionOptions.customer_email = user.email;
-    }
+    console.log(`Premium activated for user ${user._id} via ${platform} in-app purchase`);
 
-    const session = await stripe.checkout.sessions.create(sessionOptions);
-
-    res.json({ success: true, url: session.url });
+    res.json({
+      success: true,
+      message: 'Premium activated successfully',
+      subscription: {
+        isActive: true,
+        plan: 'premium',
+        source: platform,
+        features: PREMIUM_INFO.features
+      }
+    });
   } catch (error) {
-    console.error('Stripe Session Creation Error:', error);
-    res.status(500).json({ success: false, message: error.message || 'Checkout error' });
+    console.error('Receipt validation error:', error);
+    res.status(500).json({ success: false, message: 'Failed to validate receipt' });
+  }
+});
+
+router.post('/restore-purchases', protect, async (req, res) => {
+  try {
+    const { platform, receipt } = req.body;
+
+    if (!platform || !['android', 'ios'].includes(platform)) {
+      return res.status(400).json({ success: false, message: 'Invalid platform. Must be "android" or "ios".' });
+    }
+
+    if (!receipt) {
+      return res.status(400).json({ success: false, message: 'Receipt is required.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // TODO: Implement real receipt validation with Apple/Google
+    // For iOS: verify receipt with Apple's verifyReceipt endpoint
+    // For Android: verify with Google Play Developer API
+    // Until real validation is implemented, reject all restore requests
+    const isReceiptValid = false;
+
+    if (!isReceiptValid) {
+      return res.status(400).json({
+        success: false,
+        message: 'Purchase restore is not yet configured. This feature will be available once store integration is complete.'
+      });
+    }
+
+    await User.findByIdAndUpdate(user._id, {
+      'premium.isActive': true,
+      'premium.plan': 'premium',
+      'premium.source': platform,
+      'premium.activatedAt': new Date(),
+      'premium.receipt': receipt,
+      'premium.features': {
+        unlimitedSwipes: true,
+        seeWhoLikesYou: true,
+        unlimitedRewinds: true,
+        boostPerMonth: 10,
+        superLikesPerDay: 999,
+        noAds: true,
+        advancedFilters: true,
+        readReceipts: true,
+        priorityMatches: true,
+        incognitoMode: true
+      }
+    });
+
+    console.log(`Premium restored for user ${user._id} via ${platform} purchase restore`);
+
+    res.json({
+      success: true,
+      message: 'Purchases restored successfully',
+      subscription: {
+        isActive: true,
+        plan: 'premium',
+        source: platform,
+        features: PREMIUM_INFO.features
+      }
+    });
+  } catch (error) {
+    console.error('Restore purchases error:', error);
+    res.status(500).json({ success: false, message: 'Failed to restore purchases' });
   }
 });
 

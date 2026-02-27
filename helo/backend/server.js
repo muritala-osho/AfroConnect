@@ -6,15 +6,6 @@ const socketIO = require('socket.io');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-let runMigrations, getStripeSync, WebhookHandlers;
-try {
-  const stripeReplitSync = require('stripe-replit-sync');
-  runMigrations = stripeReplitSync.runMigrations;
-  getStripeSync = require('./stripe/stripeClient').getStripeSync;
-  WebhookHandlers = require('./stripe/webhookHandlers').WebhookHandlers;
-} catch (e) {
-  console.log('⚠️ Stripe dependencies not available - payment features disabled');
-}
 
 // Debug: Log Cloudinary config status
 console.log('Cloudinary config check:', {
@@ -99,37 +90,7 @@ app.get('/admin-web', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'admin-dashboard', 'index.html'));
 });
 
-// Stripe webhook route MUST be registered BEFORE express.json()
-app.post(
-  '/api/stripe/webhook/:uuid',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-
-    if (!signature) {
-      return res.status(400).json({ error: 'Missing stripe-signature' });
-    }
-
-    try {
-      const sig = Array.isArray(signature) ? signature[0] : signature;
-
-      if (!Buffer.isBuffer(req.body)) {
-        console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer');
-        return res.status(500).json({ error: 'Webhook processing error' });
-      }
-
-      const { uuid } = req.params;
-      await WebhookHandlers.processWebhook(req.body, sig, uuid);
-
-      res.status(200).json({ received: true });
-    } catch (error) {
-      console.error('Webhook error:', error.message);
-      res.status(400).json({ error: 'Webhook processing error' });
-    }
-  }
-);
-
-// JSON middleware for all other routes
+// JSON middleware for all routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -694,66 +655,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize Stripe schema and webhooks
-async function initStripe() {
-  const databaseUrl = process.env.DATABASE_URL;
-  
-  if (!databaseUrl) {
-    console.log('⚠️ DATABASE_URL not set - Stripe integration disabled');
-    return;
-  }
-
-  try {
-    console.log('Initializing Stripe schema...');
-    // await runMigrations({ databaseUrl, schema: 'stripe' });
-    console.log('✅ Stripe schema ready (Skipped migrations)');
-    /*
-    const stripeSync = await getStripeSync();
-    */
-    console.log('Setting up managed webhook...');
-    const domain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
-    const protocol = (process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS) ? 'https' : 'http';
-    const webhookBaseUrl = `${protocol}://${domain}`;
-    
-    /*
-    try {
-      const result = await stripeSync.findOrCreateManagedWebhook(
-        `${webhookBaseUrl}/api/stripe/webhook`,
-        {
-          enabled_events: ['*'],
-          description: 'AfroConnect webhook for subscription sync',
-        }
-      );
-      if (result && result.webhook) {
-        console.log(`✅ Webhook configured: ${result.webhook.url} (UUID: ${result.uuid})`);
-      } else {
-        console.log('✅ Webhook setup complete');
-      }
-    } catch (webhookError) {
-      console.log('⚠️ Webhook setup skipped:', webhookError.message);
-    }
-
-    console.log('Syncing Stripe data...');
-    stripeSync.syncBackfill()
-      .then(() => console.log('✅ Stripe data synced'))
-      .catch((err) => console.error('Error syncing Stripe data:', err));
-    */
-  } catch (error) {
-    console.error('Failed to initialize Stripe:', error.message);
-  }
-}
-
 const PORT = process.env.PORT || 3001;
 const startServer = () => {
   const serverInstance = server.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 AfroConnect Backend running on port ${PORT}`);
     console.log(`📡 Backend API ready`);
-    
-    try {
-      await initStripe();
-    } catch (err) {
-      console.error('Stripe init error:', err.message);
-    }
   });
 
   serverInstance.on('error', (e) => {
