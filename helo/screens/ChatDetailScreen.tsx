@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from "react";
-import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder, Linking } from "react-native";
+import { View, StyleSheet, TextInput, Pressable, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, Modal, Dimensions, Keyboard, ScrollView, ImageBackground, Animated, PanResponder, Linking} from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -24,8 +24,10 @@ import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
+import { platformApiLevel } from "expo-device";
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 
 type ChatDetailScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "ChatDetail">;
 type ChatDetailScreenRouteProp = RouteProp<RootStackParamList, "ChatDetail">;
@@ -101,7 +103,7 @@ const SwipeableMessage = React.memo(({ item, isMe, children, onReply, themeTextS
   const onReplyRef = useRef(onReply);
   itemRef.current = item;
   onReplyRef.current = onReply;
-  
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gestureState) => {
@@ -153,7 +155,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
   const [lastSeenDate, setLastSeenDate] = useState<Date | null>(null);
-  
+
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -163,7 +165,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
-  
+
   const [chatTheme, setChatTheme] = useState<string>('default');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -173,7 +175,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
-  
+
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -183,6 +185,23 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [translateTargetLang, setTranslateTargetLang] = useState('');
   const [screenshotProtection, setScreenshotProtection] = useState(false);
 
+  // Load draft on mount
+  useEffect(() => {
+    const loadDraft = async () => {
+      if (!userId) return;
+      try {
+        const savedDraft = await AsyncStorage.getItem(`chat_draft_${userId}`);
+        if (savedDraft) {
+          setMessage(savedDraft);
+        }
+      } catch (error) {
+        console.error("Failed to load draft:", error);
+      }
+    };
+    loadDraft();
+  }, [userId]);
+
+  const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -426,9 +445,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     const textToSend = content || message.trim();
     if (!textToSend && type === 'text') return;
     if (!matchId || !token || sending) return;
-    
+
     setMessage("");
     setSending(true);
+    if (userId) {
+      AsyncStorage.removeItem(`chat_draft_${userId}`).catch(e => console.error("Failed to clear draft", e));
+    }
     Keyboard.dismiss();
     setShowEmojiPicker(false);
     setShowAISuggestions(false);
@@ -443,7 +465,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         senderName: String(replySenderId) === String(myId) ? 'You' : userName
       };
     }
-    
+
     const tempMessage: Message = {
       _id: `temp_${Date.now()}`,
       sender: myId,
@@ -504,14 +526,14 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           type: 'image/jpeg',
           name: 'chat_image.jpg',
         } as any);
-        
+
         const apiBase = getApiBaseUrl();
         const uploadResponse = await fetch(`${apiBase}/api/upload/chat-image`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         });
-        
+
         const uploadData = await uploadResponse.json();
         if (uploadData.success && uploadData.url) {
           await sendMessage('📷 Photo', 'image', { imageUrl: uploadData.url });
@@ -569,7 +591,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       Alert.alert('Permission Needed', 'Camera permission is required to take photos');
       return;
     }
-    
+
     const result = await ImagePicker.launchCameraAsync({
       quality: 0.8,
       allowsEditing: true,
@@ -584,13 +606,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           type: 'image/jpeg',
           name: 'chat_photo.jpg',
         } as any);
-        
+
         const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         });
-        
+
         const uploadData = await uploadResponse.json();
         if (uploadData.success && uploadData.url) {
           await sendMessage('📷 Photo', 'image', { imageUrl: uploadData.url });
@@ -609,10 +631,10 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         Alert.alert('Permission Denied', 'Location permission is required to share your location');
         return;
       }
-      
+
       const location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
-      
+
       let address = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
       try {
         const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -620,7 +642,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(', ');
         }
       } catch (e) {}
-      
+
       await sendMessage(`📍 ${address}`, 'location', { latitude, longitude, address });
     } catch (error) {
       Alert.alert('Error', 'Could not get your location');
@@ -634,7 +656,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     }
 
     if (isRecording || recordingRef.current) return;
-    
+
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
@@ -651,12 +673,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         setPlayingAudioId(null);
         setAudioProgress(0);
       }
-      
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      
+
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
@@ -664,16 +686,16 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       setIsRecording(true);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
-      
+
       if (matchId) {
         socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: true });
       }
-      
+
       recordingIntervalRef.current = setInterval(() => {
         recordingDurationRef.current += 1;
         setRecordingDuration(prev => prev + 1);
       }, 1000);
-      
+
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error('Recording error:', error);
@@ -691,29 +713,29 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       setIsRecording(false);
       return;
     }
-    
+
     try {
       if (recordingIntervalRef.current) {
         clearInterval(recordingIntervalRef.current);
         recordingIntervalRef.current = null;
       }
-      
+
       const recording = recordingRef.current;
       const duration = recordingDurationRef.current;
       recordingRef.current = null;
       setIsRecording(false);
-      
+
       if (matchId) {
         socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: false });
       }
-      
+
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
       }).catch(() => {});
       const uri = recording.getURI();
-      
+
       if (uri && duration >= 1) {
         try {
           const ext = uri.split('.').pop()?.toLowerCase() || 'm4a';
@@ -735,13 +757,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             name: fileName,
           } as any);
           formData.append('duration', duration.toString());
-          
+
           const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` },
             body: formData,
           });
-          
+
           const uploadData = await uploadResponse.json();
           if (uploadData.success && uploadData.url) {
             await sendMessage(`🎤 Voice message (${duration}s)`, 'audio', { 
@@ -758,7 +780,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       } else if (uri && duration < 1) {
         Alert.alert('Too Short', 'Voice message must be at least 1 second long');
       }
-      
+
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -779,14 +801,14 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       clearInterval(recordingIntervalRef.current);
       recordingIntervalRef.current = null;
     }
-    
+
     if (!recordingRef.current) {
       setIsRecording(false);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
       return;
     }
-    
+
     try {
       if (Platform.OS !== 'web') {
         const recording = recordingRef.current;
@@ -802,11 +824,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     } catch (error) {
       console.log('Cancel recording cleanup:', error);
     }
-    
+
     if (matchId) {
       socketService.emit('chat:recording-voice', { chatId: matchId, userId: myId, isRecording: false });
     }
-    
+
     setIsRecording(false);
     setRecordingDuration(0);
     recordingDurationRef.current = 0;
@@ -1055,13 +1077,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const fetchAISuggestions = async () => {
     if (!token) return;
     setShowAISuggestions(true);
-    
+
     try {
       const response = await post<{ suggestions: string[] }>('/ai/chat-suggestions', {
         recipientName: userName,
         context: messages.slice(-5).map(m => m.content).join(' ')
       }, token);
-      
+
       if (response.success && response.data?.suggestions) {
         setAiSuggestions(response.data.suggestions);
       }
@@ -1208,7 +1230,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       Alert.alert('Select Reason', 'Please select a reason for reporting');
       return;
     }
-    
+
     setSubmittingReport(true);
     try {
       const response = await post('/reports', {
@@ -1217,7 +1239,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         description: reportDetails,
         matchId
       }, token || '');
-      
+
       if (response.success) {
         setShowReportModal(false);
         setSelectedReportReason(null);
@@ -1241,7 +1263,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+
     if (date.toDateString() === today.toDateString()) return 'Today';
     if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
     return date.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
@@ -1282,7 +1304,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             </View>
           </View>
         )}
-        
+
         {(item.type === 'system' || item.type === 'call' || item.deletedForEveryone) ? (
           <View style={styles.systemMessageContainer}>
             <View style={[styles.systemMessage, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
@@ -1301,7 +1323,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                     contentFit="cover"
                   />
                 )}
-                
+
                 <View style={[
                   styles.messageBubble,
                   isMe ? styles.myBubble : styles.theirBubble,
@@ -1437,7 +1459,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                             {tiles.map((t, i) => (
                               <Image
                                 key={i}
-                                source={{ uri: `https://tile.openstreetmap.org/${z}/${t.x}/${t.y}.png` }}
+                                source={{
+                                  uri: Platform.OS === 'web'
+                                    ? `https://basemaps.cartocdn.com/rastertiles/voyager/${z}/${t.x}/${t.y}@2x.png`
+                                    : `https://tile.openstreetmap.org/${z}/${t.x}/${t.y}.png`,
+                                  headers: Platform.OS !== 'web' ? { 'User-Agent': 'AfroConnect/1.0' } : undefined,
+                                }}
                                 style={styles.locationTile}
                                 contentFit="cover"
                               />
@@ -1472,13 +1499,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       </Pressable>
                     );
                   })()}
-                  
+
                   {messageText && item.type !== 'audio' && item.type !== 'location' ? (
                     <ThemedText style={[styles.messageText, { color: isMe ? '#FFF' : theme.text }]}>
                       {messageText}
                     </ThemedText>
                   ) : null}
-                  
+
                   <View style={styles.messageFooter}>
                     <ThemedText style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
                       {formatTime(item.createdAt)}
@@ -1571,12 +1598,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+      {/* HEADER SECTION */}
       <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color={theme.text} />
         </Pressable>
-        
-        <Pressable 
+
+        <Pressable
           style={styles.headerProfile}
           onPress={() => navigation.navigate('ProfileDetail' as any, { userId })}
         >
@@ -1588,7 +1616,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
-          
+
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
               <ThemedText style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>
@@ -1603,7 +1631,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             </ThemedText>
           </View>
         </Pressable>
-        
+
         <View style={styles.headerActions}>
           {screenshotProtection && (
             <View style={styles.headerActionButton}>
@@ -1622,17 +1650,27 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         </View>
       </View>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}>
-      {currentTheme?.image ? (
-        <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
-          {chatContent}
-        </ImageBackground>
-      ) : (
-        <View style={[styles.chatBackground, { backgroundColor: isDark ? '#1A1A1A' : '#E8E8E8' }]}>
-          {chatContent}
-        </View>
-      )}
+      {/* BODY & INPUT SECTION */}
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      >
+        {currentTheme?.image ? (
+          <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
+            {chatContent}
+          </ImageBackground>
+        ) : (
+          /* FIXED: Changed </ThemedView> to </View> to match the opening tag */
+          <View style={[styles.chatBackground, { backgroundColor: isDark ? '#0a0d14' : '#E8E8E8' }]}>
+            {chatContent}
+          </View>
+        )}
 
+
+      </KeyboardAvoidingView>
+    </ThemedView>
+  );
       {showAISuggestions && (
         <View style={[styles.aiSuggestionsContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
           <View style={styles.aiSuggestionsHeader}>
@@ -1712,16 +1750,27 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               <Pressable style={styles.attachButton} onPress={() => setShowAttachmentMenu(true)}>
                 <Feather name="plus-circle" size={26} color={theme.primary} />
               </Pressable>
-              
+
               <View style={[styles.inputWrapper, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5' }]}>
                 <TextInput
+                  ref={inputRef}
                   style={[styles.textInput, { color: theme.text }]}
                   placeholder="Type a message..."
                   placeholderTextColor={theme.textSecondary}
                   value={message}
+                  autoCorrect={true}
+                  atuoCapitalize="sentences"
+                  blurOnSubmit={false}
                   onChangeText={(text) => {
                     setMessage(text);
                     handleTypingIndicator();
+                    if (userId) {
+                      if (text.trim()) {
+                        AsyncStorage.setItem(`chat_draft_${userId}`, text).catch(e => console.error("Draft save error", e));
+                      } else {
+                        AsyncStorage.removeItem(`chat_draft_${userId}`).catch(e => console.error("Draft remove error", e));
+                      }
+                    }
                   }}
                   multiline
                   maxLength={1000}
@@ -1730,11 +1779,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   <Feather name="smile" size={22} color={showEmojiPicker ? theme.primary : theme.textSecondary} />
                 </Pressable>
               </View>
-              
+
               <Pressable style={styles.aiButton} onPress={fetchAISuggestions}>
                 <MaterialCommunityIcons name="robot" size={24} color={showAISuggestions ? theme.primary : theme.textSecondary} />
               </Pressable>
-              
+
               {message.trim() ? (
                 <Pressable 
                   onPress={() => sendMessage()} 
@@ -1758,13 +1807,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
 
       <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>
           <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.attachmentTitle, { color: theme.text }]}>Send Attachment</ThemedText>
-            
+
             <View style={styles.attachmentOptions}>
               <Pressable style={styles.attachmentOption} onPress={handleTakePhoto}>
                 <View style={[styles.attachmentIcon, { backgroundColor: '#FF6B6B20' }]}>
@@ -1772,21 +1820,21 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 </View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Camera</ThemedText>
               </Pressable>
-              
+
               <Pressable style={styles.attachmentOption} onPress={handlePickImage}>
                 <View style={[styles.attachmentIcon, { backgroundColor: '#4ECDC420' }]}>
                   <Feather name="image" size={24} color="#4ECDC4" />
                 </View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Gallery</ThemedText>
               </Pressable>
-              
+
               <Pressable style={styles.attachmentOption} onPress={handlePickVideo}>
                 <View style={[styles.attachmentIcon, { backgroundColor: '#9B59B620' }]}>
                   <Feather name="video" size={24} color="#9B59B6" />
                 </View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
               </Pressable>
-              
+
               <Pressable style={styles.attachmentOption} onPress={handleShareLocation}>
                 <View style={[styles.attachmentIcon, { backgroundColor: '#45B7D120' }]}>
                   <Feather name="map-pin" size={24} color="#45B7D1" />
@@ -1794,7 +1842,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Location</ThemedText>
               </Pressable>
             </View>
-            
+
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
               <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
             </Pressable>
@@ -1806,7 +1854,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         <Pressable style={styles.modalOverlay} onPress={() => setShowOptionsMenu(false)}>
           <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.optionsTitle, { color: theme.text }]}>Options</ThemedText>
-            
+
             <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); toggleScreenshotProtection(); }}>
               <Feather name="shield" size={22} color={screenshotProtection ? '#4CAF50' : theme.text} />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>
@@ -1814,29 +1862,29 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               </ThemedText>
               {screenshotProtection && <Feather name="check-circle" size={18} color="#4CAF50" />}
             </Pressable>
-            
+
             <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowThemeModal(true); }}>
               <Feather name="image" size={22} color={theme.primary} />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>Chat Theme</ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setThemeMode(isDark ? 'light' : 'dark'); }}>
               <Feather name={isDark ? 'sun' : 'moon'} size={22} color={theme.text} />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>
                 {isDark ? 'Light Mode' : 'Dark Mode'}
               </ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowReportModal(true); }}>
               <Feather name="flag" size={22} color="#FF9800" />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>Report User</ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.optionItem} onPress={handleBlockUser}>
               <Feather name="slash" size={22} color="#F44336" />
               <ThemedText style={[styles.optionText, { color: '#F44336' }]}>Block User</ThemedText>
             </Pressable>
-            
+
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 16 }]} onPress={() => setShowOptionsMenu(false)}>
               <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
             </Pressable>
@@ -1853,7 +1901,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
-            
+
             <ScrollView contentContainerStyle={styles.themeGrid}>
               {CHAT_THEMES.map((themeItem) => (
                 <Pressable
@@ -1895,11 +1943,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
-            
+
             <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>
               Why are you reporting this user?
             </ThemedText>
-            
+
             <ScrollView style={styles.reportReasons}>
               {REPORT_REASONS.map((reason) => (
                 <Pressable
@@ -1919,7 +1967,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 </Pressable>
               ))}
             </ScrollView>
-            
+
             <TextInput
               style={[styles.reportInput, { color: theme.text, backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}
               placeholder="Add more details (optional)"
@@ -1929,7 +1977,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               multiline
               numberOfLines={3}
             />
-            
+
             <Pressable
               style={[styles.submitReportButton, { backgroundColor: theme.primary, opacity: selectedReportReason ? 1 : 0.5 }]}
               onPress={handleSubmitReport}
@@ -1994,22 +2042,22 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 </ThemedText>
               </View>
             )}
-            
+
             <Pressable style={styles.messageMenuItem} onPress={handleReply}>
               <Feather name="corner-up-left" size={22} color={theme.primary} />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Reply</ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.messageMenuItem} onPress={handleTranslateOpen}>
               <MaterialCommunityIcons name="translate" size={22} color={theme.primary} />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Translate</ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
               <Feather name="trash-2" size={22} color="#FF9800" />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
             </Pressable>
-            
+
             {selectedMessage && (() => {
               const sid = typeof selectedMessage.sender === 'string' ? selectedMessage.sender : selectedMessage.sender?._id;
               return String(sid) === String(myId);
@@ -2019,7 +2067,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <ThemedText style={[styles.messageMenuItemText, { color: '#F44336' }]}>Delete for Everyone</ThemedText>
               </Pressable>
             )}
-            
+
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 12 }]} onPress={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
               <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
             </Pressable>
@@ -2036,7 +2084,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 <Feather name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
-            
+
             {selectedMessage && (
               <View style={[styles.translateOriginal, { backgroundColor: isDark ? '#2A2A2A' : '#F5F5F5' }]}>
                 <ThemedText style={[styles.translateOriginalLabel, { color: theme.textSecondary }]}>Original</ThemedText>
@@ -2045,7 +2093,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                 </ThemedText>
               </View>
             )}
-            
+
             {translating ? (
               <View style={styles.translateLoading}>
                 <ActivityIndicator size="large" color={theme.primary} />
@@ -2144,7 +2192,8 @@ const styles = StyleSheet.create({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingTop: 8, borderTopWidth: 1 },
+  inputContainer: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 8, paddingTop: 8, 
+  paddingBottom:Platform.OS === 'android' ? 20 : 12, borderTopWidth: 1, borderTopColor: '#1c1f26', backgroundColor: '#0a0d14' },
   recordingContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
@@ -2153,8 +2202,8 @@ const styles = StyleSheet.create({
   recordingLabel: { fontSize: 13, fontWeight: '500' },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   attachButton: { padding: 6, marginBottom: 2 },
-  inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 6, marginHorizontal: 4, minHeight: 40, maxHeight: 120 },
-  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingTop: 0, paddingBottom: 0 },
+  inputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', borderRadius: 24, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 4, minHeight: 45, maxHeight: 120, background: '#1c1f26' },
+  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 8, paddingTop: Platform.OS ==='ios' ? 10 :0, paddingBottom: Platform.OS === 'ios' ? 10 : 5, },
   emojiToggle: { padding: 4, marginLeft: 8 },
   aiButton: { padding: 6, marginBottom: 2 },
   sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginBottom: 2 },

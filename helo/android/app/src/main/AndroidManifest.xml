@@ -34,7 +34,13 @@
         <action android:name="android.intent.action.VIEW"/>
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
+        <category
+          android:windowSoftInputMode="adjustResize"
         <data android:scheme="afroconnect"/>
+          <activity 
+              android:name=".ChatActivity"
+              android:windowSoftInputMode="adjustResize">
+          </activity>
       </intent-filter>
     </activity>
   </application>
