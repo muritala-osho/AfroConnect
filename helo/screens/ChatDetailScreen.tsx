@@ -1553,12 +1553,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           data={messages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
+          extraData={playingAudioId}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           maxToRenderPerBatch={10}
           windowSize={10}
-          removeClippedSubviews={true}
+          removeClippedSubviews={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={[styles.emptyIconContainer, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
