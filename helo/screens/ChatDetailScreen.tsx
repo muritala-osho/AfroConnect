@@ -1654,7 +1654,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
       >
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={styles.chatBackground} resizeMode="cover">
@@ -1668,9 +1668,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         )}
 
 
-      </KeyboardAvoidingView>
-    </ThemedView>
-  );
       {showAISuggestions && (
         <View style={[styles.aiSuggestionsContainer, { backgroundColor: theme.background, borderTopColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
           <View style={styles.aiSuggestionsHeader}>
@@ -1807,6 +1804,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             </>
           )}
         </View>
+      </KeyboardAvoidingView>
 
       <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>

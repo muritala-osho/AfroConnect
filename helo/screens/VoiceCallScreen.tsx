@@ -50,6 +50,9 @@ export default function VoiceCallScreen() {
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const waveAnim1 = useRef(new Animated.Value(0)).current;
+  const waveAnim2 = useRef(new Animated.Value(0)).current;
+  const waveAnim3 = useRef(new Animated.Value(0)).current;
   const agoraJoined = useRef(false);
   const webViewRef = useRef<WebView | null>(null);
   const [webviewReady, setWebviewReady] = useState(false);
@@ -151,6 +154,22 @@ export default function VoiceCallScreen() {
       ])
     ).start();
 
+    const startWaveAnimations = () => {
+      const createWave = (anim: Animated.Value, delay: number) => {
+        return Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 0, duration: 0, useNativeDriver: true }),
+          ])
+        );
+      };
+      createWave(waveAnim1, 0).start();
+      createWave(waveAnim2, 600).start();
+      createWave(waveAnim3, 1200).start();
+    };
+    startWaveAnimations();
+
     if (isIncoming && incomingCallData) {
       if (callAccepted) {
         setCallStatus('connected');
@@ -199,7 +218,6 @@ export default function VoiceCallScreen() {
     };
   }, []);
 
-  // Ringing tone effect
   useEffect(() => {
     if (callStatus === 'ringing' && !isIncoming) {
       playRingtone();
@@ -280,7 +298,7 @@ export default function VoiceCallScreen() {
     return () => { if (durationInterval.current) clearInterval(durationInterval.current); };
   }, [callStatus, isPremium]);
 
-  const handleEndCall = () => {
+  const handleEndCall = (skipGoBack = false) => {
     const wasConnected = callStatus === 'connected';
     setCallStatus('ended');
     stopRingtone();
@@ -295,7 +313,9 @@ export default function VoiceCallScreen() {
       duration: callDuration,
       wasAnswered: wasConnected
     });
-    setTimeout(() => navigation.goBack(), 500);
+    if (!skipGoBack) {
+      setTimeout(() => navigation.goBack(), 500);
+    }
   };
 
   const handleAcceptCall = () => {
@@ -321,7 +341,7 @@ export default function VoiceCallScreen() {
       case 'idle': return '';
       case 'initializing': return 'Initializing...';
       case 'connecting': return 'Connecting...';
-      case 'ringing': return isIncoming ? 'Incoming call...' : 'Ringing...';
+      case 'ringing': return isIncoming ? 'Incoming voice call' : 'Ringing...';
       case 'connected': return formatDuration(callDuration);
       case 'ended': return 'Call ended';
       case 'declined': return 'Call declined';
@@ -345,9 +365,17 @@ export default function VoiceCallScreen() {
 
   const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
 
+  const isTerminal = callStatus === 'ended' || callStatus === 'declined' || callStatus === 'busy' || callStatus === 'missed' || callStatus === 'failed';
+
   return (
-    <LinearGradient colors={['#1a1a2e', '#16213e', '#0f3460']} style={styles.container}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <LinearGradient
+        colors={['#0f0c29', '#302b63', '#24243e']}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
 
       {Platform.OS !== 'web' && callStatus === 'connected' && (
         <WebView
@@ -390,101 +418,391 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      <Animated.View style={[styles.content, { opacity: fadeAnim, paddingTop: insets.top + 40 }]}>
-        <Animated.View style={[styles.avatarContainer, { transform: [{ scale: callStatus === 'ringing' ? pulseAnim : 1 }] }]}>
-          <View style={styles.avatarGlow} />
-          <SafeImage source={{ uri: userPhoto || 'https://via.placeholder.com/150' }} style={styles.avatar} />
-        </Animated.View>
+      <Animated.View style={[styles.content, { opacity: fadeAnim, paddingTop: insets.top + 20 }]}>
+        <View style={styles.topSection}>
+          <Pressable style={styles.backBtn} onPress={() => { handleEndCall(); }}>
+            <Ionicons name="chevron-back" size={28} color="rgba(255,255,255,0.8)" />
+          </Pressable>
+          <View style={styles.encryptionBadge}>
+            <Ionicons name="lock-closed" size={12} color="#10B981" />
+            <ThemedText style={styles.encryptionText}>Encrypted</ThemedText>
+          </View>
+        </View>
+
+        <View style={styles.avatarSection}>
+          {(callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'initializing') && (
+            <>
+              <Animated.View style={[styles.waveRing, {
+                opacity: waveAnim1.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.15, 0] }),
+                transform: [{ scale: waveAnim1.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }) }],
+              }]} />
+              <Animated.View style={[styles.waveRing, {
+                opacity: waveAnim2.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.15, 0] }),
+                transform: [{ scale: waveAnim2.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }) }],
+              }]} />
+              <Animated.View style={[styles.waveRing, {
+                opacity: waveAnim3.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.4, 0.15, 0] }),
+                transform: [{ scale: waveAnim3.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }) }],
+              }]} />
+            </>
+          )}
+
+          {callStatus === 'connected' && (
+            <View style={styles.connectedGlow} />
+          )}
+
+          <Animated.View style={[styles.avatarWrapper, {
+            transform: [{ scale: (callStatus === 'ringing' || callStatus === 'connecting') ? pulseAnim : 1 }]
+          }]}>
+            <SafeImage
+              source={{ uri: userPhoto || 'https://via.placeholder.com/150' }}
+              style={styles.avatar}
+            />
+          </Animated.View>
+        </View>
+
         <ThemedText style={styles.userName}>{userName || 'Unknown'}</ThemedText>
-        <ThemedText style={styles.callStatusText}>{getStatusText()}</ThemedText>
-        {callStatus === 'ringing' && !isIncoming && (
-          <View style={styles.ringingIndicator}>
-            <MaterialCommunityIcons name="phone-ring" size={24} color="#FFD700" />
-            <ThemedText style={styles.ringingText}>Ringing...</ThemedText>
-          </View>
-        )}
-        {callStatus === 'busy' && (
-          <View style={[styles.ringingIndicator, { backgroundColor: 'rgba(255, 82, 82, 0.15)' }]}>
-            <Ionicons name="call" size={24} color="#FF5252" style={{ transform: [{ rotate: '135deg' }] }} />
-            <ThemedText style={[styles.ringingText, { color: '#FF5252' }]}>User is on another call</ThemedText>
-          </View>
-        )}
-        {callStatus === 'missed' && (
-          <View style={[styles.ringingIndicator, { backgroundColor: 'rgba(255, 152, 0, 0.15)' }]}>
-            <Ionicons name="call" size={24} color="#FF9800" style={{ transform: [{ rotate: '135deg' }] }} />
-            <ThemedText style={[styles.ringingText, { color: '#FF9800' }]}>No answer</ThemedText>
+
+        <View style={styles.statusContainer}>
+          {callStatus === 'connected' && (
+            <View style={styles.connectedDot} />
+          )}
+          {isTerminal && (
+            <Ionicons
+              name={callStatus === 'busy' ? 'call' : callStatus === 'missed' ? 'call' : callStatus === 'failed' ? 'alert-circle' : 'call'}
+              size={16}
+              color={callStatus === 'failed' || callStatus === 'busy' ? '#FF5252' : callStatus === 'missed' ? '#FF9800' : 'rgba(255,255,255,0.5)'}
+              style={callStatus === 'declined' || callStatus === 'ended' || callStatus === 'missed' || callStatus === 'busy' ? { transform: [{ rotate: '135deg' }] } : undefined}
+            />
+          )}
+          <ThemedText style={[
+            styles.statusText,
+            callStatus === 'connected' && styles.statusConnected,
+            (callStatus === 'failed' || callStatus === 'busy') && styles.statusError,
+            callStatus === 'missed' && styles.statusWarning,
+          ]}>
+            {getStatusText()}
+          </ThemedText>
+        </View>
+
+        {callStatus === 'connected' && (
+          <View style={styles.soundWaveContainer}>
+            {[...Array(7)].map((_, i) => (
+              <Animated.View
+                key={i}
+                style={[styles.soundBar, {
+                  height: 12 + Math.sin((i + callDuration * 3) * 0.8) * 10 + Math.random() * 4,
+                  backgroundColor: `rgba(99, 102, 241, ${0.4 + Math.sin(i) * 0.3})`,
+                }]}
+              />
+            ))}
           </View>
         )}
       </Animated.View>
-      <View style={[styles.controls, { paddingBottom: insets.bottom + 40 }]}>
+
+      <View style={[styles.controlsSection, { paddingBottom: insets.bottom + 30 }]}>
         {isIncoming && callStatus === 'ringing' ? (
-          <View style={styles.incomingCallButtons}>
-            <Pressable onPress={handleDeclineCall}>
-              <LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.callActionGradient}>
-                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-              </LinearGradient>
+          <View style={styles.incomingButtons}>
+            <View style={styles.actionButtonCol}>
+              <Pressable onPress={handleDeclineCall} style={styles.declineBtn}>
+                <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+              </Pressable>
               <ThemedText style={styles.actionLabel}>Decline</ThemedText>
-            </Pressable>
-            <Pressable onPress={handleAcceptCall}>
-              <LinearGradient colors={['#4CAF50', '#388E3C']} style={styles.callActionGradient}>
-                <Ionicons name="call" size={32} color="#FFF" />
-              </LinearGradient>
+            </View>
+            <View style={styles.actionButtonCol}>
+              <Pressable onPress={handleAcceptCall} style={styles.acceptBtn}>
+                <Ionicons name="call" size={30} color="#FFF" />
+              </Pressable>
               <ThemedText style={styles.actionLabel}>Accept</ThemedText>
-            </Pressable>
+            </View>
           </View>
-        ) : callStatus === 'busy' || callStatus === 'missed' || callStatus === 'declined' || callStatus === 'ended' ? (
-          <View style={styles.connectedControls}>
-            <Pressable style={styles.endCallButton} onPress={() => navigation.goBack()}>
-              <LinearGradient colors={['#555', '#333']} style={styles.endCallGradient}>
-                <Ionicons name="close" size={32} color="#FFF" />
-              </LinearGradient>
+        ) : isTerminal ? (
+          <View style={styles.terminalButtons}>
+            <Pressable style={styles.closeBtn} onPress={() => navigation.goBack()}>
+              <Ionicons name="close" size={30} color="#FFF" />
             </Pressable>
           </View>
         ) : (
-          <View style={styles.connectedControls}>
+          <View style={styles.connectedButtons}>
             {callStatus === 'connected' && (
               <View style={styles.controlRow}>
-                <Pressable style={[styles.controlBtn, isMuted && styles.controlBtnActive]} onPress={() => setIsMuted(!isMuted)}>
-                  <Ionicons name={isMuted ? "mic-off" : "mic"} size={26} color="#FFF" />
+                <View style={styles.controlCol}>
+                  <Pressable
+                    style={[styles.controlBtn, isMuted && styles.controlBtnActive]}
+                    onPress={() => {
+                      setIsMuted(!isMuted);
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e) {}
+                    }}
+                  >
+                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? '#302b63' : '#FFF'} />
+                  </Pressable>
                   <ThemedText style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
-                </Pressable>
-                <Pressable style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]} onPress={() => setIsSpeakerOn(!isSpeakerOn)}>
-                  <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={26} color="#FFF" />
+                </View>
+                <View style={styles.controlCol}>
+                  <Pressable
+                    style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]}
+                    onPress={() => {
+                      setIsSpeakerOn(!isSpeakerOn);
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e) {}
+                    }}
+                  >
+                    <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={24} color={isSpeakerOn ? '#302b63' : '#FFF'} />
+                  </Pressable>
                   <ThemedText style={styles.controlLabel}>Speaker</ThemedText>
-                </Pressable>
+                </View>
+                <View style={styles.controlCol}>
+                  <Pressable
+                    style={styles.controlBtn}
+                    onPress={() => {
+                      handleEndCall(true);
+                      navigation.goBack();
+                      setTimeout(() => {
+                        (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
+                      }, 100);
+                    }}
+                  >
+                    <MaterialCommunityIcons name="message-text" size={24} color="#FFF" />
+                  </Pressable>
+                  <ThemedText style={styles.controlLabel}>Message</ThemedText>
+                </View>
               </View>
             )}
-            <Pressable style={styles.endCallButton} onPress={handleEndCall}>
-              <LinearGradient colors={['#FF5252', '#D32F2F']} style={styles.endCallGradient}>
-                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-              </LinearGradient>
+            <Pressable style={styles.endCallBtn} onPress={handleEndCall}>
+              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </Pressable>
           </View>
         )}
       </View>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { flex: 1, alignItems: 'center', paddingHorizontal: 24 },
-  avatarContainer: { alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  avatarGlow: { position: 'absolute', width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(74, 144, 226, 0.3)' },
-  avatar: { width: 150, height: 150, borderRadius: 75, borderWidth: 4, borderColor: 'rgba(255,255,255,0.3)' },
-  userName: { fontSize: 28, fontWeight: '700', color: '#FFF', marginBottom: 8 },
-  callStatusText: { fontSize: 18, color: 'rgba(255,255,255,0.7)', marginBottom: 32 },
-  ringingIndicator: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, backgroundColor: 'rgba(255, 215, 0, 0.15)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
-  ringingText: { color: '#FFD700', fontWeight: '600', fontSize: 14 },
-  controls: { paddingHorizontal: 24 },
-  incomingCallButtons: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-  callActionGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
-  actionLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 13, textAlign: 'center', marginTop: 8 },
-  endCallButton: { alignItems: 'center' },
-  endCallGradient: { width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
-  connectedControls: { alignItems: 'center', gap: 32 },
-  controlRow: { flexDirection: 'row', justifyContent: 'center', gap: 40 },
-  controlBtn: { alignItems: 'center', gap: 8 },
-  controlBtnActive: { opacity: 0.7 },
-  controlLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 12 },
+  container: {
+    flex: 1,
+    backgroundColor: '#0f0c29',
+  },
+  content: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  topSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 16,
+    marginBottom: 40,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  encryptionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  encryptionText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  avatarSection: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 200,
+    height: 200,
+    marginBottom: 32,
+  },
+  waveRing: {
+    position: 'absolute',
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 2,
+    borderColor: 'rgba(99, 102, 241, 0.5)',
+  },
+  connectedGlow: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  avatarWrapper: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.2)',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  userName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFF',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
+  connectedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  statusText: {
+    fontSize: 17,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
+  },
+  statusConnected: {
+    color: '#10B981',
+    fontSize: 22,
+    fontWeight: '700',
+    letterSpacing: 2,
+  },
+  statusError: {
+    color: '#FF5252',
+  },
+  statusWarning: {
+    color: '#FF9800',
+  },
+  soundWaveContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 30,
+    marginTop: 10,
+  },
+  soundBar: {
+    width: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(99, 102, 241, 0.5)',
+  },
+  controlsSection: {
+    paddingHorizontal: 24,
+  },
+  incomingButtons: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 80,
+  },
+  actionButtonCol: {
+    alignItems: 'center',
+  },
+  declineBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  acceptBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#34C759',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#34C759',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  actionLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 10,
+  },
+  terminalButtons: {
+    alignItems: 'center',
+  },
+  closeBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  connectedButtons: {
+    alignItems: 'center',
+    gap: 30,
+  },
+  controlRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 36,
+  },
+  controlCol: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  controlBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  controlBtnActive: {
+    backgroundColor: '#FFF',
+  },
+  controlLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  endCallBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
+  },
 });

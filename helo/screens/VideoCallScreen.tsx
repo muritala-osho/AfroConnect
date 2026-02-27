@@ -351,7 +351,7 @@ export default function VideoCallScreen() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleEndCall = () => {
+  const handleEndCall = (skipGoBack = false) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const wasConnected = callStatus === 'connected';
     setCallStatus('ended');
@@ -374,9 +374,11 @@ export default function VideoCallScreen() {
       wasAnswered: wasConnected
     });
 
-    setTimeout(() => {
-      navigation.goBack();
-    }, 500);
+    if (!skipGoBack) {
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
+    }
   };
 
   const handleAcceptCall = () => {
@@ -706,8 +708,11 @@ export default function VideoCallScreen() {
             </Pressable>
 
             <Pressable style={styles.controlButton} onPress={() => {
-              handleEndCall();
-              (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
+              handleEndCall(true);
+              navigation.goBack();
+              setTimeout(() => {
+                (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
+              }, 100);
             }}>
               <MaterialCommunityIcons name="message-text" size={24} color="#FFF" />
             </Pressable>
