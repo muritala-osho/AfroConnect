@@ -491,6 +491,12 @@ io.on('connection', (socket) => {
         startTime: Date.now()
       };
 
+      setTimeout(() => {
+        if (socket.pendingCall && socket.pendingCall.targetUserId === targetUserId) {
+          socket.pendingCall = null;
+        }
+      }, 35000);
+
       io.to(targetUserId).emit('call:incoming', {
         callData,
         callerInfo: {
@@ -611,6 +617,16 @@ io.on('connection', (socket) => {
   socket.on('call:missed', async (data) => {
     const { targetUserId, callType } = data;
     if (targetUserId && socket.userId) {
+      socket.pendingCall = null;
+      socket.activeCall = null;
+      const targetSocketId = onlineUsers.get(targetUserId);
+      if (targetSocketId) {
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (targetSocket) {
+          targetSocket.pendingCall = null;
+          targetSocket.activeCall = null;
+        }
+      }
       await saveCallMessage(socket.userId, targetUserId, callType || 'audio', 'missed');
       console.log(`Missed call from ${socket.userId} to ${targetUserId}`);
     }
@@ -618,6 +634,33 @@ io.on('connection', (socket) => {
 
   // Disconnect
   socket.on('disconnect', () => {
+    if (socket.pendingCall) {
+      const targetId = socket.pendingCall.targetUserId;
+      if (targetId) {
+        const targetSocketId = onlineUsers.get(targetId);
+        if (targetSocketId) {
+          const targetSocket = io.sockets.sockets.get(targetSocketId);
+          if (targetSocket) {
+            targetSocket.pendingCall = null;
+            targetSocket.activeCall = null;
+          }
+        }
+      }
+    }
+    if (socket.activeCall) {
+      const otherUserId = socket.activeCall.callerId;
+      if (otherUserId) {
+        io.to(otherUserId).emit('call:ended', { endedBy: socket.userId });
+        const otherSocketId = onlineUsers.get(otherUserId);
+        if (otherSocketId) {
+          const otherSocket = io.sockets.sockets.get(otherSocketId);
+          if (otherSocket) {
+            otherSocket.activeCall = null;
+            otherSocket.pendingCall = null;
+          }
+        }
+      }
+    }
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
       io.emit('user:status', { userId: socket.userId, isOnline: false });

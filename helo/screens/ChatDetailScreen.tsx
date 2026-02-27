@@ -1399,8 +1399,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       onPress={() => playAudio(item.audioUrl!, item._id)}
                     >
                       <Ionicons 
-                        name={playingAudioId === item._id ? 'pause' : 'play'} 
-                        size={24} 
+                        name={playingAudioId === item._id ? 'pause-circle' : (playingAudioId === 'paused:' + item._id ? 'play-circle' : 'play')} 
+                        size={playingAudioId === item._id || playingAudioId === 'paused:' + item._id ? 28 : 24} 
                         color={isMe ? '#FFF' : theme.primary} 
                       />
                       <View style={styles.audioWaveform}>

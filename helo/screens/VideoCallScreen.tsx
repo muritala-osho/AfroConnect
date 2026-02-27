@@ -172,6 +172,7 @@ export default function VideoCallScreen() {
       if (ringingTimeout.current) {
         clearTimeout(ringingTimeout.current);
       }
+      stopRingtone();
       setCallStatus('connected');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       durationInterval.current = setInterval(() => {
@@ -383,6 +384,7 @@ export default function VideoCallScreen() {
 
   const handleAcceptCall = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    stopRingtone();
     socketService.acceptCall({ callerId, callData: incomingCallData });
     setCallStatus('connected');
     durationInterval.current = setInterval(() => {

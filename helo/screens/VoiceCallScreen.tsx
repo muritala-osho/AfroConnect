@@ -182,6 +182,7 @@ export default function VoiceCallScreen() {
 
     socketService.onCallAccepted(() => {
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      stopRingtone();
       setCallStatus('connected');
     });
 
@@ -284,6 +285,17 @@ export default function VoiceCallScreen() {
 
   useEffect(() => {
     if (callStatus === 'connected') {
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: !isSpeakerOn,
+      }).catch((err) => console.log('Speaker toggle error:', err));
+    }
+  }, [isSpeakerOn, callStatus]);
+
+  useEffect(() => {
+    if (callStatus === 'connected') {
       durationInterval.current = setInterval(() => {
         setCallDuration(prev => {
           if (!isPremium && prev >= 300) {
@@ -319,13 +331,14 @@ export default function VoiceCallScreen() {
   };
 
   const handleAcceptCall = () => {
+    stopRingtone();
     socketService.acceptCall({ callerId, callData: incomingCallData });
     setCallStatus('connected');
   };
 
   const handleDeclineCall = async () => {
-    setCallStatus('declined');
     stopRingtone();
+    setCallStatus('declined');
     socketService.declineCall({ callerId, callType: 'audio' });
     setTimeout(() => navigation.goBack(), 1500);
   };
