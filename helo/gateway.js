@@ -5,7 +5,7 @@ const path = require('path');
 
 const GATEWAY_PORT = 5000;
 const BACKEND_PORT = 3001;
-const EXPO_WEB_PORT = 3002;
+const EXPO_WEB_PORT = 19006;
 
 // Create proxy instances
 const backendProxy = httpProxy.createProxyServer({
@@ -134,8 +134,6 @@ const server = http.createServer((req, res) => {
     console.log(`[GATEWAY] Routing ${method} ${url} to BACKEND`);
     backendProxy.web(req, res);
   } else {
-    // For Expo web, we need to ensure the Host header matches what Expo expects
-    req.headers['host'] = `localhost:${EXPO_WEB_PORT}`;
     expoProxy.web(req, res);
   }
 });

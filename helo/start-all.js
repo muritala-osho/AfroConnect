@@ -16,7 +16,7 @@ run('BACKEND', 'node', ['server.js'], path.join(__dirname, 'backend'));
 run('GATEWAY', 'node', ['gateway.js'], __dirname);
 
 // 3. Expo Web on 3002
-run('EXPO', 'CI=1 EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 NODE_OPTIONS=--max-old-space-size=1024 npx', ['expo', 'start', '--port', '3002'], __dirname);
+run('EXPO', 'CI=1 EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0 NODE_OPTIONS=--max-old-space-size=1024 npx', ['expo', 'start', '--web', '--port', '3002'], __dirname);
 
 process.on('SIGINT', () => {
   console.log('\nShutting down...');

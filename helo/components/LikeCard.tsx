@@ -34,7 +34,7 @@ interface LikeCardProps {
   onRemove: (userId: string) => void;
 }
 
-export default function LikeCard({ 
+function LikeCardComponent({ 
   likeUser, 
   isTall, 
   isLast, 
@@ -317,3 +317,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
 });
+
+const LikeCard = React.memo(LikeCardComponent);
+export default LikeCard;

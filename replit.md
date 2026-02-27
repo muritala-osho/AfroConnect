@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 - **Real-time**: Socket.io for WebSockets (chat, presence, call signaling).
 - **File Storage**: Multer for uploads, Cloudinary for cloud image storage.
 - **Email**: Nodemailer for transactional emails.
-- **Gateway**: A gateway proxies API requests to the backend (port 3001) and serves the Expo web frontend (port 3002) from an entry point (port 5000), enabling unified URL handling. Also serves admin dashboard static files at `/admin-web`.
+- **Gateway**: A gateway proxies API requests to the backend (port 3001) and serves the Expo web frontend (Webpack on port 19006) from an entry point (port 5000), enabling unified URL handling. Also serves admin dashboard static files at `/admin-web`. Expo is started with `--web` flag which launches Webpack dev server on port 19006 for web builds.
 
 ### Core System Design
 - **API Hook Pattern**: Custom `useApi` hook for memoized request functions.
