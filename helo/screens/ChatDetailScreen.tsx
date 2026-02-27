@@ -452,7 +452,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     if (userId) {
       AsyncStorage.removeItem(`chat_draft_${userId}`).catch(e => console.error("Failed to clear draft", e));
     }
-    Keyboard.dismiss();
     setShowEmojiPicker(false);
     setShowAISuggestions(false);
 
@@ -1662,7 +1661,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
       {/* BODY & INPUT SECTION */}
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 56 : 0}
       >
         {currentTheme?.image ? (

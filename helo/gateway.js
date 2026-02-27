@@ -49,7 +49,9 @@ expoProxy.on('error', (err, req, res) => {
 // Helper to serve static files for the web admin dashboard
 const serveStatic = (req, res) => {
   const reqPath = req.url.split('?')[0];
-  let filePath = path.join(__dirname, 'admin-dashboard', reqPath.replace('/admin-web', '') || '/');
+  const relativePath = reqPath.replace('/admin-web', '') || '/';
+  let filePath = path.join(__dirname, 'admin-dashboard', relativePath);
+
   if (reqPath === '/admin-web' || reqPath === '/admin-web/') {
     filePath = path.join(__dirname, 'admin-dashboard', 'index.html');
   }
@@ -61,20 +63,36 @@ const serveStatic = (req, res) => {
     case '.css': contentType = 'text/css'; break;
     case '.json': contentType = 'application/json'; break;
     case '.png': contentType = 'image/png'; break;
-    case '.jpg': contentType = 'image/jpg'; break;
+    case '.jpg': case '.jpeg': contentType = 'image/jpeg'; break;
+    case '.svg': contentType = 'image/svg+xml'; break;
+    case '.ico': contentType = 'image/x-icon'; break;
+    case '.woff': contentType = 'font/woff'; break;
+    case '.woff2': contentType = 'font/woff2'; break;
   }
 
   fs.readFile(filePath, (error, content) => {
     if (error) {
       if (error.code == 'ENOENT') {
-        res.writeHead(404);
-        res.end('File not found');
+        if (!extname || extname === '.html') {
+          fs.readFile(path.join(__dirname, 'admin-dashboard', 'index.html'), (err2, fallback) => {
+            if (err2) {
+              res.writeHead(404);
+              res.end('Admin dashboard not found');
+            } else {
+              res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' });
+              res.end(fallback, 'utf-8');
+            }
+          });
+        } else {
+          res.writeHead(404);
+          res.end('File not found');
+        }
       } else {
         res.writeHead(500);
         res.end('Server error: ' + error.code);
       }
     } else {
-      res.writeHead(200, { 'Content-Type': contentType });
+      res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': extname ? 'public, max-age=3600' : 'no-cache' });
       res.end(content, 'utf-8');
     }
   });

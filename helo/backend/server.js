@@ -94,6 +94,11 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use('/admin-web', express.static(path.join(__dirname, '..', 'admin-dashboard'), { index: 'index.html' }));
+app.get('/admin-web', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'admin-dashboard', 'index.html'));
+});
+
 // Stripe webhook route MUST be registered BEFORE express.json()
 app.post(
   '/api/stripe/webhook/:uuid',
