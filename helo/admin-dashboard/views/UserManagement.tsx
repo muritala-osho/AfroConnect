@@ -4,7 +4,7 @@ import {
   MapPin, Calendar, Mail, MessageSquare, History, ShieldAlert, Award, Heart,
   Briefcase, GraduationCap, Info, Camera, Tag, Cigarette, Wine, HandMetal, Loader2
 } from 'lucide-react';
-import { analyzeUserContent, ModerationResult } from '../services/geminiService';
+import { analyzeUserContent, ModerationResult } from '../services/geminiServices';
 import { adminApi } from '../services/adminApi';
 
 const UserManagement: React.FC = () => {

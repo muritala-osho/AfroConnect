@@ -171,6 +171,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>(AI_SUGGESTIONS);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const playingAudioIdRef = useRef<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
@@ -670,6 +671,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
           await soundRef.current.unloadAsync();
         } catch (_) {}
         soundRef.current = null;
+        playingAudioIdRef.current = null;
         setPlayingAudioId(null);
         setAudioProgress(0);
       }
@@ -834,6 +836,11 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
     recordingDurationRef.current = 0;
   };
 
+  const updatePlayingId = (id: string | null) => {
+    playingAudioIdRef.current = id;
+    setPlayingAudioId(id);
+  };
+
   const playAudio = async (audioUrl: string, messageId: string) => {
     try {
       if (!audioUrl || audioUrl.trim() === '') {
@@ -841,18 +848,20 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         return;
       }
 
+      const currentId = playingAudioIdRef.current;
+
       if (soundRef.current) {
         try {
           const status: any = await soundRef.current.getStatusAsync();
           if (status.isLoaded) {
-            if (playingAudioId === messageId && status.isPlaying) {
+            if (currentId === messageId && status.isPlaying) {
               await soundRef.current.pauseAsync();
-              setPlayingAudioId('paused:' + messageId);
+              updatePlayingId('paused:' + messageId);
               return;
             }
-            if (playingAudioId === 'paused:' + messageId && !status.isPlaying) {
+            if (currentId === 'paused:' + messageId && !status.isPlaying) {
               await soundRef.current.playAsync();
-              setPlayingAudioId(messageId);
+              updatePlayingId(messageId);
               return;
             }
           }
@@ -871,7 +880,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         soundRef.current = null;
       }
 
-      setPlayingAudioId(null);
+      updatePlayingId(null);
       setAudioProgress(0);
 
       if (Platform.OS === 'web') {
@@ -891,7 +900,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                   setAudioProgress(status.positionMillis / status.durationMillis);
                 }
                 if (status.didJustFinish) {
-                  setPlayingAudioId(null);
+                  updatePlayingId(null);
                   setAudioProgress(0);
                   if (soundRef.current) {
                     soundRef.current.unloadAsync().catch(() => {});
@@ -902,13 +911,13 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
             }
           );
           soundRef.current = sound;
-          setPlayingAudioId(messageId);
+          updatePlayingId(messageId);
         } catch (expoError) {
           console.log('expo-av failed on web, trying HTML5 Audio fallback:', expoError);
           try {
             const htmlAudio = new window.Audio(audioUrl);
             htmlAudio.onended = () => {
-              setPlayingAudioId(null);
+              updatePlayingId(null);
               setAudioProgress(0);
             };
             htmlAudio.ontimeupdate = () => {
@@ -917,12 +926,12 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               }
             };
             htmlAudio.onerror = () => {
-              setPlayingAudioId(null);
+              updatePlayingId(null);
               setAudioProgress(0);
               Alert.alert('Playback Error', 'Could not play this voice message. The audio format may not be supported.');
             };
             await htmlAudio.play();
-            setPlayingAudioId(messageId);
+            updatePlayingId(messageId);
           } catch (htmlError: any) {
             console.error('HTML5 Audio fallback also failed:', htmlError);
             Alert.alert('Playback Error', `Could not play voice message: ${htmlError.message || 'Unknown error'}`);
@@ -937,7 +946,6 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         staysActiveInBackground: true,
       });
 
-      console.log('Playing audio URL:', audioUrl);
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
         { shouldPlay: true, progressUpdateIntervalMillis: 100 },
@@ -947,7 +955,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
               setAudioProgress(status.positionMillis / status.durationMillis);
             }
             if (status.didJustFinish) {
-              setPlayingAudioId(null);
+              updatePlayingId(null);
               setAudioProgress(0);
               if (soundRef.current) {
                 soundRef.current.unloadAsync().catch(() => {});
@@ -958,7 +966,7 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
         }
       );
       soundRef.current = sound;
-      setPlayingAudioId(messageId);
+      updatePlayingId(messageId);
     } catch (error: any) {
       console.error('Audio playback error for URL:', audioUrl, error);
       Alert.alert('Playback Error', `Could not play voice message: ${error.message || 'Unknown error'}`);
@@ -1399,8 +1407,8 @@ export default function ChatDetailScreen({ navigation, route }: ChatDetailScreen
                       onPress={() => playAudio(item.audioUrl!, item._id)}
                     >
                       <Ionicons 
-                        name={playingAudioId === item._id ? 'pause-circle' : (playingAudioId === 'paused:' + item._id ? 'play-circle' : 'play')} 
-                        size={playingAudioId === item._id || playingAudioId === 'paused:' + item._id ? 28 : 24} 
+                        name={playingAudioId === item._id ? 'pause' : 'play'} 
+                        size={playingAudioId === item._id || playingAudioId === 'paused:' + item._id ? 26 : 22} 
                         color={isMe ? '#FFF' : theme.primary} 
                       />
                       <View style={styles.audioWaveform}>

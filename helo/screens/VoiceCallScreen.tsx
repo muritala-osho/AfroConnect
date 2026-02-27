@@ -431,17 +431,17 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      <Animated.View style={[styles.content, { opacity: fadeAnim, paddingTop: insets.top + 20 }]}>
-        <View style={styles.topSection}>
-          <Pressable style={styles.backBtn} onPress={() => { handleEndCall(); }}>
-            <Ionicons name="chevron-back" size={28} color="rgba(255,255,255,0.8)" />
-          </Pressable>
-          <View style={styles.encryptionBadge}>
-            <Ionicons name="lock-closed" size={12} color="#10B981" />
-            <ThemedText style={styles.encryptionText}>Encrypted</ThemedText>
-          </View>
+      <Animated.View style={[styles.topBar, { opacity: fadeAnim, paddingTop: insets.top + 12 }]}>
+        <Pressable style={styles.backBtn} onPress={() => { handleEndCall(); }}>
+          <Ionicons name="chevron-back" size={28} color="rgba(255,255,255,0.8)" />
+        </Pressable>
+        <View style={styles.encryptionBadge}>
+          <Ionicons name="lock-closed" size={12} color="#10B981" />
+          <ThemedText style={styles.encryptionText}>Encrypted</ThemedText>
         </View>
+      </Animated.View>
 
+      <Animated.View style={[styles.centerSection, { opacity: fadeAnim }]}>
         <View style={styles.avatarSection}>
           {(callStatus === 'ringing' || callStatus === 'connecting' || callStatus === 'initializing') && (
             <>
@@ -497,20 +497,6 @@ export default function VoiceCallScreen() {
             {getStatusText()}
           </ThemedText>
         </View>
-
-        {callStatus === 'connected' && (
-          <View style={styles.soundWaveContainer}>
-            {[...Array(7)].map((_, i) => (
-              <Animated.View
-                key={i}
-                style={[styles.soundBar, {
-                  height: 12 + Math.sin((i + callDuration * 3) * 0.8) * 10 + Math.random() * 4,
-                  backgroundColor: `rgba(99, 102, 241, ${0.4 + Math.sin(i) * 0.3})`,
-                }]}
-              />
-            ))}
-          </View>
-        )}
       </Animated.View>
 
       <View style={[styles.controlsSection, { paddingBottom: insets.bottom + 30 }]}>
@@ -595,17 +581,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0f0c29',
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  topSection: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: 16,
-    marginBottom: 40,
+    position: 'absolute',
+    zIndex: 10,
+  },
+  centerSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   backBtn: {
     width: 44,
@@ -705,18 +693,6 @@ const styles = StyleSheet.create({
   },
   statusWarning: {
     color: '#FF9800',
-  },
-  soundWaveContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    height: 30,
-    marginTop: 10,
-  },
-  soundBar: {
-    width: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(99, 102, 241, 0.5)',
   },
   controlsSection: {
     paddingHorizontal: 24,

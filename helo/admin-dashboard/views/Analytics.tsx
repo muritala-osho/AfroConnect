@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { MapPin, Search, Sparkles, ExternalLink, Globe, TrendingUp, Info } from 'lucide-react';
 import { ANALYTICS_DATA } from '../constants';
-import { getLocationIntel } from '../services/geminiService';
+import { getLocationIntel } from '../services/geminiServices';
 
 const Analytics: React.FC = () => {
   const [mapQuery, setMapQuery] = useState('');
