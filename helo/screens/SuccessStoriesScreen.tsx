@@ -83,33 +83,7 @@ const RELATIONSHIP_COLORS: Record<string, string> = {
   return null;
 };
 
-export default function SuccessStoriesScreen() {
-  const { theme } = useTheme();
-  const { get, post, del } = useApi();
-  const { token } = useAuth();
-  const { t } = useTranslation();
-  
-  const [stories, setStories] = useState<SuccessStory[]>(DUMMY_SUCCESS_STORIES || []);
-  const [featuredStories, setFeaturedStories] = useState<SuccessStory[]>(DUMMY_SUCCESS_STORIES ? DUMMY_SUCCESS_STORIES.filter(s => s.featured) : []);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'browse' | 'myStory'>('browse');
-
-  const [myStory, setMyStory] = useState<SuccessStory | null>(null);
-  const [loadingMyStory, setLoadingMyStory] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  
-  const [storyTitle, setStoryTitle] = useState('');
-  const [storyText, setStoryText] = useState('');
-  const [howWeMet, setHowWeMet] = useState('');
-  const [relationship, setRelationship] = useState<SuccessStory['relationship']>('dating');
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [storyPhotos, setStoryPhotos] = useState<string[]>([]);
-
-  const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
+const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
     {
       _id: 'dummy-1',
       title: 'A Modern Fairytale',
@@ -261,6 +235,32 @@ export default function SuccessStoriesScreen() {
       createdAt: '2025-01-10T10:00:00Z'
     }
   ];
+
+export default function SuccessStoriesScreen() {
+  const { theme } = useTheme();
+  const { get, post, del } = useApi();
+  const { token } = useAuth();
+  const { t } = useTranslation();
+  
+  const [stories, setStories] = useState<SuccessStory[]>(DUMMY_SUCCESS_STORIES);
+  const [featuredStories, setFeaturedStories] = useState<SuccessStory[]>(DUMMY_SUCCESS_STORIES.filter(s => s.featured));
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'browse' | 'myStory'>('browse');
+
+  const [myStory, setMyStory] = useState<SuccessStory | null>(null);
+  const [loadingMyStory, setLoadingMyStory] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  const [storyTitle, setStoryTitle] = useState('');
+  const [storyText, setStoryText] = useState('');
+  const [howWeMet, setHowWeMet] = useState('');
+  const [relationship, setRelationship] = useState<SuccessStory['relationship']>('dating');
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [storyPhotos, setStoryPhotos] = useState<string[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
