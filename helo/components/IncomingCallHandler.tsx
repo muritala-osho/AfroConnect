@@ -41,8 +41,9 @@ export default function IncomingCallHandler() {
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
       });
+
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+        require('../assets/sounds/mixkit-waiting-ringtone-1354.wav'),
         { shouldPlay: true, isLooping: true, volume: 0.8 }
       );
       ringtoneRef.current = sound;

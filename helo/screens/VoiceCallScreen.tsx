@@ -36,7 +36,7 @@ export default function VoiceCallScreen() {
   const { post } = useApi();
 
   const [callStatus, setCallStatus] = useState<
-    "connecting" | "ringing" | "connected" | "ended" | "failed"
+    "connecting" | "ringing" | "connected" | "ended" | "failed" | "busy"
   >("connecting");
   const [duration, setDuration] = useState(0);
   const [activeCallData, setActiveCallData] = useState(
@@ -171,6 +171,12 @@ export default function VoiceCallScreen() {
       }
     });
 
+    socketService.onCallBusy(async () => {
+      await stopRingtone();
+      setCallStatus("busy");
+      setTimeout(() => navigation.goBack(), 2000);
+    });
+
     socketService.onCallEnded(async () => {
       await stopRingtone();
       await (agoraService as any).leaveChannel?.();
@@ -183,6 +189,7 @@ export default function VoiceCallScreen() {
       (agoraService as any).leaveChannel?.();
       if (timerRef.current) clearInterval(timerRef.current);
       socketService.off("call:accepted");
+      socketService.off("call:busy");
       socketService.off("call:ended");
     };
   }, []);
@@ -215,6 +222,8 @@ export default function VoiceCallScreen() {
         <ThemedText style={styles.statusText}>
           {callStatus === "connected"
             ? `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, "0")}`
+            : callStatus === "busy"
+            ? "User is on another call"
             : callStatus.toUpperCase()}
         </ThemedText>
       </Animated.View>

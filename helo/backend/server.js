@@ -15,6 +15,7 @@ console.log('Cloudinary config check:', {
 });
 
 const { sendExpoPushNotification } = require('./utils/pushNotifications');
+const Message = require('./models/Message');
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -303,16 +304,38 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Mark message as read
-  socket.on('chat:mark-read', (data) => {
-    if (data.chatId && data.userId) {
-      io.to(data.chatId).emit('chat:message-read', {
-        chatId: data.chatId,
-        userId: data.userId,
-        readAt: new Date().toISOString()
+  // Helper: mark messages as read and broadcast status updates
+  const handleMarkRead = async (data) => {
+    if (!data || !data.chatId || !data.userId) return;
+
+    try {
+      const filter = {
+        matchId: data.chatId,
+        receiver: data.userId,
+        seen: false
+      };
+      if (data.messageId) {
+        filter._id = data.messageId;
+      }
+
+      await Message.updateMany(filter, {
+        $set: { seen: true, seenAt: new Date(), status: 'seen' }
       });
+    } catch (err) {
+      console.error('Error marking messages as read:', err);
     }
-  });
+
+    io.to(data.chatId).emit('chat:message-read', {
+      chatId: data.chatId,
+      userId: data.userId,
+      messageId: data.messageId,
+      readAt: new Date().toISOString()
+    });
+  };
+
+  socket.on('chat:mark-read', handleMarkRead);
+  socket.on('chat:read', handleMarkRead);
+  socket.on('message:read', handleMarkRead);
 
   // Message delivered acknowledgment
   socket.on('chat:delivered', (data) => {

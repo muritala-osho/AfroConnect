@@ -878,9 +878,7 @@ export default function ChatDetailScreen({
     if (!matchId) return;
     DeviceEventEmitter.emit("chat:read-local", matchId);
     socketService.joinChat(matchId);
-    socketService.emit("chat:mark-read", { chatId: matchId, userId: myId });
-    socketService.emit("chat:read", { chatId: matchId, userId: myId });
-    socketService.emit("message:read", { chatId: matchId, userId: myId });
+    socketService.markMessagesRead({ chatId: matchId, userId: myId });
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;
@@ -899,9 +897,7 @@ export default function ChatDetailScreen({
 
           // Emit that we've read the incoming message
           if (matchId) {
-            socketService.emit("chat:mark-read", { chatId: matchId, userId: myId, messageId: msg._id });
-            socketService.emit("chat:read", { chatId: matchId, userId: myId });
-            socketService.emit("message:read", { chatId: matchId, messageId: msg._id, userId: myId });
+            socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
             DeviceEventEmitter.emit("chat:read-local", matchId);
           }
         }

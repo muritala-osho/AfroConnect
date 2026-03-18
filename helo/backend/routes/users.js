@@ -666,7 +666,9 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  return Math.round(R * c);
+  // Return distance in kilometers with one decimal precision (e.g., 1.3 km)
+  const distanceKm = R * c;
+  return Math.max(0, Number(distanceKm.toFixed(1)));
 }
 
 // Location routes

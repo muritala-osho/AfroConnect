@@ -68,15 +68,20 @@ export default function VideoCallScreen() {
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
       });
+
+      const source = isIncoming
+        ? require('../assets/sounds/mixkit-waiting-ringtone-1354.wav')
+        : require('../assets/sounds/phone-calling-1b.mp3');
+
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3' },
+        source,
         { shouldPlay: true, isLooping: true, volume: 0.7 }
       );
       ringtoneRef.current = sound;
     } catch (err) {
       console.log('Ringtone error:', err);
     }
-  }, []);
+  }, [isIncoming]);
 
   const stopRingtone = useCallback(async () => {
     try {
@@ -201,7 +206,7 @@ export default function VideoCallScreen() {
       }, 1000);
     });
 
-    socketService.on('call:busy', () => {
+    socketService.onCallBusy(() => {
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setCallStatus('busy');
       setErrorMessage('User is busy');

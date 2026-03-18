@@ -246,15 +246,17 @@ class SocketService {
 
   // Chat specific methods
   joinChat(chatId: string) {
-    this.emit('chat:join', chatId);
+    // Ensure the server receives the join request even if the socket is still connecting.
+    this.emitWithRetry('chat:join', chatId, 5);
   }
 
   sendMessage(data: { chatId: string; text: string; senderId: string; receiverId?: string }) {
     this.emit('chat:message', data);
   }
 
-  markMessagesRead(data: { chatId: string; userId: string }) {
-    this.emit('chat:mark-read', data);
+  markMessagesRead(data: { chatId: string; userId: string; messageId?: string }) {
+    // Retry in case socket is still connecting or momentarily disconnected
+    this.emitWithRetry('chat:mark-read', data, 3);
   }
 
   onMessageStatus(callback: (data: { messageId: string; status: string }) => void) {
@@ -322,6 +324,10 @@ class SocketService {
 
   onCallDeclined(callback: (data: { declinedBy: string }) => void) {
     this.on('call:declined', callback);
+  }
+
+  onCallBusy(callback: (data: { targetUserId: string }) => void) {
+    this.on('call:busy', callback);
   }
 
   onCallEnded(callback: (data: { endedBy: string }) => void) {
