@@ -148,8 +148,9 @@ router.delete('/delete-all', protect, async (req, res) => {
 router.get('/:matchId', protect, async (req, res) => {
   try {
     const { matchId } = req.params;
-    const { limit = 30, skip = 0 } = req.query;
-    const pageSize = Math.min(parseInt(limit) || 30, 100);
+    const { limit = 200, skip = 0 } = req.query;
+    // Allow more history by default, but cap to prevent huge dumps.
+    const pageSize = Math.min(parseInt(limit) || 200, 1000);
     const skipAmount = Math.max(0, parseInt(skip) || 0);
 
     // Verify user is part of the match

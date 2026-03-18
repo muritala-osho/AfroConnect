@@ -65,6 +65,64 @@ const io = socketIO(server, {
   maxHttpBufferSize: 1e6
 });
 
+// Optional Redis setup for socket scaling / shared state
+let redisClient;
+let redisPubClient;
+let redisSubClient;
+
+const setUserBusy = async (userId, isBusy) => {
+  if (!redisClient || !userId) return;
+  try {
+    const key = `busy:${userId}`;
+    if (isBusy) {
+      // Keep busy state for 5 minutes by default to avoid stale state
+      await redisClient.set(key, '1', { EX: 60 * 5 });
+    } else {
+      await redisClient.del(key);
+    }
+  } catch (err) {
+    console.error('Redis busy flag error:', err);
+  }
+};
+
+const isUserBusy = async (userId) => {
+  if (!redisClient || !userId) return false;
+  try {
+    const value = await redisClient.get(`busy:${userId}`);
+    return !!value;
+  } catch (err) {
+    console.error('Redis busy flag read error:', err);
+    return false;
+  }
+};
+
+const setupRedisAdapter = async () => {
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    return;
+  }
+
+  try {
+    const { createClient } = require('redis');
+    const { createAdapter } = require('@socket.io/redis-adapter');
+
+    redisClient = createClient({ url: redisUrl });
+    redisClient.on('error', (err) => console.error('Redis client error:', err));
+    await redisClient.connect();
+
+    redisPubClient = redisClient.duplicate();
+    redisSubClient = redisClient.duplicate();
+    await Promise.all([redisPubClient.connect(), redisSubClient.connect()]);
+
+    io.adapter(createAdapter(redisPubClient, redisSubClient));
+    console.log('✅ Socket.IO Redis adapter enabled');
+  } catch (err) {
+    console.error('❌ Failed to initialize Redis adapter:', err);
+  }
+};
+
+setupRedisAdapter();
+
 // CORS configuration
 const corsOptions = {
   origin: true, // Reflect request origin
@@ -463,16 +521,16 @@ io.on('connection', (socket) => {
       const callerId = socket.userId || callerInfo?.id;
 
       // Check if target user is busy (already in a call)
-      const targetSocketId = onlineUsers.get(targetUserId);
-      if (targetSocketId) {
-        const targetSocket = io.sockets.sockets.get(targetSocketId);
-        if (targetSocket && (targetSocket.activeCall || targetSocket.pendingCall)) {
-          io.to(callerId).emit('call:busy', { targetUserId });
-          console.log(`User ${targetUserId} is busy, notifying ${callerId}`);
-          return;
-        }
+      const targetBusy = await isUserBusy(targetUserId);
+      if (targetBusy) {
+        io.to(callerId).emit('call:busy', { targetUserId });
+        console.log(`User ${targetUserId} is busy, notifying ${callerId}`);
+        return;
       }
-      
+
+      // Mark caller as busy for the duration of the call attempt
+      await setUserBusy(callerId, true);
+
       socket.pendingCall = {
         targetUserId,
         callerId,
@@ -520,7 +578,7 @@ io.on('connection', (socket) => {
   });
 
   // Call accepted
-  socket.on('call:accept', (data) => {
+  socket.on('call:accept', async (data) => {
     const { callerId, callData } = data;
     if (callerId) {
       socket.activeCall = {
@@ -528,6 +586,10 @@ io.on('connection', (socket) => {
         startTime: Date.now(),
         callType: callData?.callType || 'audio'
       };
+
+      // Mark both the caller and callee as busy
+      await setUserBusy(socket.userId, true);
+      await setUserBusy(callerId, true);
 
       // Also mark caller socket as in active call
       const callerSocketId = onlineUsers.get(callerId);
@@ -559,6 +621,9 @@ io.on('connection', (socket) => {
 
       // Clear pending call on both sides
       socket.pendingCall = null;
+      await setUserBusy(socket.userId, false);
+      await setUserBusy(callerId, false);
+
       const callerSocketId = onlineUsers.get(callerId);
       if (callerSocketId) {
         const callerSocket = io.sockets.sockets.get(callerSocketId);
@@ -584,9 +649,12 @@ io.on('connection', (socket) => {
         await saveCallMessage(callerId, targetUserId, callType || 'audio', 'missed');
       }
 
-      // Clear active call state for both parties
+      // Clear busy and active call state for both parties
       socket.activeCall = null;
       socket.pendingCall = null;
+      await setUserBusy(socket.userId, false);
+      await setUserBusy(targetUserId, false);
+
       const targetSocketId = onlineUsers.get(targetUserId);
       if (targetSocketId) {
         const targetSocket = io.sockets.sockets.get(targetSocketId);
@@ -608,6 +676,9 @@ io.on('connection', (socket) => {
     if (targetUserId && socket.userId) {
       socket.pendingCall = null;
       socket.activeCall = null;
+      await setUserBusy(socket.userId, false);
+      await setUserBusy(targetUserId, false);
+
       const targetSocketId = onlineUsers.get(targetUserId);
       if (targetSocketId) {
         const targetSocket = io.sockets.sockets.get(targetSocketId);
@@ -623,6 +694,11 @@ io.on('connection', (socket) => {
 
   // Disconnect
   socket.on('disconnect', () => {
+    // Clear busy flag for this user
+    if (socket.userId) {
+      setUserBusy(socket.userId, false).catch(() => {});
+    }
+
     if (socket.pendingCall) {
       const targetId = socket.pendingCall.targetUserId;
       if (targetId) {
@@ -639,6 +715,7 @@ io.on('connection', (socket) => {
     if (socket.activeCall) {
       const otherUserId = socket.activeCall.callerId;
       if (otherUserId) {
+        setUserBusy(otherUserId, false).catch(() => {});
         io.to(otherUserId).emit('call:ended', { endedBy: socket.userId });
         const otherSocketId = onlineUsers.get(otherUserId);
         if (otherSocketId) {

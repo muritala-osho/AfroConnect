@@ -1,6 +1,5 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { ActivityIndicator, View } from "react-native";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 import WelcomeScreen from "@/screens/WelcomeScreen";
 import SignUpScreen from "@/screens/SignUpScreen";
@@ -47,7 +46,7 @@ import SocialMediaScreen from "@/screens/SocialMediaScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
-import { useTheme } from "@/hooks/useTheme";
+import { AppLoadingSkeleton } from "@/components/AppLoadingSkeleton";
 
 export type RootStackParamList = {
   Welcome: undefined;
@@ -143,14 +142,9 @@ function VerificationPopup({ isProfileComplete }: { isProfileComplete: boolean }
 
 export default function RootNavigator() {
   const { isAuthenticated, isLoading, token, isProfileComplete } = useAuth();
-  const { theme } = useTheme();
 
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: theme.background }}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
-    );
+    return <AppLoadingSkeleton />;
   }
 
   return (

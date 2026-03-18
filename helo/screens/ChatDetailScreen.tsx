@@ -686,11 +686,13 @@ export default function ChatDetailScreen({
         try {
           // Always listen for screenshots so both users get notified
           subscription = ScreenCapture.addScreenshotListener(() => {
-            if (!screenshotProtection && sendMessageRef.current) {
-              sendMessageRef.current(
-                "📸 A screenshot was taken!",
-                "system",
-              );
+            if (!screenshotProtection && matchId && token) {
+              // Send a system message so it appears for both sides in the chat history
+              post(
+                `/chat/${matchId}/message`,
+                { content: "📸 A screenshot was taken!", type: "system" },
+                token,
+              ).catch(() => {});
             }
           });
 
