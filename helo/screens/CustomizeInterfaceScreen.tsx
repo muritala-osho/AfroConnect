@@ -20,7 +20,7 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 
 // Hardcoded Emerald Green"#10B981";
-const ACCENT_COLOR = 
+const ACCENT_COLOR = "10B981";
 
 const FONT_SIZES: { label: string; value: FontSizeOption; scale: number }[] = [
   { label: "Small", value: "small", scale: 0.85 },

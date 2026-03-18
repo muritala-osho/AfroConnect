@@ -39,7 +39,6 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
-import { Dimension } from 'react-native'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
