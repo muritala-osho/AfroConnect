@@ -1,6 +1,7 @@
 modules = ["nodejs-20"]
 [nix]
 channel = "stable-25_05"
+packages = ["valkey"]
 
 [agent]
 expertMode = true
@@ -32,7 +33,7 @@ outputType = "webview"
 
 [[ports]]
 localPort = 3001
-externalPort = 80
+externalPort = 3001
 
 [[ports]]
 localPort = 3002
@@ -48,8 +49,7 @@ externalPort = 5000
 
 [[ports]]
 localPort = 8081
-externalPort = 8081
+externalPort = 80
 
 [[ports]]
 localPort = 19006
-externalPort = 3001
