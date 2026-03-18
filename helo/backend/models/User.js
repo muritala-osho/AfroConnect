@@ -483,7 +483,41 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+  muteSettings: {
+    mutedUsers: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      mutedAt: {
+        type: Date,
+        default: Date.now
+      },
+      muteAll: { type: Boolean, default: true }, // mute all notifications from this user
+      muteMessages: { type: Boolean, default: false },
+      muteVoiceCalls: { type: Boolean, default: false },
+      muteVideoCalls: { type: Boolean, default: false }
+    }],
+    globalMute: {
+      enabled: { type: Boolean, default: false },
+      startTime: String, // HH:mm format
+      endTime: String, // HH:mm format
+      allowCalls: { type: Boolean, default: false } // allow calls to bypass DND
+    },
+    deviceLevelMute: {
+      enabled: { type: Boolean, default: false } // automatically detected from device
+    }
+  },
+  notificationPreferences: {
+    messagesEnabled: { type: Boolean, default: true },
+    voiceCallsEnabled: { type: Boolean, default: true },
+    videoCallsEnabled: { type: Boolean, default: true },
+    matchesEnabled: { type: Boolean, default: true },
+    likesEnabled: { type: Boolean, default: true },
+    soundEnabled: { type: Boolean, default: true },
+    vibrationEnabled: { type: Boolean, default: true }
+  }
 }, {
   timestamps: true,
   toJSON: { virtuals: true, getters: true },

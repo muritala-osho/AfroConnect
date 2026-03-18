@@ -251,9 +251,7 @@ router.get('/countries', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/nearby
-// @desc    Get nearby users based on location and preferences
-// @access  Private
+
 router.get('/nearby', protect, async (req, res) => {
   try {
     const { lat, lng, maxDistance, minAge, maxAge, genders } = req.query;
@@ -487,9 +485,7 @@ router.get('/profile-views', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/who-viewed-me
-// @desc    Get users who viewed current user's profile
-// @access  Private (Normal users see limited info, Premium sees full + actions)
+
 router.get('/who-viewed-me', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
