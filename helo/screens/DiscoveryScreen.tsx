@@ -39,9 +39,11 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { Dimension } from 'react-native'
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
+const STABLE_CARD_HEIGHT = SCREEN_HEIGHT * 0.75;
 
 type DiscoveryScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, "Discovery">,
@@ -1687,25 +1689,24 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(128, 128, 128, 0.2)',
-    borderRadius: 22,
-    padding: 3,
-    width: 170,
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.15)',
+    backgroundColor: 'rgba(225, 225, 225, 0.1)',
+    borderRadius: 20,
+    padding: 2,
+    alignSelf: 'center',
+    minWith: 120,
   },
   toggleButton: {
-    flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18,
     flexDirection: 'row',
   },
   toggleText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: '',
   },
   activeToggleText: {
     color: '#000',
@@ -1713,6 +1714,12 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  profileImageFull: {
+    position: 'absolute',
+    width: "100%",
+    height: "100%",
+    zIndex: 1,
   },
   centerContent: {
     alignItems: "center",
@@ -1887,19 +1894,16 @@ const styles = StyleSheet.create({
     textShadowRadius: 10,
   },
   cardWrapper: {
-    flex: 1,
-    marginHorizontal: 8,
-    marginBottom: 4,
+    height: STABLE_CARD_HEIGHT,
+    marginHorizontal: 10,
+    marginBottom: -20,
   },
   profileCard: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 16,
-    overflow: "hidden",
-    backgroundColor: "#1E1E1E",
+    flex: 1,
+      borderRadius: 24, 
+      overflow: 'hidden',
+      backgroundColor: '#1E1E1E',
+      height: '100%',
   },
   stackedCard: {
     transform: [{ scale: 0.95 }],
@@ -1919,7 +1923,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: "50%",
+    height: "65%",
   },
   likeStamp: {
     position: "absolute",
@@ -1950,20 +1954,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 25,
+    height: '60%',
+    justifyContent: 'flex-end',
   },
   nameRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     marginBottom: 6,
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   profileName: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "800",
     color: "#FFF",
-    flexShrink: 1,
+    paddingBottom: 4,
+    lineHeight: 38,
+    includeFontPadding: false,
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
@@ -1975,6 +1984,7 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+    marginLeft: 8,
   },
   verifiedTick: {
     width: 22,
@@ -2063,9 +2073,8 @@ const styles = StyleSheet.create({
   lifestyleRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 12,
   },
   lifestyleBadge: {
     backgroundColor: "rgba(255, 255, 255, 0.2)",

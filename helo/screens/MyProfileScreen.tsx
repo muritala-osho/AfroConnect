@@ -371,7 +371,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               <ThemedText style={styles.heroName} numberOfLines={1} ellipsizeMode="tail">
                 {user?.name || "User"}
                 {user?.age && !(user as any)?.privacySettings?.hideAge && (
-                  <ThemedText style={styles.heroAge}>  {user.age}</ThemedText>
+                  <ThemedText style={styles.heroAge}>, {user.age}</ThemedText>
                 )}
               </ThemedText>
               {user?.premium?.isActive && <PremiumBadge size="medium" />}
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   },
   nameRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
   },
   heroName: {
     fontSize: 28,

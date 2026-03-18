@@ -1,10 +1,17 @@
-import React, { useState, useCallback, useEffect, useMemo, memo, useRef } from "react";
-import { 
-  View, 
-  StyleSheet, 
-  Pressable, 
-  TextInput, 
-  ScrollView, 
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  memo,
+  useRef,
+} from "react";
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  TextInput,
+  ScrollView,
   FlatList,
   ActivityIndicator,
   RefreshControl,
@@ -12,7 +19,8 @@ import {
   Alert,
   StatusBar,
   Animated,
-  Dimensions
+  Dimensions,
+  DeviceEventEmitter,
 } from "react-native";
 import { Image } from "expo-image";
 import { CompositeNavigationProp } from "@react-navigation/native";
@@ -30,14 +38,14 @@ import { useApi } from "@/hooks/useApi";
 import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import noMessageImg from "../assets/images/no_messages_empty_state.png";
 
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type ChatsScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, "Chats">,
@@ -89,278 +97,392 @@ interface CallHistoryItem {
     name: string;
     photos?: { url: string }[] | string[];
   };
-  type: 'video' | 'audio';
-  status: 'completed' | 'missed' | 'rejected' | 'failed';
+  type: "video" | "audio";
+  status: "completed" | "missed" | "rejected" | "failed";
   duration: number;
   createdAt: string;
 }
 
-const CACHE_KEY = '@conversations_cache';
-const ARCHIVED_KEY = '@archived_chats';
-const MUTED_KEY = '@muted_chats';
-const PINNED_KEY = '@pinned_chats';
+const CACHE_KEY = "@conversations_cache";
+const ARCHIVED_KEY = "@archived_chats";
+const MUTED_KEY = "@muted_chats";
+const PINNED_KEY = "@pinned_chats";
 const CACHE_DURATION = 120000; // 2 minutes for better UX
 
-const ChatItem = memo(({ 
-  item, 
-  theme, 
-  onPress,
-  onLongPress
-}: { 
-  item: Conversation; 
-  theme: any; 
-  onPress: () => void;
-  onLongPress: () => void;
-}) => {
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    
-    if (days === 0) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (days === 1) {
-      return 'Yesterday';
-    } else if (days < 7) {
-      return date.toLocaleDateString([], { weekday: 'short' });
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-  };
+const ChatItem = memo(
+  ({
+    item,
+    theme,
+    onPress,
+    onLongPress,
+  }: {
+    item: Conversation;
+    theme: any;
+    onPress: () => void;
+    onLongPress: () => void;
+  }) => {
+    const formatTimestamp = (timestamp: string) => {
+      if (!timestamp) return "";
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diff = now.getTime() - date.getTime();
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-  const getMessagePreview = (message: string, type: string) => {
-    switch (type) {
-      case 'image':
-        return '📷 Photo';
-      case 'audio':
-        return '🎤 Voice message';
-      case 'file':
-        return '📎 File';
-      default:
-        return message || 'Start a conversation';
-    }
-  };
+      if (days === 0) {
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } else if (days === 1) {
+        return "Yesterday";
+      } else if (days < 7) {
+        return date.toLocaleDateString([], { weekday: "short" });
+      } else {
+        return date.toLocaleDateString([], { month: "short", day: "numeric" });
+      }
+    };
 
-  return (
-    <Pressable
-      style={[styles.chatItem, { backgroundColor: theme.surface }]}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      delayLongPress={400}
-    >
-      <View style={styles.avatarContainer}>
-        {item.user.photo ? (
-          <Image source={{ uri: item.user.photo }} style={styles.avatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.avatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="user" size={28} color={theme.textSecondary} />
-          </View>
-        )}
-        {item.user.online && (
-          <View style={[styles.onlineBadge, { backgroundColor: '#4CAF50', borderColor: theme.surface }]} />
-        )}
-      </View>
+    const getMessagePreview = (message: string, type: string) => {
+      switch (type) {
+        case "image":
+          return "📷 Photo";
+        case "audio":
+          return "🎤 Voice message";
+        case "file":
+          return "📎 File";
+        default:
+          return message || "Start a conversation";
+      }
+    };
 
-      <View style={styles.chatContent}>
-        <View style={styles.chatHeader}>
-          <View style={styles.nameRow}>
-            {item.isPinned && (
-              <Ionicons name="pin" size={14} color={theme.primary} style={{ marginRight: 4 }} />
-            )}
-            <ThemedText style={[styles.name, { color: theme.text }]} numberOfLines={1}>
-              {item.user.name}
-            </ThemedText>
-            {item.user.verified && (
-              <Image source={require("@/assets/icons/verified-tick.png")} style={{ width: 18, height: 18, marginLeft: 4 }} contentFit="contain" />
-            )}
-            {item.isMuted && (
-              <Ionicons name="notifications-off" size={14} color={theme.textSecondary} style={{ marginLeft: 4 }} />
-            )}
-          </View>
-          <ThemedText style={[styles.timestamp, { color: theme.textSecondary }]}>
-            {formatTimestamp(item.timestamp)}
-          </ThemedText>
-        </View>
-        <View style={styles.chatFooter}>
-          <ThemedText
-            style={[
-              styles.lastMessage,
-              { color: theme.textSecondary },
-              item.unreadCount > 0 && !item.isMuted && { color: theme.text, fontWeight: "600" },
-            ]}
-            numberOfLines={1}
-          >
-            {getMessagePreview(item.lastMessage, item.lastMessageType)}
-          </ThemedText>
-          {item.unreadCount > 0 && (
-            <View style={[styles.unreadBadge, { backgroundColor: item.isMuted ? theme.textSecondary : theme.primary }]}>
-              <ThemedText style={styles.unreadText}>
-                {item.unreadCount > 99 ? '99+' : item.unreadCount}
-              </ThemedText>
+    return (
+      <Pressable
+        style={[styles.chatItem, { backgroundColor: theme.surface }]}
+        onPress={onPress}
+        onLongPress={onLongPress}
+        delayLongPress={400}
+      >
+        <View style={styles.avatarContainer}>
+          {item.user.photo ? (
+            <Image
+              source={{ uri: item.user.photo }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              style={[
+                styles.avatarPlaceholder,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Feather name="user" size={28} color={theme.textSecondary} />
             </View>
           )}
+          {item.user.online && (
+            <View
+              style={[
+                styles.onlineBadge,
+                { backgroundColor: "#4CAF50", borderColor: theme.surface },
+              ]}
+            />
+          )}
         </View>
-      </View>
-    </Pressable>
-  );
-});
 
-const CallHistoryItemComponent = memo(({ 
-  item, 
-  theme, 
-  currentUserId,
-  onPress 
-}: { 
-  item: CallHistoryItem; 
-  theme: any; 
-  currentUserId: string;
-  onPress: () => void;
-}) => {
-  const isOutgoing = item.caller._id === currentUserId;
-  const otherUser = isOutgoing ? item.receiver : item.caller;
-  const photo = otherUser.photos?.[0];
-  const photoUrl = typeof photo === 'string' ? photo : photo?.url;
-  
-  const formatDuration = (seconds: number) => {
-    if (!seconds) return '';
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const formatTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffDays === 1) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-  };
-
-  const getStatusIcon = () => {
-    if (item.status === 'missed' || item.status === 'rejected') {
-      return { name: isOutgoing ? 'call-outline' : 'call', color: '#FF5252' };
-    }
-    return { name: isOutgoing ? 'call-outline' : 'call', color: '#4CAF50' };
-  };
-
-  const statusIcon = getStatusIcon();
-
-  return (
-    <Pressable style={[styles.callHistoryItem, { backgroundColor: theme.surface }]} onPress={onPress}>
-      <View style={styles.callHistoryAvatarContainer}>
-        {photoUrl ? (
-          <Image source={{ uri: photoUrl }} style={styles.callHistoryAvatar} contentFit="cover" />
-        ) : (
-          <View style={[styles.callHistoryAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-            <Feather name="user" size={18} color={theme.textSecondary} />
+        <View style={styles.chatContent}>
+          <View style={styles.chatHeader}>
+            <View style={styles.nameRow}>
+              {item.isPinned && (
+                <Ionicons
+                  name="pin"
+                  size={14}
+                  color={theme.primary}
+                  style={{ marginRight: 4 }}
+                />
+              )}
+              <ThemedText
+                style={[styles.name, { color: theme.text }]}
+                numberOfLines={1}
+              >
+                {item.user.name}
+              </ThemedText>
+              {item.user.verified && (
+                <Image
+                  source={require("@/assets/icons/verified-tick.png")}
+                  style={{ width: 18, height: 18, marginLeft: 4 }}
+                  contentFit="contain"
+                />
+              )}
+              {item.isMuted && (
+                <Ionicons
+                  name="notifications-off"
+                  size={14}
+                  color={theme.textSecondary}
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+            </View>
+            <ThemedText
+              style={[styles.timestamp, { color: theme.textSecondary }]}
+            >
+              {formatTimestamp(item.timestamp)}
+            </ThemedText>
           </View>
-        )}
-        <View style={[styles.callTypeIcon, { backgroundColor: item.type === 'video' ? '#2196F3' : '#4CAF50' }]}>
-          <Ionicons name={item.type === 'video' ? 'videocam' : 'call'} size={10} color="#FFF" />
+          <View style={styles.chatFooter}>
+            <ThemedText
+              style={[
+                styles.lastMessage,
+                { color: theme.textSecondary },
+                item.unreadCount > 0 &&
+                  !item.isMuted && { color: theme.text, fontWeight: "600" },
+              ]}
+              numberOfLines={1}
+            >
+              {getMessagePreview(item.lastMessage, item.lastMessageType)}
+            </ThemedText>
+            {item.unreadCount > 0 && (
+              <View
+                style={[
+                  styles.unreadBadge,
+                  {
+                    backgroundColor: item.isMuted
+                      ? theme.textSecondary
+                      : theme.primary,
+                  },
+                ]}
+              >
+                <ThemedText style={styles.unreadText}>
+                  {item.unreadCount > 99 ? "99+" : item.unreadCount}
+                </ThemedText>
+              </View>
+            )}
+          </View>
         </View>
-      </View>
-      <View style={styles.callHistoryInfo}>
-        <ThemedText style={[styles.callHistoryName, { color: theme.text }]} numberOfLines={1}>
-          {otherUser.name?.split(' ')[0] || 'Unknown'}
-        </ThemedText>
-        <View style={styles.callHistoryStatus}>
-          <Ionicons name={statusIcon.name as any} size={12} color={statusIcon.color} />
-          <ThemedText style={[styles.callHistoryTime, { color: theme.textSecondary }]}>
-            {formatTime(item.createdAt)}
-          </ThemedText>
-        </View>
-      </View>
-    </Pressable>
-  );
-});
+      </Pressable>
+    );
+  },
+);
 
-  const StoryItem = memo(({ 
-    item, 
-    theme, 
+const CallHistoryItemComponent = memo(
+  ({
+    item,
+    theme,
+    currentUserId,
+    onPress,
+  }: {
+    item: CallHistoryItem;
+    theme: any;
+    currentUserId: string;
+    onPress: () => void;
+  }) => {
+    const isOutgoing = item.caller._id === currentUserId;
+    const otherUser = isOutgoing ? item.receiver : item.caller;
+    const photo = otherUser.photos?.[0];
+    const photoUrl = typeof photo === "string" ? photo : photo?.url;
+
+    const formatDuration = (seconds: number) => {
+      if (!seconds) return "";
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, "0")}`;
+    };
+
+    const formatTime = (dateStr: string) => {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffDays = Math.floor(
+        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
+      );
+      if (diffDays === 0) {
+        return date.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } else if (diffDays === 1) {
+        return "Yesterday";
+      } else {
+        return date.toLocaleDateString([], { month: "short", day: "numeric" });
+      }
+    };
+
+    const getStatusIcon = () => {
+      if (item.status === "missed" || item.status === "rejected") {
+        return { name: isOutgoing ? "call-outline" : "call", color: "#FF5252" };
+      }
+      return { name: isOutgoing ? "call-outline" : "call", color: "#4CAF50" };
+    };
+
+    const statusIcon = getStatusIcon();
+
+    return (
+      <Pressable
+        style={[styles.callHistoryItem, { backgroundColor: theme.surface }]}
+        onPress={onPress}
+      >
+        <View style={styles.callHistoryAvatarContainer}>
+          {photoUrl ? (
+            <Image
+              source={{ uri: photoUrl }}
+              style={styles.callHistoryAvatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View
+              style={[
+                styles.callHistoryAvatarPlaceholder,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Feather name="user" size={18} color={theme.textSecondary} />
+            </View>
+          )}
+          <View
+            style={[
+              styles.callTypeIcon,
+              {
+                backgroundColor: item.type === "video" ? "#2196F3" : "#4CAF50",
+              },
+            ]}
+          >
+            <Ionicons
+              name={item.type === "video" ? "videocam" : "call"}
+              size={10}
+              color="#FFF"
+            />
+          </View>
+        </View>
+        <View style={styles.callHistoryInfo}>
+          <ThemedText
+            style={[styles.callHistoryName, { color: theme.text }]}
+            numberOfLines={1}
+          >
+            {otherUser.name?.split(" ")[0] || "Unknown"}
+          </ThemedText>
+          <View style={styles.callHistoryStatus}>
+            <Ionicons
+              name={statusIcon.name as any}
+              size={12}
+              color={statusIcon.color}
+            />
+            <ThemedText
+              style={[styles.callHistoryTime, { color: theme.textSecondary }]}
+            >
+              {formatTime(item.createdAt)}
+            </ThemedText>
+          </View>
+        </View>
+      </Pressable>
+    );
+  },
+);
+
+const StoryItem = memo(
+  ({
+    item,
+    theme,
     onPress,
     user,
-    navigation
-  }: { 
-    item: StoryUser; 
-    theme: any; 
+    navigation,
+  }: {
+    item: StoryUser;
+    theme: any;
     onPress: () => void;
     user: any;
     navigation: any;
   }) => {
-    const isOwnStory = item.id === user?.id || item.name === 'Your Story';
-    
+    const isOwnStory = item.id === user?.id || item.name === "Your Story";
+
     return (
-      <Pressable style={styles.storyItem} onPress={() => {
-        if (isOwnStory) {
-          if (item.hasStory) {
-            navigation.navigate("StoryViewer" as any, { 
-              userId: user._id || user.id, 
-              userName: user.name || 'You',
-              userPhoto: typeof user.photos?.[0] === 'string' ? user.photos?.[0] : user.photos?.[0]?.url,
-              isOwnStory: true
-            });
+      <Pressable
+        style={styles.storyItem}
+        onPress={() => {
+          if (isOwnStory) {
+            if (item.hasStory) {
+              navigation.navigate("StoryViewer" as any, {
+                userId: user._id || user.id,
+                userName: user.name || "You",
+                userPhoto:
+                  typeof user.photos?.[0] === "string"
+                    ? user.photos?.[0]
+                    : user.photos?.[0]?.url,
+                isOwnStory: true,
+              });
+            } else {
+              navigation.navigate("StoryUpload");
+            }
           } else {
-            navigation.navigate('StoryUpload');
+            onPress();
           }
-        } else {
-          onPress();
-        }
-      }}>
-      <LinearGradient
-        colors={item.hasNewStory 
-          ? ['#FF6B6B', '#FF8E53', '#FFC93C'] 
-          : item.hasStory 
-            ? ['#FF6B6B', '#FF8E53'] 
-            : [theme.border, theme.border]
-        }
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.storyGradientRing}
+        }}
       >
-        <View style={[styles.storyInnerRing, { backgroundColor: theme.background }]}>
-          {item.photo ? (
-            <Image source={{ uri: item.photo }} style={styles.storyAvatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.storyAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-              <Feather name="user" size={22} color={theme.textSecondary} />
-            </View>
-          )}
-        </View>
-      </LinearGradient>
-      {isOwnStory && (
-        <Pressable 
-          style={[styles.storyPlusBadge, { backgroundColor: theme.primary, borderColor: theme.background }]}
-          onPress={(e) => {
-            e.stopPropagation();
-            navigation.navigate('StoryUpload');
-          }}
+        <LinearGradient
+          colors={
+            item.hasNewStory
+              ? ["#FF6B6B", "#FF8E53", "#FFC93C"]
+              : item.hasStory
+                ? ["#FF6B6B", "#FF8E53"]
+                : [theme.border, theme.border]
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.storyGradientRing}
         >
-          <Ionicons name="add" size={12} color="#fff" />
-        </Pressable>
-      )}
-      {item.hasNewStory && !isOwnStory && (
-        <View style={styles.storyNewDot} />
-      )}
-      <ThemedText style={[styles.storyName, { color: theme.text }]} numberOfLines={1}>
-        {isOwnStory ? "Your Story" : item.name.split(' ')[0]}
-      </ThemedText>
-    </Pressable>
+          <View
+            style={[
+              styles.storyInnerRing,
+              { backgroundColor: theme.background },
+            ]}
+          >
+            {item.photo ? (
+              <Image
+                source={{ uri: item.photo }}
+                style={styles.storyAvatar}
+                contentFit="cover"
+              />
+            ) : (
+              <View
+                style={[
+                  styles.storyAvatarPlaceholder,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+              >
+                <Feather name="user" size={22} color={theme.textSecondary} />
+              </View>
+            )}
+          </View>
+        </LinearGradient>
+        {isOwnStory && (
+          <Pressable
+            style={[
+              styles.storyPlusBadge,
+              { backgroundColor: theme.primary, borderColor: theme.background },
+            ]}
+            onPress={(e) => {
+              e.stopPropagation();
+              navigation.navigate("StoryUpload");
+            }}
+          >
+            <Ionicons name="add" size={12} color="#fff" />
+          </Pressable>
+        )}
+        {item.hasNewStory && !isOwnStory && <View style={styles.storyNewDot} />}
+        <ThemedText
+          style={[styles.storyName, { color: theme.text }]}
+          numberOfLines={1}
+        >
+          {isOwnStory ? "Your Story" : item.name.split(" ")[0]}
+        </ThemedText>
+      </Pressable>
     );
-  });
+  },
+);
 
 export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const { theme, isDark } = useTheme();
   const { user, token } = useAuth();
   const { get, put, del, post } = useApi();
   const insets = useSafeAreaInsets();
-  
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
   const [mutedChats, setMutedChats] = useState<Set<string>>(new Set());
@@ -377,11 +499,25 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const [selectedChat, setSelectedChat] = useState<Conversation | null>(null);
   const [chatMenuVisible, setChatMenuVisible] = useState(false);
 
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener("chat:read-local", (chatId) => {
+      setConversations((prev) =>
+        prev.map((conv) => {
+          if (conv.matchId === chatId || conv.id === chatId) {
+            return { ...conv, unreadCount: 0 };
+          }
+          return conv;
+        })
+      );
+    });
+    return () => sub.remove();
+  }, []);
+
   const handleGoBack = useCallback(() => {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate('MainTabs', { screen: 'Discovery' });
+      navigation.navigate("MainTabs", { screen: "Discovery" });
     }
   }, [navigation]);
 
@@ -395,23 +531,26 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       const [archived, muted, pinned] = await Promise.all([
         AsyncStorage.getItem(ARCHIVED_KEY),
         AsyncStorage.getItem(MUTED_KEY),
-        AsyncStorage.getItem(PINNED_KEY)
+        AsyncStorage.getItem(PINNED_KEY),
       ]);
       if (archived) setArchivedChats(new Set(JSON.parse(archived)));
       if (muted) setMutedChats(new Set(JSON.parse(muted)));
       if (pinned) setPinnedChats(new Set(JSON.parse(pinned)));
     } catch (e) {
-      console.log('Settings load error:', e);
+      console.log("Settings load error:", e);
     }
   }, []);
 
-  const saveLocalSettings = useCallback(async (key: string, data: Set<string>) => {
-    try {
-      await AsyncStorage.setItem(key, JSON.stringify([...data]));
-    } catch (e) {
-      console.log('Settings save error:', e);
-    }
-  }, []);
+  const saveLocalSettings = useCallback(
+    async (key: string, data: Set<string>) => {
+      try {
+        await AsyncStorage.setItem(key, JSON.stringify(Array.from(data)));
+      } catch (e) {
+        console.log("Settings save error:", e);
+      }
+    },
+    [],
+  );
 
   const loadCachedData = useCallback(async (showImmediately = true) => {
     try {
@@ -428,7 +567,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         return isValid;
       }
     } catch (e) {
-      console.log('Cache load error:', e);
+      console.log("Cache load error:", e);
     }
     // No cache found - set loading false to show empty state faster
     if (showImmediately) {
@@ -440,13 +579,20 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const fetchMyStories = useCallback(async () => {
     if (!token) return false;
     try {
-      const response = await get<{ stories: any[] }>('/stories/my-stories', token);
-      if (response.success && response.data?.stories && response.data.stories.length > 0) {
+      const response = await get<{ stories: any[] }>(
+        "/stories/my-stories",
+        token,
+      );
+      if (
+        response.success &&
+        response.data?.stories &&
+        response.data.stories.length > 0
+      ) {
         setUserHasStory(true);
         return true;
       }
     } catch (error) {
-      console.log('My stories fetch error:', error);
+      console.log("My stories fetch error:", error);
     }
     setUserHasStory(false);
     return false;
@@ -455,18 +601,23 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const fetchStories = useCallback(async () => {
     if (!token) return [];
     try {
-      const response = await get<{ stories: StoryUser[] }>('/stories/active', token);
+      const response = await get<{ stories: StoryUser[] }>(
+        "/stories/active",
+        token,
+      );
       if (response.success && response.data?.stories) {
         // Filter out my own story completely from the active list to avoid any duplication
         // We handle "Your Story" as the first item in the list manually in the ScrollView
-        const filtered = response.data.stories.filter(s => s.id !== user?.id && s.name !== 'Your Story');
-        const unique = filtered.filter((s, index, self) => 
-          index === self.findIndex(t => t.id === s.id)
+        const filtered = response.data.stories.filter(
+          (s) => s.id !== user?.id && s.name !== "Your Story",
+        );
+        const unique = filtered.filter(
+          (s, index, self) => index === self.findIndex((t) => t.id === s.id),
         );
         return unique;
       }
     } catch (error) {
-      console.log('Stories fetch error:', error);
+      console.log("Stories fetch error:", error);
     }
     return [];
   }, [token, get, user?.id]);
@@ -474,82 +625,104 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const fetchCallHistory = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await get<{ calls: CallHistoryItem[] }>('/call/history', token);
+      const response = await get<{ calls: CallHistoryItem[] }>(
+        "/call/history",
+        token,
+      );
       if (response.success && response.data?.calls) {
         setCallHistory(response.data.calls);
       }
     } catch (error) {
-      console.log('Call history fetch error:', error);
+      console.log("Call history fetch error:", error);
     }
   }, [token, get]);
 
-  const fetchConversations = useCallback(async (search?: string, isRefresh = false) => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    
-    if (!isRefresh && !search) {
-      // Load cache immediately, then fetch fresh data in background
-      const cacheIsValid = await loadCachedData(true);
-      // Always fetch fresh data, but as background if we showed cached
-      fetchConversationsFromServer(search, cacheIsValid);
-      return;
-    }
-    
-    await fetchConversationsFromServer(search, false);
-  }, [token, loadCachedData]);
+  const fetchConversations = useCallback(
+    async (search?: string, isRefresh = false) => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
 
-  const fetchConversationsFromServer = async (search?: string, isBackground = false) => {
+      if (!isRefresh && !search) {
+        // Load cache immediately, then fetch fresh data in background
+        const cacheIsValid = await loadCachedData(true);
+        // Always fetch fresh data, but as background if we showed cached
+        fetchConversationsFromServer(search, cacheIsValid);
+        return;
+      }
+
+      await fetchConversationsFromServer(search, false);
+    },
+    [token, loadCachedData],
+  );
+
+  async function fetchConversationsFromServer(
+    search?: string,
+    isBackground = false,
+  ) {
     if (!token) return;
-    
+
     try {
-      const query = search ? `?search=${encodeURIComponent(search)}` : '';
-      const response = await get<{ conversations: Conversation[] }>(`/chat/conversations${query}`, token);
-      
+      const query = search ? `?search=${encodeURIComponent(search)}` : "";
+      const response = await get<{ conversations: Conversation[] }>(
+        `/chat/conversations${query}`,
+        token,
+      );
+
       if (response.success && response.data) {
         const uniqueConversations = response.data.conversations
-          .filter((conv, index, self) => 
-            index === self.findIndex(c => c.user.id === conv.user.id)
+          .filter(
+            (conv, index, self) =>
+              index === self.findIndex((c) => c.user.id === conv.user.id),
           )
-          .map(conv => ({
+          .map((conv) => ({
             ...conv,
             isArchived: archivedChats.has(conv.user.id),
             isMuted: mutedChats.has(conv.user.id),
-            isPinned: pinnedChats.has(conv.user.id)
+            isPinned: pinnedChats.has(conv.user.id),
           }));
         setConversations(uniqueConversations);
-        
+
         // Background Pre-fetching for each conversation
         if (!search && !isBackground) {
           uniqueConversations.slice(0, 10).forEach(async (conv) => {
             try {
               const mId = conv.matchId || conv.id;
               const cacheKey = `chat_messages_${conv.user.id}`;
-              const messagesResponse = await get<{ messages: any[] }>(`/chat/${mId}`, token);
+              const messagesResponse = await get<{ messages: any[] }>(
+                `/chat/${mId}`,
+                token,
+              );
               if (messagesResponse.success && messagesResponse.data) {
-                await AsyncStorage.setItem(cacheKey, JSON.stringify(messagesResponse.data.messages));
+                await AsyncStorage.setItem(
+                  cacheKey,
+                  JSON.stringify(messagesResponse.data.messages),
+                );
               }
             } catch (e) {
-              console.log('Pre-fetch error for', conv.user.name, e);
+              console.log("Pre-fetch error for", conv.user.name, e);
             }
           });
         }
 
         const stories = await fetchStories();
         setStoryUsers(stories);
-        
+
         if (!search) {
           try {
-            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({
-              data: { conversations: uniqueConversations, stories },
-              timestamp: Date.now()
-            }));
+            await AsyncStorage.setItem(
+              CACHE_KEY,
+              JSON.stringify({
+                data: { conversations: uniqueConversations, stories },
+                timestamp: Date.now(),
+              }),
+            );
           } catch (e) {}
         }
       }
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      console.error("Error fetching conversations:", error);
     } finally {
       if (!isBackground) {
         setLoading(false);
@@ -557,33 +730,33 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       setRefreshing(false);
       setIsSearching(false);
     }
-  };
+  }
 
   useFocusEffect(
     useCallback(() => {
       const checkAndLoad = async () => {
         const [refreshNeeded, storyPosted] = await Promise.all([
-          AsyncStorage.getItem('@chats_refresh_needed'),
-          AsyncStorage.getItem('@story_posted')
+          AsyncStorage.getItem("@chats_refresh_needed"),
+          AsyncStorage.getItem("@story_posted"),
         ]);
-        
+
         if (refreshNeeded) {
-          await AsyncStorage.removeItem('@chats_refresh_needed');
+          await AsyncStorage.removeItem("@chats_refresh_needed");
           await AsyncStorage.removeItem(CACHE_KEY);
         }
-        
+
         if (storyPosted) {
-          await AsyncStorage.removeItem('@story_posted');
+          await AsyncStorage.removeItem("@story_posted");
         }
-        
+
         const loadPromises = [
           loadLocalSettings(),
           fetchConversations(undefined, !!refreshNeeded),
-          fetchCallHistory()
+          fetchCallHistory(),
         ];
-        
+
         await Promise.all(loadPromises);
-        
+
         if (storyPosted) {
           await fetchMyStories();
         } else {
@@ -591,41 +764,114 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         }
       };
       checkAndLoad().catch(console.log);
-    }, [fetchConversations, loadLocalSettings, fetchMyStories, fetchCallHistory])
+    }, [
+      fetchConversations,
+      loadLocalSettings,
+      fetchMyStories,
+      fetchCallHistory,
+    ]),
   );
 
   // Listen for real-time online/offline status updates
   useEffect(() => {
     const handleUserStatus = (data: { userId: string; isOnline: boolean }) => {
-      setConversations(prev => prev.map(conv => 
-        conv.user.id === data.userId 
-          ? { ...conv, user: { ...conv.user, online: data.isOnline } }
-          : conv
-      ));
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.user.id === data.userId
+            ? { ...conv, user: { ...conv.user, online: data.isOnline } }
+            : conv,
+        ),
+      );
     };
 
-    if (socketService && typeof socketService.on === 'function') {
-      socketService.on('user:status', handleUserStatus);
+    if (socketService && typeof socketService.on === "function") {
+      socketService.on("user:status", handleUserStatus);
     }
-    
+
     return () => {
-      if (socketService && typeof socketService.off === 'function') {
-        socketService.off('user:status', handleUserStatus);
+      if (socketService && typeof socketService.off === "function") {
+        socketService.off("user:status", handleUserStatus);
       }
     };
   }, []);
+
+  // Live unread count: increment when a new message arrives from another user
+  useEffect(() => {
+    const handleNewMessage = (data: any) => {
+      const msg = data.message || data;
+      const senderId =
+        typeof msg.sender === "string" ? msg.sender : msg.sender?._id;
+      // Only bump unread if someone else sent it
+      if (senderId && String(senderId) !== String(user?.id || "")) {
+        setConversations((prev) =>
+          prev.map((conv) => {
+            // Match conversation by matchId or userId
+            const matchesConv =
+              conv.matchId === (data.matchId || msg.matchId) ||
+              conv.user.id === String(senderId);
+            if (matchesConv) {
+              const isAlreadySeen = msg.status === "seen";
+              return {
+                ...conv,
+                unreadCount: isAlreadySeen ? conv.unreadCount : (conv.unreadCount || 0) + 1,
+                lastMessage: msg.content || msg.text || conv.lastMessage,
+                lastMessageType: msg.type || conv.lastMessageType,
+                timestamp: msg.createdAt || conv.timestamp,
+              };
+            }
+            return conv;
+          }),
+        );
+      }
+    };
+
+    // Live read receipt: when the current user reads a chat, clear that conversation's unread count
+    const handleMessagesRead = (data: any) => {
+      const readByUserId = data.readBy || data.userId;
+      const chatMatchId = data.matchId || data.chatId;
+      // If it's the current user reading, clear unread
+      if (String(readByUserId) === String(user?.id || "")) {
+        setConversations((prev) =>
+          prev.map((conv) => {
+            if (conv.matchId === chatMatchId || conv.id === chatMatchId) {
+              return { ...conv, unreadCount: 0 };
+            }
+            return conv;
+          }),
+        );
+      }
+    };
+
+    if (socketService && typeof socketService.on === "function") {
+      socketService.on("chat:new-message", handleNewMessage);
+      socketService.on("message:new", handleNewMessage);
+      socketService.on("chat:messages-read", handleMessagesRead);
+      socketService.on("chat:message-read", handleMessagesRead);
+      socketService.on("chat:read", handleMessagesRead);
+    }
+
+    return () => {
+      if (socketService && typeof socketService.off === "function") {
+        socketService.off("chat:new-message", handleNewMessage);
+        socketService.off("message:new", handleNewMessage);
+        socketService.off("chat:messages-read", handleMessagesRead);
+        socketService.off("chat:message-read", handleMessagesRead);
+        socketService.off("chat:read", handleMessagesRead);
+      }
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!searchQuery) {
       setIsSearching(false);
       return;
     }
-    
+
     setIsSearching(true);
     const timer = setTimeout(() => {
       fetchConversationsFromServer(searchQuery);
     }, 300);
-    
+
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
@@ -633,33 +879,35 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     setMenuVisible(false);
     if (!token) return;
     try {
-      await put('/chat/mark-all-read', {}, token);
-      setConversations(prev => prev.map(c => ({ ...c, unreadCount: 0 })));
+      await put("/chat/mark-all-read", {}, token);
+      setConversations((prev) => prev.map((c) => ({ ...c, unreadCount: 0 })));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      console.error('Error marking all read:', error);
+      console.error("Error marking all read:", error);
     }
   };
 
   const handleMuteAllNotifications = () => {
     setMenuVisible(false);
     Alert.alert(
-      'Mute All Notifications',
-      'Do you want to mute notifications for all chats?',
+      "Mute All Notifications",
+      "Do you want to mute notifications for all chats?",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Mute All',
+          text: "Mute All",
           onPress: async () => {
-            const allUserIds = conversations.map(c => c.user.id);
+            const allUserIds = conversations.map((c) => c.user.id);
             const newMuted = new Set(allUserIds);
             setMutedChats(newMuted);
             await saveLocalSettings(MUTED_KEY, newMuted);
-            setConversations(prev => prev.map(c => ({ ...c, isMuted: true })));
+            setConversations((prev) =>
+              prev.map((c) => ({ ...c, isMuted: true })),
+            );
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
@@ -671,28 +919,30 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const handleDeleteAllChats = () => {
     setMenuVisible(false);
     Alert.alert(
-      'Delete All Chats',
-      'Are you sure you want to delete all your chats? This action cannot be undone.',
+      "Delete All Chats",
+      "Are you sure you want to delete all your chats? This action cannot be undone.",
       [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete All', 
-          style: 'destructive',
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete All",
+          style: "destructive",
           onPress: async () => {
             if (!token) return;
             try {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              await del('/chat/delete-all', token);
+              await del("/chat/delete-all", token);
               setConversations([]);
               await AsyncStorage.removeItem(CACHE_KEY);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Success,
+              );
             } catch (error) {
-              console.error('Error deleting chats:', error);
-              Alert.alert('Error', 'Failed to delete chats. Please try again.');
+              console.error("Error deleting chats:", error);
+              Alert.alert("Error", "Failed to delete chats. Please try again.");
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
@@ -705,7 +955,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const handlePinChat = async () => {
     if (!selectedChat) return;
     setChatMenuVisible(false);
-    
+
     const newPinned = new Set(pinnedChats);
     if (newPinned.has(selectedChat.user.id)) {
       newPinned.delete(selectedChat.user.id);
@@ -714,16 +964,20 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     }
     setPinnedChats(newPinned);
     await saveLocalSettings(PINNED_KEY, newPinned);
-    setConversations(prev => prev.map(c => 
-      c.user.id === selectedChat.user.id ? { ...c, isPinned: newPinned.has(c.user.id) } : c
-    ));
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.user.id === selectedChat.user.id
+          ? { ...c, isPinned: newPinned.has(c.user.id) }
+          : c,
+      ),
+    );
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleMuteChat = async () => {
     if (!selectedChat) return;
     setChatMenuVisible(false);
-    
+
     const newMuted = new Set(mutedChats);
     if (newMuted.has(selectedChat.user.id)) {
       newMuted.delete(selectedChat.user.id);
@@ -732,16 +986,20 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     }
     setMutedChats(newMuted);
     await saveLocalSettings(MUTED_KEY, newMuted);
-    setConversations(prev => prev.map(c => 
-      c.user.id === selectedChat.user.id ? { ...c, isMuted: newMuted.has(c.user.id) } : c
-    ));
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.user.id === selectedChat.user.id
+          ? { ...c, isMuted: newMuted.has(c.user.id) }
+          : c,
+      ),
+    );
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleArchiveChat = async () => {
     if (!selectedChat) return;
     setChatMenuVisible(false);
-    
+
     const newArchived = new Set(archivedChats);
     if (newArchived.has(selectedChat.user.id)) {
       newArchived.delete(selectedChat.user.id);
@@ -750,94 +1008,114 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     }
     setArchivedChats(newArchived);
     await saveLocalSettings(ARCHIVED_KEY, newArchived);
-    setConversations(prev => prev.map(c => 
-      c.user.id === selectedChat.user.id ? { ...c, isArchived: newArchived.has(c.user.id) } : c
-    ));
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.user.id === selectedChat.user.id
+          ? { ...c, isArchived: newArchived.has(c.user.id) }
+          : c,
+      ),
+    );
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const handleDeleteChat = () => {
     if (!selectedChat) return;
     setChatMenuVisible(false);
-    
+
     Alert.alert(
-      'Delete Chat',
+      "Delete Chat",
       `Delete your conversation with ${selectedChat.user.name}? This cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             if (!token || !selectedChat.matchId) {
-              Alert.alert('Error', 'Unable to delete chat. Please try again.');
+              Alert.alert("Error", "Unable to delete chat. Please try again.");
               return;
             }
             try {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              const response = await del(`/chat/${selectedChat.matchId}`, token);
+              const response = await del(
+                `/chat/${selectedChat.matchId}`,
+                token,
+              );
               if (response.success) {
-                setConversations(prev => prev.filter(c => c.user.id !== selectedChat.user.id));
+                setConversations((prev) =>
+                  prev.filter((c) => c.user.id !== selectedChat.user.id),
+                );
                 await AsyncStorage.removeItem(CACHE_KEY);
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success,
+                );
               } else {
-                Alert.alert('Error', 'Failed to delete chat. Please try again.');
+                Alert.alert(
+                  "Error",
+                  "Failed to delete chat. Please try again.",
+                );
               }
             } catch (error) {
-              console.error('Error deleting chat:', error);
-              Alert.alert('Error', 'Failed to delete chat. Please try again.');
+              console.error("Error deleting chat:", error);
+              Alert.alert("Error", "Failed to delete chat. Please try again.");
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const handleBlockUser = () => {
     if (!selectedChat) return;
     setChatMenuVisible(false);
-    
+
     Alert.alert(
-      'Block User',
+      "Block User",
       `Are you sure you want to block ${selectedChat.user.name}? They won't be able to contact you.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Block',
-          style: 'destructive',
+          text: "Block",
+          style: "destructive",
           onPress: async () => {
             if (!token) return;
             try {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
               await post(`/block/${selectedChat.user.id}`, {}, token);
-              setConversations(prev => prev.filter(c => c.user.id !== selectedChat.user.id));
-              Alert.alert('Blocked', `${selectedChat.user.name} has been blocked`);
+              setConversations((prev) =>
+                prev.filter((c) => c.user.id !== selectedChat.user.id),
+              );
+              Alert.alert(
+                "Blocked",
+                `${selectedChat.user.name} has been blocked`,
+              );
             } catch (error) {
-              Alert.alert('Error', 'Failed to block user');
+              Alert.alert("Error", "Failed to block user");
             }
-          }
-        }
-      ]
+          },
+        },
+      ],
     );
   };
 
   const filteredConversations = useMemo(() => {
     let filtered = conversations;
-    
+
     if (showArchived) {
-      filtered = filtered.filter(c => archivedChats.has(c.user.id));
+      filtered = filtered.filter((c) => archivedChats.has(c.user.id));
     } else {
-      filtered = filtered.filter(c => !archivedChats.has(c.user.id));
+      filtered = filtered.filter((c) => !archivedChats.has(c.user.id));
     }
-    
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(c => 
-        c.user.name.toLowerCase().includes(query) ||
-        c.lastMessage?.toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (c) =>
+          c.user.name.toLowerCase().includes(query) ||
+          c.lastMessage?.toLowerCase().includes(query),
       );
     }
-    
+
     return filtered.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -845,37 +1123,45 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     });
   }, [conversations, searchQuery, showArchived, archivedChats]);
 
-  const archivedCount = useMemo(() => 
-    conversations.filter(c => archivedChats.has(c.user.id)).length
-  , [conversations, archivedChats]);
+  const archivedCount = useMemo(
+    () => conversations.filter((c) => archivedChats.has(c.user.id)).length,
+    [conversations, archivedChats],
+  );
 
   const handleViewOwnStory = () => {
     const uid = (user as any)?._id || user?.id;
     if (uid) {
-      navigation.navigate("StoryViewer" as any, { 
-        userId: uid, 
-        userName: user?.name || 'You',
-        userPhoto: typeof user?.photos?.[0] === 'string' ? user?.photos?.[0] : user?.photos?.[0]?.url,
-        isOwnStory: true
+      navigation.navigate("StoryViewer" as any, {
+        userId: uid,
+        userName: user?.name || "You",
+        userPhoto:
+          typeof user?.photos?.[0] === "string"
+            ? user?.photos?.[0]
+            : user?.photos?.[0]?.url,
+        isOwnStory: true,
       });
     }
   };
 
   const handleAddStory = () => {
-    navigation.navigate('StoryUpload' as any);
+    navigation.navigate("StoryUpload" as any);
   };
 
   const renderAddStoryButton = () => null;
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Image 
-        source={noMessageImg} 
-        style={styles.emptyImage} 
+      <Image
+        source={noMessageImg}
+        style={styles.emptyImage}
         contentFit="contain"
       />
-      <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>No Messages</ThemedText>
-      <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+      <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
+        No Messages
+      </ThemedText>
+      <ThemedText
+        style={[styles.emptySubtitle, { color: theme.textSecondary }]}
+      >
         Start a conversation with your matches to see them here!
       </ThemedText>
     </View>
@@ -883,10 +1169,32 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
 
   const renderSkeletonItem = () => (
     <View style={[styles.chatItem, { backgroundColor: theme.surface }]}>
-      <View style={[styles.avatarPlaceholder, styles.skeletonPulse, { backgroundColor: theme.backgroundSecondary }]} />
+      <View
+        style={[
+          styles.avatarPlaceholder,
+          styles.skeletonPulse,
+          { backgroundColor: theme.backgroundSecondary },
+        ]}
+      />
       <View style={styles.chatContent}>
-        <View style={[styles.skeletonLine, styles.skeletonPulse, { width: '60%', backgroundColor: theme.backgroundSecondary }]} />
-        <View style={[styles.skeletonLine, styles.skeletonPulse, { width: '80%', marginTop: 8, backgroundColor: theme.backgroundSecondary }]} />
+        <View
+          style={[
+            styles.skeletonLine,
+            styles.skeletonPulse,
+            { width: "60%", backgroundColor: theme.backgroundSecondary },
+          ]}
+        />
+        <View
+          style={[
+            styles.skeletonLine,
+            styles.skeletonPulse,
+            {
+              width: "80%",
+              marginTop: 8,
+              backgroundColor: theme.backgroundSecondary,
+            },
+          ]}
+        />
       </View>
     </View>
   );
@@ -894,13 +1202,20 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   if (loading) {
     return (
       <LinearGradient
-        colors={isDark ? ['#1a1a2e', '#16213e', '#0f0f1a'] : ['#f8f9ff', '#ffffff', '#f0f4ff']}
+        colors={
+          isDark
+            ? ["#1a1a2e", "#16213e", "#0f0f1a"]
+            : ["#f8f9ff", "#ffffff", "#f0f4ff"]
+        }
         style={styles.container}
       >
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor="transparent"
+          translucent
+        />
         <View style={[styles.safeHeader, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-          </View>
+          <View style={styles.header}></View>
         </View>
         <View style={styles.skeletonContainer}>
           {[1, 2, 3, 4, 5].map((i) => (
@@ -913,24 +1228,35 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
 
   return (
     <LinearGradient
-      colors={isDark ? ['#1a1a2e', '#16213e', '#0f0f1a'] : ['#f8f9ff', '#ffffff', '#f0f4ff']}
+      colors={
+        isDark
+          ? ["#1a1a2e", "#16213e", "#0f0f1a"]
+          : ["#f8f9ff", "#ffffff", "#f0f4ff"]
+      }
       style={styles.container}
     >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor="transparent" translucent />
-      
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor="transparent"
+        translucent
+      />
+
       <View style={[styles.safeHeader, { paddingTop: insets.top }]}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             {showArchived && (
-              <Pressable onPress={() => setShowArchived(false)} style={styles.backButton}>
+              <Pressable
+                onPress={() => setShowArchived(false)}
+                style={styles.backButton}
+              >
                 <Ionicons name="arrow-back" size={24} color={theme.text} />
               </Pressable>
             )}
             <ThemedText style={[styles.headerTitle, { color: theme.text }]}>
-              {showArchived ? 'Archived' : 'Chats'}
+              {showArchived ? "Archived" : "Chats"}
             </ThemedText>
           </View>
-          <Pressable 
+          <Pressable
             style={[styles.menuButton, { backgroundColor: theme.surface }]}
             onPress={() => setMenuVisible(true)}
           >
@@ -941,45 +1267,72 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         {!searchQuery && !showArchived && (
           <>
             <View style={styles.storiesSection}>
-              <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary }]}>Stories</ThemedText>
-              <ScrollView 
-                horizontal 
+              <ThemedText
+                style={[styles.sectionLabel, { color: theme.textSecondary }]}
+              >
+                Stories
+              </ThemedText>
+              <ScrollView
+                horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.storiesContainer}
               >
-                <StoryItem 
+                <StoryItem
                   item={{
-                    id: user?.id || 'me',
-                    name: 'Your Story',
-                    photo: user?.photos?.[0]?.url || user?.photos?.[0] || (user as any)?.profilePhoto,
+                    id: user?.id || "me",
+                    name: "Your Story",
+                    photo:
+                      user?.photos?.[0]?.url ||
+                      user?.photos?.[0] ||
+                      (user as any)?.profilePhoto,
                     hasStory: userHasStory,
-                    hasNewStory: false
+                    hasNewStory: false,
                   }}
                   theme={theme}
                   user={user}
                   navigation={navigation}
                   onPress={() => {}}
                 />
-                {storyUsers.filter(s => s.id !== user?.id && s.name !== user?.name && s.name !== 'Your Story').map((storyUser) => {
-                  return (
-                    <StoryItem
-                      key={`story-${storyUser.id}`}
-                      item={storyUser}
-                      theme={theme}
-                      user={user}
-                      navigation={navigation}
-                      onPress={() => {
-                        navigation.navigate("StoryViewer" as any, { userId: storyUser.id, userName: storyUser.name, userPhoto: storyUser.photo });
-                      }}
-                    />
-                  );
-                })}
+                {storyUsers
+                  .filter(
+                    (s) =>
+                      s.id !== user?.id &&
+                      s.name !== user?.name &&
+                      s.name !== "Your Story",
+                  )
+                  .map((storyUser) => {
+                    return (
+                      <StoryItem
+                        key={`story-${storyUser.id}`}
+                        item={storyUser}
+                        theme={theme}
+                        user={user}
+                        navigation={navigation}
+                        onPress={() => {
+                          navigation.navigate("StoryViewer" as any, {
+                            userId: storyUser.id,
+                            userName: storyUser.name,
+                            userPhoto: storyUser.photo,
+                          });
+                        }}
+                      />
+                    );
+                  })}
               </ScrollView>
             </View>
           </>
         )}
 
-        <View style={[styles.searchContainer, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
+        <View
+          style={[
+            styles.searchContainer,
+            {
+              backgroundColor: isDark
+                ? "rgba(255,255,255,0.08)"
+                : "rgba(0,0,0,0.05)",
+            },
+          ]}
+        >
           <Feather name="search" size={18} color={theme.textSecondary} />
           <TextInput
             style={[styles.searchInput, { color: theme.text }]}
@@ -989,7 +1342,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
             onChangeText={setSearchQuery}
             returnKeyType="search"
           />
-          {isSearching && <ActivityIndicator size="small" color={theme.primary} />}
+          {isSearching && (
+            <ActivityIndicator size="small" color={theme.primary} />
+          )}
           {searchQuery.length > 0 && !isSearching && (
             <Pressable onPress={() => setSearchQuery("")} hitSlop={8}>
               <Feather name="x-circle" size={18} color={theme.textSecondary} />
@@ -1001,12 +1356,14 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
           <View style={styles.callHistorySection}>
             <View style={styles.callHistoryHeader}>
               <Ionicons name="call" size={16} color={theme.primary} />
-              <ThemedText style={[styles.callHistorySectionTitle, { color: theme.text }]}>
+              <ThemedText
+                style={[styles.callHistorySectionTitle, { color: theme.text }]}
+              >
                 Recent Calls
               </ThemedText>
             </View>
-            <ScrollView 
-              horizontal 
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.callHistoryContainer}
             >
@@ -1014,18 +1371,21 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 const isOutgoing = call.caller._id === user?.id;
                 const otherUser = isOutgoing ? call.receiver : call.caller;
                 const photo = otherUser.photos?.[0];
-                const photoUrl = typeof photo === 'string' ? photo : (photo as any)?.url;
+                const photoUrl =
+                  typeof photo === "string" ? photo : (photo as any)?.url;
                 return (
                   <CallHistoryItemComponent
                     key={call._id}
                     item={call}
                     theme={theme}
-                    currentUserId={user?.id || ''}
-                    onPress={() => navigation.navigate("ChatDetail", { 
-                      userId: otherUser._id, 
-                      userName: otherUser.name, 
-                      userPhoto: photoUrl 
-                    })}
+                    currentUserId={user?.id || ""}
+                    onPress={() =>
+                      navigation.navigate("ChatDetail", {
+                        userId: otherUser._id,
+                        userName: otherUser.name,
+                        userPhoto: photoUrl,
+                      })
+                    }
                   />
                 );
               })}
@@ -1034,7 +1394,12 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         )}
 
         {!searchQuery && filteredConversations.length > 0 && (
-          <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary, marginTop: 8 }]}>
+          <ThemedText
+            style={[
+              styles.sectionLabel,
+              { color: theme.textSecondary, marginTop: 8 },
+            ]}
+          >
             Messages
           </ThemedText>
         )}
@@ -1043,17 +1408,23 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       <FlatList
         data={filteredConversations}
         renderItem={({ item }) => (
-          <ChatItem 
-            item={item} 
+          <ChatItem
+            item={item}
             theme={theme}
-            onPress={() => navigation.navigate("ChatDetail", { userId: item.user.id, userName: item.user.name, userPhoto: item.user.photo })}
+            onPress={() =>
+              navigation.navigate("ChatDetail", {
+                userId: item.user.id,
+                userName: item.user.name,
+                userPhoto: item.user.photo,
+              })
+            }
             onLongPress={() => handleChatLongPress(item)}
           />
         )}
         keyExtractor={(item) => item.id || item.user.id}
         contentContainerStyle={[
           styles.listContent,
-          filteredConversations.length === 0 && styles.emptyListContent
+          filteredConversations.length === 0 && styles.emptyListContent,
         ]}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
@@ -1078,47 +1449,101 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setMenuVisible(false)}>
-          <View style={[styles.menuContainer, { backgroundColor: theme.surface, top: insets.top + 50 }]}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View
+            style={[
+              styles.menuContainer,
+              { backgroundColor: theme.surface, top: insets.top + 50 },
+            ]}
+          >
             <Pressable style={styles.menuItem} onPress={handleMarkAllRead}>
-              <View style={[styles.menuIconCircle, { backgroundColor: theme.primary + '20' }]}>
-                <Ionicons name="checkmark-done" size={18} color={theme.primary} />
+              <View
+                style={[
+                  styles.menuIconCircle,
+                  { backgroundColor: theme.primary + "20" },
+                ]}
+              >
+                <Ionicons
+                  name="checkmark-done"
+                  size={18}
+                  color={theme.primary}
+                />
               </View>
               <ThemedText style={[styles.menuItemText, { color: theme.text }]}>
                 Mark all as read
               </ThemedText>
             </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+            <View
+              style={[styles.menuDivider, { backgroundColor: theme.border }]}
+            />
             <Pressable style={styles.menuItem} onPress={handleArchivedChats}>
-              <View style={[styles.menuIconCircle, { backgroundColor: theme.primary + '20' }]}>
+              <View
+                style={[
+                  styles.menuIconCircle,
+                  { backgroundColor: theme.primary + "20" },
+                ]}
+              >
                 <Ionicons name="archive-outline" size={18} color={theme.text} />
               </View>
               <View style={styles.menuItemContent}>
-                <ThemedText style={[styles.menuItemText, { color: theme.text }]}>
-                  {showArchived ? 'View all chats' : 'Archived chats'}
+                <ThemedText
+                  style={[styles.menuItemText, { color: theme.text }]}
+                >
+                  {showArchived ? "View all chats" : "Archived chats"}
                 </ThemedText>
                 {archivedCount > 0 && !showArchived && (
-                  <View style={[styles.menuBadge, { backgroundColor: theme.primary }]}>
-                    <ThemedText style={styles.menuBadgeText}>{archivedCount}</ThemedText>
+                  <View
+                    style={[
+                      styles.menuBadge,
+                      { backgroundColor: theme.primary },
+                    ]}
+                  >
+                    <ThemedText style={styles.menuBadgeText}>
+                      {archivedCount}
+                    </ThemedText>
                   </View>
                 )}
               </View>
             </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
-            <Pressable style={styles.menuItem} onPress={handleMuteAllNotifications}>
-              <View style={[styles.menuIconCircle, { backgroundColor: theme.primary + '20' }]}>
-                <Ionicons name="notifications-off-outline" size={18} color={theme.text} />
+            <View
+              style={[styles.menuDivider, { backgroundColor: theme.border }]}
+            />
+            <Pressable
+              style={styles.menuItem}
+              onPress={handleMuteAllNotifications}
+            >
+              <View
+                style={[
+                  styles.menuIconCircle,
+                  { backgroundColor: theme.primary + "20" },
+                ]}
+              >
+                <Ionicons
+                  name="notifications-off-outline"
+                  size={18}
+                  color={theme.text}
+                />
               </View>
               <ThemedText style={[styles.menuItemText, { color: theme.text }]}>
                 Mute all notifications
               </ThemedText>
             </Pressable>
-            <View style={[styles.menuDivider, { backgroundColor: theme.border }]} />
+            <View
+              style={[styles.menuDivider, { backgroundColor: theme.border }]}
+            />
             <Pressable style={styles.menuItem} onPress={handleDeleteAllChats}>
-              <View style={[styles.menuIconCircle, { backgroundColor: '#FF525220' }]}>
+              <View
+                style={[
+                  styles.menuIconCircle,
+                  { backgroundColor: "#FF525220" },
+                ]}
+              >
                 <Ionicons name="trash-outline" size={18} color="#FF5252" />
               </View>
-              <ThemedText style={[styles.menuItemText, { color: '#FF5252' }]}>
+              <ThemedText style={[styles.menuItemText, { color: "#FF5252" }]}>
                 Delete all chats
               </ThemedText>
             </Pressable>
@@ -1133,82 +1558,212 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         animationType="fade"
         onRequestClose={() => setChatMenuVisible(false)}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setChatMenuVisible(false)}>
-          <View style={[styles.chatMenuContainer, { backgroundColor: theme.surface }]}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setChatMenuVisible(false)}
+        >
+          <View
+            style={[
+              styles.chatMenuContainer,
+              { backgroundColor: theme.surface },
+            ]}
+          >
             {selectedChat && (
               <>
-                <View style={[styles.chatMenuHeader, { borderBottomColor: theme.border }]}>
+                <View
+                  style={[
+                    styles.chatMenuHeader,
+                    { borderBottomColor: theme.border },
+                  ]}
+                >
                   {selectedChat.user.photo ? (
-                    <Image source={{ uri: selectedChat.user.photo }} style={styles.chatMenuAvatar} contentFit="cover" />
+                    <Image
+                      source={{ uri: selectedChat.user.photo }}
+                      style={styles.chatMenuAvatar}
+                      contentFit="cover"
+                    />
                   ) : (
-                    <View style={[styles.chatMenuAvatarPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-                      <Feather name="user" size={20} color={theme.textSecondary} />
+                    <View
+                      style={[
+                        styles.chatMenuAvatarPlaceholder,
+                        { backgroundColor: theme.backgroundSecondary },
+                      ]}
+                    >
+                      <Feather
+                        name="user"
+                        size={20}
+                        color={theme.textSecondary}
+                      />
                     </View>
                   )}
-                  <ThemedText style={[styles.chatMenuName, { color: theme.text }]}>
+                  <ThemedText
+                    style={[styles.chatMenuName, { color: theme.text }]}
+                  >
                     {selectedChat.user.name}
                   </ThemedText>
                 </View>
 
                 <View style={styles.chatMenuOptions}>
-                  <Pressable style={styles.chatMenuOption} onPress={handlePinChat}>
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: theme.primary + '20' }]}>
-                      <Ionicons name={pinnedChats.has(selectedChat.user.id) ? "pin-outline" : "pin"} size={20} color={theme.primary} />
+                  <Pressable
+                    style={styles.chatMenuOption}
+                    onPress={handlePinChat}
+                  >
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: theme.primary + "20" },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          pinnedChats.has(selectedChat.user.id)
+                            ? "pin-outline"
+                            : "pin"
+                        }
+                        size={20}
+                        color={theme.primary}
+                      />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: theme.text }]}>
-                      {pinnedChats.has(selectedChat.user.id) ? 'Unpin chat' : 'Pin chat'}
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: theme.text }]}
+                    >
+                      {pinnedChats.has(selectedChat.user.id)
+                        ? "Unpin chat"
+                        : "Pin chat"}
                     </ThemedText>
                   </Pressable>
 
-                  <Pressable style={styles.chatMenuOption} onPress={handleMuteChat}>
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: '#FF9800' + '20' }]}>
-                      <Ionicons name={mutedChats.has(selectedChat.user.id) ? "notifications" : "notifications-off"} size={20} color="#FF9800" />
+                  <Pressable
+                    style={styles.chatMenuOption}
+                    onPress={handleMuteChat}
+                  >
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: "#FF9800" + "20" },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          mutedChats.has(selectedChat.user.id)
+                            ? "notifications"
+                            : "notifications-off"
+                        }
+                        size={20}
+                        color="#FF9800"
+                      />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: theme.text }]}>
-                      {mutedChats.has(selectedChat.user.id) ? 'Unmute' : 'Mute notifications'}
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: theme.text }]}
+                    >
+                      {mutedChats.has(selectedChat.user.id)
+                        ? "Unmute"
+                        : "Mute notifications"}
                     </ThemedText>
                   </Pressable>
 
-                  <Pressable style={styles.chatMenuOption} onPress={handleArchiveChat}>
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: '#9C27B0' + '20' }]}>
-                      <Ionicons name={archivedChats.has(selectedChat.user.id) ? "archive" : "archive-outline"} size={20} color="#9C27B0" />
+                  <Pressable
+                    style={styles.chatMenuOption}
+                    onPress={handleArchiveChat}
+                  >
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: "#9C27B0" + "20" },
+                      ]}
+                    >
+                      <Ionicons
+                        name={
+                          archivedChats.has(selectedChat.user.id)
+                            ? "archive"
+                            : "archive-outline"
+                        }
+                        size={20}
+                        color="#9C27B0"
+                      />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: theme.text }]}>
-                      {archivedChats.has(selectedChat.user.id) ? 'Unarchive' : 'Archive chat'}
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: theme.text }]}
+                    >
+                      {archivedChats.has(selectedChat.user.id)
+                        ? "Unarchive"
+                        : "Archive chat"}
                     </ThemedText>
                   </Pressable>
 
-                  <Pressable 
-                    style={styles.chatMenuOption} 
+                  <Pressable
+                    style={styles.chatMenuOption}
                     onPress={() => {
                       setChatMenuVisible(false);
-                      navigation.navigate('ProfileDetail', { userId: selectedChat.user.id });
+                      navigation.navigate("ProfileDetail", {
+                        userId: selectedChat.user.id,
+                      });
                     }}
                   >
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: '#2196F3' + '20' }]}>
-                      <Ionicons name="person-outline" size={20} color="#2196F3" />
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: "#2196F3" + "20" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="person-outline"
+                        size={20}
+                        color="#2196F3"
+                      />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: theme.text }]}>
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: theme.text }]}
+                    >
                       View profile
                     </ThemedText>
                   </Pressable>
 
-                  <View style={[styles.chatMenuDivider, { backgroundColor: theme.border }]} />
+                  <View
+                    style={[
+                      styles.chatMenuDivider,
+                      { backgroundColor: theme.border },
+                    ]}
+                  />
 
-                  <Pressable style={styles.chatMenuOption} onPress={handleDeleteChat}>
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: '#FF5252' + '20' }]}>
-                      <Ionicons name="trash-outline" size={20} color="#FF5252" />
+                  <Pressable
+                    style={styles.chatMenuOption}
+                    onPress={handleDeleteChat}
+                  >
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: "#FF5252" + "20" },
+                      ]}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={20}
+                        color="#FF5252"
+                      />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: '#FF5252' }]}>
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: "#FF5252" }]}
+                    >
                       Delete chat
                     </ThemedText>
                   </Pressable>
 
-                  <Pressable style={styles.chatMenuOption} onPress={handleBlockUser}>
-                    <View style={[styles.chatMenuIconCircle, { backgroundColor: '#FF5252' + '20' }]}>
+                  <Pressable
+                    style={styles.chatMenuOption}
+                    onPress={handleBlockUser}
+                  >
+                    <View
+                      style={[
+                        styles.chatMenuIconCircle,
+                        { backgroundColor: "#FF5252" + "20" },
+                      ]}
+                    >
                       <Ionicons name="ban-outline" size={20} color="#FF5252" />
                     </View>
-                    <ThemedText style={[styles.chatMenuOptionText, { color: '#FF5252' }]}>
+                    <ThemedText
+                      style={[styles.chatMenuOptionText, { color: "#FF5252" }]}
+                    >
                       Block user
                     </ThemedText>
                   </Pressable>
@@ -1246,8 +1801,8 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   backButton: {
     marginRight: 12,
@@ -1282,8 +1837,8 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    textTransform: 'uppercase',
+    fontWeight: "600",
+    textTransform: "uppercase",
     letterSpacing: 0.5,
     paddingHorizontal: Spacing.lg,
     marginBottom: 8,
@@ -1299,7 +1854,7 @@ const styles = StyleSheet.create({
   storyItem: {
     alignItems: "center",
     width: 70,
-    position: 'relative',
+    position: "relative",
   },
   storyGradientRing: {
     width: 66,
@@ -1342,18 +1897,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   storyNewDot: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     right: 4,
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#FF6B6B',
+    backgroundColor: "#FF6B6B",
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: "#FFF",
   },
   storyPhotoContainer: {
-    position: 'relative',
+    position: "relative",
   },
   storyPhotoTouchable: {
     zIndex: 1,
@@ -1384,14 +1939,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: "#FFF",
     zIndex: 10,
   },
   storyName: {
     fontSize: 11,
     marginTop: 6,
     textAlign: "center",
-    fontWeight: '500',
+    fontWeight: "500",
   },
   listContent: {
     padding: Spacing.lg,
@@ -1442,8 +1997,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
   },
   name: {
@@ -1546,14 +2101,14 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   menuItemContent: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   menuItemText: {
     fontSize: 15,
@@ -1563,14 +2118,14 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 6,
   },
   menuBadgeText: {
-    color: '#FFF',
+    color: "#FFF",
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   menuDivider: {
     height: 1,
@@ -1578,7 +2133,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
   },
   chatMenuContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
@@ -1593,8 +2148,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   chatMenuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingBottom: Spacing.md,
     marginBottom: Spacing.sm,
     borderBottomWidth: 1,
@@ -1609,19 +2164,19 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   chatMenuName: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
   },
   chatMenuOptions: {
     gap: 4,
   },
   chatMenuOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     gap: 14,
   },
@@ -1629,12 +2184,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   chatMenuOptionText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   chatMenuDivider: {
     height: 1,
@@ -1656,34 +2211,34 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   callHistoryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
     gap: 8,
   },
   callHistorySectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
     flex: 1,
   },
   callHistoryCount: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: "500",
   },
   callHistoryContainer: {
     paddingHorizontal: Spacing.lg,
     gap: 12,
   },
   callHistoryItem: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
     minWidth: 80,
   },
   callHistoryAvatarContainer: {
-    position: 'relative',
+    position: "relative",
     marginBottom: 6,
   },
   callHistoryAvatar: {
@@ -1695,33 +2250,33 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   callTypeIcon: {
-    position: 'absolute',
+    position: "absolute",
     bottom: -2,
     right: -2,
     width: 18,
     height: 18,
     borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: '#FFF',
+    borderColor: "#FFF",
   },
   callHistoryInfo: {
-    alignItems: 'center',
+    alignItems: "center",
   },
   callHistoryName: {
     fontSize: 12,
-    fontWeight: '500',
-    textAlign: 'center',
+    fontWeight: "500",
+    textAlign: "center",
     maxWidth: 70,
   },
   callHistoryStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 3,
     marginTop: 2,
   },
@@ -1734,6 +2289,6 @@ const styles = StyleSheet.create({
   },
   emptyCallHistoryText: {
     fontSize: 13,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
 });

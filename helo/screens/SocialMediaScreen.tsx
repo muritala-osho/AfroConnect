@@ -14,8 +14,8 @@ import { Feather, Ionicons } from "@expo/vector-icons";
 const SOCIAL_LINKS = [
   {
     name: "Instagram",
-    handle: "@afroconnect",
-    url: "https://instagram.com/afroconnect",
+    handle: "@afro.connect1",
+    url: "https://instagram.com/afro.connect1",
     icon: "logo-instagram",
     color: "#E4405F",
     bg: "#E4405F15",
@@ -30,8 +30,8 @@ const SOCIAL_LINKS = [
   },
   {
     name: "TikTok",
-    handle: "@afroconnect",
-    url: "https://tiktok.com/@afroconnect",
+    handle: "@afroconnect1",
+    url: "https://tiktok.com/@afroconnect1",
     icon: "logo-tiktok",
     color: "#000000",
     bg: "#00000010",

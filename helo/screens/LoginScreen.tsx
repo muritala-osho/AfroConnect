@@ -213,8 +213,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   logo: {
-    width: 80,
-    height: 80,
+    width: 120,
+    height: 140,
     borderRadius: BorderRadius.lg,
   },
   titleSection: {

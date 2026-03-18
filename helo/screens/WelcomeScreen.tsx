@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
   content: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 30, zIndex: 5 },
   logoContainer: { alignItems: 'center' },
-  logo: { width: 100, height: 100, borderRadius: 20, marginBottom: 15 },
+  logo: { width: 120, height: 140, borderRadius: 20, marginBottom: 15 },
   taglineText: { color: '#FFF', fontSize: 24, fontWeight: '800', textAlign: 'center', lineHeight: 32 },
   bottomSection: { width: '100%', alignItems: 'center' },
   buttonContainer: { width: '100%', gap: 12, marginBottom: 25 },

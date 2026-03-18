@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, Dimensions, Platform, Modal } from "react-native";
+import { View, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, Dimensions, Platform, Modal, StatusBar, SafeAreaView } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// ActionSheetIOS is iOS-only, use dynamic check to avoid webpack warnings on web
 const ActionSheetIOS = Platform.OS === 'ios' ? require('react-native').ActionSheetIOS : null;
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -185,7 +184,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       const trimmedAge = age.trim();
       const trimmedJob = jobTitle.trim();
       const trimmedLiving = livingIn.trim();
-      
+
       if (!trimmedName || !trimmedAge || !gender || !trimmedJob || !education || !trimmedLiving || !ethnicity) {
         Alert.alert("Error", "All fields are required (Name, Age, Gender, Job Title, Education, Living In, Ethnicity)");
         return;
@@ -244,12 +243,12 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     try {
       console.log('Starting photo upload to:', `${getApiBaseUrl()}/api/upload/photo`);
       console.log('Token available:', !!token);
-      
+
       const formData = new FormData();
       const filename = uri.split('/').pop() || 'photo.jpg';
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
-      
+
       formData.append('file', {
         uri,
         name: filename,
@@ -268,7 +267,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       console.log('Upload response status:', response.status);
       const data = await response.json();
       console.log('Upload response data:', JSON.stringify(data));
-      
+
       if (data.success && data.url) {
         return { url: data.url, publicId: data.publicId };
       }
@@ -308,7 +307,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       setUploadingPhoto(slotIndex);
       const uploaded = await uploadPhoto(result.assets[0].uri);
       setUploadingPhoto(null);
-      
+
       if (uploaded) {
         const newPhotos = [...photos];
         const existingPhoto = newPhotos[slotIndex];
@@ -347,14 +346,14 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const removePhoto = (index: number) => {
     const newPhotos = [...photos];
     newPhotos[index] = null;
-    
+
     // Compact the array: shift all photos forward to fill gaps
     const validPhotos = newPhotos.filter((p): p is PhotoItem => p !== null);
     const compactedPhotos: PhotoSlot[] = [null, null, null, null, null, null];
     validPhotos.forEach((photo, i) => {
       compactedPhotos[i] = photo;
     });
-    
+
     setPhotos(compactedPhotos);
   };
 
@@ -367,7 +366,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     if (selectedPhotoIndex === null) return;
     const photo = photos[selectedPhotoIndex];
     if (!photo) return;
-    
+
     const newPhotos = [...photos];
     newPhotos[selectedPhotoIndex] = { ...photo, privacy };
     setPhotos(newPhotos);
@@ -482,22 +481,23 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   };
 
   return (
-    <ScreenKeyboardAwareScrollView>
-      <View style={styles.header}>
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: theme.primary, width: `${(step / 5) * 100}%` },
-              ]}
-            />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScreenKeyboardAwareScrollView>
+        <View style={styles.header}>
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  { backgroundColor: theme.primary, width: `${(step / 5) * 100}%` },
+                ]}
+              />
+            </View>
+            <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
+              Step {step} of 5
+            </ThemedText>
           </View>
-          <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
-            Step {step} of 5
-          </ThemedText>
         </View>
-      </View>
 
       <View style={styles.content}>
         {step === 1 ? (
@@ -825,7 +825,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
               <ThemedText style={[styles.photoHint, { color: theme.textSecondary }]}>
                 {photos.filter(p => p !== null).length}/6 photos added. First photo will be your main profile picture.
               </ThemedText>
-              
+
               <View style={styles.privacyLegend}>
                 <View style={styles.legendItem}>
                   <Feather name="globe" size={14} color={theme.primary} />
@@ -859,7 +859,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
                     Who can see this photo?
                   </ThemedText>
-                  
+
                   {PRIVACY_OPTIONS.map((option) => {
                     const isSelected = selectedPhotoIndex !== null && photos[selectedPhotoIndex]?.privacy === option.value;
                     return (
@@ -1261,7 +1261,8 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           </View>
         </View>
       </Modal>
-    </ScreenKeyboardAwareScrollView>
+      </ScreenKeyboardAwareScrollView>
+    </SafeAreaView>
   );
 }
 
