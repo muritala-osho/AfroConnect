@@ -1,3 +1,4 @@
+
 import React, { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
@@ -19,25 +20,20 @@ interface ToastProps {
   onDismiss?: () => void;
 }
 
-export function Toast({
-  message,
-  type = "info",
-  duration = 3000,
-  onDismiss,
-}: ToastProps) {
+export function Toast({ message, type = "info", duration = 3000, onDismiss }: ToastProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(-100);
 
   useEffect(() => {
     translateY.value = withSpring(0);
-
+    
     if (duration > 0) {
       translateY.value = withDelay(
         duration,
         withSpring(-100, {}, () => {
           onDismiss?.();
-        }),
+        })
       );
     }
   }, []);
@@ -81,9 +77,7 @@ export function Toast({
       ]}
     >
       <Feather name={getIcon()} size={20} color={getColor()} />
-      <ThemedText style={[styles.message, { color: theme.text }]}>
-        {message}
-      </ThemedText>
+      <ThemedText style={[styles.message, { color: theme.text }]}>{message}</ThemedText>
     </Animated.View>
   );
 }
