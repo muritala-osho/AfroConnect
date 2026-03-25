@@ -43,6 +43,7 @@ export default function VideoCallScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callData, setCallData] = useState<CallData | null>(incomingCallData || null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
@@ -427,6 +428,22 @@ export default function VideoCallScreen() {
     setIsCameraOff(!isCameraOff);
   };
 
+  const toggleSpeaker = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = !isSpeakerOn;
+    setIsSpeakerOn(next);
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldRouteThroughEarpieceAndroid: !next,
+      });
+    } catch (e) {
+      console.log('Speaker toggle error:', e);
+    }
+  }, [isSpeakerOn]);
+
   const flipCamera = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsFrontCamera(!isFrontCamera);
@@ -706,6 +723,17 @@ export default function VideoCallScreen() {
               />
             </Pressable>
 
+            <Pressable
+              style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
+              onPress={toggleSpeaker}
+            >
+              <Ionicons
+                name={isSpeakerOn ? "volume-high" : "ear"}
+                size={24}
+                color={isSpeakerOn ? "#000" : "#FFF"}
+              />
+            </Pressable>
+
             <Pressable style={styles.endCallButton} onPress={handleEndCall}>
               <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </Pressable>
@@ -956,9 +984,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    gap: 10,
     backgroundColor: 'rgba(20, 20, 20, 0.75)',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingVertical: 16,
     borderRadius: 40,
     borderWidth: 1,
