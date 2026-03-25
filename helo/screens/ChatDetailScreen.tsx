@@ -475,8 +475,18 @@ export default function ChatDetailScreen({
     const setupListener = async () => {
       if (Platform.OS !== "web") {
         try {
-          subscription = ScreenCapture.addScreenshotListener(() => {
+          subscription = ScreenCapture.addScreenshotListener(async () => {
             if (!screenshotProtection && matchIdRef.current && token) {
+              const systemMsg = {
+                _id: `screenshot_${Date.now()}`,
+                content: "📸 A screenshot was taken!",
+                type: "system",
+                sender: myId,
+                matchId: matchIdRef.current,
+                createdAt: new Date().toISOString(),
+                status: "sent",
+              };
+              setMessages((prev) => [...prev, systemMsg as any]);
               post(`/chat/${matchIdRef.current}/message`, { content: "📸 A screenshot was taken!", type: "system" }, token).catch(() => {});
             }
           });

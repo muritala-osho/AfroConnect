@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 
-const tintColorLight = "#10B981"; // Updated primary tint to Emerald Green
-const tintColorDark = "#5BA3EC";
+const tintColorLight = "#10B981";
+const tintColorDark = "#10B981";
 
 export const Colors = {
   grey: {
@@ -97,9 +97,9 @@ export const Colors = {
     surfaceSecondary: "#F0F4F8",
   },
   dark: {
-    primary: "#5BA3EC",
-    primaryLight: "#4A90D9",
-    primaryDark: "#2E6DB3",
+    primary: "#10B981",
+    primaryLight: "#34D399",
+    primaryDark: "#059669",
     secondary: "#00B2FF",
     background: "#0D1117",
     backgroundGradientStart: "#0D1117",
@@ -118,14 +118,14 @@ export const Colors = {
     online: "#00D856",
     tabIconDefault: "#8B949E",
     tabIconSelected: tintColorDark,
-    link: "#5BA3EC",
+    link: "#10B981",
     backgroundRoot: "#0D1117",
     backgroundDefault: "#0D1117",
     backgroundSecondary: "#161B22",
     backgroundTertiary: "#21262D",
     pass: "#FF6B6B",
     superLike: "#00B2FF",
-    like: "#5BA3EC",
+    like: "#10B981",
     rewind: "#FFC629",
     boost: "#9B59B6",
     inputBackground: "#161B22",
@@ -137,8 +137,8 @@ export const Colors = {
     settingsSectionBg: "#161B22",
     settingsItemBg: "#21262D",
     modalBackground: "#161B22",
-    accentGradientStart: "#5BA3EC",
-    accentGradientEnd: "#4A90D9",
+    accentGradientStart: "#10B981",
+    accentGradientEnd: "#34D399",
     card: "#161B22",
     surfaceSecondary: "#21262D",
   },

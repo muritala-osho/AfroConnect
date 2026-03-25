@@ -10,9 +10,9 @@ const User = require("../models/User");
 // @access  Private
 router.get("/conversations", protect, async (req, res) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
+    const { search, page = 1, limit = 100 } = req.query;
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 50);
+    const limitNum = Math.min(parseInt(limit), 200);
 
     // Get current user's blocked list
     const currentUser = await User.findById(req.user._id)
