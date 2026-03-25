@@ -10,9 +10,9 @@ const User = require("../models/User");
 // @access  Private
 router.get("/conversations", protect, async (req, res) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
+    const { search, page = 1, limit = 100 } = req.query;
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 50);
+    const limitNum = Math.min(parseInt(limit), 200);
 
     // Get current user's blocked list
     const currentUser = await User.findById(req.user._id)
@@ -374,9 +374,14 @@ router.post("/:matchId", protect, async (req, res) => {
           sendExpoPushNotification,
         } = require("../utils/pushNotifications");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled",
+          "pushToken pushNotificationsEnabled muteSettings",
         );
-        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled) {
+        const isMutedBySenderSocket = rcvUser?.muteSettings?.mutedUsers?.some(
+          (m) =>
+            m.userId.toString() === req.user._id.toString() &&
+            (m.muteAll || m.muteMessages),
+        );
+        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled && !isMutedBySenderSocket) {
           const senderName = req.user.name || "Someone";
           let notifBody = content || "";
           if (type === "image") notifBody = "📷 Sent a photo";
@@ -660,9 +665,14 @@ router.post("/:matchId/message", protect, async (req, res) => {
           sendExpoPushNotification,
         } = require("../utils/pushNotifications");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled",
+          "pushToken pushNotificationsEnabled muteSettings",
         );
-        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled) {
+        const isMutedBySender = rcvUser?.muteSettings?.mutedUsers?.some(
+          (m) =>
+            m.userId.toString() === req.user._id.toString() &&
+            (m.muteAll || m.muteMessages),
+        );
+        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled && !isMutedBySender) {
           const senderName = req.user.name || "Someone";
           let notifBody = content || "";
           if (type === "image") notifBody = "📷 Sent a photo";

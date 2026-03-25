@@ -557,14 +557,19 @@ io.on('connection', (socket) => {
       const isTargetOnline = onlineUsers.has(targetUserId);
       if (!isTargetOnline) {
         try {
-          const targetUser = await User.findById(targetUserId).select('pushToken pushNotificationsEnabled');
-          if (targetUser?.pushToken && targetUser.pushNotificationsEnabled) {
+          const targetUser = await User.findById(targetUserId).select('pushToken pushNotificationsEnabled muteSettings');
+          const callType = callData?.callType || 'voice';
+          const isMutedByCaller = targetUser?.muteSettings?.mutedUsers?.some(
+            (m) =>
+              m.userId.toString() === callerId &&
+              (m.muteAll || (callType === 'voice' ? m.muteVoiceCalls : m.muteVideoCalls))
+          );
+          if (targetUser?.pushToken && targetUser.pushNotificationsEnabled && !isMutedByCaller) {
             const callerName = callerInfo?.name || 'Someone';
-            const callType = callData?.callType || 'voice';
             await sendExpoPushNotification(targetUser.pushToken, {
               title: `Incoming ${callType} call`,
               body: `${callerName} is calling you...`,
-              data: { type: 'call', callerId, callType, channelName: callData.channelName },
+              data: { type: 'call', callerId, callType, callData, callerName, callerPhoto: callerInfo?.photo || '' },
               priority: 'high',
               sound: 'default',
               channelId: 'calls'
