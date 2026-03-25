@@ -10,7 +10,6 @@ module.exports = async function (env, argv) {
 
   config.output.publicPath = '/';
 
-  config.devServer.port = 8085;
   config.devServer.host = '0.0.0.0';
   config.devServer.allowedHosts = 'all';
   

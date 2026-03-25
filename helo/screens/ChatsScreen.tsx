@@ -664,7 +664,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     if (!token) return;
 
     try {
-      const query = search ? `?search=${encodeURIComponent(search)}` : "";
+      const query = search ? `?search=${encodeURIComponent(search)}&limit=100` : "?limit=100";
       const response = await get<{ conversations: Conversation[] }>(
         `/chat/conversations${query}`,
         token,

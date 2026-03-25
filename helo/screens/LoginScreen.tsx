@@ -1,5 +1,13 @@
 import React, { useState } from "react";
-import { View, StyleSheet, TextInput, Pressable, ActivityIndicator, Image, Alert } from "react-native";
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  ActivityIndicator,
+  Image,
+  Alert,
+} from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -10,7 +18,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Login">;
+type LoginScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Login"
+>;
 
 interface LoginScreenProps {
   navigation: LoginScreenNavigationProp;
@@ -27,7 +38,12 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      showAlert("Error", "Please fill in all fields", [{ text: "OK", style: "default" }], "alert-circle");
+      showAlert(
+        "Error",
+        "Please fill in all fields",
+        [{ text: "OK", style: "default" }],
+        "alert-circle",
+      );
       return;
     }
 
@@ -37,34 +53,44 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     } catch (error: any) {
       console.log("Login error:", error);
       const errorMsg = error.message || "Invalid email or password";
-      
-      // Check if account is banned from error object or message
-      if (error.isBanned || error.status === 403 || errorMsg.toLowerCase().includes("banned") || errorMsg.toLowerCase().includes("suspended")) {
+
+      if (
+        error.isBanned ||
+        error.status === 403 ||
+        errorMsg.toLowerCase().includes("banned") ||
+        errorMsg.toLowerCase().includes("suspended")
+      ) {
         setLoading(false);
         // Use native Alert for reliable navigation
-        const banReason = error.banReason || "Violation of community guidelines";
+        const banReason =
+          error.banReason || "Violation of community guidelines";
         Alert.alert(
           "Account Suspended",
           `Your account has been suspended.\n\nReason: ${banReason}\n\nYou can submit an appeal to request reinstatement.`,
           [
-            { 
-              text: "Appeal", 
+            {
+              text: "Appeal",
               onPress: () => {
                 navigation.navigate("AppealBanned", {
                   appealToken: error.appealToken,
                   email: error.email || email,
                   banReason: error.banReason,
                   bannedAt: error.bannedAt,
-                  appeal: error.appeal
+                  appeal: error.appeal,
                 });
-              }
+              },
             },
-            { text: "Cancel", style: "cancel" }
-          ]
+            { text: "Cancel", style: "cancel" },
+          ],
         );
         return; // Exit early to prevent any other error handling
       } else {
-        showAlert("Error", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
+        showAlert(
+          "Error",
+          errorMsg,
+          [{ text: "OK", style: "default" }],
+          "alert-circle",
+        );
       }
     } finally {
       setLoading(false);
@@ -93,21 +119,46 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
         <View style={styles.titleSection}>
           <ThemedText style={[styles.welcomeEmoji]}>👋</ThemedText>
-          <ThemedText style={[styles.title, { color: theme.text, fontWeight: '800' }]}>
+          <ThemedText
+            style={[styles.title, { color: theme.text, fontWeight: "800" }]}
+          >
             Welcome back
           </ThemedText>
-          <ThemedText style={[styles.subtitle, { color: theme.textSecondary, fontWeight: '700' }]}>
+          <ThemedText
+            style={[
+              styles.subtitle,
+              { color: theme.textSecondary, fontWeight: "700" },
+            ]}
+          >
             Please enter your details to sign in
           </ThemedText>
         </View>
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <ThemedText style={[styles.label, { color: theme.text, fontWeight: '700' }]}>Email</ThemedText>
-            <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5 }]}>
-              <Feather name="mail" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+            <ThemedText
+              style={[styles.label, { color: theme.text, fontWeight: "700" }]}
+            >
+              Email
+            </ThemedText>
+            <View
+              style={[
+                styles.inputWrapper,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                  borderWidth: 1.5,
+                },
+              ]}
+            >
+              <Feather
+                name="mail"
+                size={20}
+                color={theme.textSecondary}
+                style={styles.inputIcon}
+              />
               <TextInput
-                style={[styles.input, { color: theme.text, fontWeight: '600' }]}
+                style={[styles.input, { color: theme.text, fontWeight: "600" }]}
                 placeholder="Enter your email"
                 placeholderTextColor={theme.textSecondary}
                 value={email}
@@ -115,17 +166,35 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
-                keyboardAppearance={themeMode === 'dark' ? 'dark' : 'light'}
+                keyboardAppearance={themeMode === "dark" ? "dark" : "light"}
               />
             </View>
           </View>
 
           <View style={styles.inputContainer}>
-            <ThemedText style={[styles.label, { color: theme.text, fontWeight: '700' }]}>Password</ThemedText>
-            <View style={[styles.inputWrapper, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1.5 }]}>
-              <Feather name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+            <ThemedText
+              style={[styles.label, { color: theme.text, fontWeight: "700" }]}
+            >
+              Password
+            </ThemedText>
+            <View
+              style={[
+                styles.inputWrapper,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: theme.border,
+                  borderWidth: 1.5,
+                },
+              ]}
+            >
+              <Feather
+                name="lock"
+                size={20}
+                color={theme.textSecondary}
+                style={styles.inputIcon}
+              />
               <TextInput
-                style={[styles.input, { color: theme.text, fontWeight: '600' }]}
+                style={[styles.input, { color: theme.text, fontWeight: "600" }]}
                 placeholder="Enter your password"
                 placeholderTextColor={theme.textSecondary}
                 value={password}
@@ -138,33 +207,51 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 style={styles.eyeButton}
                 onPress={() => setShowPassword(!showPassword)}
               >
-                <Feather name={showPassword ? "eye-off" : "eye"} size={20} color={theme.textSecondary} />
+                <Feather
+                  name={showPassword ? "eye-off" : "eye"}
+                  size={20}
+                  color={theme.textSecondary}
+                />
               </Pressable>
             </View>
           </View>
 
           <View style={styles.linksRow}>
-            <Pressable onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}>
-              <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
+            <Pressable
+              onPress={() =>
+                navigation.navigate("Legal" as any, { type: "terms" })
+              }
+            >
+              <ThemedText
+                style={[styles.forgotPasswordText, { color: theme.primary }]}
+              >
                 Terms of Service
               </ThemedText>
             </Pressable>
             <Pressable onPress={() => navigation.navigate("ForgotPassword")}>
-              <ThemedText style={[styles.forgotPasswordText, { color: theme.primary }]}>
+              <ThemedText
+                style={[styles.forgotPasswordText, { color: theme.primary }]}
+              >
                 Forgot password?
               </ThemedText>
             </Pressable>
           </View>
 
           <Pressable
-            style={[styles.button, { backgroundColor: theme.primary }, Shadow.button]}
+            style={[
+              styles.button,
+              { backgroundColor: theme.primary },
+              Shadow.button,
+            ]}
             onPress={handleLogin}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color={theme.buttonText} />
             ) : (
-              <ThemedText style={[styles.buttonText, { color: theme.buttonText }]}>
+              <ThemedText
+                style={[styles.buttonText, { color: theme.buttonText }]}
+              >
                 Sign In
               </ThemedText>
             )}
@@ -174,7 +261,9 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             style={styles.signupLink}
             onPress={() => navigation.navigate("SignUp")}
           >
-            <ThemedText style={[styles.signupLinkText, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.signupLinkText, { color: theme.textSecondary }]}
+            >
               Don't have an account?{" "}
               <ThemedText style={{ color: theme.primary, fontWeight: "600" }}>
                 Sign up
