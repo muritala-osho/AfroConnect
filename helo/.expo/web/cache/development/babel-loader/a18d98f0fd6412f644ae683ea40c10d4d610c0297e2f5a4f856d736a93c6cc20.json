@@ -1,1 +1,0 @@
-{"ast":null,"code":"export * from \"./src/legacy\";","map":{"version":3,"names":[],"sources":["/home/runner/workspace/helo/node_modules/expo-file-system/legacy.ts"],"sourcesContent":["export * from './src/legacy';\n"],"mappings":"AAAA","ignoreList":[]},"metadata":{"hasCjsExports":false},"sourceType":"module","externalDependencies":[]}
