@@ -18,7 +18,7 @@ const expoProxy = httpProxy.createProxyServer({
   target: `http://localhost:${EXPO_WEB_PORT}`,
   changeOrigin: true,
   ws: true,
-  xfwd: true,
+  xfwd: false,
   secure: false,
 });
 
@@ -47,6 +47,10 @@ expoProxy.on("error", (err, req, res) => {
     });
     res.end(JSON.stringify({ error: "Frontend unavailable" }));
   }
+});
+
+expoProxy.on("proxyReq", (proxyReq) => {
+  proxyReq.setHeader("Host", `localhost:${EXPO_WEB_PORT}`);
 });
 
 // Helper to serve static files for the web admin dashboard

@@ -42,22 +42,20 @@ const isLocalAddress = (hostname: string): boolean => {
 };
 
 export const getApiBaseUrl = (): string => {
-  // Try explicit env first
   if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
 
-  // In Replit web, we MUST use relative URLs so the gateway (port 5000)
-  // correctly handles the proxying to port 3001.
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    // Return empty string to make URLs relative (e.g., /api/auth/signup)
-    // The browser will prepend the current origin, and the gateway will catch it.
-    return ''; 
+    const { protocol, hostname, port } = window.location;
+    // Already on the gateway port — use relative URLs
+    if (port === '5000') return '';
+    // Default HTTPS (no port) or Expo dev port (19006) routes directly to
+    // the Expo dev server, bypassing the gateway. Explicitly target port 5000
+    // so all API calls reach the gateway and are proxied to the backend.
+    return `${protocol}//${hostname}:5000`;
   }
 
-  // For native/mobile in Replit, we use the public dev domain
-  // Using the domain directly can sometimes lead to 503 if the proxy is sleeping
-  // but relative URLs are only for web. 
   const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'c5c54baf-607c-4435-b17f-8cf09cd59dc8-00-18tae8zjyowju.riker.replit.dev';
-  return `https://${replitDomain}`;
+  return `https://${replitDomain}:5000`;
 };
 
 export const getSocketUrl = (): string => {
