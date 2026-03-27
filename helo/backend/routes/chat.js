@@ -4,15 +4,26 @@ const { protect } = require("../middleware/auth");
 const Message = require("../models/Message");
 const Match = require("../models/Match");
 const User = require("../models/User");
+const redis = require("../utils/redis");
 
 // @route   GET /api/chat/conversations
-// @desc    Get all conversations for user with pagination (optimized with aggregation)
+// @desc    Get all conversations for user sorted by latest message (WhatsApp-style)
 // @access  Private
 router.get("/conversations", protect, async (req, res) => {
   try {
-    const { search, page = 1, limit = 100 } = req.query;
+    const { search, page = 1, limit = 500 } = req.query;
     const pageNum = parseInt(page);
-    const limitNum = Math.min(parseInt(limit), 200);
+    const limitNum = Math.min(parseInt(limit), 1000);
+    const userId = req.user._id.toString();
+
+    // Serve from Redis cache for non-search, non-paginated requests
+    const cacheKey = `conversations:${userId}`;
+    if (!search && pageNum === 1) {
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return res.json({ success: true, conversations: cached, fromCache: true });
+      }
+    }
 
     // Get current user's blocked list
     const currentUser = await User.findById(req.user._id)
@@ -22,12 +33,14 @@ router.get("/conversations", protect, async (req, res) => {
       id.toString(),
     );
 
-    // Get all matches for the user with pagination using lean for speed
-    const matches = await Match.find({ users: req.user._id })
+    // Fetch ALL matches sorted by lastMessageAt desc (most recent chat first)
+    // Fall back to updatedAt then matchedAt for matches with no messages yet
+    const matches = await Match.find({ users: req.user._id, status: 'active' })
       .populate(
         "users",
         "name photos onlineStatus lastActive blockedUsers verified",
       )
+      .sort({ lastMessageAt: -1, updatedAt: -1, matchedAt: -1 })
       .skip((pageNum - 1) * limitNum)
       .limit(limitNum)
       .lean();
@@ -70,7 +83,7 @@ router.get("/conversations", protect, async (req, res) => {
       unreadCountsAgg.map((m) => [m._id.toString(), m.count]),
     );
 
-    // Build conversations from cached data
+    // Build conversations
     const onlineUsers = req.app.get("onlineUsers");
     const currentUserId = req.user._id.toString();
     const conversations = matches.map((match) => {
@@ -111,21 +124,27 @@ router.get("/conversations", protect, async (req, res) => {
         },
         lastMessage: lastMessage?.content || "",
         lastMessageType: lastMessage?.type || "text",
-        timestamp: lastMessage?.createdAt || match.createdAt,
+        timestamp: lastMessage?.createdAt || match.lastMessageAt || match.matchedAt || match.createdAt,
         unreadCount,
+        isNew: !lastMessage,
       };
     });
 
-    // Filter nulls, deduplicate by user ID, and sort by timestamp
+    // Filter nulls and deduplicate by user ID (keep first occurrence — already sorted)
     const seenUserIds = new Set();
     const filteredConversations = conversations
       .filter((c) => c !== null)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       .filter((c) => {
-        if (seenUserIds.has(c.user.id.toString())) return false;
-        seenUserIds.add(c.user.id.toString());
+        const uid = c.user.id.toString();
+        if (seenUserIds.has(uid)) return false;
+        seenUserIds.add(uid);
         return true;
       });
+
+    // Cache for 30 seconds (non-search results only)
+    if (!search && pageNum === 1) {
+      await redis.set(cacheKey, filteredConversations, 30);
+    }
 
     res.json({ success: true, conversations: filteredConversations });
   } catch (error) {
@@ -272,6 +291,9 @@ router.post("/:matchId", protect, async (req, res) => {
       };
       const message = await Message.create(messageData);
       await message.populate("sender", "name photos");
+      await Match.findByIdAndUpdate(matchId, { lastMessageAt: new Date() });
+      await redis.del(`conversations:${req.user._id.toString()}`);
+      await redis.del(`conversations:${receiver.toString()}`);
       const io = req.app.get("io");
       if (io) {
         const msgPayload = { message, matchId: matchId.toString() };
@@ -349,6 +371,13 @@ router.post("/:matchId", protect, async (req, res) => {
           });
       }
     }
+
+    // Update lastMessageAt on the Match so conversations sort correctly
+    await Match.findByIdAndUpdate(matchId, { lastMessageAt: new Date() });
+
+    // Invalidate conversation caches for both users so next fetch is fresh
+    await redis.del(`conversations:${req.user._id.toString()}`);
+    await redis.del(`conversations:${receiver.toString()}`);
 
     const io = req.app.get("io");
     if (io) {

@@ -4,6 +4,7 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { sendOTPEmail } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
+const redis = require('../utils/redis');
 
 // @route   POST /api/auth/signup
 // @desc    Register user
@@ -262,6 +263,13 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
+    // Cache discovery results per user (2 min TTL — fast enough to stay fresh)
+    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${Math.round((parseFloat(lat) || 0) * 10)}:${Math.round((parseFloat(lng) || 0) * 10)}:${maxDistance || ''}:${minAge || ''}:${maxAge || ''}:${genders || ''}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.json({ success: true, users: cached, fromCache: true });
+    }
+
     const currentUser = await User.findById(req.user.id);
 
     if (isGlobal && !currentUser.premium?.isActive) {
@@ -441,6 +449,10 @@ router.get('/nearby', protect, async (req, res) => {
     });
 
     console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
+
+    // Cache discovery results for 2 minutes
+    await redis.set(cacheKey, users, 120);
+
     res.json({
       success: true,
       users

@@ -23,6 +23,10 @@ const matchSchema = new mongoose.Schema({
   screenshotProtection: {
     type: Boolean,
     default: false
+  },
+  lastMessageAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
@@ -38,5 +42,6 @@ matchSchema.pre('save', async function() {
 // Index for faster queries
 matchSchema.index({ users: 1 });
 matchSchema.index({ matchedAt: -1 });
+matchSchema.index({ users: 1, lastMessageAt: -1 });
 
 module.exports = mongoose.model('Match', matchSchema);
