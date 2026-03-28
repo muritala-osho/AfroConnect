@@ -14,22 +14,25 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
-import { registerForPushNotificationsAsync, setupNotificationListeners } from "@/services/notifications";
+import {
+  registerForPushNotificationsAsync,
+  setupNotificationListeners,
+} from "@/services/notifications";
 import { getApiBaseUrl } from "@/constants/config";
 
 SplashScreen.preventAutoHideAsync();
 
 // Print API configuration on startup
-console.log('\n\n========== AFROCONNECT APP STARTED ==========');
-console.log('🌐 API Base URL:', getApiBaseUrl());
-console.log('📝 Signup URL:', `${getApiBaseUrl()}/api/auth/signup`);
-console.log('🔐 Login URL:', `${getApiBaseUrl()}/api/auth/login`);
-console.log('==========================================\n\n');
+console.log("\n\n========== AFROCONNECT APP STARTED ==========");
+console.log("API Base URL:", getApiBaseUrl());
+console.log("Signup URL:", `${getApiBaseUrl()}/api/auth/signup`);
+console.log("Login URL:", `${getApiBaseUrl()}/api/auth/login`);
+console.log("==========================================\n\n");
 
 function LanguageSync() {
   const { user, isLoading } = useAuth();
   const { syncFromProfile, resetLanguage } = useLanguage();
-  
+
   useEffect(() => {
     if (!isLoading) {
       if (user?.id && user?.preferences?.language) {
@@ -38,8 +41,15 @@ function LanguageSync() {
         resetLanguage();
       }
     }
-  }, [isLoading, user?.id, user?.preferences?.language, syncFromProfile, resetLanguage, user]);
-  
+  }, [
+    isLoading,
+    user?.id,
+    user?.preferences?.language,
+    syncFromProfile,
+    resetLanguage,
+    user,
+  ]);
+
   return null;
 }
 
@@ -47,7 +57,7 @@ function AppContent() {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const [isOverlayVisible, setIsOverlayVisible] = React.useState(false);
-  
+
   const onLayoutRootView = useCallback(async () => {
     await SplashScreen.hideAsync();
   }, []);
@@ -55,32 +65,32 @@ function AppContent() {
   // Initialize notifications when user is authenticated
   useEffect(() => {
     if (!user?.id) return;
-    
+
     let unsubscribe: (() => void) | undefined;
-    
+
     const setupNotifications = async () => {
       try {
         // Register for push notifications
         await registerForPushNotificationsAsync();
-        
+
         // Setup listeners for incoming notifications
         unsubscribe = setupNotificationListeners(
           (notification) => {
-            console.log('Notification received:', notification);
+            console.log("Notification received:", notification);
             // Handle notification when app is in foreground
           },
           (response) => {
-            console.log('User tapped notification:', response);
+            console.log("User tapped notification:", response);
             // Handle user tapping on notification
-          }
+          },
         );
       } catch (error) {
-        console.error('Failed to setup notifications:', error);
+        console.error("Failed to setup notifications:", error);
       }
     };
-    
+
     setupNotifications();
-    
+
     return () => {
       if (unsubscribe) unsubscribe();
     };
