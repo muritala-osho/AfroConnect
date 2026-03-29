@@ -57,4 +57,3 @@ externalPort = 3002
 [userenv]
 
 [userenv.shared]
-WEBHOOK_URL = "https://71b2bd2b-546f-4ded-9969-3ff5b8cf71a7-00-1lcqeki95t6lc.worf.replit.dev/api/stripe/webhook"
