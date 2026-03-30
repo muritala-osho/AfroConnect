@@ -26,12 +26,12 @@ name = "Start Backend"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd backend && npm install --legacy-peer-deps && node server.js"
-waitForPort = 3001
+waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Expo QR (Mobile)"
@@ -47,6 +47,10 @@ outputType = "console"
 [[ports]]
 localPort = 3001
 externalPort = 3001
+
+[[ports]]
+localPort = 5000
+externalPort = 80
 
 [[ports]]
 localPort = 8081
