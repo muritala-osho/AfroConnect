@@ -10,7 +10,7 @@ function run(name, command, args, cwd) {
 console.log('🚀 Starting AfroConnect Services...');
 
 // 1. Backend on 3001
-run('BACKEND', 'node', ['server.js'], path.join(__dirname, 'backend'));
+run('BACKEND', 'node', ['server.js'], path.join(__dirname, '..', 'backend'));
 
 // 2. Gateway on 5000
 run('GATEWAY', 'node', ['gateway.js'], __dirname);

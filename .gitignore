@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment secrets — NEVER commit these
+.env
+.env.local
+.env.production
+.env.*
+
+# Expo / React Native
+.expo/
+dist/
+frontend/.expo/
+frontend/dist/
+frontend/node_modules/
+
+# Backend
+backend/node_modules/
+
+# Admin dashboard
+admin-dashboard/node_modules/
+
+# Build outputs
+*.log
+*.tgz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Replit
+.replit
+replit.nix
