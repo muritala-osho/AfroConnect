@@ -1,8 +1,6 @@
-// API Configuration - Runtime detection for proper platform handling
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-// Export Platform explicitly and ensure it's on global scope for Metro/React Native
 if (typeof global !== 'undefined') {
   (global as any).Platform = Platform;
 }
@@ -46,11 +44,8 @@ export const getApiBaseUrl = (): string => {
 
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
-    // Already on the gateway port — use relative URLs
     if (port === '5000') return '';
-    // Default HTTPS (no port) or Expo dev port (19006) routes directly to
-    // the Expo dev server, bypassing the gateway. Explicitly target port 5000
-    // so all API calls reach the gateway and are proxied to the backend.
+    
     return `${protocol}//${hostname}:5000`;
   }
 

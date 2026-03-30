@@ -430,6 +430,7 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               </View>
             )}
+          </View>
 
           <Pressable style={[styles.floatBack, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
