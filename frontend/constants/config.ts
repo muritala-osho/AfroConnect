@@ -5,61 +5,41 @@ if (typeof global !== 'undefined') {
   (global as any).Platform = Platform;
 }
 
-const BACKEND_PORT = 5000;
-const GATEWAY_PORT = 5000;
-
-// Export Platform explicitly to ensure it's available if needed elsewhere
 export const GlobalPlatform = Platform;
 
-const parseHostname = (uri: string): string | null => {
-  if (!uri) return null;
-  try {
-    const normalizedUri = uri.replace(/^exp:\/\//, 'http://');
-    if (normalizedUri.includes('://')) {
-      const url = new URL(normalizedUri);
-      return url.hostname;
-    }
-    const colonIdx = uri.indexOf(':');
-    return colonIdx > 0 ? uri.substring(0, colonIdx) : uri;
-  } catch {
-    const cleanUri = uri.replace(/^(exp|http|https):\/\//, '').split('/')[0].split('?')[0];
-    const colonIdx = cleanUri.indexOf(':');
-    return colonIdx > 0 ? cleanUri.substring(0, colonIdx) : cleanUri;
-  }
-};
-
-const isLocalAddress = (hostname: string): boolean => {
-  if (!hostname) return false;
-  return (
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname.startsWith('192.168.') ||
-    hostname.startsWith('10.') ||
-    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(hostname)
-  );
-};
+// ─── WHERE TO PUT YOUR RENDER URL ────────────────────────────────────────────
+// In frontend/.env add:
+//   EXPO_PUBLIC_API_URL=https://your-app-name.onrender.com
+//
+// That single line is all you need. The function below will pick it up
+// automatically and use it everywhere in the app.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const getApiBaseUrl = (): string => {
-  if (process.env.EXPO_PUBLIC_API_URL) return process.env.EXPO_PUBLIC_API_URL;
-
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location;
-    if (port === '5000') return '';
-    
-    return `${protocol}//${hostname}:5000`;
+  // 1. Production / Render — set EXPO_PUBLIC_API_URL in frontend/.env
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN || 'c5c54baf-607c-4435-b17f-8cf09cd59dc8-00-18tae8zjyowju.riker.replit.dev';
-  return `https://${replitDomain}:5000`;
+  // 2. Web (browser) — use current host
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+    if (port === '3001') return '';
+    return `${protocol}//${hostname}:3001`;
+  }
+
+  // 3. Mobile dev on Replit — use the tunnelled domain
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
+  }
+
+  // 4. Local machine fallback
+  return 'http://localhost:3001';
 };
 
 export const getSocketUrl = (): string => {
   return getApiBaseUrl();
 };
-
-// Log the URLs being used for debugging
-console.log('🌐 API Base URL:', getApiBaseUrl());
-console.log('📡 Socket URL:', getSocketUrl());
 
 export const API_ENDPOINTS = {
   SIGNUP: '/api/auth/signup',
