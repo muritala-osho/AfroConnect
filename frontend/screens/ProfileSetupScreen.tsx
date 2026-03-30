@@ -480,34 +480,43 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     }
   };
 
+  const STEP_META: Record<number, { title: string; subtitle: string }> = {
+    1: { title: 'Tell us about yourself', subtitle: 'Basic information to get started' },
+    2: { title: 'Describe yourself', subtitle: 'Write a bio that shows your personality' },
+    3: { title: 'Add your photos', subtitle: 'Upload 1-6 photos. Tap the lock icon to set privacy.' },
+    4: { title: 'Your interests', subtitle: 'Select at least 3 interests (max 5)' },
+    5: { title: 'Your preferences', subtitle: 'Who would you like to meet?' },
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <ScreenKeyboardAwareScrollView>
-        <View style={styles.header}>
-          <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { backgroundColor: theme.primary, width: `${(step / 5) * 100}%` },
-                ]}
-              />
-            </View>
-            <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
-              Step {step} of 5
-            </ThemedText>
+      {/* Fixed header — stays put when keyboard opens */}
+      <View style={styles.header}>
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
+            <View
+              style={[
+                styles.progressFill,
+                { backgroundColor: theme.primary, width: `${(step / 5) * 100}%` },
+              ]}
+            />
           </View>
+          <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
+            Step {step} of 5
+          </ThemedText>
         </View>
+        <ThemedText style={[styles.title, { color: theme.text, marginTop: Spacing.md }]}>
+          {STEP_META[step].title}
+        </ThemedText>
+        <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
+          {STEP_META[step].subtitle}
+        </ThemedText>
+      </View>
 
+      <ScreenKeyboardAwareScrollView contentContainerStyle={{ paddingTop: 0 }}>
       <View style={styles.content}>
         {step === 1 ? (
           <>
-            <ThemedText style={[styles.title, { color: theme.text }]}>
-              Tell us about yourself
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Basic information to get started
-            </ThemedText>
 
             <View style={styles.form}>
               <View style={styles.inputContainer}>
@@ -726,13 +735,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           </>
         ) : step === 2 ? (
           <>
-            <ThemedText style={[styles.title, { color: theme.text }]}>
-              Describe yourself
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Write a bio that shows your personality
-            </ThemedText>
-
             <View style={styles.form}>
               <View style={styles.inputContainer}>
                 <ThemedText style={[styles.label, { color: theme.text }]}>Bio</ThemedText>
@@ -759,13 +761,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           </>
         ) : step === 3 ? (
           <>
-            <ThemedText style={[styles.title, { color: theme.text }]}>
-              Add your photos
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Upload 1-6 photos. Tap the lock icon to set privacy.
-            </ThemedText>
-
             <View style={styles.form}>
               <View style={styles.photoGrid}>
                 {/* 2x3 Grid - 2 photos per row, 3 rows */}
@@ -901,13 +896,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           </>
         ) : step === 4 ? (
           <>
-            <ThemedText style={[styles.title, { color: theme.text }]}>
-              Your interests
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Select at least 3 interests (max 5)
-            </ThemedText>
-
             <View style={styles.form}>
               <View style={styles.interestsGrid}>
                 {INTERESTS_OPTIONS.map((interest) => (
@@ -971,13 +959,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           </>
         ) : (
           <>
-            <ThemedText style={[styles.title, { color: theme.text }]}>
-              Your preferences
-            </ThemedText>
-            <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Who would you like to meet?
-            </ThemedText>
-
             <View style={styles.form}>
               <View style={styles.inputContainer}>
                 <ThemedText style={[styles.label, { color: theme.text }]}>

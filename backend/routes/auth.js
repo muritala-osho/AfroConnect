@@ -127,6 +127,11 @@ router.post('/verify-otp', async (req, res) => {
     user.expireAt = undefined; // Stop auto-deletion once verified
     await user.save();
 
+    // Send welcome email — fire and forget, don't block the response
+    sendWelcomeEmail(user.email, user.name || 'there').catch((err) =>
+      console.error('Welcome email failed (non-blocking):', err.message)
+    );
+
     const token = generateToken(user._id);
 
     res.json({
