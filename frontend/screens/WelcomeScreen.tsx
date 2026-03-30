@@ -27,24 +27,47 @@ const SLIDESHOW_IMAGES = [
 export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [showAbout, setShowAbout] = useState(false);
 
+  // UI entrance animation — fast
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  // Crossfade slideshow
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [nextIndex, setNextIndex] = useState(1);
+  const crossfade = useRef(new Animated.Value(0)).current;
+  const isAnimating = useRef(false);
+
+  const [showAbout, setShowAbout] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    // Entrance animation — snappy 400ms
     Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
 
+    // Slideshow tick every 4 seconds
     const interval = setInterval(() => {
-      setCurrentImageIndex((prev) => (prev + 1) % SLIDESHOW_IMAGES.length);
-    }, 5000);
+      if (isAnimating.current) return;
+      isAnimating.current = true;
+
+      setNextIndex((prev) => (prev + 1) % SLIDESHOW_IMAGES.length);
+
+      crossfade.setValue(0);
+      Animated.timing(crossfade, {
+        toValue: 1,
+        duration: 900,
+        useNativeDriver: true,
+      }).start(() => {
+        setCurrentIndex((prev) => (prev + 1) % SLIDESHOW_IMAGES.length);
+        crossfade.setValue(0);
+        isAnimating.current = false;
+      });
+    }, 4000);
 
     return () => clearInterval(interval);
   }, []);
@@ -56,11 +79,8 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
     }
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ name, email, message }),
       });
       const data = await response.json();
@@ -70,7 +90,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
       } else {
         Alert.alert("Error", data.message || "Failed to send message");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Something went wrong.");
     }
   };
@@ -81,13 +101,19 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 
   return (
     <View style={styles.container}>
-      {/* Background Slideshow */}
+      {/* Crossfade background slideshow */}
       <View style={StyleSheet.absoluteFill}>
-        <Image 
-          key={currentImageIndex}
-          source={SLIDESHOW_IMAGES[currentImageIndex]} 
-          style={styles.backgroundImage} 
-          resizeMode="cover" 
+        {/* Bottom layer — current image */}
+        <Image
+          source={SLIDESHOW_IMAGES[currentIndex]}
+          style={styles.backgroundImage}
+          resizeMode="cover"
+        />
+        {/* Top layer — next image fades in */}
+        <Animated.Image
+          source={SLIDESHOW_IMAGES[nextIndex]}
+          style={[styles.backgroundImage, StyleSheet.absoluteFill, { opacity: crossfade }]}
+          resizeMode="cover"
         />
         <View style={styles.overlay} />
       </View>
@@ -103,7 +129,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
             <Pressable style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={() => navigation.navigate("SignUp")}>
               <ThemedText style={styles.primaryButtonText}>Get Started</ThemedText>
             </Pressable>
-            
+
             <Pressable style={styles.secondaryButton} onPress={() => navigation.navigate("Login")}>
               <ThemedText style={styles.secondaryButtonText}>I already have an account</ThemedText>
             </Pressable>
@@ -116,7 +142,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 
           <View style={styles.termsContainer}>
             <ThemedText style={styles.termsText}>By continuing, you agree to our </ThemedText>
-            <View style={{ flexDirection: 'row' }}>
+            <View style={{ flexDirection: "row" }}>
               <Pressable onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}>
                 <ThemedText style={[styles.termsLink, { color: theme.primary }]}>Terms of Service</ThemedText>
               </Pressable>
@@ -129,19 +155,16 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
         </View>
       </View>
 
-      {/* About Section */}
+      {/* About modal */}
       {showAbout && (
         <Modal visible={showAbout} animationType="slide" transparent={false}>
-          <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-            style={{ flex: 1, backgroundColor: theme.background }}
-          >
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: theme.background }}>
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
               <View style={{ padding: 20, paddingTop: insets.top + 20 }}>
-                <Pressable onPress={() => setShowAbout(false)} style={{ alignSelf: 'flex-end', padding: 10 }}>
+                <Pressable onPress={() => setShowAbout(false)} style={{ alignSelf: "flex-end", padding: 10 }}>
                   <Ionicons name="close" size={30} color={theme.text} />
                 </Pressable>
-                
+
                 <ThemedText style={styles.sectionTitle}>How AfroConnect Works</ThemedText>
                 <ThemedText style={[styles.aboutText, { color: theme.textSecondary, marginBottom: 20 }]}>
                   1. Create your profile with authentic photos and interests.{"\n"}
@@ -159,12 +182,9 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
                   <ThemedText style={[styles.faqAnswer, { color: theme.textSecondary }]}>You can report any profile directly from their profile page using the report button.</ThemedText>
                 </View>
 
-                <Pressable 
-                  style={[styles.successStoryLink, { backgroundColor: theme.primary + '15' }]} 
-                  onPress={() => {
-                    setShowAbout(false);
-                    navigation.push("SuccessStories" as any);
-                  }}
+                <Pressable
+                  style={[styles.successStoryLink, { backgroundColor: theme.primary + "15" }]}
+                  onPress={() => { setShowAbout(false); navigation.push("SuccessStories" as any); }}
                 >
                   <Ionicons name="heart" size={20} color={theme.primary} />
                   <ThemedText style={[styles.successStoryLinkText, { color: theme.primary }]}>View Success Stories</ThemedText>
@@ -173,10 +193,10 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 
                 <ThemedText style={styles.sectionTitle}>Connect with Us</ThemedText>
                 <View style={styles.socialRow}>
-                  <Pressable onPress={() => openSocial('https://instagram.com/afro.connect1')}><Ionicons name="logo-instagram" size={32} color={theme.primary} /></Pressable>
-                  <Pressable onPress={() => openSocial('https://twitter.com/afroconnect')}><Ionicons name="logo-twitter" size={32} color={theme.primary} /></Pressable>
-                  <Pressable onPress={() => openSocial('https://linkedin.com/company/afroconnect')}><Ionicons name="logo-linkedin" size={32} color={theme.primary} /></Pressable>
-                  <Pressable onPress={() => openSocial('https://tiktok.com/@afroconnect1')}><Ionicons name="logo-tiktok" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial("https://instagram.com/afro.connect1")}><Ionicons name="logo-instagram" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial("https://twitter.com/afroconnect")}><Ionicons name="logo-twitter" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial("https://linkedin.com/company/afroconnect")}><Ionicons name="logo-linkedin" size={32} color={theme.primary} /></Pressable>
+                  <Pressable onPress={() => openSocial("https://tiktok.com/@afroconnect1")}><Ionicons name="logo-tiktok" size={32} color={theme.primary} /></Pressable>
                 </View>
 
                 <ThemedText style={styles.sectionTitle}>Contact Us</ThemedText>
@@ -196,54 +216,31 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  backgroundImage: { width: '100%', height: '100%' },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
-  content: { flex: 1, justifyContent: 'space-between', paddingHorizontal: 30, zIndex: 5 },
-  logoContainer: { alignItems: 'center' },
+  container: { flex: 1, backgroundColor: "#000" },
+  backgroundImage: { width: "100%", height: "100%" },
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.48)" },
+  content: { flex: 1, justifyContent: "space-between", paddingHorizontal: 30, zIndex: 5 },
+  logoContainer: { alignItems: "center" },
   logo: { width: 120, height: 140, borderRadius: 20, marginBottom: 15 },
-  taglineText: { color: '#FFF', fontSize: 24, fontWeight: '800', textAlign: 'center', lineHeight: 32 },
-  bottomSection: { width: '100%', alignItems: 'center' },
-  buttonContainer: { width: '100%', gap: 12, marginBottom: 25 },
-  primaryButton: { height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', width: '100%' },
-  primaryButtonText: { fontSize: 18, fontWeight: '700', color: '#FFF' },
-  secondaryButton: { height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', width: '100%', borderWidth: 2, borderColor: '#FFF' },
-  secondaryButtonText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  aboutButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 10 },
-  aboutButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  termsContainer: { alignItems: 'center', marginTop: 10 },
-  termsText: { color: 'rgba(255,255,255,0.8)', fontSize: 13 },
-  termsLink: { fontSize: 13, fontWeight: '700' },
-  sectionTitle: { fontSize: 22, fontWeight: '800', marginBottom: 15, marginTop: 20 },
-  socialRow: { flexDirection: 'row', gap: 20, marginBottom: 20 },
-  aboutText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  faqItem: {
-    marginBottom: 15,
-  },
-  faqQuestion: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  faqAnswer: {
-    fontSize: 14,
-  },
+  taglineText: { color: "#FFF", fontSize: 24, fontWeight: "800", textAlign: "center", lineHeight: 32 },
+  bottomSection: { width: "100%", alignItems: "center" },
+  buttonContainer: { width: "100%", gap: 12, marginBottom: 25 },
+  primaryButton: { height: 56, borderRadius: 28, justifyContent: "center", alignItems: "center", width: "100%" },
+  primaryButtonText: { fontSize: 18, fontWeight: "700", color: "#FFF" },
+  secondaryButton: { height: 56, borderRadius: 28, justifyContent: "center", alignItems: "center", width: "100%", borderWidth: 2, borderColor: "#FFF" },
+  secondaryButtonText: { color: "#FFF", fontSize: 18, fontWeight: "700" },
+  aboutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", padding: 10 },
+  aboutButtonText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
+  termsContainer: { alignItems: "center", marginTop: 10 },
+  termsText: { color: "rgba(255,255,255,0.8)", fontSize: 13 },
+  termsLink: { fontSize: 13, fontWeight: "700" },
+  sectionTitle: { fontSize: 22, fontWeight: "800", marginBottom: 15, marginTop: 20 },
+  socialRow: { flexDirection: "row", gap: 20, marginBottom: 20 },
+  aboutText: { fontSize: 14, lineHeight: 20 },
+  faqItem: { marginBottom: 15 },
+  faqQuestion: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
+  faqAnswer: { fontSize: 14 },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 15 },
-  successStoryLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderRadius: 12,
-    marginTop: 10,
-    marginBottom: 10,
-    gap: 10
-  },
-  successStoryLinkText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700'
-  }
+  successStoryLink: { flexDirection: "row", alignItems: "center", padding: 15, borderRadius: 12, marginTop: 10, marginBottom: 10, gap: 10 },
+  successStoryLinkText: { flex: 1, fontSize: 16, fontWeight: "700" },
 });

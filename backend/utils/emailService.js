@@ -1,268 +1,340 @@
-
 const nodemailer = require('nodemailer');
+const path = require('path');
 
-// Create email transporter
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
-// Professional OTP Email Template
-const getOTPEmailTemplate = (userName, otpCode) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>AfroConnect - OTP Verification</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+// Brand palette — Emerald Blue
+const BRAND = {
+  gradientStart: '#059669',   // emerald
+  gradientEnd:   '#0EA5E9',   // sky blue
+  primary:       '#059669',
+  primaryLight:  '#E8FAF5',
+  accent:        '#0EA5E9',
+  accentLight:   '#E0F2FE',
+};
+
+// Reusable logo block (CID inline)
+const LOGO_BLOCK = `
+  <img src="cid:afroconnect-logo"
+       alt="AfroConnect"
+       width="80" height="80"
+       style="border-radius: 16px; display: block; margin: 0 auto 14px auto;" />
+`;
+
+// Reusable header section
+const emailHeader = (title, subtitle = '') => `
+  <tr>
+    <td style="background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+               padding: 40px 30px; text-align: center;">
+      ${LOGO_BLOCK}
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.3px;">
+        ${title}
+      </h1>
+      ${subtitle ? `<p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.88); font-size: 15px;">${subtitle}</p>` : ''}
+    </td>
+  </tr>
+`;
+
+// Reusable footer
+const emailFooter = () => `
+  <tr>
+    <td style="background-color: #F8F9FA; padding: 28px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
+      <p style="margin: 0 0 10px 0; color: #666666; font-size: 13px;">
+        Need help? <a href="mailto:support@afroconnect.app"
+          style="color: ${BRAND.primary}; text-decoration: none; font-weight: 600;">
+          support@afroconnect.app
+        </a>
+      </p>
+      <div style="margin: 12px 0;">
+        <a href="#" style="color: #999999; font-size: 11px; text-decoration: none; margin: 0 8px;">Privacy Policy</a>
+        <span style="color: #CCCCCC;">|</span>
+        <a href="#" style="color: #999999; font-size: 11px; text-decoration: none; margin: 0 8px;">Terms of Service</a>
+      </div>
+      <p style="margin: 0; color: #AAAAAA; font-size: 11px; line-height: 1.5;">
+        © 2025 AfroConnect. All rights reserved.<br/>
+        Making meaningful connections across Africa and beyond.
+      </p>
+    </td>
+  </tr>
+`;
+
+// Email shell wrapper
+const emailShell = (bodyRows) => `
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background-color:#f0f4f8;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f4f8;padding:40px 20px;">
+      <tr>
+        <td align="center">
+          <table width="600" cellpadding="0" cellspacing="0"
+            style="background-color:#ffffff;border-radius:16px;overflow:hidden;
+                   box-shadow:0 6px 24px rgba(0,0,0,0.10);">
+            ${bodyRows}
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>
+`;
+
+// ─── OTP Email ────────────────────────────────────────────────────────────────
+const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
+  ${emailHeader('AfroConnect', 'Connect with Your Perfect Match')}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hello ${userName || 'there'}! 👋
+      </h2>
+      <p style="margin: 0 0 28px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        We received a request to verify your email address.
+        Use the code below to complete your registration:
+      </p>
+
+      <!-- OTP Box -->
+      <table width="100%" cellpadding="0" cellspacing="0">
         <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              
-              <!-- Header with gradient -->
-              <tr>
-                <td style="background: linear-gradient(135deg, #FE3C72 0%, #FF6B9D 100%); padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
-                    AfroConnect
-                  </h1>
-                  <p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.9); font-size: 16px;">
-                    Connect with Your Perfect Match
-                  </p>
-                </td>
-              </tr>
-              
-              <!-- Content -->
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">
-                    Hello ${userName || 'there'}! 👋
-                  </h2>
-                  
-                  <p style="margin: 0 0 30px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    We received a request to verify your email address. Use the verification code below to complete your registration:
-                  </p>
-                  
-                  <!-- OTP Box -->
-                  <table width="100%" cellpadding="0" cellspacing="0">
-                    <tr>
-                      <td align="center" style="padding: 30px 0;">
-                        <div style="background: linear-gradient(135deg, #FFF5F7 0%, #FFE8ED 100%); border: 2px dashed #FE3C72; border-radius: 12px; padding: 30px; display: inline-block;">
-                          <p style="margin: 0 0 10px 0; color: #666666; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
-                            Your Verification Code
-                          </p>
-                          <p style="margin: 0; color: #FE3C72; font-size: 42px; font-weight: 700; letter-spacing: 8px; font-family: 'Courier New', monospace;">
-                            ${otpCode}
-                          </p>
-                        </div>
-                      </td>
-                    </tr>
-                  </table>
-                  
-                  <p style="margin: 30px 0 20px 0; color: #666666; font-size: 15px; line-height: 1.6;">
-                    This code will expire in <strong style="color: #FE3C72;">10 minutes</strong>. If you didn't request this code, please ignore this email.
-                  </p>
-                  
-                  <!-- Security Note -->
-                  <div style="background-color: #FFF9E6; border-left: 4px solid #FFC107; padding: 15px 20px; margin: 30px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.5;">
-                      <strong>🔒 Security Tip:</strong> Never share this code with anyone. AfroConnect will never ask for your verification code.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              
-              <!-- Footer -->
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 30px 40px; border-top: 1px solid #E9ECEF;">
-                  <p style="margin: 0 0 15px 0; color: #666666; font-size: 14px; text-align: center;">
-                    Need help? Contact us at 
-                    <a href="mailto:support@afroconnect.com" style="color: #FE3C72; text-decoration: none;">support@afroconnect.com</a>
-                  </p>
-                  
-                  <p style="margin: 0; color: #999999; font-size: 12px; text-align: center; line-height: 1.5;">
-                    © 2025 AfroConnect. All rights reserved.<br>
-                    Making meaningful connections across Africa and beyond.
-                  </p>
-                  
-                  <!-- Social Links (optional) -->
-                  <div style="text-align: center; margin-top: 20px;">
-                    <a href="#" style="display: inline-block; margin: 0 10px; color: #999999; text-decoration: none; font-size: 12px;">Privacy Policy</a>
-                    <span style="color: #CCCCCC;">|</span>
-                    <a href="#" style="display: inline-block; margin: 0 10px; color: #999999; text-decoration: none; font-size: 12px;">Terms of Service</a>
-                  </div>
-                </td>
-              </tr>
-              
-            </table>
+          <td align="center" style="padding: 28px 0;">
+            <div style="background: linear-gradient(135deg, ${BRAND.primaryLight} 0%, ${BRAND.accentLight} 100%);
+                        border: 2px dashed ${BRAND.accent};
+                        border-radius: 14px; padding: 28px 32px; display: inline-block;">
+              <p style="margin: 0 0 8px 0; color: #555555; font-size: 13px;
+                         text-transform: uppercase; letter-spacing: 1.2px; font-weight: 600;">
+                Your Verification Code
+              </p>
+              <p style="margin: 0; color: ${BRAND.primary}; font-size: 44px; font-weight: 800;
+                         letter-spacing: 10px; font-family: 'Courier New', monospace;">
+                ${otpCode}
+              </p>
+            </div>
           </td>
         </tr>
       </table>
-    </body>
-    </html>
-  `;
+
+      <p style="margin: 20px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        This code expires in <strong style="color: ${BRAND.primary};">10 minutes</strong>.
+        If you didn't request this, please ignore this email.
+      </p>
+
+      <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
+                  padding: 14px 18px; margin: 24px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #92400E; font-size: 13px; line-height: 1.6;">
+          <strong>🔒 Security Tip:</strong> Never share this code with anyone.
+          AfroConnect will never ask for your verification code.
+        </p>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+// ─── Welcome Email ────────────────────────────────────────────────────────────
+const getWelcomeEmailTemplate = (userName) => emailShell(`
+  ${emailHeader('Welcome to AfroConnect! 🎉')}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hi ${userName}! 👋
+      </h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        We're thrilled to have you join our community! AfroConnect is more than just a dating
+        app — it's a platform where authentic connections happen.
+      </p>
+
+      <h3 style="margin: 28px 0 14px 0; color: #1a1a1a; font-size: 17px; font-weight: 700;">
+        Get Started:
+      </h3>
+      <ul style="color: #555555; font-size: 15px; line-height: 1.9; padding-left: 20px; margin: 0 0 32px 0;">
+        <li>Complete your profile with great photos</li>
+        <li>Share your interests and what makes you unique</li>
+        <li>Start swiping to find your perfect match</li>
+        <li>Send friend requests and start chatting</li>
+      </ul>
+
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+          Complete Your Profile →
+        </a>
+      </div>
+
+      <p style="margin: 24px 0 0 0; color: #AAAAAA; font-size: 14px; text-align: center; font-style: italic;">
+        "Your perfect match is just a swipe away!" 💚
+      </p>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+// ─── Password Reset Email ─────────────────────────────────────────────────────
+const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
+  ${emailHeader('Password Reset Request')}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hi ${userName},
+      </h2>
+      <p style="margin: 0 0 24px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        We received a request to reset your password.
+        Click the button below to create a new one:
+      </p>
+
+      <div style="text-align: center; margin: 32px 0;">
+        <a href="${resetLink}" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700;">
+          Reset Password
+        </a>
+      </div>
+
+      <p style="margin: 20px 0; color: #555555; font-size: 14px; line-height: 1.7;">
+        This link expires in <strong>30 minutes</strong>.
+        If you didn't request a password reset, you can safely ignore this email.
+      </p>
+
+      <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
+                  padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #92400E; font-size: 13px;">
+          For security, never share your password or reset link with anyone.
+        </p>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+// ─── Ban Notification ─────────────────────────────────────────────────────────
+const getBanNotificationTemplate = (userName, reason) => emailShell(`
+  <tr>
+    <td style="background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
+               padding: 40px 30px; text-align: center;">
+      ${LOGO_BLOCK}
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">
+        Account Suspended
+      </h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        Your AfroConnect account has been suspended due to a violation of our Community Guidelines.
+      </p>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        <strong>Reason:</strong> ${reason || 'Violation of community guidelines'}
+      </p>
+      <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
+                  padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.6;">
+          <strong>What happens next?</strong> You can submit an appeal through the AfroConnect
+          app to have your case reviewed by our team.
+        </p>
+      </div>
+      <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        If you believe this was a mistake, submit an appeal with your explanation.
+        Our team will respond within 5–7 business days.
+      </p>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+// ─── Unban Notification ───────────────────────────────────────────────────────
+const getUnbanNotificationTemplate = (userName) => emailShell(`
+  ${emailHeader("You're Back! 🎉")}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        Great news! Your appeal has been approved and your account has been restored.
+        You can now log back into AfroConnect.
+      </p>
+      <div style="background-color: ${BRAND.primaryLight}; border-left: 4px solid ${BRAND.primary};
+                  padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #065F46; font-size: 14px; line-height: 1.6;">
+          <strong>Welcome back!</strong> Please review our Community Guidelines to ensure
+          you understand our policies.
+        </p>
+      </div>
+      <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        We're excited to have you back. Remember to treat all members with respect
+        and follow our guidelines.
+      </p>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+// ─── Appeal Decision ──────────────────────────────────────────────────────────
+const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
+  const headerBg  = approved ? `linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%)` : 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)';
+  const noteBg    = approved ? BRAND.primaryLight : '#FEE2E2';
+  const noteBorder= approved ? BRAND.primary      : '#DC2626';
+  const noteText  = approved ? '#065F46'           : '#991B1B';
+  const title     = approved ? 'Appeal Approved ✓' : 'Appeal Decision';
+
+  return emailShell(`
+    <tr>
+      <td style="background: ${headerBg}; padding: 40px 30px; text-align: center;">
+        ${LOGO_BLOCK}
+        <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${title}</h1>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 48px 40px;">
+        <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+        <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+          Your appeal has been reviewed by our team. Here is their decision:
+        </p>
+        <div style="background-color: ${noteBg}; border-left: 4px solid ${noteBorder};
+                    padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+          <p style="margin: 0; color: ${noteText}; font-size: 14px; line-height: 1.7;">
+            ${adminResponse || (approved
+              ? 'Your appeal has been approved. Your account has been restored.'
+              : 'Your appeal has been reviewed. Please review our Community Guidelines for next steps.'
+            )}
+          </p>
+        </div>
+        ${!approved ? `
+        <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+          You can submit a new appeal in 30 days if you wish to challenge this decision.
+        </p>` : ''}
+      </td>
+    </tr>
+    ${emailFooter()}
+  `);
 };
 
-// Welcome Email Template
-const getWelcomeEmailTemplate = (userName) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Welcome to AfroConnect</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              
-              <tr>
-                <td style="background: linear-gradient(135deg, #FE3C72 0%, #FF6B9D 100%); padding: 50px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 36px; font-weight: 700;">
-                    Welcome to AfroConnect! 🎉
-                  </h1>
-                </td>
-              </tr>
-              
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px;">
-                    Hi ${userName}! 👋
-                  </h2>
-                  
-                  <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    We're thrilled to have you join our community! AfroConnect is more than just a dating app—it's a platform where authentic connections happen.
-                  </p>
-                  
-                  <h3 style="margin: 30px 0 15px 0; color: #333333; font-size: 18px;">
-                    Get Started:
-                  </h3>
-                  
-                  <ul style="color: #666666; font-size: 15px; line-height: 1.8; padding-left: 20px;">
-                    <li>Complete your profile with great photos</li>
-                    <li>Share your interests and what makes you unique</li>
-                    <li>Start swiping to find your perfect match</li>
-                    <li>Send friend requests and start chatting</li>
-                  </ul>
-                  
-                  <div style="text-align: center; margin: 40px 0;">
-                    <a href="#" style="display: inline-block; background: linear-gradient(135deg, #FE3C72 0%, #FF6B9D 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-size: 16px; font-weight: 600;">
-                      Complete Your Profile
-                    </a>
-                  </div>
-                  
-                  <p style="margin: 30px 0 0 0; color: #999999; font-size: 14px; text-align: center; font-style: italic;">
-                    "Your perfect match is just a swipe away!" ❤️
-                  </p>
-                </td>
-              </tr>
-              
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 30px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
-                  <p style="margin: 0; color: #999999; font-size: 12px;">
-                    © 2025 AfroConnect. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-              
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
+// ─── Logo attachment helper ───────────────────────────────────────────────────
+const logoAttachment = () => ({
+  filename: 'afroconnect-logo.png',
+  path: path.join(__dirname, '../../frontend/assets/afroconnect-logo.png'),
+  cid: 'afroconnect-logo',
+});
 
-// Password Reset Email Template
-const getPasswordResetEmailTemplate = (userName, resetLink) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Reset Your Password</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              
-              <tr>
-                <td style="background: linear-gradient(135deg, #FE3C72 0%, #FF6B9D 100%); padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">
-                    Password Reset Request
-                  </h1>
-                </td>
-              </tr>
-              
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 22px;">
-                    Hi ${userName},
-                  </h2>
-                  
-                  <p style="margin: 0 0 25px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    We received a request to reset your password. Click the button below to create a new password:
-                  </p>
-                  
-                  <div style="text-align: center; margin: 35px 0;">
-                    <a href="${resetLink}" style="display: inline-block; background: linear-gradient(135deg, #FE3C72 0%, #FF6B9D 100%); color: #ffffff; text-decoration: none; padding: 16px 40px; border-radius: 30px; font-size: 16px; font-weight: 600;">
-                      Reset Password
-                    </a>
-                  </div>
-                  
-                  <p style="margin: 25px 0; color: #666666; font-size: 14px; line-height: 1.6;">
-                    This link will expire in <strong>30 minutes</strong>. If you didn't request a password reset, you can safely ignore this email.
-                  </p>
-                  
-                  <div style="background-color: #FFF3CD; border-left: 4px solid #FFC107; padding: 15px 20px; margin: 25px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: #856404; font-size: 13px;">
-                      For security reasons, never share your password or reset link with anyone.
-                    </p>
-                  </div>
-                </td>
-              </tr>
-              
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 25px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
-                  <p style="margin: 0; color: #999999; font-size: 12px;">
-                    © 2025 AfroConnect. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-              
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
-
-// Send OTP Email
+// ─── Send functions ───────────────────────────────────────────────────────────
 const sendOTPEmail = async (email, userName, otpCode) => {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: '🔐 Your AfroConnect Verification Code',
-      html: getOTPEmailTemplate(userName, otpCode)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      html: getOTPEmailTemplate(userName, otpCode),
+      attachments: [logoAttachment()],
+    });
     console.log('OTP email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -271,17 +343,15 @@ const sendOTPEmail = async (email, userName, otpCode) => {
   }
 };
 
-// Send Welcome Email
 const sendWelcomeEmail = async (email, userName) => {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: '🎉 Welcome to AfroConnect - Let\'s Find Your Match!',
-      html: getWelcomeEmailTemplate(userName)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      subject: '🎉 Welcome to AfroConnect — Let\'s Find Your Match!',
+      html: getWelcomeEmailTemplate(userName),
+      attachments: [logoAttachment()],
+    });
     console.log('Welcome email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -290,19 +360,16 @@ const sendWelcomeEmail = async (email, userName) => {
   }
 };
 
-// Send Password Reset Email
 const sendPasswordResetEmail = async (email, userName, resetToken) => {
   try {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: '🔒 Reset Your AfroConnect Password',
-      html: getPasswordResetEmailTemplate(userName, resetLink)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      html: getPasswordResetEmailTemplate(userName, resetLink),
+      attachments: [logoAttachment()],
+    });
     console.log('Password reset email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -311,181 +378,15 @@ const sendPasswordResetEmail = async (email, userName, resetToken) => {
   }
 };
 
-// Ban Notification Email Template
-const getBanNotificationTemplate = (userName, reason) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Account Suspended - AfroConnect</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              <tr>
-                <td style="background: linear-gradient(135deg, #FF6B6B 0%, #FF8A80 100%); padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">Account Suspended</h1>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 22px;">Hi ${userName},</h2>
-                  <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    Your AfroConnect account has been suspended due to a violation of our Community Guidelines.
-                  </p>
-                  <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    <strong>Reason:</strong> ${reason || 'Violation of community guidelines'}
-                  </p>
-                  <div style="background-color: #FFF3CD; border-left: 4px solid #FFC107; padding: 15px 20px; margin: 25px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: #856404; font-size: 14px;">
-                      <strong>What happens next?</strong> You can submit an appeal through the AfroConnect app to have your case reviewed by our team.
-                    </p>
-                  </div>
-                  <p style="margin: 20px 0; color: #666666; font-size: 15px;">
-                    If you believe this was a mistake, please submit an appeal with your explanation. Our team will review it and respond within 5-7 business days.
-                  </p>
-                </td>
-              </tr>
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 30px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
-                  <p style="margin: 0; color: #999999; font-size: 12px;">
-                    © 2025 AfroConnect. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
-
-// Unban Notification Email Template
-const getUnbanNotificationTemplate = (userName) => {
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Your Appeal Was Approved - AfroConnect</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              <tr>
-                <td style="background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%); padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">You're Back! 🎉</h1>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 22px;">Hi ${userName},</h2>
-                  <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    Great news! Your appeal has been approved and your account has been restored. You can now log back into AfroConnect.
-                  </p>
-                  <div style="background-color: #E8F5E9; border-left: 4px solid #4CAF50; padding: 15px 20px; margin: 25px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: #2E7D32; font-size: 14px;">
-                      <strong>Welcome back!</strong> Please review our Community Guidelines to ensure you understand our policies.
-                    </p>
-                  </div>
-                  <p style="margin: 20px 0; color: #666666; font-size: 15px;">
-                    We're excited to have you back in the AfroConnect community. Remember to treat all members with respect and follow our guidelines.
-                  </p>
-                </td>
-              </tr>
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 30px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
-                  <p style="margin: 0; color: #999999; font-size: 12px;">
-                    © 2025 AfroConnect. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
-
-// Appeal Decision Email Template
-const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
-  const bgColor = approved ? '#E8F5E9' : '#FFEBEE';
-  const borderColor = approved ? '#4CAF50' : '#FF6B6B';
-  const title = approved ? 'Appeal Approved ✓' : 'Appeal Decision';
-  const textColor = approved ? '#2E7D32' : '#C62828';
-  
-  return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${title} - AfroConnect</title>
-    </head>
-    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
-        <tr>
-          <td align="center">
-            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
-              <tr>
-                <td style="background: linear-gradient(135deg, ${approved ? '#4CAF50' : '#FF6B6B'} 0%, ${approved ? '#66BB6A' : '#FF8A80'} 100%); padding: 40px 30px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">${title}</h1>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 50px 40px;">
-                  <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 22px;">Hi ${userName},</h2>
-                  <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
-                    Your appeal has been reviewed by our team. Here is their decision:
-                  </p>
-                  <div style="background-color: ${bgColor}; border-left: 4px solid ${borderColor}; padding: 15px 20px; margin: 25px 0; border-radius: 4px;">
-                    <p style="margin: 0; color: ${textColor}; font-size: 14px; line-height: 1.6;">
-                      ${adminResponse || (approved ? 'Your appeal has been approved. Your account has been restored.' : 'Your appeal has been reviewed. Please review our Community Guidelines for next steps.')}
-                    </p>
-                  </div>
-                  ${!approved ? `<p style="margin: 20px 0; color: #666666; font-size: 15px;">
-                    You can submit a new appeal in 30 days if you wish to challenge this decision.
-                  </p>` : ''}
-                </td>
-              </tr>
-              <tr>
-                <td style="background-color: #F8F9FA; padding: 30px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
-                  <p style="margin: 0; color: #999999; font-size: 12px;">
-                    © 2025 AfroConnect. All rights reserved.
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
-  `;
-};
-
-// Send Ban Notification Email
 const sendBanNotificationEmail = async (email, userName, reason) => {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: '⚠️ Your AfroConnect Account Has Been Suspended',
-      html: getBanNotificationTemplate(userName, reason)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      html: getBanNotificationTemplate(userName, reason),
+      attachments: [logoAttachment()],
+    });
     console.log('Ban notification email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -494,17 +395,15 @@ const sendBanNotificationEmail = async (email, userName, reason) => {
   }
 };
 
-// Send Unban Notification Email
 const sendUnbanNotificationEmail = async (email, userName) => {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: '✓ Your Appeal Was Approved - Welcome Back!',
-      html: getUnbanNotificationTemplate(userName)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      subject: '✓ Your Appeal Was Approved — Welcome Back!',
+      html: getUnbanNotificationTemplate(userName),
+      attachments: [logoAttachment()],
+    });
     console.log('Unban notification email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -513,17 +412,15 @@ const sendUnbanNotificationEmail = async (email, userName) => {
   }
 };
 
-// Send Appeal Decision Email
 const sendAppealDecisionEmail = async (email, userName, approved, adminResponse) => {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: approved ? '✓ Your Appeal Was Approved!' : '⚠️ Appeal Decision',
-      html: getAppealDecisionTemplate(userName, approved, adminResponse)
-    };
-
-    const info = await transporter.sendMail(mailOptions);
+      html: getAppealDecisionTemplate(userName, approved, adminResponse),
+      attachments: [logoAttachment()],
+    });
     console.log('Appeal decision email sent:', info.messageId);
     return { success: true, messageId: info.messageId };
   } catch (error) {
@@ -532,10 +429,7 @@ const sendAppealDecisionEmail = async (email, userName, approved, adminResponse)
   }
 };
 
-// Generate OTP Code
-const generateOTP = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
+const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 module.exports = {
   sendOTPEmail,
@@ -544,5 +438,5 @@ module.exports = {
   sendBanNotificationEmail,
   sendUnbanNotificationEmail,
   sendAppealDecisionEmail,
-  generateOTP
+  generateOTP,
 };
