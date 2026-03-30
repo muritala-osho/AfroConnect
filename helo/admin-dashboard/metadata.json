@@ -1,0 +1,9 @@
+{
+  "name": "AfroConnect Admin - Platform Management",
+  "description": "Secure admin dashboard for AfroConnect dating platform, featuring real-time analytics, AI-moderation, and community management.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

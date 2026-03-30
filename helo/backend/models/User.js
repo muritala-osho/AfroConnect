@@ -1,0 +1,549 @@
+
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    lowercase: true,
+    trim: true
+  },
+  verificationOTP: String,
+  verificationOTPExpire: Date,
+  resetPasswordOTP: String,
+  resetPasswordOTPExpire: Date,
+  password: {
+    type: String,
+    required: function() {
+      return !this.googleId;
+    }
+  },
+  googleId: {
+    type: String,
+    sparse: true
+  },
+  age: {
+    type: Number,
+    required: true,
+    min: 18,
+    max: 100
+  },
+  gender: {
+    type: String,
+    enum: ['male', 'female', 'other'],
+    required: true
+  },
+  zodiacSign: {
+    type: String,
+    enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'],
+    default: null
+  },
+  jobTitle: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  education: {
+    type: String,
+    enum: ['high_school', 'some_college', 'bachelors', 'masters', 'doctorate', 'trade_school', 'other', 'prefer_not_to_say'],
+    default: null
+  },
+  livingIn: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  bio: {
+    type: String,
+    maxlength: 500,
+    default: ''
+  },
+  favoriteSong: {
+    title: { type: String, maxlength: 200, default: '' },
+    artist: { type: String, maxlength: 200, default: '' },
+    spotifyUri: { type: String, default: '' }
+  },
+  spotify: {
+    connected: { type: Boolean, default: false },
+    userId: { type: String, default: '' },
+    displayName: { type: String, default: '' },
+    accessToken: { type: String, default: '' },
+    refreshToken: { type: String, default: '' },
+    tokenExpiry: { type: Date, default: null }
+  },
+  interests: [{
+    type: String,
+    trim: true
+  }],
+  photos: [{
+    url: String,
+    publicId: String,
+    isPrimary: {
+      type: Boolean,
+      default: false
+    },
+    privacy: {
+      type: String,
+      enum: ['public', 'friends', 'private'],
+      default: 'public'
+    },
+    order: {
+      type: Number,
+      default: 0
+    }
+  }],
+  location: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], 
+      default: [0, 0]
+    },
+    city: String,
+    country: String
+  },
+  passportLocation: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: [Number],
+    city: String,
+    country: String,
+    isActive: { type: Boolean, default: false }
+  },
+  locationSharingEnabled: {
+    type: Boolean,
+    default: true
+  },
+  locationUpdatedAt: {
+    type: Date,
+    default: Date.now
+  },
+  verified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  expireAt: {
+    type: Date,
+    index: { expires: '24h' },
+    default: function() {
+      return this.emailVerified ? undefined : new Date();
+    }
+  },
+  verificationStatus: {
+    type: String,
+    enum: ['not_requested', 'pending', 'approved', 'rejected'],
+    default: 'not_requested'
+  },
+  verificationPhoto: {
+    type: String,
+    default: null
+  },
+  idPhoto: {
+    url: String,
+    publicId: String,
+    submittedAt: Date
+  },
+  selfiePhoto: {
+    url: String,
+    publicId: String,
+    submittedAt: Date
+  },
+  verificationRequestDate: {
+    type: Date,
+    default: null
+  },
+  verificationApprovedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  verificationApprovedAt: {
+    type: Date,
+    default: null
+  },
+  verificationRejectionReason: {
+    type: String,
+    default: null
+  },
+  onlineStatus: {
+    type: String,
+    enum: ['online', 'offline', 'away'],
+    default: 'offline'
+  },
+  lastActive: {
+    type: Date,
+    default: Date.now
+  },
+  lookingFor: {
+    type: String,
+    enum: ['relationship', 'friendship', 'casual', 'networking', 'not_sure', 'not sure'],
+    default: 'relationship'
+  },
+  relationshipGoal: {
+    type: String,
+    enum: ['short_term', 'long_term', 'friendship', 'networking', 'casual', 'marriage', 'open_to_everything', 'not_sure_yet'],
+    default: null
+  },
+  preferences: {
+    ageRange: {
+      min: { type: Number, default: 18 },
+      max: { type: Number, default: 50 }
+    },
+    genderPreference: {
+      type: String,
+      enum: ['male', 'female', 'both'],
+      default: 'both'
+    },
+    maxDistance: {
+      type: Number,
+      default: 10000 
+    },
+    showOnlineOnly: {
+      type: Boolean,
+      default: false
+    },
+    showVerifiedOnly: {
+      type: Boolean,
+      default: false
+    },
+    dealBreakers: [{
+      type: String,
+      enum: ['smoking', 'drinking', 'no_kids', 'has_kids', 'pets']
+    }],
+    language: {
+      type: String,
+      enum: ['en', 'es', 'fr', 'pt', 'ar', 'sw', 'yo', 'ig', 'ha', 'zu', 'xh', 'am'],
+      default: 'en'
+    }
+  },
+  lifestyle: {
+    smoking: {
+      type: String,
+      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say', ''],
+      default: null
+    },
+    drinking: {
+      type: String,
+      enum: ['never', 'socially', 'regularly', 'prefer_not_to_say', ''],
+      default: null
+    },
+    workout: {
+      type: String,
+      enum: ['never', 'rarely', 'sometimes', 'often', 'daily', 'regularly', 'very_active', 'prefer_not_to_say'],
+      default: null
+    },
+    religion: {
+      type: String,
+      enum: ['christian', 'muslim', 'traditional', 'atheist', 'agnostic', 'spiritual', 'other', 'prefer_not_to_say'],
+      default: null,
+      trim: true
+    },
+    ethnicity: {
+      type: String,
+      maxlength: 100,
+      trim: true
+    },
+    communicationStyle: {
+      type: String,
+      enum: ['introverted', 'ambiverted', 'extroverted', 'ambivert', 'big_talker', 'listener', 'texter', 'caller', 'prefer_not_to_say'],
+      default: null
+    },
+    loveStyle: {
+      type: String,
+      enum: ['romantic', 'playful', 'passionate', 'intellectual', 'caring', 'adventurous', 'practical', 'selfless', 'physical', 'acts_of_service', 'words_of_affirmation', 'quality_time', 'gift_giving', 'prefer_not_to_say'],
+      default: null
+    },
+    personalityType: {
+      type: String,
+      maxlength: 50,
+      trim: true
+    },
+    hasKids: {
+      type: Boolean,
+      default: false
+    },
+    wantsKids: {
+      type: Boolean
+    },
+    hasPets: {
+      type: Boolean,
+      default: false
+    },
+    pets: {
+      type: String,
+      default: ''
+    },
+    relationshipStatus: {
+      type: String,
+      default: ''
+    }
+  },
+  swipedRight: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  swipedLeft: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  superLiked: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  blockedUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  privacySettings: {
+    showOnlineStatus: {
+      type: Boolean,
+      default: true
+    },
+    showDistance: {
+      type: Boolean,
+      default: true
+    },
+    showLastActive: {
+      type: Boolean,
+      default: true
+    },
+    hideAge: {
+      type: Boolean,
+      default: false
+    },
+    whoCanViewStories: {
+      type: String,
+      enum: ['friends', 'matches', 'everyone'],
+      default: 'everyone'
+    },
+    allowMessageCopying: {
+      type: Boolean,
+      default: true
+    }
+  },
+  settings: {
+    emailNotifications: {
+      type: Boolean,
+      default: true
+    },
+    pushNotifications: {
+      type: Boolean,
+      default: true
+    },
+    theme: {
+      type: String,
+      enum: ['light', 'dark', 'system'],
+      default: 'system'
+    }
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  banned: {
+    type: Boolean,
+    default: false
+  },
+  bannedAt: Date,
+  banReason: String,
+  suspended: {
+    type: Boolean,
+    default: false
+  },
+  suspendedUntil: Date,
+  warnings: {
+    type: Number,
+    default: 0
+  },
+  appeal: {
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'rejected'],
+      default: 'none'
+    },
+    message: {
+      type: String,
+      maxlength: 1000,
+      default: null
+    },
+    submittedAt: {
+      type: Date,
+      default: null
+    },
+    reviewedAt: {
+      type: Date,
+      default: null
+    },
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    adminResponse: {
+      type: String,
+      maxlength: 500,
+      default: null
+    },
+    lastAppealRejectedAt: {
+      type: Date,
+      default: null
+    }
+  },
+  resetPasswordToken: String,
+  resetPasswordExpire: Date,
+  deletionOTP: String,
+  deletionOTPExpire: Date,
+  premium: {
+    isActive: {
+      type: Boolean,
+      default: false
+    },
+    plan: {
+      type: String,
+      enum: ['free', 'plus', 'gold', 'platinum'],
+      default: 'free'
+    },
+    stripeCustomerId: {
+      type: String,
+      default: null
+    },
+    stripeSubscriptionId: {
+      type: String,
+      default: null
+    },
+    expiresAt: {
+      type: Date,
+      default: null
+    },
+    features: {
+      unlimitedSwipes: { type: Boolean, default: false },
+      seeWhoLikesYou: { type: Boolean, default: false },
+      unlimitedRewinds: { type: Boolean, default: false },
+      boostPerMonth: { type: Number, default: 0 },
+      superLikesPerDay: { type: Number, default: 1 },
+      noAds: { type: Boolean, default: false },
+      advancedFilters: { type: Boolean, default: false },
+      readReceipts: { type: Boolean, default: false },
+      priorityMatches: { type: Boolean, default: false },
+      incognitoMode: { type: Boolean, default: false },
+      voiceNoteLimit: { type: Number, default: 30 }, 
+      unsendLimit: { type: Number, default: 15 } 
+    }
+  },
+  storyPrivacy: {
+    blockedUsers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    whoCanSee: {
+      type: String,
+      enum: ['everyone', 'matches', 'friends', 'custom'],
+      default: 'everyone'
+    }
+  },
+  dailySwipes: {
+    count: { type: Number, default: 0 },
+    lastReset: { type: Date, default: Date.now }
+  },
+  dailySuperLikes: {
+    count: { type: Number, default: 0 },
+    lastReset: { type: Date, default: Date.now }
+  },
+  profileComments: [{
+    _id: mongoose.Schema.Types.ObjectId,
+    authorId: mongoose.Schema.Types.ObjectId,
+    authorName: String,
+    text: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  profileViews: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    viewedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  muteSettings: {
+    mutedUsers: [{
+      userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+      },
+      mutedAt: {
+        type: Date,
+        default: Date.now
+      },
+      muteAll: { type: Boolean, default: true }, 
+      muteMessages: { type: Boolean, default: false },
+      muteVoiceCalls: { type: Boolean, default: false },
+      muteVideoCalls: { type: Boolean, default: false }
+    }],
+    globalMute: {
+      enabled: { type: Boolean, default: false },
+      startTime: String, 
+      endTime: String, 
+      allowCalls: { type: Boolean, default: false } 
+    },
+    deviceLevelMute: {
+      enabled: { type: Boolean, default: false } 
+    }
+  },
+  notificationPreferences: {
+    messagesEnabled: { type: Boolean, default: true },
+    voiceCallsEnabled: { type: Boolean, default: true },
+    videoCallsEnabled: { type: Boolean, default: true },
+    matchesEnabled: { type: Boolean, default: true },
+    likesEnabled: { type: Boolean, default: true },
+    soundEnabled: { type: Boolean, default: true },
+    vibrationEnabled: { type: Boolean, default: true }
+  }
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true, getters: true },
+  toObject: { virtuals: true, getters: true }
+});
+
+
+userSchema.index({ location: '2dsphere' });
+
+userSchema.index({ email: 1 }, { unique: true });
+
+
+userSchema.pre('save', async function() {
+  if (this.emailVerified && this.expireAt) {
+    this.expireAt = undefined;
+  }
+  if (!this.isModified('password')) {
+    return;
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
+
+
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+module.exports = mongoose.model('User', userSchema);
