@@ -21,17 +21,21 @@ args = "Start Backend"
 task = "workflow.run"
 args = "Expo QR (Mobile)"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Admin Dashboard"
+
 [[workflows.workflow]]
 name = "Start Backend"
 author = "agent"
 
 [workflows.workflow.metadata]
-outputType = "webview"
+outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd backend && npm install --legacy-peer-deps && node server.js"
-waitForPort = 5000
+args = "cd backend && npm install --legacy-peer-deps && PORT=3001 node server.js"
+waitForPort = 3001
 
 [[workflows.workflow]]
 name = "Expo QR (Mobile)"
@@ -43,6 +47,18 @@ args = "cd frontend && npx expo start --tunnel"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "Admin Dashboard"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd admin-dashboard && npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
 
 [[ports]]
 localPort = 3001

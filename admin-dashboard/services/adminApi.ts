@@ -1,16 +1,9 @@
 const API_BASE = '/api';
 
-const getToken = (): string | null => {
-  return localStorage.getItem('afroconnect_token');
-};
+const getToken = (): string | null => localStorage.getItem('afroconnect_token');
 
-export const setToken = (token: string) => {
-  localStorage.setItem('afroconnect_token', token);
-};
-
-export const clearToken = () => {
-  localStorage.removeItem('afroconnect_token');
-};
+export const setToken = (token: string) => localStorage.setItem('afroconnect_token', token);
+export const clearToken = () => localStorage.removeItem('afroconnect_token');
 
 const authHeaders = (): Record<string, string> => {
   const token = getToken();
@@ -39,9 +32,7 @@ export const adminApi = {
       body: JSON.stringify({ email, password }),
     });
     const data = await handleResponse(res);
-    if (data.success && data.token) {
-      setToken(data.token);
-    }
+    if (data.success && data.token) setToken(data.token);
     return data;
   },
 
@@ -61,7 +52,7 @@ export const adminApi = {
     if (params?.limit) query.set('limit', String(params.limit));
     if (params?.search) query.set('search', params.search);
     if (params?.status) query.set('status', params.status);
-    const res = await fetch(`${API_BASE}/admin/users?${query.toString()}`, { headers: authHeaders() });
+    const res = await fetch(`${API_BASE}/admin/users?${query}`, { headers: authHeaders() });
     return handleResponse(res);
   },
 
@@ -75,6 +66,23 @@ export const adminApi = {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ banned, reason }),
+    });
+    return handleResponse(res);
+  },
+
+  suspendUser: async (userId: string, suspended: boolean, days?: number) => {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}/suspend`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ suspended, days }),
+    });
+    return handleResponse(res);
+  },
+
+  deleteUser: async (userId: string) => {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
     });
     return handleResponse(res);
   },
@@ -131,6 +139,55 @@ export const adminApi = {
 
   getAnalytics: async () => {
     const res = await fetch(`${API_BASE}/admin/analytics`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  getFlaggedContent: async (status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    const res = await fetch(`${API_BASE}/admin/flagged-content${query}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  moderateContent: async (contentId: string, action: 'approve' | 'reject') => {
+    const res = await fetch(`${API_BASE}/admin/flagged-content/${contentId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ action }),
+    });
+    return handleResponse(res);
+  },
+
+  sendBroadcast: async (payload: {
+    title: string;
+    body: string;
+    target: string;
+    imageUrl?: string;
+    scheduled?: boolean;
+  }) => {
+    const res = await fetch(`${API_BASE}/admin/broadcasts`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  getBroadcastHistory: async () => {
+    const res = await fetch(`${API_BASE}/admin/broadcasts`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  updateAppSettings: async (settings: Record<string, unknown>) => {
+    const res = await fetch(`${API_BASE}/admin/settings`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(settings),
+    });
+    return handleResponse(res);
+  },
+
+  getAppSettings: async () => {
+    const res = await fetch(`${API_BASE}/admin/settings`, { headers: authHeaders() });
     return handleResponse(res);
   },
 };

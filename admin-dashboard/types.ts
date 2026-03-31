@@ -54,3 +54,57 @@ export interface AuthState {
     avatar?: string;
   } | null;
 }
+
+export type BroadcastTarget =
+  | 'all'
+  | 'male'
+  | 'female'
+  | 'verified'
+  | 'platinum'
+  | 'gold'
+  | 'lagos'
+  | 'london';
+
+export interface NotificationCampaign {
+  id: string;
+  title: string;
+  body: string;
+  target: BroadcastTarget;
+  status: 'sent' | 'draft' | 'scheduled';
+  timestamp: string;
+  reach: number;
+  openRate: string;
+}
+
+export interface PushTemplate {
+  id: string;
+  name: string;
+  category: string;
+  title: string;
+  body: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  subject: string;
+  category: 'billing' | 'account' | 'technical' | 'report' | 'other';
+  status: 'open' | 'in-progress' | 'closed';
+  priority: 'low' | 'medium' | 'high';
+  timestamp: string;
+  message: string;
+}
+
+export interface FlaggedContent {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  type: 'profile_photo' | 'story' | 'message_image';
+  imageUrl: string;
+  reason: string;
+  flaggedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  aiConfidence?: number;
+}

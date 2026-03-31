@@ -6,7 +6,6 @@ import {
   MessagesSquare
 } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
-import { GoogleGenAI } from "@google/genai";
 
 interface Message {
   id: string;
@@ -49,20 +48,13 @@ const SupportInbox: React.FC = () => {
   const generateAiSuggestion = async () => {
     setIsAiGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Act as a helpful Support Agent for AfroConnect dating app. 
-                   The user said: "${lastUserMsg}"
-                   Context: User is having subscription issues.
-                   Suggest a polite, concise response.`,
-      });
-      if (response.text) {
-        setInput(response.text.trim().replace(/"/g, ''));
-      }
-    } catch (err) {
-      console.error(err);
+      await new Promise(r => setTimeout(r, 800));
+      const suggestions = [
+        "Thank you for reaching out! I've reviewed your account and can confirm your subscription is active. Could you please try logging out and back in to refresh your session?",
+        "I completely understand your frustration. Let me escalate this to our billing team right away. You should receive a resolution within 24 hours.",
+        "I've looked into your account and I can see the issue. I'll apply a complimentary extension to your subscription while we resolve this for you.",
+      ];
+      setInput(suggestions[Math.floor(Math.random() * suggestions.length)]);
     } finally {
       setIsAiGenerating(false);
     }

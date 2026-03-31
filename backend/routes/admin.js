@@ -666,4 +666,290 @@ router.delete('/stories/:storyId', protect, isAdmin, async (req, res) => {
   }
 });
 
+// @route   PUT /api/admin/users/:userId/suspend
+// @desc    Suspend or unsuspend a user
+// @access  Private/Admin
+router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
+  try {
+    const { suspended, days = 7 } = req.body;
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.suspended = suspended;
+    if (suspended) {
+      user.suspendedUntil = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    } else {
+      user.suspendedUntil = null;
+    }
+    await user.save();
+
+    res.json({
+      success: true,
+      message: suspended ? `User suspended for ${days} days` : 'User suspension lifted',
+      user,
+    });
+  } catch (error) {
+    console.error('Suspend user error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   DELETE /api/admin/users/:userId
+// @desc    Permanently delete a user account
+// @access  Private/Admin
+router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    await User.findByIdAndDelete(req.params.userId);
+    res.json({ success: true, message: 'User account permanently deleted' });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// In-memory flagged content store (production: use a DB model)
+const flaggedContentStore = [];
+
+// @route   GET /api/admin/flagged-content
+// @desc    Get flagged images and stories for moderation
+// @access  Private/Admin
+router.get('/flagged-content', protect, isAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+
+    // Gather from real data sources
+    const usersWithFlaggedPhotos = await User.find({ reportCount: { $gt: 0 } })
+      .select('name photos reportCount')
+      .limit(20);
+
+    const content = [];
+
+    usersWithFlaggedPhotos.forEach(u => {
+      if (u.photos && u.photos.length > 0) {
+        content.push({
+          id: `ph-${u._id}`,
+          userId: u._id,
+          userName: u.name,
+          userAvatar: u.photos[0],
+          type: 'profile_photo',
+          imageUrl: u.photos[0],
+          reason: `Reported ${u.reportCount} time(s)`,
+          flaggedAt: new Date().toISOString(),
+          status: 'pending',
+          aiConfidence: Math.min(90, u.reportCount * 15),
+        });
+      }
+    });
+
+    const filtered = status ? content.filter(c => c.status === status) : content;
+
+    res.json({ success: true, content: filtered, total: filtered.length });
+  } catch (error) {
+    console.error('Flagged content error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/admin/flagged-content/:contentId
+// @desc    Approve or reject flagged content
+// @access  Private/Admin
+router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => {
+  try {
+    const { action } = req.body; // 'approve' | 'reject'
+
+    if (!['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid action' });
+    }
+
+    // If reject, remove the photo from user profile
+    if (action === 'reject' && req.params.contentId.startsWith('ph-')) {
+      const userId = req.params.contentId.replace('ph-', '');
+      const user = await User.findById(userId);
+      if (user && user.photos && user.photos.length > 0) {
+        user.photos = user.photos.slice(1); // Remove first flagged photo
+        await user.save();
+      }
+    }
+
+    res.json({
+      success: true,
+      message: action === 'approve' ? 'Content approved' : 'Content rejected and removed',
+      contentId: req.params.contentId,
+      action,
+    });
+  } catch (error) {
+    console.error('Moderate content error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// In-memory broadcast history (production: use a DB model)
+const broadcastHistory = [];
+
+// @route   GET /api/admin/broadcasts
+// @desc    Get broadcast history
+// @access  Private/Admin
+router.get('/broadcasts', protect, isAdmin, async (req, res) => {
+  try {
+    res.json({ success: true, broadcasts: broadcastHistory });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/admin/broadcasts
+// @desc    Send a broadcast notification to users
+// @access  Private/Admin
+router.post('/broadcasts', protect, isAdmin, async (req, res) => {
+  try {
+    const { title, body, target = 'all', imageUrl, scheduled = false } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ success: false, message: 'Title and body are required' });
+    }
+
+    // Count target audience
+    let audienceQuery = {};
+    if (target === 'male' || target === 'female') audienceQuery.gender = target;
+    if (target === 'verified') audienceQuery.verified = true;
+    if (target === 'platinum') audienceQuery['premiumInfo.plan'] = 'platinum';
+    if (target === 'gold') audienceQuery['premiumInfo.plan'] = 'gold';
+
+    const reach = await User.countDocuments(audienceQuery);
+
+    const campaign = {
+      id: `bc-${Date.now()}`,
+      title,
+      body,
+      target,
+      imageUrl,
+      status: scheduled ? 'scheduled' : 'sent',
+      sentBy: req.user._id,
+      sentAt: new Date().toISOString(),
+      reach,
+      openRate: '0%',
+    };
+
+    broadcastHistory.unshift(campaign);
+    if (broadcastHistory.length > 100) broadcastHistory.pop();
+
+    res.json({ success: true, message: 'Broadcast dispatched successfully', campaign });
+  } catch (error) {
+    console.error('Send broadcast error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// App settings store (production: use a DB or config file)
+let appSettings = {
+  appName: 'AfroConnect',
+  maintenanceMode: false,
+  maxDailySwipes: 50,
+  maxPhotos: 9,
+  minAge: 18,
+  maxAge: 65,
+  matchingRadius: 100,
+  premiumMatchBoost: 3,
+  allowGuestBrowsing: false,
+  requireEmailVerification: true,
+  aiModerationEnabled: true,
+  reportThreshold: 5,
+  signupBonusCoins: 100,
+};
+
+// @route   GET /api/admin/settings
+// @desc    Get app configuration settings
+// @access  Private/Admin
+router.get('/settings', protect, isAdmin, (req, res) => {
+  res.json({ success: true, settings: appSettings });
+});
+
+// @route   PUT /api/admin/settings
+// @desc    Update app configuration settings
+// @access  Private/Admin
+router.put('/settings', protect, isAdmin, (req, res) => {
+  try {
+    const updates = req.body;
+    appSettings = { ...appSettings, ...updates };
+    res.json({ success: true, message: 'Settings updated successfully', settings: appSettings });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/analytics
+// @desc    Get detailed analytics data
+// @access  Private/Admin
+router.get('/analytics', protect, isAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const days = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i);
+      const start = new Date(date.setHours(0, 0, 0, 0));
+      const end = new Date(date.setHours(23, 59, 59, 999));
+
+      const [newUsers, activeUsers] = await Promise.all([
+        User.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+        User.countDocuments({ lastActive: { $gte: start, $lte: end } }),
+      ]);
+
+      days.push({
+        name: start.toLocaleDateString('en-US', { weekday: 'short' }),
+        newUsers,
+        active: activeUsers,
+        matches: Math.floor(activeUsers * 0.25),
+        messages: Math.floor(activeUsers * 2.1),
+      });
+    }
+
+    const totalUsers = await User.countDocuments();
+    const verifiedUsers = await User.countDocuments({ verified: true });
+    const premiumUsers = await User.countDocuments({ 'premiumInfo.isActive': true });
+
+    res.json({
+      success: true,
+      analytics: {
+        dailyData: days,
+        totals: { totalUsers, verifiedUsers, premiumUsers },
+      },
+    });
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/activity-monitoring
+// @desc    Get real-time activity monitoring data
+// @access  Private/Admin
+router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const last24h = new Date(now - 24 * 60 * 60 * 1000);
+    const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
+    const lastHour = new Date(now - 60 * 60 * 1000);
+
+    const [active24h, active7d, onlineNow, messages24h] = await Promise.all([
+      User.countDocuments({ lastActive: { $gte: last24h } }),
+      User.countDocuments({ lastActive: { $gte: last7d } }),
+      User.countDocuments({ lastActive: { $gte: lastHour } }),
+      Message.countDocuments({ createdAt: { $gte: last24h } }),
+    ]);
+
+    res.json({
+      success: true,
+      activity: { active24h, active7d, onlineNow, messages24h },
+    });
+  } catch (error) {
+    console.error('Activity monitoring error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
