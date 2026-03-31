@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  StyleSheet, 
-  TextInput, 
-  Pressable, 
-  ScrollView, 
-  Modal, 
-  Alert, 
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  ScrollView,
+  Modal,
+  Alert,
   FlatList,
   ActivityIndicator,
   Switch,
@@ -34,20 +34,19 @@ interface EditProfileScreenProps {
 
 const EDIT_PROFILE_STORAGE_KEY = "afroconnect_edit_profile_draft";
 
-// ... (keep all the OPTIONS arrays from the original file: ZODIAC_OPTIONS, EDUCATION_OPTIONS, etc.)
 const ZODIAC_OPTIONS = [
-  { value: 'aries', label: 'Aries ♈' },
-  { value: 'taurus', label: 'Taurus ♉' },
-  { value: 'gemini', label: 'Gemini ♊' },
-  { value: 'cancer', label: 'Cancer ♋' },
-  { value: 'leo', label: 'Leo ♌' },
-  { value: 'virgo', label: 'Virgo ♍' },
-  { value: 'libra', label: 'Libra ♎' },
-  { value: 'scorpio', label: 'Scorpio ♏' },
-  { value: 'sagittarius', label: 'Sagittarius ♐' },
-  { value: 'capricorn', label: 'Capricorn ♑' },
-  { value: 'aquarius', label: 'Aquarius ♒' },
-  { value: 'pisces', label: 'Pisces ♓' },
+  { value: 'aries', label: 'Aries â™ˆ' },
+  { value: 'taurus', label: 'Taurus â™‰' },
+  { value: 'gemini', label: 'Gemini â™Š' },
+  { value: 'cancer', label: 'Cancer â™‹' },
+  { value: 'leo', label: 'Leo â™Œ' },
+  { value: 'virgo', label: 'Virgo â™' },
+  { value: 'libra', label: 'Libra â™Ž' },
+  { value: 'scorpio', label: 'Scorpio â™' },
+  { value: 'sagittarius', label: 'Sagittarius â™' },
+  { value: 'capricorn', label: 'Capricorn â™‘' },
+  { value: 'aquarius', label: 'Aquarius â™’' },
+  { value: 'pisces', label: 'Pisces â™“' },
 ];
 
 const EDUCATION_OPTIONS = [
@@ -281,7 +280,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       showAlert("Error", "Name is required", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
-
     setSaving(true);
     try {
       await updateProfile({
@@ -315,13 +313,13 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           wantsKids,
         },
         interests,
-        language: user?.language || 'en'
+        language: user?.language || 'en',
       } as any);
 
       await AsyncStorage.removeItem(EDIT_PROFILE_STORAGE_KEY);
       if (fetchUser) await fetchUser();
       Alert.alert("Success", "Profile updated successfully", [
-        { text: "OK", onPress: () => navigation.goBack() }
+        { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (error: any) {
       showAlert("Error", error.message || "Failed to update profile", [{ text: "OK", style: "default" }], "alert-circle");
@@ -338,19 +336,26 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 
   const InterestModal = ({ visible, onClose }: any) => (
     <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={[styles.modalContent, { backgroundColor: theme.surface, height: '70%' }]}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
           <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Select Interests</ThemedText>
-            <Pressable onPress={onClose}>
-              <Feather name="x" size={24} color={theme.text} />
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                {interests.length} selected
+              </ThemedText>
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
             </Pressable>
           </View>
           <FlatList
             data={INTEREST_OPTIONS}
             keyExtractor={(item) => item.id}
             numColumns={2}
-            contentContainerStyle={{ padding: 16 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
             renderItem={({ item }) => {
               const isSelected = interests.includes(item.id);
               return (
@@ -359,78 +364,134 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
                     styles.interestOptionItem,
                     {
                       borderColor: isSelected ? theme.primary : theme.border,
-                      backgroundColor: isSelected ? theme.primary + '15' : 'transparent'
-                    }
+                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                    },
                   ]}
                   onPress={() => toggleInterest(item.id)}
                 >
-                  <Ionicons name={item.icon as any} size={20} color={isSelected ? theme.primary : theme.textSecondary} />
-                  <ThemedText style={[styles.interestOptionLabel, { color: theme.text }, isSelected && { color: theme.primary, fontWeight: '700' }]}>
+                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
+                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
+                  </View>
+                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
                     {item.label}
                   </ThemedText>
-                  {isSelected && <Feather name="check-circle" size={16} color={theme.primary} />}
+                  {isSelected && (
+                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={10} color="#FFF" />
+                    </View>
+                  )}
                 </Pressable>
               );
             }}
           />
-          <View style={[styles.doneButtonWrap, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
+          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
             <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
-              <ThemedText style={styles.doneButtonText}>Done ({interests.length})</ThemedText>
+              <ThemedText style={styles.doneButtonText}>Done  Â·  {interests.length} selected</ThemedText>
             </Pressable>
           </View>
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 
-  const OptionModal = ({ visible, onClose, title, options, selectedValue, onSelect }: any) => (
+  const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => (
     <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={styles.modalOverlay} onPress={onClose}>
-        <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
           <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
-            <Pressable onPress={onClose}>
-              <Feather name="x" size={24} color={theme.text} />
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
+              {subtitle && (
+                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
+              )}
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
             </Pressable>
           </View>
           <FlatList
             data={options}
             keyExtractor={(item: any) => item.value}
-            renderItem={({ item }: any) => (
-              <Pressable
-                style={[styles.optionItem, { borderBottomColor: theme.border }]}
-                onPress={() => { onSelect(item.value); onClose(); }}
-              >
-                <ThemedText style={[styles.optionLabel, { color: theme.text }, selectedValue === item.value && { color: theme.primary, fontWeight: '700' }]}>
-                  {item.label}
-                </ThemedText>
-                {selectedValue === item.value && <Feather name="check" size={20} color={theme.primary} />}
-              </Pressable>
-            )}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            renderItem={({ item }: any) => {
+              const isSelected = selectedValue === item.value;
+              return (
+                <Pressable
+                  style={[
+                    styles.optionItem,
+                    { borderBottomColor: theme.border },
+                    isSelected && { backgroundColor: theme.primary + '0C' },
+                  ]}
+                  onPress={() => { onSelect(item.value); onClose(); }}
+                >
+                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
           />
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 
-  const SelectButton = ({ label, value, options, onPress, icon }: any) => {
+  const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
     const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
+    const hasValue = !!value;
     return (
-      <Pressable style={[styles.selectButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8F9FA', borderColor: theme.border }]} onPress={onPress}>
-        {icon && <Feather name={icon} size={18} color={value ? theme.primary : theme.textSecondary} style={{ marginRight: 10 }} />}
-        <ThemedText style={[styles.selectButtonText, { color: theme.text, flex: 1 }, !value && { color: theme.textSecondary }]}>
+      <Pressable
+        style={[
+          styles.selectButton,
+          {
+            backgroundColor: hasValue
+              ? (accent ? accent + '10' : theme.primary + '0D')
+              : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
+            borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
+          },
+        ]}
+        onPress={onPress}
+      >
+        {icon && (
+          <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+            <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
+          </View>
+        )}
+        <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
           {displayLabel || label}
         </ThemedText>
-        <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+        <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
       </Pressable>
     );
   };
 
-  const InputField = ({ label, value, onChangeText, placeholder, multiline, icon }: any) => (
+  const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => (
     <View style={styles.fieldContainer}>
-      <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
-      <View style={[styles.inputRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8F9FA', borderColor: theme.border }]}>
-        {icon && <Feather name={icon} size={18} color={theme.textSecondary} style={{ marginRight: 10 }} />}
+      <View style={styles.fieldLabelRow}>
+        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+        {value?.length > 0 && (
+          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
+        )}
+      </View>
+      <View style={[
+        styles.inputRow,
+        {
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
+          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
+        },
+      ]}>
+        {icon && (
+          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
+          </View>
+        )}
         <TextInput
           style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
           value={value}
@@ -443,300 +504,395 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     </View>
   );
 
-  const ToggleField = ({ label, value, onValueChange, icon }: any) => (
-    <View style={[styles.toggleRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#F8F9FA' }]}>
+  const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => (
+    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
       <View style={styles.toggleLeft}>
-        {icon && <Feather name={icon} size={18} color={theme.primary} style={{ marginRight: 10 }} />}
-        <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
+        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
+          <Feather name={icon} size={16} color={accent || theme.primary} />
+        </View>
+        <View style={styles.toggleTextGroup}>
+          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
+          {description && (
+            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+          )}
+        </View>
       </View>
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ false: theme.border, true: theme.primary + '80' }}
-        thumbColor={value ? theme.primary : theme.textTertiary}
+        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
+        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
       />
     </View>
   );
 
+  const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => (
+    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
+      <LinearGradient
+        colors={[color + '25', color + '10']}
+        style={styles.sectionIconWrap}
+      >
+        <Feather name={icon} size={17} color={color} />
+      </LinearGradient>
+      <View style={styles.sectionHeaderText}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
+        {description && (
+          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+        )}
+      </View>
+    </View>
+  );
+
+  const filledFields = [
+    name, bio, jobTitle, livingIn, zodiacSign, education, lookingFor,
+    songTitle, smoking, drinking, workout, religion, ethnicity, pets,
+    relationshipStatus, communicationStyle, loveStyle, gender, height,
+  ].filter(Boolean).length + (interests.length > 0 ? 1 : 0);
+  const totalFields = 20;
+  const completionPct = Math.round((filledFields / totalFields) * 100);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* PREMIUM HEADER */}
+      {/* HEADER */}
       <LinearGradient
-        colors={[theme.primary + '15', theme.primary + '05', 'transparent']}
-        style={[styles.header, { paddingTop: insets.top + 12 }]}
+        colors={isDark
+          ? [theme.primary + '22', theme.primary + '08', 'transparent']
+          : [theme.primary + '18', theme.primary + '06', 'transparent']}
+        style={[styles.header, { paddingTop: insets.top + 10 }]}
       >
-        <Pressable onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Feather name="arrow-left" size={24} color={theme.text} />
+        <Pressable onPress={() => navigation.goBack()} style={[styles.headerIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
+          <Feather name="arrow-left" size={20} color={theme.text} />
         </Pressable>
+
         <View style={styles.headerCenter}>
           <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Edit Profile</ThemedText>
-          <ThemedText style={[styles.headerSubtitle, { color: theme.textSecondary }]}>
-            Make your profile stand out
+          <ThemedText style={[styles.headerTagline, { color: theme.primary }]}>
+            {completionPct}% complete
           </ThemedText>
         </View>
-        <Pressable onPress={handleSave} disabled={saving} style={[styles.saveBtn, { backgroundColor: theme.primary }]}>
+
+        <Pressable
+          onPress={handleSave}
+          disabled={saving}
+          style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
+        >
           {saving ? (
             <ActivityIndicator size="small" color="#FFF" />
           ) : (
             <>
-              <Feather name="check" size={16} color="#FFF" />
+              <Feather name="check" size={15} color="#FFF" />
               <ThemedText style={styles.saveBtnText}>Save</ThemedText>
             </>
           )}
         </Pressable>
       </LinearGradient>
 
-      <ScreenKeyboardAwareScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + 30 }}>
-        {/* PHOTO SECTION */}
+      {/* COMPLETION BAR */}
+      <View style={[styles.completionBarWrap, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
+        <View style={[styles.completionBarTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF' }]}>
+          <LinearGradient
+            colors={[theme.primary, theme.primary + 'BB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={[styles.completionBarFill, { width: `${completionPct}%` as any }]}
+          />
+        </View>
+        <ThemedText style={[styles.completionBarLabel, { color: theme.textSecondary }]}>
+          {totalFields - filledFields > 0 ? `${totalFields - filledFields} fields left to fill` : 'Profile complete!'}
+        </ThemedText>
+      </View>
+
+      <ScreenKeyboardAwareScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* PHOTO CARD */}
         <Pressable
-          style={[styles.photoSection, { backgroundColor: theme.surface, borderColor: theme.border }]}
+          style={[styles.photoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
           onPress={() => navigation.navigate('ChangeProfilePicture')}
         >
           <LinearGradient
-            colors={[theme.primary + '15', theme.primary + '05']}
-            style={styles.photoGradient}
+            colors={[theme.primary + '18', theme.primary + '06']}
+            style={styles.photoCardGradient}
           >
-            <View style={[styles.photoWrap, { borderColor: theme.primary + '30' }]}>
-              {user?.photos?.[0] ? (
-                <SafeImage
-                  source={typeof user.photos[0] === 'string' ? user.photos[0] : user.photos[0].url}
-                  style={styles.photoImage}
-                />
-              ) : (
-                <View style={[styles.photoPlaceholder, { backgroundColor: theme.primary + '10' }]}>
-                  <Ionicons name="camera" size={40} color={theme.primary} />
+            <View style={styles.photoCardLeft}>
+              <View style={[styles.photoAvatarRing, { borderColor: theme.primary + '50' }]}>
+                {user?.photos?.[0] ? (
+                  <SafeImage
+                    source={typeof user.photos[0] === 'string' ? user.photos[0] : user.photos[0].url}
+                    style={styles.photoImage}
+                  />
+                ) : (
+                  <View style={[styles.photoPlaceholder, { backgroundColor: theme.primary + '15' }]}>
+                    <Ionicons name="camera" size={32} color={theme.primary} />
+                  </View>
+                )}
+                <View style={[styles.photoEditBadge, { backgroundColor: theme.primary, borderColor: theme.surface }]}>
+                  <Feather name="camera" size={11} color="#FFF" />
                 </View>
-              )}
-              <View style={[styles.editBadge, { backgroundColor: theme.primary }]}>
-                <Feather name="edit-2" size={14} color="#FFF" />
               </View>
             </View>
-            <View style={styles.photoInfo}>
-              <ThemedText style={[styles.photoTitle, { color: theme.text }]}>Profile Photos</ThemedText>
-              <ThemedText style={[styles.photoSubtitle, { color: theme.textSecondary }]}>
-                Add up to 6 photos
+            <View style={styles.photoCardBody}>
+              <ThemedText style={[styles.photoCardTitle, { color: theme.text }]}>
+                {user?.name || 'Your Photos'}
               </ThemedText>
+              <ThemedText style={[styles.photoCardSub, { color: theme.textSecondary }]}>
+                {user?.photos?.length
+                  ? `${user.photos.length} photo${user.photos.length !== 1 ? 's' : ''} Â· Tap to edit`
+                  : 'Add up to 6 photos'}
+              </ThemedText>
+              <View style={styles.photoDotsRow}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.photoDot,
+                      {
+                        backgroundColor: i < (user?.photos?.length || 0)
+                          ? theme.primary
+                          : isDark ? 'rgba(255,255,255,0.15)' : '#DDD',
+                        width: i < (user?.photos?.length || 0) ? 16 : 8,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
             </View>
+            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
           </LinearGradient>
-          <Feather name="chevron-right" size={20} color={theme.textSecondary} />
         </Pressable>
 
-        {/* SECTIONS */}
-        <View style={styles.sectionsContainer}>
-          {/* Basic Info */}
+        <View style={styles.content}>
+
+          {/* BASIC INFO */}
           <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: theme.primary + '15' }]}>
-                <Feather name="user" size={16} color={theme.primary} />
+            <SectionHeader icon="user" label="Basic Info" color={theme.primary} description="How others see you" />
+            <View style={styles.sectionBody}>
+              <InputField label="Full Name *" value={name} onChangeText={setName} placeholder="Your name" icon="user" />
+              <InputField label="Username" value={username} onChangeText={setUsername} placeholder="@username" icon="at-sign" />
+              <InputField label="Bio" value={bio} onChangeText={setBio} placeholder="Tell others about yourself..." multiline icon="edit-3" />
+              <View style={styles.row2}>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Gender</ThemedText>
+                  <SelectButton label="Gender" value={gender} options={GENDER_OPTIONS} onPress={() => setActiveModal('gender')} icon="users" />
+                </View>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Height</ThemedText>
+                  <SelectButton label="Height" value={height} options={HEIGHT_OPTIONS} onPress={() => setActiveModal('height')} icon="trending-up" />
+                </View>
               </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Basic Info</ThemedText>
-            </View>
-
-            <InputField label="Full Name *" value={name} onChangeText={setName} placeholder="Your name" icon="user" />
-            <InputField label="Username" value={username} onChangeText={setUsername} placeholder="@username" icon="at-sign" />
-            <InputField label="Bio" value={bio} onChangeText={setBio} placeholder="Tell others about yourself..." multiline icon="edit-3" />
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Gender</ThemedText>
-              <SelectButton label="Select gender" value={gender} options={GENDER_OPTIONS} onPress={() => setActiveModal('gender')} icon="users" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Height</ThemedText>
-              <SelectButton label="Select height" value={height} options={HEIGHT_OPTIONS} onPress={() => setActiveModal('height')} icon="trending-up" />
             </View>
           </View>
 
-          {/* Interests */}
+          {/* INTERESTS */}
           <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#FF6B9D15' }]}>
-                <Feather name="heart" size={16} color="#FF6B9D" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Interests</ThemedText>
+            <SectionHeader icon="heart" label="Interests" color="#FF6B9D" description="What makes you, you" />
+            <View style={styles.sectionBody}>
+              <Pressable
+                style={[styles.interestsTrigger, { borderColor: interests.length > 0 ? '#FF6B9D40' : theme.border, backgroundColor: interests.length > 0 ? '#FF6B9D08' : isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA' }]}
+                onPress={() => setInterestsModalVisible(true)}
+              >
+                <View style={[styles.selectIconWrap, { backgroundColor: interests.length > 0 ? '#FF6B9D20' : theme.border + '50' }]}>
+                  <Feather name="plus-circle" size={15} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
+                </View>
+                <ThemedText style={[styles.selectButtonText, { color: interests.length > 0 ? theme.text : theme.textSecondary, flex: 1 }]}>
+                  {interests.length > 0 ? `${interests.length} interests selected` : 'Choose your interests'}
+                </ThemedText>
+                <Feather name="chevron-right" size={16} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
+              </Pressable>
+
               {interests.length > 0 && (
-                <View style={[styles.badge, { backgroundColor: theme.primary }]}>
-                  <ThemedText style={styles.badgeText}>{interests.length}</ThemedText>
+                <View style={styles.interestsGrid}>
+                  {interests.map((interest) => {
+                    const opt = INTEREST_OPTIONS.find(o => o.id === interest);
+                    return (
+                      <View key={interest} style={[styles.interestChip, { backgroundColor: '#FF6B9D12', borderColor: '#FF6B9D30' }]}>
+                        {opt && <Ionicons name={opt.icon as any} size={12} color="#FF6B9D" />}
+                        <ThemedText style={[styles.interestChipText, { color: theme.text }]}>{opt?.label || interest}</ThemedText>
+                        <Pressable onPress={() => toggleInterest(interest)} hitSlop={8}>
+                          <Feather name="x" size={11} color={theme.textSecondary} />
+                        </Pressable>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </View>
+          </View>
 
-            <Pressable
-              style={[styles.addButton, { borderColor: theme.primary, backgroundColor: theme.primary + '10' }]}
-              onPress={() => setInterestsModalVisible(true)}
-            >
-              <Feather name="plus" size={18} color={theme.primary} />
-              <ThemedText style={[styles.addButtonText, { color: theme.primary }]}>
-                {interests.length > 0 ? `Edit ${interests.length} interests` : 'Add interests'}
-              </ThemedText>
-            </Pressable>
-
-            {interests.length > 0 && (
-              <View style={styles.interestsGrid}>
-                {interests.map((interest) => {
-                  const opt = INTEREST_OPTIONS.find(o => o.id === interest);
-                  return (
-                    <View key={interest} style={[styles.interestTag, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '30' }]}>
-                      {opt && <Ionicons name={opt.icon as any} size={13} color={theme.primary} />}
-                      <ThemedText style={[styles.interestTagText, { color: theme.text }]}>
-                        {opt?.label || interest}
-                      </ThemedText>
-                      <Pressable onPress={() => toggleInterest(interest)} hitSlop={8}>
-                        <Feather name="x" size={12} color={theme.textSecondary} />
-                      </Pressable>
-                    </View>
-                  );
-                })}
+          {/* DATING PREFERENCES */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="target" label="Dating Preferences" color="#8B5CF6" description="What you're looking for" />
+            <View style={styles.sectionBody}>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Looking For</ThemedText>
+                <SelectButton label="What are you seeking?" value={lookingFor} options={LOOKING_FOR_OPTIONS} onPress={() => setActiveModal('lookingFor')} icon="search" accent="#8B5CF6" />
               </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Relationship Goal</ThemedText>
+                <SelectButton label="Your goal" value={relationshipGoal} options={RELATIONSHIP_GOAL_OPTIONS} onPress={() => setActiveModal('relationshipGoal')} icon="heart" accent="#8B5CF6" />
+              </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Relationship Status</ThemedText>
+                <SelectButton label="Current status" value={relationshipStatus} options={RELATIONSHIP_STATUS_OPTIONS} onPress={() => setActiveModal('relationshipStatus')} icon="info" accent="#8B5CF6" />
+              </View>
+            </View>
+          </View>
+
+          {/* PERSONALITY */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="zap" label="Personality" color="#F59E0B" description="Your inner world" />
+            <View style={styles.sectionBody}>
+              <InputField label="Personality Type" value={personalityType} onChangeText={setPersonalityType} placeholder="e.g. ENFP, Creative, Empath..." icon="star" accent="#F59E0B" />
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Communication Style</ThemedText>
+                <SelectButton label="How you communicate" value={communicationStyle} options={COMMUNICATION_STYLE_OPTIONS} onPress={() => setActiveModal('communicationStyle')} icon="message-circle" accent="#F59E0B" />
+              </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Love Language</ThemedText>
+                <SelectButton label="How you express love" value={loveStyle} options={LOVE_STYLE_OPTIONS} onPress={() => setActiveModal('loveStyle')} icon="heart" accent="#F59E0B" />
+              </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Zodiac Sign</ThemedText>
+                <SelectButton label="Your star sign" value={zodiacSign} options={ZODIAC_OPTIONS} onPress={() => setActiveModal('zodiac')} icon="star" accent="#F59E0B" />
+              </View>
+            </View>
+          </View>
+
+          {/* LIFESTYLE */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="coffee" label="Lifestyle" color="#10B981" description="Your day-to-day life" />
+            <View style={styles.sectionBody}>
+              <View style={styles.row2}>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Smoking</ThemedText>
+                  <SelectButton label="Habits" value={smoking} options={SMOKING_OPTIONS} onPress={() => setActiveModal('smoking')} icon="wind" accent="#10B981" />
+                </View>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Drinking</ThemedText>
+                  <SelectButton label="Habits" value={drinking} options={DRINKING_OPTIONS} onPress={() => setActiveModal('drinking')} icon="coffee" accent="#10B981" />
+                </View>
+              </View>
+              <View style={styles.row2}>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Workout</ThemedText>
+                  <SelectButton label="Frequency" value={workout} options={WORKOUT_OPTIONS} onPress={() => setActiveModal('workout')} icon="activity" accent="#10B981" />
+                </View>
+                <View style={styles.halfField}>
+                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
+                  <SelectButton label="Pets?" value={pets} options={PETS_OPTIONS} onPress={() => setActiveModal('pets')} icon="heart" accent="#10B981" />
+                </View>
+              </View>
+              <View style={[styles.toggleCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA', borderColor: theme.border }]}>
+                <ToggleField
+                  label="Has Kids"
+                  description="I currently have children"
+                  value={hasKids}
+                  onValueChange={setHasKids}
+                  icon="users"
+                  accent="#10B981"
+                />
+                <View style={[styles.toggleDivider, { backgroundColor: theme.border }]} />
+                <ToggleField
+                  label="Wants Kids"
+                  description="Open to having children"
+                  value={wantsKids}
+                  onValueChange={setWantsKids}
+                  icon="smile"
+                  accent="#10B981"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* BACKGROUND */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="globe" label="Background" color="#0EA5E9" description="Your roots and beliefs" />
+            <View style={styles.sectionBody}>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
+                <SelectButton label="Your ethnicity" value={ethnicity} options={ETHNICITY_OPTIONS} onPress={() => setActiveModal('ethnicity')} icon="globe" accent="#0EA5E9" />
+              </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Religion</ThemedText>
+                <SelectButton label="Your beliefs" value={religion} options={RELIGION_OPTIONS} onPress={() => setActiveModal('religion')} icon="sun" accent="#0EA5E9" />
+              </View>
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Education</ThemedText>
+                <SelectButton label="Education level" value={education} options={EDUCATION_OPTIONS} onPress={() => setActiveModal('education')} icon="book" accent="#0EA5E9" />
+              </View>
+            </View>
+          </View>
+
+          {/* WORK & LOCATION */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="briefcase" label="Work & Location" color="#EF4444" description="Where you are and what you do" />
+            <View style={styles.sectionBody}>
+              <InputField label="Job Title" value={jobTitle} onChangeText={setJobTitle} placeholder="What you do" icon="briefcase" accent="#EF4444" />
+              <InputField label="Location" value={livingIn} onChangeText={setLivingIn} placeholder="City, Country" icon="map-pin" accent="#EF4444" />
+            </View>
+          </View>
+
+          {/* SOUNDTRACK */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="music" label="Soundtrack" color="#9333EA" description="Your current anthem" />
+            <View style={styles.sectionBody}>
+              <View style={[styles.songCard, { backgroundColor: isDark ? 'rgba(147,51,234,0.08)' : '#9333EA0A', borderColor: '#9333EA25' }]}>
+                <View style={styles.songCardIcon}>
+                  <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.songIconGradient}>
+                    <Feather name="music" size={20} color="#FFF" />
+                  </LinearGradient>
+                  <View style={styles.songMusicBars}>
+                    {[1, 2, 3].map((i) => (
+                      <View key={i} style={[styles.songBar, { backgroundColor: '#9333EA', height: i === 2 ? 14 : 9 }]} />
+                    ))}
+                  </View>
+                </View>
+                <View style={styles.songCardFields}>
+                  <TextInput
+                    style={[styles.songInput, { color: theme.text, borderBottomColor: theme.border }]}
+                    value={songTitle}
+                    onChangeText={setSongTitle}
+                    placeholder="Song title"
+                    placeholderTextColor={theme.textSecondary}
+                  />
+                  <TextInput
+                    style={[styles.songInput, { color: theme.textSecondary, borderBottomColor: 'transparent', fontSize: 13 }]}
+                    value={songArtist}
+                    onChangeText={setSongArtist}
+                    placeholder="Artist name"
+                    placeholderTextColor={theme.textSecondary + '90'}
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* BOTTOM SAVE BUTTON */}
+          <Pressable
+            style={[styles.bottomSaveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <>
+                <Feather name="check-circle" size={20} color="#FFF" />
+                <ThemedText style={styles.bottomSaveBtnText}>Save Profile</ThemedText>
+              </>
             )}
-          </View>
+          </Pressable>
 
-          {/* Dating Preferences */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#8b5cf615' }]}>
-                <Feather name="target" size={16} color="#8b5cf6" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Dating Preferences</ThemedText>
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Looking For</ThemedText>
-              <SelectButton label="What are you seeking?" value={lookingFor} options={LOOKING_FOR_OPTIONS} onPress={() => setActiveModal('lookingFor')} icon="search" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Relationship Goal</ThemedText>
-              <SelectButton label="Your goal" value={relationshipGoal} options={RELATIONSHIP_GOAL_OPTIONS} onPress={() => setActiveModal('relationshipGoal')} icon="heart" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Relationship Status</ThemedText>
-              <SelectButton label="Current status" value={relationshipStatus} options={RELATIONSHIP_STATUS_OPTIONS} onPress={() => setActiveModal('relationshipStatus')} icon="info" />
-            </View>
-          </View>
-
-          {/* Personality & Style */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#F2994A15' }]}>
-                <Feather name="zap" size={16} color="#F2994A" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Personality</ThemedText>
-            </View>
-
-            <InputField label="Personality Type" value={personalityType} onChangeText={setPersonalityType} placeholder="e.g. ENFP, Creative..." icon="star" />
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Communication Style</ThemedText>
-              <SelectButton label="How you communicate" value={communicationStyle} options={COMMUNICATION_STYLE_OPTIONS} onPress={() => setActiveModal('communicationStyle')} icon="message-circle" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Love Language</ThemedText>
-              <SelectButton label="How you express love" value={loveStyle} options={LOVE_STYLE_OPTIONS} onPress={() => setActiveModal('loveStyle')} icon="heart" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Zodiac Sign</ThemedText>
-              <SelectButton label="Your star sign" value={zodiacSign} options={ZODIAC_OPTIONS} onPress={() => setActiveModal('zodiac')} icon="star" />
-            </View>
-          </View>
-
-          {/* Lifestyle */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#4ade8015' }]}>
-                <Feather name="coffee" size={16} color="#4ade80" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Lifestyle</ThemedText>
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Smoking</ThemedText>
-              <SelectButton label="Smoking habits" value={smoking} options={SMOKING_OPTIONS} onPress={() => setActiveModal('smoking')} icon="wind" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Drinking</ThemedText>
-              <SelectButton label="Drinking habits" value={drinking} options={DRINKING_OPTIONS} onPress={() => setActiveModal('drinking')} icon="coffee" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Workout</ThemedText>
-              <SelectButton label="Exercise frequency" value={workout} options={WORKOUT_OPTIONS} onPress={() => setActiveModal('workout')} icon="activity" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
-              <SelectButton label="Do you have pets?" value={pets} options={PETS_OPTIONS} onPress={() => setActiveModal('pets')} icon="heart" />
-            </View>
-
-            <View style={styles.toggleContainer}>
-              <ToggleField label="Has Kids" value={hasKids} onValueChange={setHasKids} icon="users" />
-              <View style={[styles.divider, { backgroundColor: theme.border }]} />
-              <ToggleField label="Wants Kids" value={wantsKids} onValueChange={setWantsKids} icon="smile" />
-            </View>
-          </View>
-
-          {/* Background */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#00B2FF15' }]}>
-                <Feather name="globe" size={16} color="#00B2FF" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Background</ThemedText>
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
-              <SelectButton label="Your ethnicity" value={ethnicity} options={ETHNICITY_OPTIONS} onPress={() => setActiveModal('ethnicity')} icon="globe" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Religion</ThemedText>
-              <SelectButton label="Your beliefs" value={religion} options={RELIGION_OPTIONS} onPress={() => setActiveModal('religion')} icon="sun" />
-            </View>
-
-            <View style={styles.fieldContainer}>
-              <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Education</ThemedText>
-              <SelectButton label="Education level" value={education} options={EDUCATION_OPTIONS} onPress={() => setActiveModal('education')} icon="book" />
-            </View>
-          </View>
-
-          {/* Work & Location */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#FF6B6B15' }]}>
-                <Feather name="briefcase" size={16} color="#FF6B6B" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Work & Location</ThemedText>
-            </View>
-
-            <InputField label="Job Title" value={jobTitle} onChangeText={setJobTitle} placeholder="What you do" icon="briefcase" />
-            <InputField label="Location" value={livingIn} onChangeText={setLivingIn} placeholder="City, Country" icon="map-pin" />
-          </View>
-
-          {/* Favorite Song */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <View style={styles.sectionTitleRow}>
-              <View style={[styles.sectionIconWrap, { backgroundColor: '#9B59B615' }]}>
-                <Feather name="music" size={16} color="#9B59B6" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Favorite Song</ThemedText>
-            </View>
-
-            <InputField label="Song Title" value={songTitle} onChangeText={setSongTitle} placeholder="Your anthem" icon="music" />
-            <InputField label="Artist" value={songArtist} onChangeText={setSongArtist} placeholder="Artist name" icon="mic" />
-          </View>
         </View>
       </ScreenKeyboardAwareScrollView>
 
       {/* MODALS */}
       <OptionModal visible={activeModal === 'gender'} onClose={() => setActiveModal(null)} title="Gender" options={GENDER_OPTIONS} selectedValue={gender} onSelect={setGender} />
       <OptionModal visible={activeModal === 'height'} onClose={() => setActiveModal(null)} title="Height" options={HEIGHT_OPTIONS} selectedValue={height} onSelect={setHeight} />
-      <OptionModal visible={activeModal === 'lookingFor'} onClose={() => setActiveModal(null)} title="Looking For" options={LOOKING_FOR_OPTIONS} selectedValue={lookingFor} onSelect={setLookingFor} />
-      <OptionModal visible={activeModal === 'relationshipGoal'} onClose={() => setActiveModal(null)} title="Relationship Goal" options={RELATIONSHIP_GOAL_OPTIONS} selectedValue={relationshipGoal} onSelect={setRelationshipGoal} />
+      <OptionModal visible={activeModal === 'lookingFor'} onClose={() => setActiveModal(null)} title="Looking For" subtitle="What are you here for?" options={LOOKING_FOR_OPTIONS} selectedValue={lookingFor} onSelect={setLookingFor} />
+      <OptionModal visible={activeModal === 'relationshipGoal'} onClose={() => setActiveModal(null)} title="Relationship Goal" subtitle="Your vision for the future" options={RELATIONSHIP_GOAL_OPTIONS} selectedValue={relationshipGoal} onSelect={setRelationshipGoal} />
       <OptionModal visible={activeModal === 'relationshipStatus'} onClose={() => setActiveModal(null)} title="Relationship Status" options={RELATIONSHIP_STATUS_OPTIONS} selectedValue={relationshipStatus} onSelect={setRelationshipStatus} />
       <OptionModal visible={activeModal === 'smoking'} onClose={() => setActiveModal(null)} title="Smoking" options={SMOKING_OPTIONS} selectedValue={smoking} onSelect={setSmoking} />
       <OptionModal visible={activeModal === 'drinking'} onClose={() => setActiveModal(null)} title="Drinking" options={DRINKING_OPTIONS} selectedValue={drinking} onSelect={setDrinking} />
@@ -747,7 +903,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'ethnicity'} onClose={() => setActiveModal(null)} title="Ethnicity" options={ETHNICITY_OPTIONS} selectedValue={ethnicity} onSelect={setEthnicity} />
       <OptionModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
-      <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Style" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
+      <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
       <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
       <AlertComponent />
     </View>
@@ -762,63 +918,90 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 14,
     gap: 12,
   },
-  headerBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  headerSubtitle: {
+  headerTagline: {
     fontSize: 12,
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 1,
   },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 22,
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
   },
   saveBtnText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
 
-  scrollView: { flex: 1 },
+  // COMPLETION BAR
+  completionBarWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 6,
+  },
+  completionBarTrack: {
+    height: 4,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  completionBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  completionBarLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
 
-  // PHOTO SECTION
-  photoSection: {
-    margin: 16,
-    borderRadius: 20,
+  scrollView: { flex: 1 },
+  content: { paddingHorizontal: 14, paddingTop: 14, gap: 14 },
+
+  // PHOTO CARD
+  photoCard: {
+    marginHorizontal: 14,
+    marginTop: 14,
+    borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
   },
-  photoGradient: {
+  photoCardGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-    gap: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 14,
   },
-  photoWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    overflow: 'hidden',
+  photoCardLeft: {},
+  photoAvatarRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2,
+    overflow: 'hidden',
     position: 'relative',
   },
   photoImage: { width: '100%', height: '100%' },
@@ -827,190 +1010,313 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editBadge: {
+  photoEditBadge: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    bottom: 1,
+    right: 1,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFF',
   },
-  photoInfo: { flex: 1 },
-  photoTitle: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
-  photoSubtitle: { fontSize: 13 },
+  photoCardBody: { flex: 1 },
+  photoCardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 2 },
+  photoCardSub: { fontSize: 12, marginBottom: 8 },
+  photoDotsRow: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  photoDot: { height: 4, borderRadius: 2 },
 
-  // SECTIONS
-  sectionsContainer: { paddingHorizontal: 16, gap: 16 },
+  // SECTION
   section: {
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 18,
+    overflow: 'hidden',
     borderWidth: 1,
   },
-  sectionTitleRow: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    gap: 12,
   },
   sectionIconWrap: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    flex: 1,
-  },
-  badge: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  badgeText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  sectionHeaderText: { flex: 1 },
+  sectionTitle: { fontSize: 15, fontWeight: '700' },
+  sectionDescription: { fontSize: 12, marginTop: 1 },
+  sectionBody: { padding: 16, gap: 0 },
 
   // FIELDS
-  fieldContainer: { marginBottom: 16 },
+  fieldContainer: { marginBottom: 14 },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 7,
+    gap: 6,
+  },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
+  },
+  fieldFilledDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    minHeight: 52,
+    paddingHorizontal: 12,
+    minHeight: 50,
+    gap: 10,
   },
-  textInput: { flex: 1, fontSize: 15, paddingVertical: 14 },
-  multilineInput: { minHeight: 100, textAlignVertical: 'top' },
+  textInput: { flex: 1, fontSize: 15, paddingVertical: 12 },
+  multilineInput: { minHeight: 90, textAlignVertical: 'top' },
+
   selectButton: {
-    height: 52,
-    borderRadius: 14,
+    height: 50,
+    borderRadius: 12,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
+    gap: 10,
   },
-  selectButtonText: { fontSize: 15 },
+  selectIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectButtonText: { fontSize: 14, flex: 1 },
+
+  // ROW LAYOUT
+  row2: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  halfField: { flex: 1 },
+
+  // INTERESTS
+  interestsTrigger: {
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 10,
+    marginBottom: 12,
+  },
+  interestsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  interestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 5,
+  },
+  interestChipText: { fontSize: 12, fontWeight: '500' },
 
   // TOGGLE
-  toggleContainer: {
-    borderRadius: 14,
-    overflow: 'hidden',
+  toggleCard: {
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+    marginTop: 4,
   },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 13,
   },
   toggleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    gap: 12,
   },
-  toggleLabel: { fontSize: 15, fontWeight: '500' },
-  divider: { height: 1 },
-
-  // INTERESTS
-  addButton: {
-    flexDirection: 'row',
+  toggleIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
+  },
+  toggleTextGroup: { flex: 1 },
+  toggleLabel: { fontSize: 14, fontWeight: '600' },
+  toggleDescription: { fontSize: 12, marginTop: 1 },
+  toggleDivider: { height: 1, marginHorizontal: 14 },
+
+  // SONG CARD
+  songCard: {
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    marginBottom: 16,
-  },
-  addButtonText: { fontSize: 14, fontWeight: '600' },
-  interestsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  interestTag: {
+    borderWidth: 1,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+    gap: 14,
+  },
+  songCardIcon: {
+    alignItems: 'center',
     gap: 6,
   },
-  interestTagText: { fontSize: 13, fontWeight: '500' },
+  songIconGradient: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  songMusicBars: {
+    flexDirection: 'row',
+    gap: 3,
+    alignItems: 'flex-end',
+  },
+  songBar: {
+    width: 3,
+    borderRadius: 2,
+  },
+  songCardFields: { flex: 1 },
+  songInput: {
+    fontSize: 15,
+    fontWeight: '600',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    marginBottom: 4,
+  },
 
   // MODALS
-  modalOverlay: {
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: '80%',
+  modalSheet: {
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    maxHeight: '82%',
+  },
+  modalDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 2,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  modalTitle: { fontSize: 18, fontWeight: '700' },
+  modalTitle: { fontSize: 17, fontWeight: '700' },
+  modalSubtitle: { fontSize: 12, marginTop: 2 },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+  },
+  doneButton: {
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  doneButtonText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
 
   interestOptionItem: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 6,
-    padding: 14,
-    borderRadius: 14,
+    margin: 5,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1.5,
     gap: 8,
+    position: 'relative',
   },
-  interestOptionLabel: { flex: 1, fontSize: 14 },
-
-  doneButtonWrap: {
-    padding: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  doneButton: {
-    height: 52,
-    borderRadius: 26,
+  interestIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  doneButtonText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
+  interestOptionLabel: { flex: 1, fontSize: 13 },
+  interestCheckBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   optionItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderBottomWidth: 1,
   },
   optionLabel: { fontSize: 16 },
+  optionCheckCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // BOTTOM SAVE
+  bottomSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 54,
+    borderRadius: 27,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  bottomSaveBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
 });
