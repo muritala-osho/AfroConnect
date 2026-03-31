@@ -317,11 +317,15 @@ export default function ProfileDetailScreen() {
   }
 
   const quickInfoPills = [];
-  if (user.location?.city || user.location?.address) {
-    const city = user.location.city || user.location.address || '';
-    const country = user.location.country || '';
-    const locationText = country ? `${city}, ${country}` : city;
-    quickInfoPills.push({ icon: 'location-outline', text: locationText, color: theme.primary });
+  if (user.location?.city || user.location?.address || user.livingIn) {
+    const city = user.location?.city || user.location?.address || '';
+    const country = user.location?.country || '';
+    const locationText = city
+      ? (country ? `${city}, ${country}` : city)
+      : (user.livingIn || '');
+    if (locationText) {
+      quickInfoPills.push({ icon: 'location-outline', text: locationText, color: theme.primary });
+    }
   }
   if (user.gender) {
     quickInfoPills.push({ icon: 'person-outline', text: user.gender, color: '#9B59B6' });
@@ -414,11 +418,13 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               )}
             </View>
-            {(user.location?.city || user.location?.address) && (
+            {(user.location?.city || user.location?.address || user.livingIn) && (
               <View style={styles.locationRow}>
                 <Ionicons name="location-outline" size={14} color="rgba(255,255,255,0.9)" />
                 <ThemedText style={styles.locationText}>
-                  {user.location.city || user.location.address}{user.location.country ? `, ${user.location.country}` : ''}
+                  {user.location?.city || user.location?.address
+                    ? `${user.location.city || user.location.address}${user.location.country ? `, ${user.location.country}` : ''}`
+                    : user.livingIn}
                 </ThemedText>
               </View>
             )}

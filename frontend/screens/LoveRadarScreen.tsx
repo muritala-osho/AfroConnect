@@ -103,6 +103,10 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
     );
   }, []);
 
+  useEffect(() => {
+    handleRefreshLocation();
+  }, []);
+
   const scannerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
@@ -168,6 +172,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
       if (status !== 'granted') {
         showAlert(t('locationRequired'), t('enableLocationAccess'), [{ text: t('ok') }], 'map-pin');
         setLocationLoading(false);
+        setLoading(false);
         return;
       }
 

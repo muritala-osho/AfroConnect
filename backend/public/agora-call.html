@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agora Call Bridge</title>
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
+  <style>
+    body { margin: 0; background: #000; overflow: hidden; }
+    #local-video { width: 100vw; height: 100vh; object-fit: cover; }
+    #remote-video { width: 100vw; height: 100vh; object-fit: cover; position: absolute; top: 0; left: 0; }
+  </style>
+</head>
+<body>
+  <div id="local-video"></div>
+  <div id="remote-video"></div>
+
+<script>
+  var client = null;
+  var localAudioTrack = null;
+  var localVideoTrack = null;
+  var joined = false;
+  var callType = 'voice';
+
+  function postToNative(data) {
+    try {
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(data));
+      }
+    } catch (e) {}
+  }
+
+  async function joinChannel(appId, channel, token, uid, type) {
+    try {
+      callType = type || 'voice';
+      client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+
+      client.on('user-published', async function(user, mediaType) {
+        await client.subscribe(user, mediaType);
+        if (mediaType === 'audio') {
+          user.audioTrack && user.audioTrack.play();
+        }
+        if (mediaType === 'video' && callType === 'video') {
+          user.videoTrack && user.videoTrack.play('remote-video');
+          postToNative({ type: 'remoteVideoStart', uid: user.uid });
+        }
+        postToNative({ type: 'remoteJoined', uid: user.uid });
+      });
+
+      client.on('user-unpublished', function(user, mediaType) {
+        if (mediaType === 'video') {
+          postToNative({ type: 'remoteVideoStop', uid: user.uid });
+        }
+      });
+
+      client.on('user-left', function(user) {
+        postToNative({ type: 'remoteLeft', uid: user.uid });
+      });
+
+      client.on('connection-state-change', function(curState) {
+        postToNative({ type: 'connectionState', state: curState });
+      });
+
+      await client.join(appId, channel, token || null, uid || 0);
+      joined = true;
+
+      if (callType === 'video') {
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+        localVideoTrack.play('local-video');
+        await client.publish([localAudioTrack, localVideoTrack]);
+      } else {
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        await client.publish([localAudioTrack]);
+      }
+
+      postToNative({ type: 'joined', uid: client.uid });
+    } catch (e) {
+      postToNative({ type: 'error', message: e.message || 'Failed to join channel' });
+    }
+  }
+
+  async function leaveChannel() {
+    try {
+      if (localAudioTrack) { localAudioTrack.close(); localAudioTrack = null; }
+      if (localVideoTrack) { localVideoTrack.close(); localVideoTrack = null; }
+      if (client && joined) { await client.leave(); }
+      joined = false;
+      postToNative({ type: 'left' });
+    } catch (e) {
+      postToNative({ type: 'error', message: e.message || 'Failed to leave channel' });
+    }
+  }
+
+  function handleMessage(event) {
+    try {
+      var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (!data || !data.action) return;
+
+      switch (data.action) {
+        case 'join':
+          joinChannel(data.appId, data.channel, data.token, data.uid, data.callType);
+          break;
+        case 'leave':
+          leaveChannel();
+          break;
+        case 'mute':
+          if (localAudioTrack) {
+            data.muted ? localAudioTrack.setMuted(true) : localAudioTrack.setMuted(false);
+          }
+          break;
+        case 'camera':
+          if (localVideoTrack) {
+            data.off ? localVideoTrack.setMuted(true) : localVideoTrack.setMuted(false);
+          }
+          break;
+        case 'speaker':
+          break;
+        default:
+          break;
+      }
+    } catch (e) {
+      postToNative({ type: 'error', message: 'Message parse error: ' + e.message });
+    }
+  }
+
+  window.addEventListener('message', handleMessage);
+  document.addEventListener('message', handleMessage);
+</script>
+</body>
+</html>

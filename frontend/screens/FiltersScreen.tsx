@@ -115,7 +115,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* HEADER */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
         <Pressable
           style={[styles.iconButton, { backgroundColor: "rgba(255,255,255,0.08)" }]}
           onPress={() => navigation.goBack()}
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingTop: 0,
     paddingBottom: 16,
   },
   headerTitle: {

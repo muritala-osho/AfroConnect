@@ -198,6 +198,7 @@ export default function VideoCallScreen() {
     });
 
     socketService.onCallEnded((data) => {
+      stopRingtone();
       setCallStatus('ended');
       if (durationInterval.current) {
         clearInterval(durationInterval.current);

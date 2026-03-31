@@ -53,6 +53,7 @@ export default function VoiceCallScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const ringtoneRef = useRef<Audio.Sound | null>(null);
+  const shouldRingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
   const webViewRef = useRef<WebView | null>(null);
@@ -60,11 +61,13 @@ export default function VoiceCallScreen() {
   const activeCallDataRef = useRef<any>(incomingCallData || null);
 
   const stopRingtoneSound = useCallback(async () => {
+    shouldRingRef.current = false;
     try {
       if (ringtoneRef.current) {
-        await ringtoneRef.current.stopAsync();
-        await ringtoneRef.current.unloadAsync();
+        const s = ringtoneRef.current;
         ringtoneRef.current = null;
+        await s.stopAsync();
+        await s.unloadAsync();
       }
       Vibration.cancel();
     } catch (err) {
@@ -73,14 +76,23 @@ export default function VoiceCallScreen() {
   }, []);
 
   const playRingtone = useCallback(async () => {
+    shouldRingRef.current = true;
     try {
-      await stopRingtoneSound();
+      if (ringtoneRef.current) {
+        const old = ringtoneRef.current;
+        ringtoneRef.current = null;
+        await old.stopAsync().catch(() => {});
+        await old.unloadAsync().catch(() => {});
+      }
+      Vibration.cancel();
+      if (!shouldRingRef.current) return;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldRouteThroughEarpieceAndroid: false,
       });
+      if (!shouldRingRef.current) return;
       const source = isIncoming
         ? require("../assets/sounds/mixkit-waiting-ringtone-1354.wav")
         : require("../assets/sounds/phone-calling-1b.mp3");
@@ -89,13 +101,17 @@ export default function VoiceCallScreen() {
         isLooping: true,
         volume: 1.0,
       });
+      if (!shouldRingRef.current) {
+        await sound.unloadAsync().catch(() => {});
+        return;
+      }
       ringtoneRef.current = sound;
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
       console.error("Ringtone play error:", err);
-      if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
+      if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
-  }, [isIncoming, stopRingtoneSound]);
+  }, [isIncoming]);
 
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
