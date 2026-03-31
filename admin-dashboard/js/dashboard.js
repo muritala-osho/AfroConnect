@@ -1,4 +1,24 @@
 const API_BASE = window.location.origin;
+
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') ? url : null;
+  } catch {
+    return null;
+  }
+}
 let authToken = localStorage.getItem('admin_token') || '';
 let currentAdmin = null;
 
