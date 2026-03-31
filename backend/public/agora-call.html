@@ -6,14 +6,31 @@
   <title>Agora Call Bridge</title>
   <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body { margin: 0; background: #000; overflow: hidden; }
-    #local-video { width: 100vw; height: 100vh; object-fit: cover; }
-    #remote-video { width: 100vw; height: 100vh; object-fit: cover; position: absolute; top: 0; left: 0; }
+    #local-video {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 120px;
+      height: 160px;
+      z-index: 10;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #remote-video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
   </style>
 </head>
 <body>
-  <div id="local-video"></div>
   <div id="remote-video"></div>
+  <div id="local-video"></div>
 
 <script>
   var client = null;
@@ -21,6 +38,7 @@
   var localVideoTrack = null;
   var joined = false;
   var callType = 'voice';
+  var currentFacingMode = 'user';
 
   function postToNative(data) {
     try {
@@ -39,22 +57,22 @@
         await client.subscribe(user, mediaType);
         if (mediaType === 'audio') {
           user.audioTrack && user.audioTrack.play();
+          postToNative({ type: 'remote-user-joined', uid: user.uid });
         }
         if (mediaType === 'video' && callType === 'video') {
           user.videoTrack && user.videoTrack.play('remote-video');
-          postToNative({ type: 'remoteVideoStart', uid: user.uid });
+          postToNative({ type: 'remote-video-started', uid: user.uid });
         }
-        postToNative({ type: 'remoteJoined', uid: user.uid });
       });
 
       client.on('user-unpublished', function(user, mediaType) {
         if (mediaType === 'video') {
-          postToNative({ type: 'remoteVideoStop', uid: user.uid });
+          postToNative({ type: 'remote-video-stopped', uid: user.uid });
         }
       });
 
       client.on('user-left', function(user) {
-        postToNative({ type: 'remoteLeft', uid: user.uid });
+        postToNative({ type: 'remote-user-left', uid: user.uid });
       });
 
       client.on('connection-state-change', function(curState) {
@@ -65,12 +83,25 @@
       joined = true;
 
       if (callType === 'video') {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: 'speech_standard',
+          AEC: true,
+          ANS: true,
+          AGC: true,
+        });
+        localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+          facingMode: currentFacingMode,
+          encoderConfig: '480p_1',
+        });
         localVideoTrack.play('local-video');
         await client.publish([localAudioTrack, localVideoTrack]);
       } else {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          encoderConfig: 'speech_standard',
+          AEC: true,
+          ANS: true,
+          AGC: true,
+        });
         await client.publish([localAudioTrack]);
       }
 
@@ -82,13 +113,41 @@
 
   async function leaveChannel() {
     try {
-      if (localAudioTrack) { localAudioTrack.close(); localAudioTrack = null; }
-      if (localVideoTrack) { localVideoTrack.close(); localVideoTrack = null; }
+      if (localAudioTrack) { localAudioTrack.stop(); localAudioTrack.close(); localAudioTrack = null; }
+      if (localVideoTrack) { localVideoTrack.stop(); localVideoTrack.close(); localVideoTrack = null; }
       if (client && joined) { await client.leave(); }
       joined = false;
       postToNative({ type: 'left' });
     } catch (e) {
       postToNative({ type: 'error', message: e.message || 'Failed to leave channel' });
+    }
+  }
+
+  async function switchCamera() {
+    if (!localVideoTrack || callType !== 'video') return;
+    try {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      var track = localVideoTrack.getMediaStreamTrack();
+      if (track) {
+        await track.applyConstraints({ facingMode: currentFacingMode });
+        postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
+        return;
+      }
+    } catch (constraintErr) {}
+    try {
+      localVideoTrack.stop();
+      localVideoTrack.close();
+      localVideoTrack = null;
+      await client.unpublish();
+      localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+        facingMode: currentFacingMode,
+        encoderConfig: '480p_1',
+      });
+      localVideoTrack.play('local-video');
+      await client.publish([localAudioTrack, localVideoTrack]);
+      postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
+    } catch (e) {
+      postToNative({ type: 'error', message: 'Camera switch failed: ' + e.message });
     }
   }
 
@@ -106,13 +165,16 @@
           break;
         case 'mute':
           if (localAudioTrack) {
-            data.muted ? localAudioTrack.setMuted(true) : localAudioTrack.setMuted(false);
+            localAudioTrack.setMuted(data.muted === true);
           }
           break;
         case 'camera':
           if (localVideoTrack) {
-            data.off ? localVideoTrack.setMuted(true) : localVideoTrack.setMuted(false);
+            localVideoTrack.setMuted(data.off === true);
           }
+          break;
+        case 'switch-camera':
+          switchCamera();
           break;
         case 'speaker':
           break;

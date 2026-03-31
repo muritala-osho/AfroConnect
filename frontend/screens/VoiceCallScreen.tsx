@@ -90,7 +90,7 @@ export default function VoiceCallScreen() {
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        shouldRouteThroughEarpieceAndroid: false,
+        playThroughEarpieceAndroid: false,
       });
       if (!shouldRingRef.current) return;
       const source = isIncoming
@@ -228,7 +228,7 @@ export default function VoiceCallScreen() {
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        shouldRouteThroughEarpieceAndroid: !next,
+        playThroughEarpieceAndroid: !next,
       });
     } catch (e) {
       console.log("Speaker toggle error:", e);
@@ -371,6 +371,12 @@ export default function VoiceCallScreen() {
       default: return "";
     }
   };
+
+  useEffect(() => {
+    if (webviewReady && callStatus === 'connected' && activeCallDataRef.current && !agoraJoined.current) {
+      joinAgoraVoice(activeCallDataRef.current);
+    }
+  }, [webviewReady]);
 
   const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
 

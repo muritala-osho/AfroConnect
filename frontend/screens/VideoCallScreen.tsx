@@ -268,61 +268,68 @@ export default function VideoCallScreen() {
     }
   }, []);
 
+  const pendingJoinRef = useRef<CallData | null>(null);
+
+  const doJoinAgora = useCallback(async (data: CallData) => {
+    let joinToken = data.token;
+    let joinUid = data.uid || 0;
+    if (isIncoming && authToken) {
+      try {
+        const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: data.channelName, uid: 0, role: 'publisher' }, authToken);
+        if (res.success && res.data?.token) {
+          joinToken = res.data.token;
+          joinUid = 0;
+        }
+      } catch (e) {
+        console.log('Failed to get receiver token, using shared token');
+      }
+    }
+
+    if (Platform.OS === 'web') {
+      if (agoraService.isSupported()) {
+        agoraService.setRemoteUserHandlers(
+          (user) => {
+            setRemoteUserJoined(true);
+            if (user.videoTrack && remoteVideoRef.current) {
+              user.videoTrack.play(remoteVideoRef.current);
+            }
+          },
+          () => { setRemoteUserJoined(false); }
+        );
+        const { videoTrack } = await agoraService.joinVideoCall(data.appId, data.channelName, joinToken, joinUid);
+        if (videoTrack && localVideoRef.current) {
+          videoTrack.play(localVideoRef.current);
+        }
+      }
+    } else {
+      sendToWebView({
+        action: 'join',
+        appId: data.appId,
+        channel: data.channelName,
+        token: joinToken,
+        uid: joinUid,
+        callType: 'video',
+      });
+    }
+  }, [isIncoming, authToken, get, sendToWebView]);
+
   useEffect(() => {
     if (callStatus === 'connected' && callData && !agoraJoined.current) {
       agoraJoined.current = true;
-      const joinAgora = async () => {
-        let joinToken = callData.token;
-        let joinUid = callData.uid || 0;
-        if (isIncoming && authToken) {
-          try {
-            const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: callData.channelName, uid: 0, role: 'publisher' }, authToken);
-            if (res.success && res.data?.token) {
-              joinToken = res.data.token;
-              joinUid = 0;
-            }
-          } catch (e) {
-            console.log('Failed to get receiver token, using shared token');
-          }
-        }
-
-        if (Platform.OS === 'web') {
-          if (agoraService.isSupported()) {
-            agoraService.setRemoteUserHandlers(
-              (user) => {
-                setRemoteUserJoined(true);
-                if (user.videoTrack && remoteVideoRef.current) {
-                  user.videoTrack.play(remoteVideoRef.current);
-                }
-              },
-              () => {
-                setRemoteUserJoined(false);
-              }
-            );
-            const { videoTrack } = await agoraService.joinVideoCall(
-              callData.appId,
-              callData.channelName,
-              joinToken,
-              joinUid
-            );
-            if (videoTrack && localVideoRef.current) {
-              videoTrack.play(localVideoRef.current);
-            }
-          }
-        } else {
-          sendToWebView({
-            action: 'join',
-            appId: callData.appId,
-            channel: callData.channelName,
-            token: joinToken,
-            uid: joinUid,
-            callType: 'video'
-          });
-        }
-      };
-      joinAgora();
+      if (Platform.OS === 'web' || webviewReady) {
+        doJoinAgora(callData);
+      } else {
+        pendingJoinRef.current = callData;
+      }
     }
   }, [callStatus, callData, webviewReady]);
+
+  useEffect(() => {
+    if (webviewReady && pendingJoinRef.current) {
+      doJoinAgora(pendingJoinRef.current);
+      pendingJoinRef.current = null;
+    }
+  }, [webviewReady]);
 
   useEffect(() => {
     if (agoraJoined.current) {
@@ -438,7 +445,7 @@ export default function VideoCallScreen() {
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        shouldRouteThroughEarpieceAndroid: !next,
+        playThroughEarpieceAndroid: !next,
       });
     } catch (e) {
       console.log('Speaker toggle error:', e);
@@ -476,9 +483,9 @@ export default function VideoCallScreen() {
   const handleWebViewMessage = useCallback((event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'remote-user-joined') {
+      if (data.type === 'remote-user-joined' || data.type === 'remote-video-started') {
         setRemoteUserJoined(true);
-      } else if (data.type === 'remote-user-left') {
+      } else if (data.type === 'remote-user-left' || data.type === 'remote-video-stopped') {
         setRemoteUserJoined(false);
       } else if (data.type === 'joined') {
         console.log('WebView Agora joined:', data.uid);
@@ -491,13 +498,18 @@ export default function VideoCallScreen() {
   const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const renderNativeCallView = () => {
-    if (callStatus === 'connected' && agoraJoined.current) {
-      return (
-        <View style={styles.remoteVideo}>
+    return (
+      <>
+        <SafeImage
+          source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
+          style={styles.remoteVideo}
+          contentFit="cover"
+        />
+        {callStatus === 'connected' && (
           <WebView
             ref={webViewRef}
             source={{ uri: agoraCallUrl }}
-            style={{ flex: 1, backgroundColor: '#000' }}
+            style={StyleSheet.absoluteFillObject}
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
             mediaCapturePermissionGrantType="grant"
@@ -506,41 +518,10 @@ export default function VideoCallScreen() {
             onMessage={handleWebViewMessage}
             onLoad={() => {
               setWebviewReady(true);
-              if (callData && agoraJoined.current) {
-                const getTokenAndJoin = async () => {
-                  let joinToken = callData.token;
-                  let joinUid = callData.uid || 0;
-                  if (isIncoming && authToken) {
-                    try {
-                      const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: callData.channelName, uid: 0, role: 'publisher' }, authToken);
-                      if (res.success && res.data?.token) {
-                        joinToken = res.data.token;
-                        joinUid = 0;
-                      }
-                    } catch (e) {}
-                  }
-                  sendToWebView({
-                    action: 'join',
-                    appId: callData.appId,
-                    channel: callData.channelName,
-                    token: joinToken,
-                    uid: joinUid,
-                    callType: 'video'
-                  });
-                };
-                getTokenAndJoin();
-              }
             }}
           />
-        </View>
-      );
-    }
-    return (
-      <SafeImage
-        source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
-        style={styles.remoteVideo}
-        contentFit="cover"
-      />
+        )}
+      </>
     );
   };
 
@@ -607,13 +588,16 @@ export default function VideoCallScreen() {
         onPress={() => setShowControls(!showControls)}
       />
 
-      <Animated.View style={[
-        styles.topBar,
-        {
-          paddingTop: insets.top + 16,
-          opacity: showControls ? 1 : 0,
-        }
-      ]}>
+      <Animated.View
+        pointerEvents={showControls ? 'auto' : 'none'}
+        style={[
+          styles.topBar,
+          {
+            paddingTop: insets.top + 16,
+            opacity: showControls ? 1 : 0,
+          }
+        ]}
+      >
         <View style={styles.headerGlass}>
           <View style={styles.callInfo}>
             <ThemedText style={styles.userName}>{userName || 'Unknown'}</ThemedText>
@@ -631,8 +615,8 @@ export default function VideoCallScreen() {
         </View>
       </Animated.View>
 
-      {!(Platform.OS !== 'web' && callStatus === 'connected') && (
-        <View style={[styles.selfVideoContainer, { top: insets.top + 90 }]}>
+      {(Platform.OS === 'web' || callStatus !== 'connected') && callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'failed' && (
+        <View style={[styles.selfVideoContainer, { top: insets.top + 100 }]}>
           {renderLocalVideo()}
           <Pressable style={styles.flipButton} onPress={flipCamera}>
             <Ionicons name="camera-reverse" size={16} color="#FFF" />
@@ -694,63 +678,83 @@ export default function VideoCallScreen() {
           </Pressable>
         </View>
       ) : (
-        <Animated.View style={[
-          styles.controls,
-          {
-            paddingBottom: insets.bottom + 30,
-            opacity: showControls ? 1 : 0,
-          }
-        ]}>
-          <View style={styles.glassControlsRow}>
-            <Pressable
-              style={[styles.controlButton, isCameraOff && styles.controlButtonActive]}
-              onPress={toggleCamera}
-            >
-              <Ionicons
-                name={isCameraOff ? "videocam-off" : "videocam"}
-                size={24}
-                color={isCameraOff ? "#000" : "#FFF"}
-              />
-            </Pressable>
+        <Animated.View
+          pointerEvents={showControls ? 'auto' : 'none'}
+          style={[
+            styles.controls,
+            {
+              paddingBottom: insets.bottom + 30,
+              opacity: showControls ? 1 : 0,
+            }
+          ]}
+        >
+          <View style={styles.glassControlsContainer}>
+            <View style={styles.glassControlsRow}>
+              <View style={styles.controlItem}>
+                <Pressable
+                  style={[styles.controlButton, isCameraOff && styles.controlButtonActive]}
+                  onPress={toggleCamera}
+                >
+                  <Ionicons
+                    name={isCameraOff ? "videocam-off" : "videocam"}
+                    size={22}
+                    color={isCameraOff ? "#000" : "#FFF"}
+                  />
+                </Pressable>
+                <ThemedText style={styles.controlLabel}>{isCameraOff ? 'Show' : 'Camera'}</ThemedText>
+              </View>
 
-            <Pressable
-              style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-              onPress={toggleMute}
-            >
-              <Ionicons
-                name={isMuted ? "mic-off" : "mic"}
-                size={24}
-                color={isMuted ? "#000" : "#FFF"}
-              />
-            </Pressable>
+              <View style={styles.controlItem}>
+                <Pressable
+                  style={[styles.controlButton, isMuted && styles.controlButtonActive]}
+                  onPress={toggleMute}
+                >
+                  <Ionicons
+                    name={isMuted ? "mic-off" : "mic"}
+                    size={22}
+                    color={isMuted ? "#000" : "#FFF"}
+                  />
+                </Pressable>
+                <ThemedText style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
+              </View>
 
-            <Pressable
-              style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-              onPress={toggleSpeaker}
-            >
-              <Ionicons
-                name={isSpeakerOn ? "volume-high" : "ear"}
-                size={24}
-                color={isSpeakerOn ? "#000" : "#FFF"}
-              />
-            </Pressable>
+              <View style={styles.controlItem}>
+                <Pressable
+                  style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
+                  onPress={toggleSpeaker}
+                >
+                  <Ionicons
+                    name={isSpeakerOn ? "volume-high" : "ear"}
+                    size={22}
+                    color={isSpeakerOn ? "#000" : "#FFF"}
+                  />
+                </Pressable>
+                <ThemedText style={styles.controlLabel}>{isSpeakerOn ? 'Earpiece' : 'Speaker'}</ThemedText>
+              </View>
+
+              <View style={styles.controlItem}>
+                <Pressable style={styles.controlButton} onPress={flipCamera}>
+                  <Ionicons name="camera-reverse" size={22} color="#FFF" />
+                </Pressable>
+                <ThemedText style={styles.controlLabel}>Flip</ThemedText>
+              </View>
+
+              <View style={styles.controlItem}>
+                <Pressable style={styles.controlButton} onPress={() => {
+                  handleEndCall(true);
+                  navigation.goBack();
+                  setTimeout(() => {
+                    (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
+                  }, 100);
+                }}>
+                  <MaterialCommunityIcons name="message-text" size={22} color="#FFF" />
+                </Pressable>
+                <ThemedText style={styles.controlLabel}>Message</ThemedText>
+              </View>
+            </View>
 
             <Pressable style={styles.endCallButton} onPress={handleEndCall}>
               <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-            </Pressable>
-
-            <Pressable style={styles.controlButton} onPress={flipCamera}>
-              <Ionicons name="camera-reverse" size={24} color="#FFF" />
-            </Pressable>
-
-            <Pressable style={styles.controlButton} onPress={() => {
-              handleEndCall(true);
-              navigation.goBack();
-              setTimeout(() => {
-                (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
-              }, 100);
-            }}>
-              <MaterialCommunityIcons name="message-text" size={24} color="#FFF" />
             </Pressable>
           </View>
         </Animated.View>
@@ -981,27 +985,45 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 20,
   },
-  glassControlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  glassControlsContainer: {
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(20, 20, 20, 0.75)',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 40,
+    gap: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: 'rgba(15, 15, 15, 0.82)',
+    borderRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.1)',
+    marginHorizontal: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.4,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 12,
+  },
+  glassControlsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    gap: 8,
+  },
+  controlItem: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+  },
+  controlLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.65)',
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   controlButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1010,17 +1032,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
   },
   endCallButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     backgroundColor: '#FF3B30',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 6,
     shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-shadowRadius: 8,
-elevation: 6,
-},
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+  },
 });
