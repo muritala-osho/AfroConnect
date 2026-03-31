@@ -79,10 +79,15 @@ async function delPattern(pattern) {
   try {
     const c = getClient();
     if (!c) return;
-    const keys = await c.keys(pattern);
-    if (keys.length > 0) {
-      await c.del(...keys);
-    }
+    let cursor = '0';
+    const batchSize = 100;
+    do {
+      const [nextCursor, keys] = await c.scan(cursor, 'MATCH', pattern, 'COUNT', batchSize);
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        await c.del(...keys);
+      }
+    } while (cursor !== '0');
   } catch {}
 }
 

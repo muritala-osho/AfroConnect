@@ -48,6 +48,9 @@ const successStoriesRoutes = require('./routes/successStories');
 const subscriptionRoutes = require('./routes/subscription');
 const commentsRoutes = require('./routes/comments');
 
+const compression = require('compression');
+const helmet = require('helmet');
+
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
@@ -135,14 +138,25 @@ const corsOptions = {
 // Trust proxy for Replit environment
 app.set('trust proxy', 1);
 
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: false,
+}));
+
+// Gzip compression for all responses
+app.use(compression());
+
 // Middleware - CORS first
 app.use(cors(corsOptions));
 
-// Logging middleware
-app.use((req, res, next) => {
-  console.log(`[BACKEND] ${req.method} ${req.url}`);
-  next();
-});
+// Lightweight request logging (only in development to avoid performance hit)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`[BACKEND] ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 app.use('/admin-web', express.static(path.join(__dirname, '..', 'admin-dashboard'), { index: 'index.html' }));
 app.get('/admin-web', (req, res) => {
@@ -153,8 +167,9 @@ app.get('/admin-web', (req, res) => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting - selective application
-const { authLimiter } = require('./middleware/rateLimiter');
+// Rate limiting
+const { authLimiter, apiLimiter, uploadLimiter, messageLimiter } = require('./middleware/rateLimiter');
+app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
 app.use('/api/auth/verify-otp', authLimiter);
@@ -165,7 +180,12 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
   // If it's a postgres URL but we are in a mongo app, we might need a mock or the user to provide Mongo
   // For now, let's just allow it to attempt connection if it's mongo, otherwise log warning
   if (connectionString.startsWith('mongodb')) {
-    mongoose.connect(connectionString)
+    mongoose.connect(connectionString, {
+      maxPoolSize: 100,
+      minPoolSize: 10,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    })
       .then(async () => {
         console.log('✅ MongoDB Connected');
         try {
@@ -219,13 +239,22 @@ const logRoutes = () => {
   }
 };
 
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: Date.now(),
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/match', matchRoutes);
 app.use('/api/friends', friendRoutes);
-app.use('/api/chat', chatRoutes);
+app.use('/api/chat', messageLimiter, chatRoutes);
 app.use('/api/call', callRoutes);
-app.use('/api/upload', uploadRoutes);
+app.use('/api/upload', uploadLimiter, uploadRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
