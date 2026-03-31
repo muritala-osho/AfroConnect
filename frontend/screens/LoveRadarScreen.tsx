@@ -23,6 +23,7 @@ import Svg, { Circle, Defs, RadialGradient, Stop, Path } from "react-native-svg"
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,6 +62,7 @@ interface LoveRadarScreenProps {
 
 export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const { token, updateProfile } = useAuth();
   const { t } = useTranslation();
   const { showAlert, AlertComponent } = useThemedAlert();
@@ -241,19 +243,20 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#0a0a0a' : theme.background }]}>
-      <ScreenScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScreenScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 0 }}>
         {/* HEADER */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <TouchableOpacity
-              style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
-              onPress={() => navigation.goBack()}
-            >
-              <Feather name="arrow-left" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+          <TouchableOpacity
+            style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.10)' }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </TouchableOpacity>
 
-          <ThemedText style={styles.pageTitle}>Love Radar</ThemedText>
+          <View style={styles.headerCenter}>
+            <ThemedText style={styles.pageTitle}>Love Radar</ThemedText>
+            <ThemedText style={styles.pageSubtitle}>Discover people near you</ThemedText>
+          </View>
 
           <View style={styles.headerRight} />
         </View>
@@ -518,14 +521,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: 16,
+    paddingBottom: 20,
+    gap: 12,
   },
-  headerLeft: {
-    width: 44,
-    alignItems: 'flex-start',
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerRight: {
     width: 44,
@@ -538,12 +540,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pageTitle: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 20,
+    fontWeight: "700",
     color: '#fff',
-    letterSpacing: 0.5,
-    flex: 1,
-    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  pageSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
   statsRow: {
     flexDirection: "row",
