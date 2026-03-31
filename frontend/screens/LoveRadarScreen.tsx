@@ -36,7 +36,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 
 const { width, height } = Dimensions.get("window");
-const RADAR_SIZE = Math.min(width - 80, 280);
+const RADAR_SIZE = Math.min(width - 60, 320);
 const CENTER = RADAR_SIZE / 2;
 
 interface NearbyUser {
@@ -244,121 +244,176 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: isDark ? '#0a0a0a' : theme.background }]}>
       <ScreenScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 0 }}>
-        {/* HEADER */}
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        {/* PREMIUM HEADER */}
+        <LinearGradient
+          colors={['rgba(139,92,246,0.15)', 'rgba(139,92,246,0.05)', 'transparent']}
+          style={[styles.headerGradient, { paddingTop: insets.top + 16 }]}
+        >
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Feather name="arrow-left" size={22} color="#fff" />
+            </TouchableOpacity>
+
+            <View style={styles.headerTextContainer}>
+              <ThemedText style={styles.pageTitle}>Love Radar</ThemedText>
+              <View style={styles.subtitleRow}>
+                <View style={styles.liveDot} />
+                <ThemedText style={styles.pageSubtitle}>Live nearby</ThemedText>
+              </View>
+            </View>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={[styles.headerIconButton, locationSharingEnabled && styles.headerIconButtonActive]}
+                onPress={toggleLocationSharing}
+              >
+                <Feather
+                  name={locationSharingEnabled ? "eye" : "eye-off"}
+                  size={18}
+                  color={locationSharingEnabled ? "#8b5cf6" : "rgba(255,255,255,0.5)"}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* STATS CARD */}
+          <View style={styles.statsCard}>
+            <View style={styles.statItem}>
+              <ThemedText style={styles.statValue}>{nearbyUsers.length}</ThemedText>
+              <ThemedText style={styles.statLabel}>Nearby</ThemedText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <ThemedText style={styles.statValue}>{filters.radius}km</ThemedText>
+              <ThemedText style={styles.statLabel}>Radius</ThemedText>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statItem}>
+              <View style={styles.locationStatusRow}>
+                {locationLoading ? (
+                  <ActivityIndicator size="small" color="#4ade80" />
+                ) : (
+                  <>
+                    <View style={[styles.locationDot, { backgroundColor: locationPermission ? '#4ade80' : '#f87171' }]} />
+                    <ThemedText style={styles.statValue}>
+                      {locationPermission ? 'Active' : 'Off'}
+                    </ThemedText>
+                  </>
+                )}
+              </View>
+              <ThemedText style={styles.statLabel}>Location</ThemedText>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* FILTERS SECTION */}
+        <View style={styles.filtersSection}>
           <TouchableOpacity
-            style={[styles.backButton, { backgroundColor: 'rgba(255,255,255,0.10)' }]}
-            onPress={() => navigation.goBack()}
+            style={styles.filterToggle}
+            onPress={() => setShowFilters(!showFilters)}
           >
-            <Feather name="arrow-left" size={22} color="#fff" />
+            <Feather name="sliders" size={18} color="#8b5cf6" />
+            <ThemedText style={styles.filterToggleText}>
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </ThemedText>
+            <Feather
+              name={showFilters ? "chevron-up" : "chevron-down"}
+              size={18}
+              color="rgba(255,255,255,0.5)"
+            />
           </TouchableOpacity>
 
-          <View style={styles.headerCenter}>
-            <ThemedText style={styles.pageTitle}>Love Radar</ThemedText>
-            <ThemedText style={styles.pageSubtitle}>Discover people near you</ThemedText>
-          </View>
-
-          <View style={styles.headerRight} />
-        </View>
-
-        {/* STATS & CONTROLS */}
-        <View style={styles.statsRow}>
-          <View style={styles.statsInfo}>
-            <ThemedText style={styles.statsLabel}>Nearby singles</ThemedText>
-            <ThemedText style={styles.statsCount}>
-              {nearbyUsers.length} {nearbyUsers.length === 1 ? 'person' : 'people'}
-            </ThemedText>
-            <ThemedText style={styles.statsSubtext}>
-              within {filters.radius} km
-            </ThemedText>
-          </View>
-
-          <View style={styles.controlButtons}>
-            <TouchableOpacity
-              style={[styles.controlButton, { backgroundColor: 'rgba(242,153,74,0.15)', borderColor: 'rgba(242,153,74,0.3)' }]}
-              onPress={handleRefreshLocation}
-              disabled={locationLoading}
-            >
-              {locationLoading ? (
-                <ActivityIndicator size="small" color="#F2994A" />
-              ) : (
-                <Feather name="map-pin" size={18} color="#F2994A" />
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.controlButton, { backgroundColor: 'rgba(242,153,74,0.15)', borderColor: 'rgba(242,153,74,0.3)' }]}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <Feather name="sliders" size={18} color="#F2994A" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.controlButton,
-                {
-                  backgroundColor: locationSharingEnabled ? '#8b5cf6' : 'rgba(255,255,255,0.08)',
-                  borderColor: locationSharingEnabled ? 'rgba(139,92,246,0.4)' : 'rgba(255,255,255,0.1)',
-                },
-              ]}
-              onPress={toggleLocationSharing}
-            >
-              <Feather
-                name={locationSharingEnabled ? "eye" : "eye-off"}
-                size={18}
-                color="#fff"
+          {showFilters && (
+            <Animated.View style={styles.filterContent}>
+              <View style={styles.filterRow}>
+                <View style={styles.filterLabel}>
+                  <Feather name="compass" size={16} color="#8b5cf6" />
+                  <ThemedText style={styles.filterLabelText}>Distance</ThemedText>
+                </View>
+                <ThemedText style={styles.filterValue}>{filters.radius}km</ThemedText>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={1}
+                maximumValue={100}
+                value={filters.radius}
+                onValueChange={(v) => setFilters({ ...filters, radius: Math.round(v) })}
+                minimumTrackTintColor="#8b5cf6"
+                maximumTrackTintColor="rgba(255,255,255,0.1)"
+                thumbTintColor="#8b5cf6"
               />
-            </TouchableOpacity>
-          </View>
+
+              <View style={[styles.filterRow, { marginTop: 16 }]}>
+                <View style={styles.filterLabel}>
+                  <Feather name="users" size={16} color="#8b5cf6" />
+                  <ThemedText style={styles.filterLabelText}>Age Range</ThemedText>
+                </View>
+                <ThemedText style={styles.filterValue}>
+                  {filters.ageMin} - {filters.ageMax}
+                </ThemedText>
+              </View>
+
+              <View style={styles.ageSliders}>
+                <View style={styles.ageSliderRow}>
+                  <ThemedText style={styles.ageLabel}>Min: {filters.ageMin}</ThemedText>
+                  <Slider
+                    style={styles.ageSlider}
+                    minimumValue={18}
+                    maximumValue={80}
+                    value={filters.ageMin}
+                    onValueChange={(v) => setFilters({ ...filters, ageMin: Math.round(v) })}
+                    minimumTrackTintColor="#8b5cf6"
+                    maximumTrackTintColor="rgba(255,255,255,0.1)"
+                    thumbTintColor="#8b5cf6"
+                  />
+                </View>
+                <View style={styles.ageSliderRow}>
+                  <ThemedText style={styles.ageLabel}>Max: {filters.ageMax}</ThemedText>
+                  <Slider
+                    style={styles.ageSlider}
+                    minimumValue={18}
+                    maximumValue={80}
+                    value={filters.ageMax}
+                    onValueChange={(v) => setFilters({ ...filters, ageMax: Math.round(v) })}
+                    minimumTrackTintColor="#8b5cf6"
+                    maximumTrackTintColor="rgba(255,255,255,0.1)"
+                    thumbTintColor="#8b5cf6"
+                  />
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.applyFiltersButton}
+                onPress={() => {
+                  setShowFilters(false);
+                  fetchNearbyUsers();
+                }}
+              >
+                <LinearGradient
+                  colors={['#8b5cf6', '#7c3aed']}
+                  style={styles.applyFiltersGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                >
+                  <Feather name="check" size={18} color="#fff" />
+                  <ThemedText style={styles.applyFiltersText}>Apply Filters</ThemedText>
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
         </View>
 
-        {/* FILTERS */}
-        {showFilters && (
-          <View style={[styles.filtersCard, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-            <ThemedText style={styles.filterLabel}>
-              {t('distance')}: {filters.radius}km
-            </ThemedText>
-            <Slider
-              style={styles.slider}
-              minimumValue={1}
-              maximumValue={100}
-              value={filters.radius}
-              onValueChange={(v) => setFilters({ ...filters, radius: Math.round(v) })}
-              minimumTrackTintColor="#8b5cf6"
-              maximumTrackTintColor="rgba(255,255,255,0.1)"
-              thumbTintColor="#8b5cf6"
-            />
-            <TouchableOpacity
-              style={[styles.applyButton, { backgroundColor: '#8b5cf6' }]}
-              onPress={() => {
-                setShowFilters(false);
-                fetchNearbyUsers();
-              }}
-            >
-              <ThemedText style={{ color: '#FFF', fontWeight: '700' }}>
-                {t('applyFilters')}
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* RADAR CARD */}
-        <View style={styles.radarCard}>
-          {/* Animated glow background */}
+        {/* RADAR VISUALIZATION */}
+        <View style={styles.radarSection}>
           <Animated.View style={[styles.radarGlow, glowStyle]}>
-            <View
-              style={{
-                width: RADAR_SIZE + 100,
-                height: RADAR_SIZE + 100,
-                borderRadius: (RADAR_SIZE + 100) / 2,
-                backgroundColor: 'rgba(139,92,246,0.2)',
-              }}
-            />
+            <View style={styles.radarGlowInner} />
           </Animated.View>
 
-          <View style={[styles.radarInner, { backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+          <View style={styles.radarCard}>
             <View style={styles.radarContainer}>
-              {/* SVG Radar */}
               <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
                 <Defs>
                   <RadialGradient id="beamGrad" cx="50%" cy="50%">
@@ -374,9 +429,10 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                     cx={CENTER}
                     cy={CENTER}
                     r={(RADAR_SIZE / 2 - 30) * f}
-                    stroke="rgba(255,255,255,0.06)"
+                    stroke="rgba(139,92,246,0.15)"
                     strokeDasharray="4,4"
                     fill="none"
+                    strokeWidth={1.5}
                   />
                 ))}
 
@@ -393,35 +449,23 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 </Animated.View>
 
                 {/* Center point */}
-                <Circle cx={CENTER} cy={CENTER} r="8" fill="#8b5cf6" />
+                <Circle cx={CENTER} cy={CENTER} r="10" fill="#8b5cf6" opacity={0.8} />
+                <Circle cx={CENTER} cy={CENTER} r="6" fill="#fff" />
               </Svg>
 
               {/* Pulse rings */}
               <Animated.View style={[styles.pulseRing, pulseStyle]}>
-                <View
-                  style={[
-                    styles.ring,
-                    {
-                      borderColor: '#8b5cf6',
-                      width: RADAR_SIZE,
-                      height: RADAR_SIZE,
-                      borderRadius: RADAR_SIZE / 2,
-                    },
-                  ]}
-                />
+                <View style={styles.ring} />
               </Animated.View>
 
               {/* User dots */}
-              {nearbyUsers.map((u, index) => {
+              {nearbyUsers.map((u) => {
                 const pos = getUserDotPosition(u);
                 const gradientColors = getGenderGradient(u.gender);
                 return (
                   <Pressable
                     key={u.id}
-                    style={[
-                      styles.userDot,
-                      { left: pos.x - 22, top: pos.y - 22 },
-                    ]}
+                    style={[styles.userDot, { left: pos.x - 24, top: pos.y - 24 }]}
                     onPress={() => handleUserPress(u.id)}
                   >
                     <LinearGradient
@@ -435,76 +479,121 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                       ) : (
                         <Feather name="user" size={20} color="#fff" />
                       )}
-                      {u.online && (
-                        <View style={styles.onlineIndicator} />
-                      )}
+                      {u.online && <View style={styles.onlineIndicator} />}
                     </LinearGradient>
                   </Pressable>
                 );
               })}
             </View>
 
-            {/* Distance scale */}
-            <View style={styles.distanceScale}>
-              <ThemedText style={styles.scaleText}>0 km</ThemedText>
-              <ThemedText style={styles.scaleText}>{(filters.radius / 2).toFixed(1)} km</ThemedText>
-              <ThemedText style={styles.scaleText}>{filters.radius} km</ThemedText>
+            {/* Distance markers */}
+            <View style={styles.distanceMarkers}>
+              <View style={styles.distanceMarker}>
+                <ThemedText style={styles.distanceText}>0km</ThemedText>
+              </View>
+              <View style={styles.distanceMarker}>
+                <ThemedText style={styles.distanceText}>{(filters.radius / 2).toFixed(0)}km</ThemedText>
+              </View>
+              <View style={styles.distanceMarker}>
+                <ThemedText style={styles.distanceText}>{filters.radius}km</ThemedText>
+              </View>
             </View>
           </View>
+
+          {/* Quick Action */}
+          <TouchableOpacity
+            style={styles.refreshButton}
+            onPress={handleRefreshLocation}
+            disabled={locationLoading}
+          >
+            <LinearGradient
+              colors={['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.1)']}
+              style={styles.refreshGradient}
+            >
+              {locationLoading ? (
+                <ActivityIndicator size="small" color="#8b5cf6" />
+              ) : (
+                <Feather name="refresh-cw" size={18} color="#8b5cf6" />
+              )}
+              <ThemedText style={styles.refreshText}>
+                {locationLoading ? 'Updating...' : 'Refresh Location'}
+              </ThemedText>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
 
-        {/* NEARBY LIST */}
+        {/* NEARBY USERS LIST */}
         <View style={styles.nearbySection}>
-          <ThemedText style={styles.sectionTitle}>People nearby</ThemedText>
+          <View style={styles.nearbySectionHeader}>
+            <ThemedText style={styles.nearbySectionTitle}>People Nearby</ThemedText>
+            {nearbyUsers.length > 0 && (
+              <View style={styles.countBadge}>
+                <ThemedText style={styles.countBadgeText}>{nearbyUsers.length}</ThemedText>
+              </View>
+            )}
+          </View>
 
           {nearbyUsers.length === 0 ? (
             <View style={styles.emptyState}>
-              <Feather name="users" size={48} color="rgba(255,255,255,0.2)" />
-              <ThemedText style={styles.emptyText}>No one nearby yet</ThemedText>
+              <View style={styles.emptyIconContainer}>
+                <Feather name="users" size={48} color="rgba(139,92,246,0.3)" />
+              </View>
+              <ThemedText style={styles.emptyText}>No one nearby</ThemedText>
               <ThemedText style={styles.emptySubtext}>
-                Try adjusting your search radius
+                Try increasing your search radius or refreshing your location
               </ThemedText>
             </View>
           ) : (
-            nearbyUsers.map((u, index) => {
-              const gradientColors = getGenderGradient(u.gender);
-              return (
-                <Pressable
-                  key={u.id}
-                  style={[styles.userCard, { backgroundColor: 'rgba(255,255,255,0.04)' }]}
-                  onPress={() => handleUserPress(u.id)}
-                >
-                  <View style={styles.userCardContent}>
-                    <View style={styles.userAvatar}>
+            <View style={styles.usersList}>
+              {nearbyUsers.map((u) => {
+                const gradientColors = getGenderGradient(u.gender);
+                return (
+                  <Pressable
+                    key={u.id}
+                    style={styles.userCard}
+                    onPress={() => handleUserPress(u.id)}
+                  >
+                    <View style={styles.userCardLeft}>
                       <LinearGradient
                         colors={gradientColors}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 1 }}
-                        style={styles.avatarGradient}
+                        style={styles.userAvatar}
                       >
                         {u.profilePhoto ? (
-                          <Image source={{ uri: u.profilePhoto }} style={styles.avatarImage} />
+                          <Image source={{ uri: u.profilePhoto }} style={styles.userAvatarImage} />
                         ) : (
                           <Feather name="user" size={24} color="#fff" />
                         )}
+                        {u.online && <View style={styles.userOnlineBadge} />}
                       </LinearGradient>
-                      {u.online && <View style={styles.avatarOnline} />}
+
+                      <View style={styles.userInfo}>
+                        <View style={styles.userNameRow}>
+                          <ThemedText style={styles.userName} numberOfLines={1}>
+                            {u.name}
+                          </ThemedText>
+                          <ThemedText style={styles.userAge}>{u.age}</ThemedText>
+                        </View>
+                        <View style={styles.userMetaRow}>
+                          <Feather name="map-pin" size={12} color="rgba(255,255,255,0.5)" />
+                          <ThemedText style={styles.userDistance}>
+                            {u.distance < 1 
+                              ? `${(u.distance * 1000).toFixed(0)}m away`
+                              : `${u.distance.toFixed(1)}km away`
+                            }
+                          </ThemedText>
+                        </View>
+                      </View>
                     </View>
 
-                    <View style={styles.userInfo}>
-                      <ThemedText style={styles.userName}>
-                        {u.name}, {u.age}
-                      </ThemedText>
-                      <ThemedText style={styles.userDistance}>
-                        {u.distance.toFixed(1)} km away
-                      </ThemedText>
+                    <View style={styles.userCardRight}>
+                      <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.3)" />
                     </View>
-                  </View>
-
-                  <Feather name="chevron-right" size={20} color="rgba(255,255,255,0.4)" />
-                </Pressable>
-              );
-            })
+                  </Pressable>
+                );
+              })}
+            </View>
           )}
         </View>
 
@@ -518,19 +607,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+
+  // HEADER
+  headerGradient: {
+    paddingBottom: 20,
+  },
+  headerContent: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 12,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  headerRight: {
-    width: 44,
+    marginBottom: 20,
   },
   backButton: {
     width: 44,
@@ -538,101 +624,210 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  headerTextContainer: {
+    flex: 1,
+    alignItems: "center",
   },
   pageTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  subtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4ade80',
+    marginRight: 6,
+  },
+  pageSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 0.3,
+  },
+  headerActions: {
+    width: 44,
+    alignItems: "flex-end",
+  },
+  headerIconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  headerIconButtonActive: {
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderColor: "rgba(139,92,246,0.3)",
+  },
+
+  // STATS CARD
+  statsCard: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+  },
+  statValue: {
     fontSize: 20,
     fontWeight: "700",
     color: '#fff',
-    letterSpacing: 0.3,
-  },
-  pageSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.45)',
-    marginTop: 2,
-    letterSpacing: 0.2,
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 20,
-  },
-  statsInfo: {
-    flex: 1,
-  },
-  statsLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
     marginBottom: 4,
   },
-  statsCount: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: '#fff',
-    letterSpacing: -0.5,
-    marginBottom: 2,
-  },
-  statsSubtext: {
+  statLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.5)',
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  controlButtons: {
+  statDivider: {
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginHorizontal: 12,
+  },
+  locationStatusRow: {
     flexDirection: "row",
-    gap: 8,
+    alignItems: "center",
+    gap: 6,
   },
-  controlButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  locationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+
+  // FILTERS
+  filtersSection: {
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  filterToggle: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(139,92,246,0.1)",
+    borderRadius: 16,
     borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.2)",
   },
-  filtersCard: {
-    padding: 20,
-    marginHorizontal: 16,
+  filterToggleText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8b5cf6",
+  },
+  filterContent: {
+    marginTop: 16,
+    backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 20,
-    marginBottom: 20,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  filterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
   },
   filterLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  filterLabelText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
+  },
+  filterValue: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#8b5cf6",
   },
   slider: {
     width: '100%',
     height: 40,
-    marginBottom: 10,
   },
-  applyButton: {
-    padding: 14,
-    borderRadius: 12,
-    alignItems: 'center',
+  ageSliders: {
+    marginTop: 8,
+    gap: 12,
   },
-  radarCard: {
-    marginHorizontal: 16,
-    alignItems: 'center',
-    position: 'relative',
-    marginBottom: 24,
+  ageSliderRow: {
+    gap: 8,
+  },
+  ageLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: "500",
+  },
+  ageSlider: {
+    width: '100%',
+    height: 40,
+  },
+  applyFiltersButton: {
+    marginTop: 16,
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  applyFiltersGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+  },
+  applyFiltersText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: '#fff',
+  },
+
+  // RADAR
+  radarSection: {
+    marginTop: 24,
+    alignItems: "center",
+    position: "relative",
   },
   radarGlow: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    top: -50,
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+    top: 0,
+    zIndex: 0,
   },
-  radarInner: {
-    borderRadius: 28,
-    padding: 24,
+  radarGlowInner: {
+    width: RADAR_SIZE + 120,
+    height: RADAR_SIZE + 120,
+    borderRadius: (RADAR_SIZE + 120) / 2,
+    backgroundColor: 'rgba(139,92,246,0.15)',
+  },
+  radarCard: {
+    backgroundColor: "rgba(255,255,255,0.02)",
+    borderRadius: 32,
+    padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    overflow: 'hidden',
-    position: 'relative',
+    borderColor: "rgba(139,92,246,0.2)",
     zIndex: 1,
   },
   radarContainer: {
@@ -648,34 +843,37 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   ring: {
+    width: RADAR_SIZE,
+    height: RADAR_SIZE,
+    borderRadius: RADAR_SIZE / 2,
     borderWidth: 2,
-    position: 'absolute',
+    borderColor: '#8b5cf6',
   },
   userDot: {
     position: "absolute",
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   userDotGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 22,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.3)',
     position: 'relative',
   },
   userDotImage: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
   onlineIndicator: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: -2,
+    right: -2,
     width: 14,
     height: 14,
     borderRadius: 7,
@@ -683,74 +881,130 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#0a0a0a',
   },
-  distanceScale: {
-    marginTop: 20,
+  distanceMarkers: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    marginTop: 16,
+    paddingHorizontal: 8,
   },
-  scaleText: {
+  distanceMarker: {
+    alignItems: 'center',
+  },
+  distanceText: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
+    fontWeight: "500",
   },
+  refreshButton: {
+    marginTop: 16,
+    marginHorizontal: 20,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  refreshGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.2)",
+    borderRadius: 16,
+  },
+  refreshText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#8b5cf6",
+  },
+
+  // NEARBY USERS
   nearbySection: {
+    marginTop: 32,
     paddingHorizontal: 20,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: '#fff',
+  nearbySectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 16,
+  },
+  nearbySectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: '#fff',
+  },
+  countBadge: {
+    backgroundColor: "rgba(139,92,246,0.2)",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  countBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#8b5cf6",
   },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
   },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(139,92,246,0.1)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
   emptyText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 16,
+    fontSize: 17,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
+    marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.3)',
-    marginTop: 4,
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: "center",
+    paddingHorizontal: 40,
+    lineHeight: 20,
+  },
+  usersList: {
+    gap: 12,
   },
   userCard: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 20,
     padding: 14,
-    borderRadius: 18,
-    marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: "rgba(255,255,255,0.08)",
   },
-  userCardContent: {
+  userCardLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
     flex: 1,
+    gap: 14,
   },
   userAvatar: {
-    position: 'relative',
-  },
-  avatarGradient: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.2)',
+    position: "relative",
   },
-  avatarImage: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  userAvatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  avatarOnline: {
+  userOnlineBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
@@ -764,14 +1018,33 @@ const styles = StyleSheet.create({
   userInfo: {
     flex: 1,
   },
+  userNameRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 6,
+    marginBottom: 4,
+  },
   userName: {
-    fontSize: 15,
-    fontWeight: "600",
+    fontSize: 16,
+    fontWeight: "700",
     color: '#fff',
-    marginBottom: 2,
+    flex: 1,
+  },
+  userAge: {
+    fontSize: 15,
+    fontWeight: "500",
+    color: 'rgba(255,255,255,0.7)',
+  },
+  userMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   userDistance: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
+  },
+  userCardRight: {
+    marginLeft: 8,
   },
 });

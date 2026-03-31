@@ -1,14 +1,12 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, ScrollView } from "react-native";
+import { View, StyleSheet, Pressable, ScrollView, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
-import { ScreenScrollView } from "@/components/ScreenScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
-import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
@@ -114,59 +112,80 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* HEADER */}
-      <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+      {/* PREMIUM HEADER */}
+      <LinearGradient
+        colors={[theme.primary + '15', theme.primary + '05', 'transparent']}
+        style={[styles.header, { paddingTop: insets.top + 16 }]}
+      >
         <Pressable
-          style={[styles.iconButton, { backgroundColor: "rgba(255,255,255,0.08)" }]}
+          style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Feather name="arrow-left" size={22} color="#FFFFFF" />
         </Pressable>
 
-        <ThemedText style={styles.headerTitle}>Filters</ThemedText>
+        <View style={styles.headerCenter}>
+          <ThemedText style={styles.headerTitle}>Discover Filters</ThemedText>
+          <ThemedText style={styles.headerSubtitle}>Find your perfect match</ThemedText>
+        </View>
 
         <Pressable style={styles.resetButton} onPress={handleReset}>
-          <ThemedText style={styles.resetText}>Reset</ThemedText>
+          <Feather name="refresh-cw" size={18} color={theme.primary} />
         </Pressable>
-      </View>
+      </LinearGradient>
 
       {/* ACTIVE FILTERS SUMMARY */}
       <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryHeader}>
-            <ThemedText style={styles.summaryEmoji}>🎯</ThemedText>
-            <ThemedText style={styles.summaryLabel}>ACTIVE FILTERS</ThemedText>
+        <LinearGradient
+          colors={[theme.primary + '20', theme.primary + '10']}
+          style={styles.summaryCard}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
+          <View style={styles.summaryRow}>
+            <View style={[styles.summaryIcon, { backgroundColor: theme.primary }]}>
+              <Feather name="sliders" size={16} color="#FFF" />
+            </View>
+            <View style={styles.summaryContent}>
+              <ThemedText style={styles.summaryLabel}>ACTIVE FILTERS</ThemedText>
+              <ThemedText style={styles.summaryText}>
+                {minAge}-{maxAge} years • {distance}km • {getLookingForLabel(lookingFor)}
+              </ThemedText>
+            </View>
           </View>
-          <ThemedText style={styles.summaryText}>
-            Ages {minAge}-{maxAge} • Within {distance}km • {getLookingForLabel(lookingFor)}
-          </ThemedText>
-        </View>
+        </LinearGradient>
       </View>
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* AGE RANGE SECTION */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionEmoji}>👤</ThemedText>
-            <View style={styles.sectionInfo}>
-              <ThemedText style={styles.sectionTitle}>Age Range</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>Set minimum and maximum age</ThemedText>
+        {/* AGE RANGE */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: theme.primary + '15' }]}>
+                <Feather name="user" size={18} color={theme.primary} />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Age Range</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Who you want to meet
+                </ThemedText>
+              </View>
             </View>
-            <View style={styles.ageBadge}>
-              <ThemedText style={styles.ageBadgeText}>
-                {minAge} - {maxAge}
+            <View style={[styles.filterValueBadge, { backgroundColor: theme.primary + '15' }]}>
+              <ThemedText style={[styles.filterValueText, { color: theme.primary }]}>
+                {minAge}-{maxAge}
               </ThemedText>
             </View>
           </View>
 
-          <View style={styles.sliderCard}>
-            <View style={styles.sliderLabelRow}>
-              <ThemedText style={styles.sliderLabel}>MINIMUM</ThemedText>
-              <ThemedText style={styles.sliderValue}>{minAge}</ThemedText>
+          <View style={styles.sliderContainer}>
+            <View style={styles.sliderRow}>
+              <ThemedText style={[styles.sliderLabel, { color: theme.textSecondary }]}>MIN AGE</ThemedText>
+              <ThemedText style={[styles.sliderValue, { color: theme.text }]}>{minAge}</ThemedText>
             </View>
             <Slider
               style={styles.slider}
@@ -178,16 +197,16 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
                 setMinAge(Math.round(v));
                 Haptics.selectionAsync();
               }}
-              minimumTrackTintColor="#4A90E2"
+              minimumTrackTintColor={theme.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
-              thumbTintColor="#4A90E2"
+              thumbTintColor={theme.primary}
             />
           </View>
 
-          <View style={styles.sliderCard}>
-            <View style={styles.sliderLabelRow}>
-              <ThemedText style={styles.sliderLabel}>MAXIMUM</ThemedText>
-              <ThemedText style={styles.sliderValue}>{maxAge}</ThemedText>
+          <View style={styles.sliderContainer}>
+            <View style={styles.sliderRow}>
+              <ThemedText style={[styles.sliderLabel, { color: theme.textSecondary }]}>MAX AGE</ThemedText>
+              <ThemedText style={[styles.sliderValue, { color: theme.text }]}>{maxAge}</ThemedText>
             </View>
             <Slider
               style={styles.slider}
@@ -199,29 +218,35 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
                 setMaxAge(Math.round(v));
                 Haptics.selectionAsync();
               }}
-              minimumTrackTintColor="#4A90E2"
+              minimumTrackTintColor={theme.primary}
               maximumTrackTintColor="rgba(255,255,255,0.1)"
-              thumbTintColor="#4A90E2"
+              thumbTintColor={theme.primary}
             />
           </View>
         </View>
 
-        {/* DISTANCE SECTION */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionEmoji}>📍</ThemedText>
-            <View style={styles.sectionInfo}>
-              <ThemedText style={styles.sectionTitle}>Maximum Distance</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>How far are you willing to travel?</ThemedText>
+        {/* DISTANCE */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#FF6B9D15' }]}>
+                <Feather name="map-pin" size={18} color="#FF6B9D" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Maximum Distance</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  How far you'll go
+                </ThemedText>
+              </View>
             </View>
-            <View style={[styles.ageBadge, { backgroundColor: "rgba(255,107,157,0.15)" }]}>
-              <ThemedText style={[styles.ageBadgeText, { color: "#FF6B9D" }]}>
-                {distance} km
+            <View style={[styles.filterValueBadge, { backgroundColor: '#FF6B9D15' }]}>
+              <ThemedText style={[styles.filterValueText, { color: '#FF6B9D' }]}>
+                {distance}km
               </ThemedText>
             </View>
           </View>
 
-          <View style={styles.sliderCard}>
+          <View style={styles.sliderContainer}>
             <Slider
               style={styles.slider}
               minimumValue={1}
@@ -236,24 +261,87 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               maximumTrackTintColor="rgba(255,255,255,0.1)"
               thumbTintColor="#FF6B9D"
             />
-            <View style={styles.sliderRangeLabels}>
-              <ThemedText style={styles.rangeLabel}>1km</ThemedText>
-              <ThemedText style={styles.rangeLabel}>200km</ThemedText>
+            <View style={styles.sliderRangeRow}>
+              <ThemedText style={[styles.rangeLabel, { color: theme.textSecondary }]}>1km</ThemedText>
+              <ThemedText style={[styles.rangeLabel, { color: theme.textSecondary }]}>200km</ThemedText>
             </View>
           </View>
         </View>
 
-        {/* LOOKING FOR SECTION */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionEmoji}>💕</ThemedText>
-            <View style={styles.sectionInfo}>
-              <ThemedText style={styles.sectionTitle}>Looking For</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>What type of connection?</ThemedText>
+        {/* GENDER PREFERENCE */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#8b5cf615' }]}>
+                <Feather name="users" size={18} color="#8b5cf6" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Show Me</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Gender preference
+                </ThemedText>
+              </View>
             </View>
           </View>
 
-          <View style={styles.pillGrid}>
+          <View style={styles.optionsGrid}>
+            {[
+              { value: "male", label: "Men", icon: "👨" },
+              { value: "female", label: "Women", icon: "👩" },
+              { value: "both", label: "Everyone", icon: "🌈" },
+            ].map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.optionCard,
+                  {
+                    backgroundColor: genderPref === option.value
+                      ? theme.primary + '20'
+                      : 'rgba(255,255,255,0.03)',
+                    borderColor: genderPref === option.value
+                      ? theme.primary
+                      : 'rgba(255,255,255,0.1)',
+                  },
+                ]}
+                onPress={() => {
+                  setGenderPref(option.value);
+                  Haptics.selectionAsync();
+                }}
+              >
+                <ThemedText style={styles.optionEmoji}>{option.icon}</ThemedText>
+                <ThemedText
+                  style={[
+                    styles.optionLabel,
+                    {
+                      color: genderPref === option.value ? theme.primary : theme.text,
+                      fontWeight: genderPref === option.value ? '700' : '500',
+                    },
+                  ]}
+                >
+                  {option.label}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        {/* LOOKING FOR */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#F2994A15' }]}>
+                <Feather name="heart" size={18} color="#F2994A" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Looking For</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Type of connection
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.pillsContainer}>
             {[
               { value: "relationship", label: "Relationship", emoji: "💑" },
               { value: "friendship", label: "Friendship", emoji: "🤝" },
@@ -264,66 +352,28 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
                 key={option.value}
                 style={[
                   styles.pill,
-                  lookingFor === option.value ? styles.pillActive : styles.pillInactive,
+                  {
+                    backgroundColor: lookingFor === option.value
+                      ? theme.primary + '20'
+                      : 'rgba(255,255,255,0.05)',
+                    borderColor: lookingFor === option.value
+                      ? theme.primary
+                      : 'rgba(255,255,255,0.1)',
+                  },
                 ]}
                 onPress={() => {
                   setLookingFor(option.value);
                   Haptics.selectionAsync();
                 }}
               >
+                <ThemedText style={styles.pillEmoji}>{option.emoji}</ThemedText>
                 <ThemedText
                   style={[
-                    styles.pillText,
-                    lookingFor === option.value ? styles.pillTextActive : styles.pillTextInactive,
-                  ]}
-                >
-                  {option.emoji} {option.label}
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* GENDER PREFERENCE SECTION */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionEmoji}>⚧️</ThemedText>
-            <View style={styles.sectionInfo}>
-              <ThemedText style={styles.sectionTitle}>Show Me</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>Gender preferences</ThemedText>
-            </View>
-          </View>
-
-          <View style={styles.genderGrid}>
-            {[
-              { value: "male", emoji: "👨", label: "Men" },
-              { value: "female", emoji: "👩", label: "Women" },
-              { value: "both", emoji: "🌈", label: "Everyone" },
-            ].map((option) => (
-              <Pressable
-                key={option.value}
-                style={[
-                  styles.genderCard,
-                  genderPref === option.value
-                    ? option.value === "both"
-                      ? styles.genderCardActiveBoth
-                      : styles.genderCardActive
-                    : styles.genderCardInactive,
-                ]}
-                onPress={() => {
-                  setGenderPref(option.value);
-                  Haptics.selectionAsync();
-                }}
-              >
-                <ThemedText style={styles.genderEmoji}>{option.emoji}</ThemedText>
-                <ThemedText
-                  style={[
-                    styles.genderLabel,
-                    genderPref === option.value
-                      ? option.value === "both"
-                        ? styles.genderLabelActiveBoth
-                        : styles.genderLabelActive
-                      : styles.genderLabelInactive,
+                    styles.pillLabel,
+                    {
+                      color: lookingFor === option.value ? theme.primary : theme.text,
+                      fontWeight: lookingFor === option.value ? '700' : '500',
+                    },
                   ]}
                 >
                   {option.label}
@@ -333,13 +383,19 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
           </View>
         </View>
 
-        {/* RELIGION SECTION */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <ThemedText style={styles.sectionEmoji}>🙏</ThemedText>
-            <View style={styles.sectionInfo}>
-              <ThemedText style={styles.sectionTitle}>Religion</ThemedText>
-              <ThemedText style={styles.sectionSubtitle}>Religious preferences</ThemedText>
+        {/* RELIGION */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#4ade8015' }]}>
+                <Feather name="sun" size={18} color="#4ade80" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Religion</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Religious preference
+                </ThemedText>
+              </View>
             </View>
           </View>
 
@@ -358,47 +414,107 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               <Pressable
                 key={option.value}
                 style={[
-                  styles.religionPill,
-                  religion === option.value
-                    ? styles.religionPillActive
-                    : styles.religionPillInactive,
+                  styles.scrollPill,
+                  {
+                    backgroundColor: religion === option.value
+                      ? theme.primary + '20'
+                      : 'rgba(255,255,255,0.05)',
+                    borderColor: religion === option.value
+                      ? theme.primary
+                      : 'rgba(255,255,255,0.1)',
+                  },
                 ]}
                 onPress={() => {
                   setReligion(option.value);
                   Haptics.selectionAsync();
                 }}
               >
+                <ThemedText style={styles.scrollPillEmoji}>{option.emoji}</ThemedText>
                 <ThemedText
                   style={[
-                    styles.religionText,
-                    religion === option.value
-                      ? styles.religionTextActive
-                      : styles.religionTextInactive,
+                    styles.scrollPillLabel,
+                    {
+                      color: religion === option.value ? theme.primary : theme.text,
+                      fontWeight: religion === option.value ? '700' : '500',
+                    },
                   ]}
                 >
-                  {option.emoji} {option.label}
+                  {option.label}
                 </ThemedText>
               </Pressable>
             ))}
           </ScrollView>
         </View>
 
-        <View style={{ height: 100 }} />
+        {/* LIFESTYLE PREFERENCES */}
+        <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#00B2FF15' }]}>
+                <Feather name="coffee" size={18} color="#00B2FF" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Lifestyle</ThemedText>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Habits & preferences
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.lifestyleGrid}>
+            <View style={styles.lifestyleItem}>
+              <View style={styles.lifestyleLabel}>
+                <Feather name="wind" size={14} color={theme.textSecondary} />
+                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary }]}>
+                  Smoking
+                </ThemedText>
+              </View>
+              <ThemedText style={[styles.lifestyleValue, { color: theme.text }]}>
+                {smoking === 'any' ? 'Any' : smoking.charAt(0).toUpperCase() + smoking.slice(1)}
+              </ThemedText>
+            </View>
+
+            <View style={styles.lifestyleItem}>
+              <View style={styles.lifestyleLabel}>
+                <Feather name="coffee" size={14} color={theme.textSecondary} />
+                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary }]}>
+                  Drinking
+                </ThemedText>
+              </View>
+              <ThemedText style={[styles.lifestyleValue, { color: theme.text }]}>
+                {drinking === 'any' ? 'Any' : drinking.charAt(0).toUpperCase() + drinking.slice(1)}
+              </ThemedText>
+            </View>
+          </View>
+        </View>
       </ScrollView>
 
-      {/* FLOATING BUTTON */}
-      <View style={styles.footer}>
-        <LinearGradient colors={["rgba(13,13,15,0)", "rgba(13,13,15,0.8)", "#0D0D0F"]} style={styles.gradientOverlay} />
+      {/* FLOATING APPLY BUTTON */}
+      <View style={[styles.footer, { paddingBottom: Platform.OS === "ios" ? insets.bottom + 16 : 20 }]}>
+        <LinearGradient
+          colors={["rgba(10,10,10,0)", "rgba(10,10,10,0.95)", theme.background]}
+          style={styles.footerGradient}
+        />
         <Pressable
           style={[styles.applyButton, saving && styles.applyButtonDisabled]}
           onPress={handleApply}
           disabled={saving}
         >
-          <LinearGradient colors={["#4A90E2", "#357ABD"]} style={styles.applyButtonGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-            <ThemedText style={styles.applyEmoji}>✨</ThemedText>
-            <ThemedText style={styles.applyButtonText}>
-              {saving ? "Updating..." : "Show 247 People"}
-            </ThemedText>
+          <LinearGradient
+            colors={[theme.primary, theme.primary + 'CC']}
+            style={styles.applyButtonGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            {saving ? (
+              <ThemedText style={styles.applyButtonText}>Updating...</ThemedText>
+            ) : (
+              <>
+                <Feather name="check" size={20} color="#FFF" />
+                <ThemedText style={styles.applyButtonText}>Apply Filters</ThemedText>
+              </>
+            )}
           </LinearGradient>
         </Pressable>
       </View>
@@ -417,33 +533,38 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 0,
-    paddingBottom: 16,
+    paddingBottom: 20,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
-    flex: 1,
-    textAlign: "center",
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.1)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 2,
   },
   resetButton: {
-    padding: 8,
-  },
-  resetText: {
-    color: "#4A90E2",
-    fontWeight: "600",
-    fontSize: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
 
   // SUMMARY
@@ -452,32 +573,39 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   summaryCard: {
-    backgroundColor: "rgba(74,144,226,0.12)",
-    borderWidth: 0.5,
-    borderColor: "rgba(74,144,226,0.25)",
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
   },
-  summaryHeader: {
+  summaryRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    gap: 14,
   },
-  summaryEmoji: {
-    fontSize: 16,
+  summaryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  summaryContent: {
+    flex: 1,
   },
   summaryLabel: {
-    fontSize: 13,
-    color: "#4A90E2",
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
+    color: "rgba(255,255,255,0.6)",
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
   summaryText: {
     fontSize: 15,
-    color: "rgba(255,255,255,0.9)",
-    lineHeight: 22,
+    color: "rgba(255,255,255,0.95)",
+    fontWeight: "500",
+    lineHeight: 20,
   },
 
   // SCROLL
@@ -486,194 +614,171 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
+    gap: 16,
   },
 
-  // SECTION
-  section: {
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.08)",
+  // FILTER CARD
+  filterCard: {
     borderRadius: 20,
     padding: 20,
-    marginBottom: 16,
+    borderWidth: 1,
   },
-  sectionHeader: {
+  filterHeader: {
+    marginBottom: 20,
+  },
+  filterTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginBottom: 16,
+    gap: 12,
+    marginBottom: 12,
   },
-  sectionEmoji: {
-    fontSize: 20,
+  filterIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sectionInfo: {
+  filterTitleContent: {
     flex: 1,
   },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#FFFFFF",
+  filterTitle: {
+    fontSize: 17,
+    fontWeight: "700",
     marginBottom: 2,
   },
-  sectionSubtitle: {
+  filterSubtitle: {
     fontSize: 13,
-    color: "rgba(255,255,255,0.5)",
   },
-  ageBadge: {
-    backgroundColor: "rgba(74,144,226,0.15)",
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+  filterValueBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
   },
-  ageBadgeText: {
+  filterValueText: {
     fontSize: 15,
-    fontWeight: "600",
-    color: "#4A90E2",
+    fontWeight: "700",
   },
 
   // SLIDERS
-  sliderCard: {
-    backgroundColor: "rgba(255,255,255,0.03)",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
+  sliderContainer: {
+    marginBottom: 16,
   },
-  sliderLabelRow: {
+  sliderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 8,
   },
   sliderLabel: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   sliderValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   slider: {
     width: "100%",
     height: 40,
   },
-  sliderRangeLabels: {
+  sliderRangeRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
   },
   rangeLabel: {
     fontSize: 11,
-    color: "rgba(255,255,255,0.4)",
+  },
+
+  // OPTIONS GRID
+  optionsGrid: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  optionCard: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    borderWidth: 1.5,
+  },
+  optionEmoji: {
+    fontSize: 28,
+    marginBottom: 8,
+  },
+  optionLabel: {
+    fontSize: 14,
   },
 
   // PILLS
-  pillGrid: {
+  pillsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
   pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingVertical: 12,
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
-  pillActive: {
-    backgroundColor: "rgba(74,144,226,0.25)",
-    borderColor: "rgba(74,144,226,0.4)",
+  pillEmoji: {
+    fontSize: 16,
   },
-  pillInactive: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  pillText: {
+  pillLabel: {
     fontSize: 14,
   },
-  pillTextActive: {
-    fontWeight: "600",
-    color: "#4A90E2",
-  },
-  pillTextInactive: {
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.7)",
-  },
 
-  // GENDER GRID
-  genderGrid: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  genderCard: {
-    flex: 1,
-    padding: 14,
-    borderRadius: 14,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  genderCardActive: {
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  genderCardActiveBoth: {
-    backgroundColor: "rgba(242,153,74,0.2)",
-    borderColor: "rgba(242,153,74,0.35)",
-  },
-  genderCardInactive: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  genderEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  genderLabel: {
-    fontSize: 13,
-  },
-  genderLabelActive: {
-    fontWeight: "600",
-    color: "#FFFFFF",
-  },
-  genderLabelActiveBoth: {
-    fontWeight: "600",
-    color: "#F2994A",
-  },
-  genderLabelInactive: {
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.7)",
-  },
-
-  // RELIGION
+  // HORIZONTAL SCROLL
   horizontalScroll: {
     gap: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
   },
-  religionPill: {
+  scrollPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
   },
-  religionPillActive: {
-    backgroundColor: "rgba(76,217,100,0.2)",
-    borderColor: "rgba(76,217,100,0.35)",
+  scrollPillEmoji: {
+    fontSize: 16,
   },
-  religionPillInactive: {
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  religionText: {
+  scrollPillLabel: {
     fontSize: 14,
   },
-  religionTextActive: {
-    fontWeight: "600",
-    color: "#4CD964",
+
+  // LIFESTYLE
+  lifestyleGrid: {
+    gap: 12,
   },
-  religionTextInactive: {
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.7)",
+  lifestyleItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  lifestyleLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  lifestyleLabelText: {
+    fontSize: 14,
+  },
+  lifestyleValue: {
+    fontSize: 14,
+    fontWeight: "600",
   },
 
   // FOOTER
@@ -683,25 +788,24 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === "ios" ? 32 : 20,
   },
-  gradientOverlay: {
+  footerGradient: {
     position: "absolute",
-    top: -80,
+    top: -60,
     left: 0,
     right: 0,
-    height: 80,
+    height: 60,
     pointerEvents: "none",
   },
   applyButton: {
     height: 56,
-    borderRadius: 16,
+    borderRadius: 28,
     overflow: "hidden",
-    shadowColor: "#4A90E2",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
   },
   applyButtonDisabled: {
     opacity: 0.6,
@@ -711,10 +815,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-  },
-  applyEmoji: {
-    fontSize: 18,
+    gap: 10,
   },
   applyButtonText: {
     color: "#FFFFFF",
