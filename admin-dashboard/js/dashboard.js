@@ -395,7 +395,14 @@ async function viewUserDetail(userId) {
     document.getElementById('detailUserBio').textContent = u.bio || 'No bio';
     const picsGrid = document.getElementById('detailProfilePictures');
     const photos = (u.photos || []).map(p => typeof p === 'string' ? p : p?.url).filter(Boolean);
-    picsGrid.innerHTML = photos.map(p => `<img src="${p}" alt="Photo" onerror="this.src='https://via.placeholder.com/80'">`).join('');
+    picsGrid.innerHTML = '';
+    photos.forEach(p => {
+      const img = document.createElement('img');
+      img.src = p;
+      img.alt = 'Photo';
+      img.onerror = function() { this.src = 'https://via.placeholder.com/80'; };
+      picsGrid.appendChild(img);
+    });
     const vPhoto = document.getElementById('detailVerificationPhoto');
     if (vPhoto) vPhoto.src = u.verificationPhoto || 'https://via.placeholder.com/300x200?text=No+Photo';
     modal.classList.add('active');
