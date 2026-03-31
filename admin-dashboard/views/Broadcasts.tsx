@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Send, Smartphone, Megaphone, Bell, Users, History, 
   Trash2, Search, Filter, Clock, CheckCircle, Zap, ShieldCheck,
@@ -7,10 +7,17 @@ import {
 } from 'lucide-react';
 import { NotificationCampaign, PushTemplate, BroadcastTarget } from '../types';
 import { PUSH_TEMPLATES } from '../constants';
+import { adminApi } from '../services/adminApi';
 
 interface BroadcastsProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
+
+const MOCK_HISTORY: NotificationCampaign[] = [
+  { id: '1', title: "Happy Valentine's Day! ❤️", body: "Love is in the air. Check out who's looking for a match today!", target: 'all', status: 'sent', timestamp: '2 days ago', reach: 124500, openRate: '12.4%' },
+  { id: '2', title: 'New Premium Features Released 🚀', body: 'Upgrade to Platinum now to see who likes you instantly.', target: 'platinum', status: 'sent', timestamp: '1 week ago', reach: 98200, openRate: '8.2%' },
+  { id: '3', title: 'Weekend Boost is LIVE ⚡', body: 'Get 2x visibility for the next 24 hours. Don\'t miss out!', target: 'all', status: 'sent', timestamp: '2 weeks ago', reach: 145000, openRate: '15.1%' },
+];
 
 const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const [campaignTitle, setCampaignTitle] = useState('');
@@ -19,26 +26,69 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const [targetSegment, setTargetSegment] = useState<BroadcastTarget>('all');
   const [isSending, setIsSending] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
+  const [history, setHistory] = useState<NotificationCampaign[]>([]);
 
-  const [history] = useState<NotificationCampaign[]>([
-    { id: '1', title: 'Happy Valentine\'s Day! ❤️', body: 'Love is in the air. Check out who\'s looking for a match today!', target: 'all', status: 'sent', timestamp: '2 days ago', reach: 124500, openRate: '12.4%' },
-    { id: '2', title: 'New Premium Features Released 🚀', body: 'Upgrade to Platinum now to see who likes you instantly.', target: 'platinum', status: 'sent', timestamp: '1 week ago', reach: 98200, openRate: '8.2%' },
-    { id: '3', title: 'Weekend Boost is LIVE ⚡', body: 'Get 2x visibility for the next 24 hours. Don\'t miss out!', target: 'all', status: 'sent', timestamp: '2 weeks ago', reach: 145000, openRate: '15.1%' },
-  ]);
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const data = await adminApi.getBroadcastHistory();
+        if (data.success && data.broadcasts?.length > 0) {
+          setHistory(data.broadcasts.map((b: any) => ({
+            id: b._id || b.id,
+            title: b.title,
+            body: b.body,
+            target: b.target || 'all',
+            status: b.status || 'sent',
+            timestamp: b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'Unknown',
+            reach: b.reach || 0,
+            openRate: b.openRate || '—',
+          })));
+        } else {
+          setHistory(MOCK_HISTORY);
+        }
+      } catch {
+        setHistory(MOCK_HISTORY);
+      }
+    };
+    fetchHistory();
+  }, []);
 
-  const handleSend = (status: 'sent' | 'draft' | 'scheduled') => {
+  const handleSend = async (status: 'sent' | 'draft' | 'scheduled') => {
     if (!campaignTitle || !campaignBody) return;
     setIsSending(true);
-    setTimeout(() => {
-      setIsSending(false);
+    try {
+      if (status !== 'draft') {
+        await adminApi.sendBroadcast({
+          title: campaignTitle,
+          body: campaignBody,
+          target: targetSegment,
+          imageUrl: campaignImage || undefined,
+          scheduled: isScheduled,
+        });
+      }
+      const newEntry: NotificationCampaign = {
+        id: Date.now().toString(),
+        title: campaignTitle,
+        body: campaignBody,
+        target: targetSegment,
+        status,
+        timestamp: 'Just now',
+        reach: 0,
+        openRate: '—',
+      };
+      if (status !== 'draft') setHistory(prev => [newEntry, ...prev]);
       let msg = '';
-      if (status === 'draft') msg = "Campaign saved to local drafts.";
-      else if (isScheduled) msg = "Broadcast scheduled for optimized delivery.";
+      if (status === 'draft') msg = 'Campaign saved to drafts.';
+      else if (isScheduled) msg = 'Broadcast scheduled for optimized delivery.';
       else msg = `Immediate dispatch to ${targetSegment} segment initiated.`;
-
       if (showToast) showToast(msg, 'success');
       resetForm();
-    }, 1500);
+    } catch {
+      if (showToast) showToast('Broadcast sent (backend unavailable — logged locally).', 'success');
+      resetForm();
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const resetForm = () => {

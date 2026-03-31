@@ -5,9 +5,10 @@ import { AuthState } from '../types';
 interface AdminProfileProps {
   auth: AuthState;
   onUpdate: (updatedUser: any) => void;
+  showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-const AdminProfile: React.FC<AdminProfileProps> = ({ auth, onUpdate }) => {
+const AdminProfile: React.FC<AdminProfileProps> = ({ auth, onUpdate, showToast }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [formData, setFormData] = React.useState({
     name: auth.user?.name || '',
@@ -35,8 +36,10 @@ const AdminProfile: React.FC<AdminProfileProps> = ({ auth, onUpdate }) => {
     setTimeout(() => {
       onUpdate({ ...auth.user, ...formData });
       setIsSaving(false);
-      alert("Admin profile synchronization successful. Core identity updated.");
-    }, 1000);
+      if (showToast) {
+        showToast('Admin profile synchronized. Core identity updated.', 'success');
+      }
+    }, 800);
   };
 
   return (

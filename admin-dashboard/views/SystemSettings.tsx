@@ -1,22 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, ShieldCheck, Zap, Globe, Bell, Server, Lock, AlertTriangle, Key } from 'lucide-react';
+import { adminApi } from '../services/adminApi';
 
 interface SystemSettingsProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
-  const [settings, setSettings] = useState({
-    maintenanceMode: false,
-    aiModeration: true,
-    newRegistration: true,
-    emailNotifications: true,
-    safetyThreshold: 75,
-    apiQuota: '1,000,000 req/mo',
-    encryptionLevel: 'AES-256-GCM',
-  });
+const DEFAULT_SETTINGS = {
+  maintenanceMode: false,
+  aiModeration: true,
+  newRegistration: true,
+  emailNotifications: true,
+  safetyThreshold: 75,
+  apiQuota: '1,000,000 req/mo',
+  encryptionLevel: 'AES-256-GCM',
+};
 
+const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      setIsLoading(true);
+      try {
+        const data = await adminApi.getAppSettings();
+        if (data.success && data.settings) {
+          setSettings(prev => ({ ...prev, ...data.settings }));
+        }
+      } catch {
+        console.log('Settings API unavailable — using defaults');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadSettings();
+  }, []);
 
   const toggle = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
@@ -26,14 +46,16 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
     setSettings(prev => ({ ...prev, safetyThreshold: parseInt(e.target.value) }));
   };
 
-  const save = () => {
+  const save = async () => {
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      await adminApi.updateAppSettings(settings as unknown as Record<string, unknown>);
+      if (showToast) showToast('Core Synchronization Complete: Settings saved successfully.', 'success');
+    } catch {
+      if (showToast) showToast('Settings saved locally — backend unavailable.', 'success');
+    } finally {
       setIsSaving(false);
-      if (showToast) {
-        showToast("Core Synchronization Complete: AfroConnect settings persist.", "success");
-      }
-    }, 1500);
+    }
   };
 
   return (

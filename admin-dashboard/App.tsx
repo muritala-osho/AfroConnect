@@ -248,7 +248,7 @@ const App: React.FC = () => {
             {activeTab === 'settings'     && <SystemSettings showToast={showToast} />}
             {activeTab === 'verification' && <IDVerification />}
             {activeTab === 'broadcasts'   && <Broadcasts showToast={showToast} />}
-            {activeTab === 'profile'      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} />}
+            {activeTab === 'profile'      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
             {!ALL_TABS.includes(activeTab) && (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-slate-800 animate-fadeIn">

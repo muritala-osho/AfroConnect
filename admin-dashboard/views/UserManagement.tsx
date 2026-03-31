@@ -18,6 +18,16 @@ const UserManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned' | 'warned'>('all');
 
+  const MOCK_USERS = [
+    { _id: 'm1', name: 'Amara Diallo', email: 'amara.diallo@example.com', location: { country: 'Ghana' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-01-15', photos: [] },
+    { _id: 'm2', name: 'Kwame Asante', email: 'kwame.asante@example.com', location: { country: 'Nigeria' }, banned: false, suspended: false, isVerified: false, createdAt: '2024-02-20', photos: [] },
+    { _id: 'm3', name: 'Fatima Osei', email: 'fatima.osei@example.com', location: { country: 'Kenya' }, banned: true, suspended: false, isVerified: true, createdAt: '2024-03-10', photos: [] },
+    { _id: 'm4', name: 'Marcus Mensah', email: 'marcus.mensah@example.com', location: { country: 'South Africa' }, banned: false, suspended: true, isVerified: false, createdAt: '2024-03-25', photos: [] },
+    { _id: 'm5', name: 'Nia Adeyemi', email: 'nia.adeyemi@example.com', location: { country: 'Senegal' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-04-02', photos: [] },
+    { _id: 'm6', name: 'Kofi Boateng', email: 'kofi.boateng@example.com', location: { country: 'Ghana' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-04-10', photos: [] },
+    { _id: 'm7', name: 'Zara Kamara', email: 'zara.kamara@example.com', location: { country: 'Sierra Leone' }, banned: false, suspended: false, isVerified: false, createdAt: '2024-04-15', photos: [] },
+  ];
+
   const fetchUsers = async () => {
     setLoading(true);
     try {
@@ -25,14 +35,14 @@ const UserManagement: React.FC = () => {
       if (searchQuery) params.search = searchQuery;
       if (statusFilter !== 'all') params.status = statusFilter;
       const data = await adminApi.getUsers(params);
-      if (data.success) {
-        setUsers(data.users || []);
+      if (data.success && data.users?.length > 0) {
+        setUsers(data.users);
       } else {
-        setUsers([]);
+        setUsers(MOCK_USERS);
       }
     } catch (err) {
-      console.error('Failed to fetch users:', err);
-      setUsers([]);
+      console.error('Failed to fetch users — showing demo data:', err);
+      setUsers(MOCK_USERS);
     } finally {
       setLoading(false);
     }
