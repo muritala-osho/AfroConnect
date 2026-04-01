@@ -567,16 +567,23 @@ async function loadPayments() {
       if (tbody) {
         const plans = Object.entries(planBreakdown);
         if (plans.length > 0) {
-          tbody.innerHTML = plans.map(([plan, count]) => `
-            <tr>
-              <td>—</td>
-              <td>${escapeHtml(String(count))} users</td>
-              <td>${escapeHtml(plan.charAt(0).toUpperCase() + plan.slice(1))}</td>
-              <td>—</td>
-              <td>—</td>
-              <td><span class="badge-status badge-active">Active</span></td>
-            </tr>
-          `).join('');
+          tbody.textContent = '';
+          plans.forEach(([plan, count]) => {
+            const tr = document.createElement('tr');
+            const cells = ['—', String(count) + ' users', plan.charAt(0).toUpperCase() + plan.slice(1), '—', '—'];
+            cells.forEach(text => {
+              const td = document.createElement('td');
+              td.textContent = text;
+              tr.appendChild(td);
+            });
+            const badgeTd = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = 'badge-status badge-active';
+            badge.textContent = 'Active';
+            badgeTd.appendChild(badge);
+            tr.appendChild(badgeTd);
+            tbody.appendChild(tr);
+          });
         } else {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No subscription data</td></tr>';
         }
