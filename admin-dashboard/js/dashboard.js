@@ -562,16 +562,42 @@ async function loadSupportTickets() {
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No support tickets</td></tr>';
       return;
     }
-    tbody.innerHTML = tickets.slice(0, 20).map(t => `
-      <tr>
-        <td>${(t._id || '').slice(-8)}</td>
-        <td>${t.user?.name || t.userName || 'Unknown'}</td>
-        <td>${t.subject || 'Contact'}</td>
-        <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.message || ''}</td>
-        <td>${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}</td>
-        <td><span class="badge-status ${t.status === 'resolved' ? 'badge-active' : 'badge-pending'}">${t.status || 'Open'}</span></td>
-      </tr>
-    `).join('');
+    const fragment = document.createDocumentFragment();
+    tickets.slice(0, 20).forEach(t => {
+      const tr = document.createElement('tr');
+
+      const tdId = document.createElement('td');
+      tdId.textContent = (t._id || '').slice(-8);
+      tr.appendChild(tdId);
+
+      const tdName = document.createElement('td');
+      tdName.textContent = t.user?.name || t.userName || 'Unknown';
+      tr.appendChild(tdName);
+
+      const tdSubject = document.createElement('td');
+      tdSubject.textContent = t.subject || 'Contact';
+      tr.appendChild(tdSubject);
+
+      const tdMessage = document.createElement('td');
+      tdMessage.style.cssText = 'max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      tdMessage.textContent = t.message || '';
+      tr.appendChild(tdMessage);
+
+      const tdDate = document.createElement('td');
+      tdDate.textContent = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : '';
+      tr.appendChild(tdDate);
+
+      const tdStatus = document.createElement('td');
+      const span = document.createElement('span');
+      span.className = `badge-status ${t.status === 'resolved' ? 'badge-active' : 'badge-pending'}`;
+      span.textContent = t.status || 'Open';
+      tdStatus.appendChild(span);
+      tr.appendChild(tdStatus);
+
+      fragment.appendChild(tr);
+    });
+    tbody.innerHTML = '';
+    tbody.appendChild(fragment);
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No support tickets</td></tr>';
   }
