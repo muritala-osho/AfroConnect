@@ -190,6 +190,30 @@ export const adminApi = {
     const res = await fetch(`${API_BASE}/admin/settings`, { headers: authHeaders() });
     return handleResponse(res);
   },
+
+  getSupportTickets: async (status?: string) => {
+    const query = status ? `?status=${status}` : '';
+    const res = await fetch(`${API_BASE}/admin/support-tickets${query}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  replySupportTicket: async (ticketId: string, content: string) => {
+    const res = await fetch(`${API_BASE}/admin/support-tickets/${ticketId}/reply`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ content }),
+    });
+    return handleResponse(res);
+  },
+
+  updateSupportTicketStatus: async (ticketId: string, status: 'open' | 'in-progress' | 'closed') => {
+    const res = await fetch(`${API_BASE}/admin/support-tickets/${ticketId}/status`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ status }),
+    });
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;

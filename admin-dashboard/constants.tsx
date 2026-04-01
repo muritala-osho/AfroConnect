@@ -10,6 +10,7 @@ import {
   UserCircle,
   Megaphone,
   ImageOff,
+  LifeBuoy,
 } from 'lucide-react';
 import { User, AdminRole, PushTemplate } from './types';
 
@@ -19,6 +20,7 @@ export const NAV_ITEMS = [
   { id: 'verification',      label: 'ID Verification',    icon: <UserCheck size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'reports',           label: 'Safety Hub',         icon: <ShieldAlert size={20} />,     roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'content',           label: 'Content Moderation', icon: <ImageOff size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'support',           label: 'Support Desk',       icon: <LifeBuoy size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
   { id: 'payments',          label: 'Finances',           icon: <CreditCard size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'analytics',         label: 'Intelligence',       icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
   { id: 'broadcasts',        label: 'Broadcasts',         icon: <Megaphone size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },

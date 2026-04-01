@@ -952,4 +952,103 @@ router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
   }
 });
 
+// ─── SUPPORT TICKETS ────────────────────────────────────────────────────────
+
+const SupportTicket = require('../models/SupportTicket');
+const { sendExpoPushNotification } = require('../utils/pushNotifications');
+
+// @route   GET /api/admin/support-tickets
+// @desc    Get all support tickets
+// @access  Private/Admin
+router.get('/support-tickets', protect, isAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const query = status ? { status } : {};
+    const tickets = await SupportTicket.find(query)
+      .sort({ createdAt: -1 })
+      .limit(200);
+    res.json({ success: true, tickets });
+  } catch (error) {
+    console.error('Get support tickets error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   POST /api/admin/support-tickets/:ticketId/reply
+// @desc    Admin replies to a support ticket — saves to DB and pushes notification to user
+// @access  Private/Admin
+router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: 'Reply content is required' });
+    }
+
+    const ticket = await SupportTicket.findById(req.params.ticketId);
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    const adminMessage = {
+      role: 'admin',
+      content: content.trim(),
+      adminName: req.user?.name || 'AfroConnect Support',
+      timestamp: new Date(),
+    };
+    ticket.messages.push(adminMessage);
+    ticket.status = 'in-progress';
+    await ticket.save();
+
+    // Send push notification to the user if they have a push token
+    if (ticket.userId) {
+      try {
+        const user = await User.findById(ticket.userId).select('pushToken pushNotificationsEnabled');
+        if (user?.pushToken && user.pushNotificationsEnabled !== false) {
+          await sendExpoPushNotification(user.pushToken, {
+            title: '💬 Support Reply from AfroConnect',
+            body: content.length > 80 ? content.substring(0, 80) + '...' : content,
+            data: { screen: 'Support', ticketId: ticket._id.toString() },
+            channelId: 'support',
+          });
+        }
+      } catch (pushErr) {
+        console.error('Push notification failed (non-critical):', pushErr.message);
+      }
+    }
+
+    res.json({ success: true, message: 'Reply sent', ticket });
+  } catch (error) {
+    console.error('Support reply error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   PUT /api/admin/support-tickets/:ticketId/status
+// @desc    Update ticket status (open | in-progress | closed)
+// @access  Private/Admin
+router.put('/support-tickets/:ticketId/status', protect, isAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    const allowed = ['open', 'in-progress', 'closed'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    const ticket = await SupportTicket.findByIdAndUpdate(
+      req.params.ticketId,
+      {
+        status,
+        ...(status === 'closed' ? { resolvedAt: new Date(), resolvedBy: req.user._id } : {}),
+      },
+      { new: true }
+    );
+
+    if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.json({ success: true, ticket });
+  } catch (error) {
+    console.error('Update ticket status error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

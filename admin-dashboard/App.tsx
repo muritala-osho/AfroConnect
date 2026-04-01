@@ -10,11 +10,12 @@ import IDVerification from './views/IDVerification';
 import AdminProfile from './views/AdminProfile';
 import Broadcasts from './views/Broadcasts';
 import ContentModeration from './views/ContentModeration';
+import SupportDesk from './views/SupportDesk';
 import { AuthState, AdminRole } from './types';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support'];
 
 const AfroLogo = () => (
   <svg width="100%" height="100%" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -245,6 +246,7 @@ const App: React.FC = () => {
             {activeTab === 'payments'     && <Payments />}
             {activeTab === 'reports'      && <ReportsQueue />}
             {activeTab === 'content'      && <ContentModeration showToast={showToast} />}
+            {activeTab === 'support'      && <SupportDesk showToast={showToast} />}
             {activeTab === 'settings'     && <SystemSettings showToast={showToast} />}
             {activeTab === 'verification' && <IDVerification />}
             {activeTab === 'broadcasts'   && <Broadcasts showToast={showToast} />}
