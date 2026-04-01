@@ -437,11 +437,14 @@ router.get('/nearby', protect, async (req, res) => {
     users = users.map(user => {
       const privacy = user.privacySettings || {};
       const isOnline = user.onlineStatus === 'online' || user.online;
-
       const distanceVisible = isPremium || privacy.showDistance !== false;
+
+      // Filter photos by per-photo privacy — in discovery (no match yet) only show public photos
+      const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
       return {
         ...user,
+        photos: visiblePhotos,
         age: privacy.hideAge ? null : user.age,
         online: privacy.showOnlineStatus === false ? null : isOnline,
         onlineStatus: privacy.showOnlineStatus === false ? null : user.onlineStatus,
@@ -604,19 +607,35 @@ router.get('/:id', protect, async (req, res) => {
     // Apply privacy settings
     const isPremium = req.user.premium?.isActive;
     const privacy = user.privacySettings || {};
-    
+
     if (privacy.hideAge) otherUserInfo.age = null;
     if (privacy.showOnlineStatus === false) {
       otherUserInfo.online = null;
       otherUserInfo.onlineStatus = null;
     }
-    
+
     // Feature: Distance viewing is premium only
     if (!isPremium && (privacy.showDistance === false || !isPremium)) {
-        otherUserInfo.distance = null;
+      otherUserInfo.distance = null;
     }
-    
+
     if (privacy.showLastActive === false) otherUserInfo.lastActive = null;
+
+    // Enforce per-photo privacy
+    // Check if viewer is matched with the profile owner (friends-level access)
+    const Match = require('../models/Match');
+    const isMatched = await Match.exists({
+      users: { $all: [req.user._id, user._id] },
+      status: 'active'
+    });
+    const isOwnProfile = req.user._id.toString() === req.params.id;
+
+    otherUserInfo.photos = (otherUserInfo.photos || []).filter(photo => {
+      if (!photo.privacy || photo.privacy === 'public') return true;
+      if (photo.privacy === 'friends') return isOwnProfile || isMatched;
+      if (photo.privacy === 'private') return isOwnProfile;
+      return false;
+    });
 
     res.json({ success: true, user: otherUserInfo });
   } catch (error) {
