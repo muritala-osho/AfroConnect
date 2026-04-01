@@ -391,10 +391,10 @@ async function loadUsers() {
         </td>
         <td><span class="badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span></td>
         <td>${escapeHtml(u.location?.city || u.location?.country || 'N/A')}</td>
-        <td>${u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'N/A'}</td>
+        <td>${u.lastActive ? escapeHtml(new Date(u.lastActive).toLocaleDateString()) : 'N/A'}</td>
         <td>
           <button class="btn-sm btn-primary" data-action="view" data-userid="${id}">View</button>
-          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" data-action="ban" data-userid="${id}" data-banned="${u.isBanned}">
+          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" data-action="ban" data-userid="${id}" data-banned="${escapeHtml(String(u.isBanned))}">
             ${u.isBanned ? 'Unban' : 'Ban'}
           </button>
         </td>
