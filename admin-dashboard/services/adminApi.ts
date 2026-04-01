@@ -214,6 +214,20 @@ export const adminApi = {
     });
     return handleResponse(res);
   },
+
+  getAppeals: async () => {
+    const res = await fetch(`${API_BASE}/admin/appeals`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  reviewAppeal: async (userId: string, action: 'approve' | 'reject', adminResponse?: string) => {
+    const res = await fetch(`${API_BASE}/admin/appeals/${userId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ action, adminResponse }),
+    });
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;

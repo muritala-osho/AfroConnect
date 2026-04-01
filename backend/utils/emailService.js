@@ -630,6 +630,291 @@ const sendSuspensionEmail = async (email, userName, reason, durationDays) => {
   }
 };
 
+// ─── Suspension Lifted Email ──────────────────────────────────────────────────
+const getSuspensionLiftedTemplate = (userName) => emailShell(`
+  ${emailHeader("Suspension Lifted — Welcome Back! 🎉", "Your access has been automatically restored")}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hi ${userName},
+      </h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        Great news — your temporary suspension period has ended and your AfroConnect account
+        has been <strong style="color: ${BRAND.primary};">automatically restored</strong>.
+        You can log back in and pick up right where you left off.
+      </p>
+      <div style="background-color: ${BRAND.primaryLight}; border-left: 4px solid ${BRAND.primary};
+                  padding: 14px 18px; margin: 24px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #065F46; font-size: 14px; line-height: 1.6;">
+          <strong>Friendly reminder:</strong> Please review our Community Guidelines to help us
+          keep AfroConnect a safe and welcoming space for everyone.
+        </p>
+      </div>
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+          Open AfroConnect →
+        </a>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+const sendSuspensionLiftedEmail = async (email, userName) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: '✅ Your AfroConnect Suspension Has Been Lifted',
+      html: getSuspensionLiftedTemplate(userName),
+      attachments: [logoAttachment()],
+    });
+    console.log('Suspension lifted email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending suspension lifted email:', error);
+  }
+};
+
+// ─── New Match Notification ───────────────────────────────────────────────────
+const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
+  ${emailHeader("It's a Match! 💚", `You and ${matchName} liked each other`)}
+  <tr>
+    <td style="padding: 48px 40px; text-align: center;">
+      ${matchPhoto ? `
+      <div style="margin: 0 auto 24px auto; width: 100px; height: 100px; border-radius: 50%;
+                  overflow: hidden; border: 4px solid ${BRAND.primary}; display: inline-block;">
+        <img src="${matchPhoto}" alt="${matchName}" width="100" height="100"
+             style="object-fit: cover; width: 100%; height: 100%;" />
+      </div>` : `
+      <div style="margin: 0 auto 24px auto; width: 100px; height: 100px; border-radius: 50%;
+                  background: linear-gradient(135deg, ${BRAND.gradientStart}, ${BRAND.gradientEnd});
+                  display: inline-flex; align-items: center; justify-content: center;
+                  font-size: 48px; line-height: 100px;">💚</div>`}
+      <h2 style="margin: 0 0 12px 0; color: #1a1a1a; font-size: 24px; font-weight: 700;">
+        Hi ${userName}! 👋
+      </h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 17px; line-height: 1.7;">
+        You and <strong style="color: ${BRAND.primary};">${matchName}</strong> have matched on AfroConnect!
+        Don't leave them waiting — say hello first and start the conversation.
+      </p>
+      <div style="background-color: ${BRAND.primaryLight}; border-radius: 12px;
+                  padding: 16px 20px; margin: 24px 0; text-align: left;">
+        <p style="margin: 0; color: #065F46; font-size: 14px; line-height: 1.6;">
+          💡 <strong>Ice Breaker tip:</strong> People who message within the first hour are
+          3× more likely to get a reply. Go for it!
+        </p>
+      </div>
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+          Message ${matchName} →
+        </a>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+const sendNewMatchEmail = async (email, userName, matchName, matchPhoto) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `💚 You matched with ${matchName} on AfroConnect!`,
+      html: getNewMatchTemplate(userName, matchName, matchPhoto),
+      attachments: [logoAttachment()],
+    });
+    console.log('New match email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending new match email:', error);
+  }
+};
+
+// ─── Support Ticket Reply ─────────────────────────────────────────────────────
+const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => emailShell(`
+  ${emailHeader('Support Reply from AfroConnect 💬', 'Our team has responded to your enquiry')}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hi ${userName},
+      </h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        Our support team has replied to your ticket${ticketSubject ? ` regarding <strong>"${ticketSubject}"</strong>` : ''}.
+        Here is their message:
+      </p>
+      <div style="background-color: #F8F9FA; border: 1px solid #E9ECEF; border-radius: 12px;
+                  padding: 24px 28px; margin: 24px 0;">
+        <p style="margin: 0 0 10px 0; color: #AAAAAA; font-size: 11px; font-weight: 700;
+                   text-transform: uppercase; letter-spacing: 1px;">AfroConnect Support</p>
+        <p style="margin: 0; color: #333333; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">
+          ${replyContent}
+        </p>
+      </div>
+      <p style="margin: 20px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        You can reply to this conversation directly from within the AfroConnect app under
+        <strong>Settings → Help & Support</strong>.
+      </p>
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+          View Conversation →
+        </a>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+const sendSupportReplyEmail = async (email, userName, replyContent, ticketSubject) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"AfroConnect Support" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: '💬 AfroConnect Support has replied to your ticket',
+      html: getSupportReplyTemplate(userName, replyContent, ticketSubject),
+      attachments: [logoAttachment()],
+    });
+    console.log('Support reply email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending support reply email:', error);
+  }
+};
+
+// ─── Renewal Reminder ─────────────────────────────────────────────────────────
+const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) => emailShell(`
+  ${emailHeader('Subscription Renewal Reminder ⏰', `Your ${planName} plan renews soon`)}
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+        Hi ${userName},
+      </h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        Just a heads-up — your <strong style="color: ${BRAND.primary};">${planName} subscription</strong>
+        is set to automatically renew in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>
+        on <strong>${renewalDate}</strong>.
+      </p>
+      <div style="background-color: ${BRAND.accentLight}; border-left: 4px solid ${BRAND.accent};
+                  padding: 14px 18px; margin: 24px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #0C4A6E; font-size: 14px; line-height: 1.6;">
+          <strong>No action needed</strong> — your subscription will renew automatically.
+          If you'd like to make any changes, please do so before your renewal date.
+        </p>
+      </div>
+      <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        To manage your subscription, go to <strong>Profile → Premium → Manage Subscription</strong>
+        in the AfroConnect app.
+      </p>
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 16px 42px;
+           border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+          Manage Subscription →
+        </a>
+      </div>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, daysLeft) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `⏰ Your AfroConnect ${planName} plan renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+      html: getRenewalReminderTemplate(userName, planName, renewalDate, daysLeft),
+      attachments: [logoAttachment()],
+    });
+    console.log('Renewal reminder email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending renewal reminder email:', error);
+  }
+};
+
+// ─── Inactivity Re-engagement ─────────────────────────────────────────────────
+const getInactivityTemplate = (userName) => emailShell(`
+  ${emailHeader('We miss you, ' + userName + '! 👋', 'New people are waiting to connect with you')}
+  <tr>
+    <td style="padding: 48px 40px; text-align: center;">
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        It's been a while since we last saw you on AfroConnect. While you've been away,
+        <strong style="color: ${BRAND.primary};">new members have joined</strong> and your
+        profile has been getting attention.
+      </p>
+
+      <table width="100%" cellpadding="0" cellspacing="0" style="margin: 28px 0;">
+        <tr>
+          <td width="33%" style="text-align: center; padding: 16px;">
+            <div style="font-size: 36px; margin-bottom: 8px;">💌</div>
+            <p style="margin: 0; color: ${BRAND.primary}; font-size: 22px; font-weight: 800;">New</p>
+            <p style="margin: 4px 0 0 0; color: #888888; font-size: 13px;">Likes waiting</p>
+          </td>
+          <td width="33%" style="text-align: center; padding: 16px;">
+            <div style="font-size: 36px; margin-bottom: 8px;">🔥</div>
+            <p style="margin: 0; color: ${BRAND.primary}; font-size: 22px; font-weight: 800;">Fresh</p>
+            <p style="margin: 4px 0 0 0; color: #888888; font-size: 13px;">Profiles nearby</p>
+          </td>
+          <td width="33%" style="text-align: center; padding: 16px;">
+            <div style="font-size: 36px; margin-bottom: 8px;">✨</div>
+            <p style="margin: 0; color: ${BRAND.primary}; font-size: 22px; font-weight: 800;">Ready</p>
+            <p style="margin: 4px 0 0 0; color: #888888; font-size: 13px;">Matches to explore</p>
+          </td>
+        </tr>
+      </table>
+
+      <div style="background-color: ${BRAND.primaryLight}; border-radius: 12px;
+                  padding: 16px 20px; margin: 24px 0; text-align: left;">
+        <p style="margin: 0; color: #065F46; font-size: 14px; line-height: 1.6;">
+          💡 <strong>Pro tip:</strong> Profiles that are active regularly get up to
+          <strong>5× more matches</strong>. Come back and boost your chances!
+        </p>
+      </div>
+
+      <div style="text-align: center; margin: 36px 0;">
+        <a href="#" style="display: inline-block;
+           background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+           color: #ffffff; text-decoration: none; padding: 18px 50px;
+           border-radius: 32px; font-size: 17px; font-weight: 700; letter-spacing: 0.3px;">
+          Come Back to AfroConnect →
+        </a>
+      </div>
+
+      <p style="margin: 0; color: #AAAAAA; font-size: 13px; line-height: 1.6;">
+        Your perfect match could be just one swipe away. Don't keep them waiting! 💚
+      </p>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
+const sendInactivityEmail = async (email, userName) => {
+  try {
+    const info = await transporter.sendMail({
+      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: `👋 ${userName}, we miss you! New matches are waiting`,
+      html: getInactivityTemplate(userName),
+      attachments: [logoAttachment()],
+    });
+    console.log('Inactivity email sent:', info.messageId);
+    return { success: true };
+  } catch (error) {
+    console.error('Error sending inactivity email:', error);
+  }
+};
+
 module.exports = {
   sendOTPEmail,
   sendWelcomeEmail,
@@ -641,5 +926,10 @@ module.exports = {
   sendVerificationRejectedEmail,
   sendWarningEmail,
   sendSuspensionEmail,
+  sendSuspensionLiftedEmail,
+  sendNewMatchEmail,
+  sendSupportReplyEmail,
+  sendRenewalReminderEmail,
+  sendInactivityEmail,
   generateOTP,
 };

@@ -787,6 +787,8 @@ const startServer = () => {
   const serverInstance = server.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 AfroConnect Backend running on port ${PORT}`);
     console.log(`📡 Backend API ready`);
+    const { startScheduledJobs } = require('./utils/scheduledJobs');
+    startScheduledJobs();
   });
 
   serverInstance.on('error', (e) => {

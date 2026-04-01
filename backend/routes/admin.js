@@ -1033,6 +1033,24 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
       }
     }
 
+    // Send email notification to user
+    if (ticket.userId) {
+      try {
+        const ticketUser = await User.findById(ticket.userId).select('email name');
+        if (ticketUser?.email) {
+          const { sendSupportReplyEmail } = require('../utils/emailService');
+          await sendSupportReplyEmail(
+            ticketUser.email,
+            ticketUser.name,
+            content.trim(),
+            ticket.subject || null
+          );
+        }
+      } catch (emailErr) {
+        console.error('Support reply email error (non-critical):', emailErr.message);
+      }
+    }
+
     res.json({ success: true, message: 'Reply sent', ticket });
   } catch (error) {
     console.error('Support reply error:', error);

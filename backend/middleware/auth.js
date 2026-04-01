@@ -68,6 +68,12 @@ const protect = async (req, res, next) => {
       req.user.suspended = false;
       req.user.suspendedUntil = null;
       await req.user.save();
+      try {
+        const { sendSuspensionLiftedEmail } = require('../utils/emailService');
+        await sendSuspensionLiftedEmail(req.user.email, req.user.name);
+      } catch (emailErr) {
+        console.error('Suspension lifted email error (non-critical):', emailErr.message);
+      }
     }
 
     next();

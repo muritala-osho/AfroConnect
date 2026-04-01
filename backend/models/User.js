@@ -411,6 +411,8 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpire: Date,
   deletionOTP: String,
   deletionOTPExpire: Date,
+  inactivityEmailSentAt: Date,
+  renewalReminderSentAt: Date,
   premium: {
     isActive: {
       type: Boolean,

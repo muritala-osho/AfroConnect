@@ -11,11 +11,12 @@ import AdminProfile from './views/AdminProfile';
 import Broadcasts from './views/Broadcasts';
 import ContentModeration from './views/ContentModeration';
 import SupportDesk from './views/SupportDesk';
+import Appeals from './views/Appeals';
 import { AuthState, AdminRole } from './types';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'appeals'];
 
 
 const App: React.FC = () => {
@@ -241,6 +242,7 @@ const App: React.FC = () => {
             {activeTab === 'settings'     && <SystemSettings showToast={showToast} />}
             {activeTab === 'verification' && <IDVerification />}
             {activeTab === 'broadcasts'   && <Broadcasts showToast={showToast} />}
+            {activeTab === 'appeals'      && <Appeals showToast={showToast} />}
             {activeTab === 'profile'      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
             {!ALL_TABS.includes(activeTab) && (

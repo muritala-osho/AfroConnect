@@ -139,6 +139,20 @@ router.post('/swipe', protect, async (req, res) => {
         });
 
         await currentUser.save();
+
+        // Send match notification emails to both users (non-blocking)
+        try {
+          const { sendNewMatchEmail } = require('../utils/emailService');
+          const currentUserPhoto = currentUser.photos?.[0] || null;
+          const targetUserPhoto  = targetUser.photos?.[0] || null;
+          await Promise.all([
+            sendNewMatchEmail(currentUser.email, currentUser.name, targetUser.name, targetUserPhoto),
+            sendNewMatchEmail(targetUser.email,  targetUser.name,  currentUser.name, currentUserPhoto),
+          ]);
+        } catch (emailErr) {
+          console.error('Match email error (non-critical):', emailErr.message);
+        }
+
         return res.json({ success: true, isMatch: true, match });
       }
     } else if (action === 'pass') {
