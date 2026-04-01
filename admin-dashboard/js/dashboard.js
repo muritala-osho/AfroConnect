@@ -535,8 +535,8 @@ async function loadPayments() {
           tbody.innerHTML = plans.map(([plan, count]) => `
             <tr>
               <td>—</td>
-              <td>${count} users</td>
-              <td>${plan.charAt(0).toUpperCase() + plan.slice(1)}</td>
+              <td>${escapeHtml(String(count))} users</td>
+              <td>${escapeHtml(plan.charAt(0).toUpperCase() + plan.slice(1))}</td>
               <td>—</td>
               <td>—</td>
               <td><span class="badge-status badge-active">Active</span></td>
