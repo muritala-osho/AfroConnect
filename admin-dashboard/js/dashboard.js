@@ -487,12 +487,15 @@ async function loadReports() {
         </div>
         <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${escapeHtml(r.description || '')}</p>
         <div class="report-actions">
-          <button class="btn-sm btn-success" onclick="resolveReport('${escapeHtml(r._id)}', 'dismiss')">Dismiss</button>
-          <button class="btn-sm btn-warning" onclick="resolveReport('${escapeHtml(r._id)}', 'warn')">Warn</button>
-          <button class="btn-sm btn-danger" onclick="resolveReport('${escapeHtml(r._id)}', 'ban')">Ban</button>
+          <button class="btn-sm btn-success" data-report-id="${escapeHtml(r._id)}" data-action="dismiss">Dismiss</button>
+          <button class="btn-sm btn-warning" data-report-id="${escapeHtml(r._id)}" data-action="warn">Warn</button>
+          <button class="btn-sm btn-danger" data-report-id="${escapeHtml(r._id)}" data-action="ban">Ban</button>
         </div>
       </div>
     `).join('');
+    container.querySelectorAll('[data-report-id]').forEach(btn => {
+      btn.addEventListener('click', () => resolveReport(btn.dataset.reportId, btn.dataset.action));
+    });
   } catch (e) {
     const container = document.getElementById('reportsContainer');
     if (container) container.innerHTML = '<div class="empty-state"><p>Could not load reports</p></div>';
