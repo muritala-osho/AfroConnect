@@ -215,6 +215,11 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  getChurnOverview: async () => {
+    const res = await fetch(`${API_BASE}/engagement/admin/churn-overview`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
   getAppeals: async () => {
     const res = await fetch(`${API_BASE}/admin/appeals`, { headers: authHeaders() });
     return handleResponse(res);

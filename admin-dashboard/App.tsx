@@ -12,11 +12,12 @@ import Broadcasts from './views/Broadcasts';
 import ContentModeration from './views/ContentModeration';
 import SupportDesk from './views/SupportDesk';
 import Appeals from './views/Appeals';
+import ChurnIntelligence from './views/ChurnIntelligence';
 import { AuthState, AdminRole } from './types';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'appeals'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'appeals', 'churn'];
 
 
 const App: React.FC = () => {
@@ -243,6 +244,7 @@ const App: React.FC = () => {
             {activeTab === 'verification' && <IDVerification />}
             {activeTab === 'broadcasts'   && <Broadcasts showToast={showToast} />}
             {activeTab === 'appeals'      && <Appeals showToast={showToast} />}
+            {activeTab === 'churn'        && <ChurnIntelligence showToast={showToast} />}
             {activeTab === 'profile'      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
             {!ALL_TABS.includes(activeTab) && (

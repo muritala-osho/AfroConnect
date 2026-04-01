@@ -19,6 +19,7 @@ import {
   setupNotificationListeners,
 } from "@/services/notifications";
 import { getApiBaseUrl } from "@/constants/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -79,9 +80,23 @@ function AppContent() {
             console.log("Notification received:", notification);
             // Handle notification when app is in foreground
           },
-          (response) => {
+          async (response) => {
             console.log("User tapped notification:", response);
-            // Handle user tapping on notification
+            // Track notification open for the timing engine
+            try {
+              const token = await AsyncStorage.getItem("token");
+              if (token) {
+                const screen = response?.notification?.request?.content?.data?.screen;
+                fetch(`${getApiBaseUrl()}/api/engagement/notification-opened`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ screen: screen || "unknown" }),
+                }).catch(() => {}); // fire and forget — never block UX
+              }
+            } catch {}
           },
         );
       } catch (error) {

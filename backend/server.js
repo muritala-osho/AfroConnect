@@ -271,6 +271,8 @@ app.use('/api/profile-completion', profileCompletionRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/success-stories', successStoriesRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+const engagementRoutes = require('./routes/engagement');
+app.use('/api/engagement', engagementRoutes);
 app.use('/api/comments', commentsRoutes);
 
 logRoutes();

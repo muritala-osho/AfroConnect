@@ -413,6 +413,32 @@ const userSchema = new mongoose.Schema({
   deletionOTPExpire: Date,
   inactivityEmailSentAt: Date,
   renewalReminderSentAt: Date,
+
+  // ── Churn Prediction ────────────────────────────────────────────────────────
+  churnScore: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 1,
+  },
+  churnInterventionSentAt: Date,
+  churnInterventionTier: {
+    type: String,
+    enum: ['none', 'push', 'email', 'boost'],
+    default: 'none',
+  },
+  freeBoostGrantedAt: Date,
+
+  // ── Notification Timing Engine ──────────────────────────────────────────────
+  // 24-slot array (one per UTC hour) tracking sent/opened counts
+  notificationEngagement: [{
+    hour:        { type: Number, min: 0, max: 23 },
+    sent:        { type: Number, default: 0 },
+    opened:      { type: Number, default: 0 },
+    lastUpdated: { type: Date },
+  }],
+  lastNotificationOpenedAt: Date,
+  totalNotificationOpens:   { type: Number, default: 0 },
   premium: {
     isActive: {
       type: Boolean,

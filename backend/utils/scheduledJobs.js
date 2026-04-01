@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { sendRenewalReminderEmail, sendInactivityEmail } = require('./emailService');
+const { runChurnPrediction } = require('./churnEngine');
 
 const THIRTY_DAYS_MS   = 30 * 24 * 60 * 60 * 1000;
 const THREE_DAYS_MS    =  3 * 24 * 60 * 60 * 1000;
@@ -99,12 +100,22 @@ const runInactivityEmails = async () => {
 const startScheduledJobs = () => {
   console.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
 
-  // Run immediately on startup, then on interval
+  // Run email jobs immediately on startup, then on interval
   runRenewalReminders();
   runInactivityEmails();
 
   setInterval(runRenewalReminders, CHECK_INTERVAL);
   setInterval(runInactivityEmails, CHECK_INTERVAL);
+
+  // Churn prediction runs every 6 hours (more intensive — queries multiple collections)
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  // Delay first churn run by 2 minutes so DB connection is settled
+  setTimeout(() => {
+    runChurnPrediction();
+    setInterval(runChurnPrediction, SIX_HOURS);
+  }, 2 * 60 * 1000);
+
+  console.log('[ScheduledJobs] Churn prediction engine scheduled (every 6 hours).');
 };
 
 module.exports = { startScheduledJobs };
