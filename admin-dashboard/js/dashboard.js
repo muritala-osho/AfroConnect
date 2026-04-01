@@ -393,11 +393,27 @@ async function loadUsers() {
         <td>${escapeHtml(u.location?.city || u.location?.country || 'N/A')}</td>
         <td>${u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'N/A'}</td>
         <td>
-          <button class="btn-sm btn-primary" onclick="viewUserDetail('${id}')">View</button>
-          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" onclick="toggleBan('${id}', ${!u.isBanned})">${u.isBanned ? 'Unban' : 'Ban'}</button>
+          <button class="btn-sm btn-primary" data-action="view" data-userid="${id}">View</button>
+          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" data-action="ban" data-userid="${id}" data-banned="${u.isBanned}">
+            ${u.isBanned ? 'Unban' : 'Ban'}
+          </button>
         </td>
       </tr>`;
     }).join('');
+    if (tbody._userClickHandler) {
+      tbody.removeEventListener('click', tbody._userClickHandler);
+    }
+    tbody._userClickHandler = function(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+      const userId = btn.dataset.userid;
+      if (btn.dataset.action === 'view') {
+        viewUserDetail(userId);
+      } else if (btn.dataset.action === 'ban') {
+        toggleBan(userId, btn.dataset.banned !== 'true');
+      }
+    };
+    tbody.addEventListener('click', tbody._userClickHandler);
   } catch (e) {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">Could not load users</td></tr>';
   }
