@@ -145,7 +145,9 @@ router.put('/me', protect, async (req, res) => {
         // Handle preference updates
         else if (field === 'preferences') {
           // Merge preferences instead of replacing
+          const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language'];
           Object.keys(updates.preferences).forEach(prefKey => {
+            if (!allowedPrefKeys.includes(prefKey)) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
               user.preferences.ageRange = {
                 ...(user.preferences.ageRange || {}),
