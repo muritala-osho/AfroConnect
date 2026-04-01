@@ -7,13 +7,6 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 
-// Debug: Log Cloudinary config status
-console.log('Cloudinary config check:', {
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? 'SET' : 'NOT SET',
-  api_key: process.env.CLOUDINARY_API_KEY ? 'SET' : 'NOT SET',
-  api_secret: process.env.CLOUDINARY_API_SECRET ? 'SET' : 'NOT SET'
-});
-
 const { sendExpoPushNotification } = require('./utils/pushNotifications');
 const Message = require('./models/Message');
 
