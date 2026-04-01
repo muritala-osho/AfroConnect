@@ -378,7 +378,7 @@ async function loadUsers() {
     }
     tbody.innerHTML = users.slice(0, 50).map(u => {
       const rawPhoto = Array.isArray(u.photos) ? (typeof u.photos[0] === 'string' ? u.photos[0] : u.photos[0]?.url) : null;
-      const photo = sanitizeUrl(rawPhoto) || 'https://via.placeholder.com/32';
+      const photo = escapeHtml(sanitizeUrl(rawPhoto) || 'https://via.placeholder.com/32');
       const id = escapeHtml(u._id);
       return `
       <tr>
