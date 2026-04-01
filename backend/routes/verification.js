@@ -128,16 +128,12 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
     user.verificationRejectionReason = null;
     await user.save();
 
-    // Send verification success email
+    // Send verification approved email
     try {
-      await emailService.sendEmail({
-        to: user.email,
-        subject: 'Your AfroConnect Profile is Verified!',
-        text: `Hi ${user.name},\n\nGreat news! Your profile has been verified. You now have a verified badge on your profile which helps build trust and increases your chances of getting matches.\n\nHappy connecting!`,
-        html: `<h1>Verified!</h1><p>Hi ${user.name},</p><p>Great news! Your profile has been verified. You now have a verified badge on your profile which helps build trust and increases your chances of getting matches.</p><p>Happy connecting!</p>`
-      });
+      const { sendVerificationApprovedEmail } = require('../utils/emailService');
+      await sendVerificationApprovedEmail(user.email, user.name);
     } catch (emailError) {
-      console.error('Failed to send verification email:', emailError);
+      console.error('Failed to send verification approved email:', emailError);
     }
 
     res.json({
@@ -170,6 +166,14 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
     user.verificationRejectionReason = reason || 'Photos do not meet requirements';
     user.verificationApprovedAt = null;
     await user.save();
+
+    // Send rejection email
+    try {
+      const { sendVerificationRejectedEmail } = require('../utils/emailService');
+      await sendVerificationRejectedEmail(user.email, user.name, reason);
+    } catch (emailError) {
+      console.error('Failed to send verification rejection email:', emailError);
+    }
 
     res.json({
       success: true,

@@ -17,15 +17,6 @@ import { adminApi, clearToken } from './services/adminApi';
 
 const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support'];
 
-const AfroLogo = () => (
-  <svg width="100%" height="100%" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M100 20C55.8 20 20 55.8 20 100C20 144.2 55.8 180 100 180C144.2 180 180 144.2 180 100C180 55.8 144.2 20 100 20Z" fill="#14B8A6"/>
-    <path d="M75 90C75 80 85 75 100 75C115 75 125 80 125 90V130C125 135 120 140 115 140H85C80 140 75 135 75 130V90Z" fill="white"/>
-    <circle cx="100" cy="55" r="20" fill="white"/>
-    <path d="M100 25C108 25 115 32 115 40C115 48 108 55 100 55C92 55 85 48 85 40C85 32 92 25 100 25Z" fill="#2DD4BF"/>
-    <path d="M100 10C115 10 125 20 125 35C125 50 115 60 100 60C85 60 75 50 75 35C75 20 85 10 100 10Z" fill="#2DD4BF" opacity="0.3"/>
-  </svg>
-);
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -131,8 +122,8 @@ const App: React.FC = () => {
             >
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             </button>
-            <div className="h-28 w-28 bg-white rounded-[2.5rem] mx-auto flex items-center justify-center mb-6 shadow-2xl p-4">
-              <AfroLogo />
+            <div className="h-28 w-28 bg-white rounded-[2.5rem] mx-auto flex items-center justify-center mb-6 shadow-2xl overflow-hidden">
+              <img src="/afroconnect-logo.png" alt="AfroConnect" className="w-full h-full object-cover" />
             </div>
             <h2 className="text-3xl font-black tracking-tight">AfroConnect</h2>
             <p className="text-teal-100 text-[10px] font-black uppercase tracking-[0.2em] mt-2 opacity-80">Admin Command Center</p>
@@ -241,7 +232,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard'    && <DashboardHome />}
-            {activeTab === 'users'        && <UserManagement />}
+            {activeTab === 'users'        && <UserManagement showToast={showToast} />}
             {activeTab === 'analytics'    && <Analytics />}
             {activeTab === 'payments'     && <Payments />}
             {activeTab === 'reports'      && <ReportsQueue />}

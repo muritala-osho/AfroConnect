@@ -67,17 +67,32 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
 
     const reportedUser = await User.findById(report.reportedUser);
     
-    if (action === 'warn') {
-      reportedUser.warnings = (reportedUser.warnings || 0) + 1;
-      await reportedUser.save();
-    } else if (action === 'suspend') {
-      reportedUser.suspended = true;
-      reportedUser.suspendedUntil = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
-      await reportedUser.save();
-    } else if (action === 'ban') {
-      reportedUser.banned = true;
-      reportedUser.bannedAt = Date.now();
-      await reportedUser.save();
+    if (reportedUser) {
+      if (action === 'warn') {
+        reportedUser.warnings = (reportedUser.warnings || 0) + 1;
+        await reportedUser.save();
+        try {
+          const { sendWarningEmail } = require('../utils/emailService');
+          await sendWarningEmail(reportedUser.email, reportedUser.name, notes || 'Violation of community guidelines');
+        } catch (e) { console.error('Warning email failed:', e.message); }
+      } else if (action === 'suspend') {
+        reportedUser.suspended = true;
+        reportedUser.suspendedUntil = Date.now() + 7 * 24 * 60 * 60 * 1000;
+        await reportedUser.save();
+        try {
+          const { sendSuspensionEmail } = require('../utils/emailService');
+          await sendSuspensionEmail(reportedUser.email, reportedUser.name, notes || 'Repeated violation of community guidelines', 7);
+        } catch (e) { console.error('Suspension email failed:', e.message); }
+      } else if (action === 'ban') {
+        reportedUser.banned = true;
+        reportedUser.bannedAt = Date.now();
+        reportedUser.banReason = notes;
+        await reportedUser.save();
+        try {
+          const { sendBanNotificationEmail } = require('../utils/emailService');
+          await sendBanNotificationEmail(reportedUser.email, reportedUser.name, notes || 'Violation of community guidelines');
+        } catch (e) { console.error('Ban email failed:', e.message); }
+      }
     }
 
     res.json({
@@ -116,6 +131,8 @@ router.get('/users', protect, isAdmin, async (req, res) => {
     }
     if (status) {
       if (status === 'banned') query.banned = true;
+      if (status === 'suspended') query.suspended = true;
+      if (status === 'warned') query.warnings = { $gt: 0 };
       if (status === 'verified') query.verified = true;
       if (status === 'pending_verification') query.verificationStatus = 'pending';
     }

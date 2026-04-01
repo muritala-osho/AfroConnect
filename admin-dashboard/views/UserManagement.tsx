@@ -7,7 +7,11 @@ import {
 import { analyzeUserContent, ModerationResult } from '../services/geminiServices';
 import { adminApi } from '../services/adminApi';
 
-const UserManagement: React.FC = () => {
+interface UserManagementProps {
+  showToast?: (message: string, type: 'success' | 'error') => void;
+}
+
+const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -17,6 +21,7 @@ const UserManagement: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned' | 'warned'>('all');
+  const [confirmBanUser, setConfirmBanUser] = useState<any | null>(null);
 
   const MOCK_USERS = [
     { _id: 'm1', name: 'Amara Diallo', email: 'amara.diallo@example.com', location: { country: 'Ghana' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-01-15', photos: [] },
@@ -62,6 +67,7 @@ const UserManagement: React.FC = () => {
   const mapUserStatus = (user: any) => {
     if (user.banned) return 'banned';
     if (user.suspended) return 'suspended';
+    if (user.warnings && user.warnings > 0) return 'warned';
     return 'active';
   };
 
@@ -94,21 +100,24 @@ const UserManagement: React.FC = () => {
         const updated = { ...selectedUser, banned: !isBanned };
         setSelectedUser(updated);
         setUsers(prev => prev.map(u => u._id === updated._id ? updated : u));
+        showToast?.(isBanned ? `${selectedUser.name}'s access has been restored.` : `${selectedUser.name} has been banned. User has been notified by email.`, isBanned ? 'success' : 'error');
       }
     } catch (err) {
       console.error('Ban toggle failed:', err);
+      showToast?.('Action failed. Try again.', 'error');
     }
   };
 
-  const handleDelete = async (userId: string) => {
-    if (window.confirm("Are you sure you want to permanently ban this account?")) {
-      try {
-        await adminApi.banUser(userId, true, 'Permanently banned by admin');
-        setUsers(prev => prev.filter(u => u._id !== userId));
-        setIsModalOpen(false);
-      } catch (err) {
-        console.error('Delete failed:', err);
-      }
+  const handleConfirmBan = async (user: any) => {
+    setConfirmBanUser(null);
+    try {
+      await adminApi.banUser(user._id, true, 'Permanently banned by admin');
+      setUsers(prev => prev.map(u => u._id === user._id ? { ...u, banned: true } : u));
+      if (selectedUser?._id === user._id) setSelectedUser((prev: any) => ({ ...prev, banned: true }));
+      showToast?.(`${user.name} has been permanently banned.`, 'error');
+    } catch (err) {
+      console.error('Ban failed:', err);
+      showToast?.('Action failed. Try again.', 'error');
     }
   };
 
@@ -139,6 +148,7 @@ const UserManagement: React.FC = () => {
             >
               <option value="all">All Citizens</option>
               <option value="active">Active</option>
+              <option value="warned">Warned</option>
               <option value="suspended">Suspended</option>
               <option value="banned">Banned</option>
             </select>
@@ -185,6 +195,7 @@ const UserManagement: React.FC = () => {
                   <td className="px-8 py-5">
                     <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
                       status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 
+                      status === 'warned' ? 'bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400' :
                       status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400' : 
                       'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400'
                     }`}>
@@ -212,8 +223,9 @@ const UserManagement: React.FC = () => {
                         <Eye size={18} />
                       </button>
                       <button 
-                        onClick={() => handleDelete(user._id)}
+                        onClick={() => setConfirmBanUser(user)}
                         className="p-2.5 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all shadow-sm"
+                        title="Ban user"
                       >
                         <UserX size={18} />
                       </button>
@@ -294,7 +306,7 @@ const UserManagement: React.FC = () => {
                     }`}
                   >
                     {selectedUser.banned ? <CheckCircle2 size={18}/> : <UserX size={18}/>}
-                    {selectedUser.banned ? 'Restore Access' : 'Suspend Access'}
+                    {selectedUser.banned ? 'Restore Access' : 'Ban User'}
                   </button>
                 </div>
               </div>
@@ -512,12 +524,12 @@ const UserManagement: React.FC = () => {
                           <ShieldAlert size={48} className="text-rose-500 opacity-20" />
                        </div>
                        <button 
-                         onClick={() => handleDelete(selectedUser._id)}
+                         onClick={() => setConfirmBanUser(selectedUser)}
                          className="p-10 bg-rose-500/5 hover:bg-rose-500/10 rounded-[3rem] border border-rose-500/20 text-rose-600 flex items-center justify-between transition-all group"
                        >
                          <div className="text-left">
                             <p className="text-[10px] font-black uppercase tracking-widest mb-2">Management Tier</p>
-                            <p className="text-2xl font-black group-hover:translate-x-1 transition-transform">Purge Citizen Node</p>
+                            <p className="text-2xl font-black group-hover:translate-x-1 transition-transform">Permanently Ban User</p>
                          </div>
                          <UserX size={48} className="opacity-30 group-hover:scale-110 transition-transform" />
                        </button>
@@ -525,6 +537,37 @@ const UserManagement: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmBanUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-sm w-full p-10 text-center border border-rose-100 dark:border-rose-500/20">
+            <div className="h-20 w-20 bg-rose-100 dark:bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <UserX size={36} className="text-rose-500" />
+            </div>
+            <h3 className="text-xl font-black dark:text-white mb-3">Permanently Ban User?</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-2">
+              You are about to permanently ban <strong className="text-gray-800 dark:text-white">{confirmBanUser.name}</strong>.
+            </p>
+            <p className="text-xs text-slate-400 mb-8">
+              They will be notified by email and lose access immediately.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmBanUser(null)}
+                className="flex-1 py-4 rounded-2xl bg-gray-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleConfirmBan(confirmBanUser)}
+                className="flex-1 py-4 rounded-2xl bg-rose-500 text-white font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20"
+              >
+                Ban User
+              </button>
             </div>
           </div>
         </div>
