@@ -478,18 +478,18 @@ async function loadReports() {
     container.innerHTML = reports.slice(0, 20).map(r => `
       <div class="report-card">
         <div class="report-header">
-          <span class="report-reason">${r.reason || r.type || 'Report'}</span>
+          <span class="report-reason">${escapeHtml(r.reason || r.type || 'Report')}</span>
           <span class="report-date">${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</span>
         </div>
         <div class="report-users">
-          <span>Reporter: ${r.reporter?.name || 'Anonymous'}</span> &rarr;
-          <span>Reported: ${r.reported?.name || 'Unknown'}</span>
+          <span>Reporter: ${escapeHtml(r.reporter?.name || 'Anonymous')}</span> &rarr;
+          <span>Reported: ${escapeHtml(r.reported?.name || 'Unknown')}</span>
         </div>
-        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${r.description || ''}</p>
+        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${escapeHtml(r.description || '')}</p>
         <div class="report-actions">
-          <button class="btn-sm btn-success" onclick="resolveReport('${r._id}', 'dismiss')">Dismiss</button>
-          <button class="btn-sm btn-warning" onclick="resolveReport('${r._id}', 'warn')">Warn</button>
-          <button class="btn-sm btn-danger" onclick="resolveReport('${r._id}', 'ban')">Ban</button>
+          <button class="btn-sm btn-success" onclick="resolveReport('${escapeHtml(r._id)}', 'dismiss')">Dismiss</button>
+          <button class="btn-sm btn-warning" onclick="resolveReport('${escapeHtml(r._id)}', 'warn')">Warn</button>
+          <button class="btn-sm btn-danger" onclick="resolveReport('${escapeHtml(r._id)}', 'ban')">Ban</button>
         </div>
       </div>
     `).join('');
