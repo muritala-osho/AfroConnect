@@ -475,26 +475,58 @@ async function loadReports() {
       container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No pending reports</p></div>';
       return;
     }
-    container.innerHTML = reports.slice(0, 20).map(r => `
-      <div class="report-card">
-        <div class="report-header">
-          <span class="report-reason">${escapeHtml(r.reason || r.type || 'Report')}</span>
-          <span class="report-date">${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ''}</span>
-        </div>
-        <div class="report-users">
-          <span>Reporter: ${escapeHtml(r.reporter?.name || 'Anonymous')}</span> &rarr;
-          <span>Reported: ${escapeHtml(r.reported?.name || 'Unknown')}</span>
-        </div>
-        <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">${escapeHtml(r.description || '')}</p>
-        <div class="report-actions">
-          <button class="btn-sm btn-success" data-report-id="${escapeHtml(r._id)}" data-action="dismiss">Dismiss</button>
-          <button class="btn-sm btn-warning" data-report-id="${escapeHtml(r._id)}" data-action="warn">Warn</button>
-          <button class="btn-sm btn-danger" data-report-id="${escapeHtml(r._id)}" data-action="ban">Ban</button>
-        </div>
-      </div>
-    `).join('');
-    container.querySelectorAll('[data-report-id]').forEach(btn => {
-      btn.addEventListener('click', () => resolveReport(btn.dataset.reportId, btn.dataset.action));
+    container.innerHTML = '';
+    reports.slice(0, 20).forEach(r => {
+      const card = document.createElement('div');
+      card.className = 'report-card';
+
+      const header = document.createElement('div');
+      header.className = 'report-header';
+      const reason = document.createElement('span');
+      reason.className = 'report-reason';
+      reason.textContent = r.reason || r.type || 'Report';
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'report-date';
+      dateSpan.textContent = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '';
+      header.appendChild(reason);
+      header.appendChild(dateSpan);
+
+      const users = document.createElement('div');
+      users.className = 'report-users';
+      const reporterSpan = document.createElement('span');
+      reporterSpan.textContent = 'Reporter: ' + (r.reporter?.name || 'Anonymous');
+      const arrow = document.createTextNode(' \u2192 ');
+      const reportedSpan = document.createElement('span');
+      reportedSpan.textContent = 'Reported: ' + (r.reported?.name || 'Unknown');
+      users.appendChild(reporterSpan);
+      users.appendChild(arrow);
+      users.appendChild(reportedSpan);
+
+      const desc = document.createElement('p');
+      desc.style.cssText = 'font-size:13px;color:var(--text-secondary);margin-bottom:8px';
+      desc.textContent = r.description || '';
+
+      const actions = document.createElement('div');
+      actions.className = 'report-actions';
+      [
+        { cls: 'btn-sm btn-success', action: 'dismiss', label: 'Dismiss' },
+        { cls: 'btn-sm btn-warning', action: 'warn',    label: 'Warn'    },
+        { cls: 'btn-sm btn-danger',  action: 'ban',     label: 'Ban'     },
+      ].forEach(({ cls, action, label }) => {
+        const btn = document.createElement('button');
+        btn.className = cls;
+        btn.dataset.reportId = r._id;
+        btn.dataset.action = action;
+        btn.textContent = label;
+        btn.addEventListener('click', () => resolveReport(btn.dataset.reportId, btn.dataset.action));
+        actions.appendChild(btn);
+      });
+
+      card.appendChild(header);
+      card.appendChild(users);
+      card.appendChild(desc);
+      card.appendChild(actions);
+      container.appendChild(card);
     });
   } catch (e) {
     const container = document.getElementById('reportsContainer');
