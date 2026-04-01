@@ -274,6 +274,8 @@ app.use('/api/subscription', subscriptionRoutes);
 const engagementRoutes = require('./routes/engagement');
 app.use('/api/engagement', engagementRoutes);
 app.use('/api/comments', commentsRoutes);
+const streakRoutes = require('./routes/streak');
+app.use('/api/streak', streakRoutes);
 
 logRoutes();
 

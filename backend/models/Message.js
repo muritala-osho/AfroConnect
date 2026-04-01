@@ -110,7 +110,11 @@ const messageSchema = new mongoose.Schema({
     default: false
   },
   storyReaction: storyReactionSchema,
-  replyTo: replyToSchema
+  replyTo: replyToSchema,
+  reactions: [{
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    emoji: { type: String }
+  }]
 }, {
   timestamps: true
 });

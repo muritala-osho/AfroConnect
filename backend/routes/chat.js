@@ -373,7 +373,11 @@ router.post("/:matchId", protect, async (req, res) => {
     }
 
     // Update lastMessageAt on the Match so conversations sort correctly
-    await Match.findByIdAndUpdate(matchId, { lastMessageAt: new Date() });
+    // Also mark hasFirstMessage so expiry countdown stops
+    await Match.findByIdAndUpdate(matchId, { 
+      lastMessageAt: new Date(),
+      $set: { hasFirstMessage: true }
+    });
 
     // Invalidate conversation caches for both users so next fetch is fresh
     await redis.del(`conversations:${req.user._id.toString()}`);
@@ -815,4 +819,57 @@ router.delete("/:matchId", protect, async (req, res) => {
   }
 });
 
+router.post('/:matchId/messages/:messageId/react', protect, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    const { matchId, messageId } = req.params;
+    const userId = req.user._id;
+
+    if (!emoji) return res.status(400).json({ success: false, message: 'Emoji required' });
+
+    const Message = require('../models/Message');
+    const message = await Message.findOne({ _id: messageId, matchId });
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+
+    const existingIdx = message.reactions.findIndex(r => r.user.toString() === userId.toString());
+    if (existingIdx !== -1) {
+      if (message.reactions[existingIdx].emoji === emoji) {
+        message.reactions.splice(existingIdx, 1);
+      } else {
+        message.reactions[existingIdx].emoji = emoji;
+      }
+    } else {
+      message.reactions.push({ user: userId, emoji });
+    }
+
+    await message.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(matchId).emit('message:reaction', {
+        messageId,
+        reactions: message.reactions
+      });
+    }
+
+    res.json({ success: true, reactions: message.reactions });
+  } catch (error) {
+    console.error('React to message error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/:matchId/messages/:messageId/reactions', protect, async (req, res) => {
+  try {
+    const { matchId, messageId } = req.params;
+    const Message = require('../models/Message');
+    const message = await Message.findOne({ _id: messageId, matchId }).populate('reactions.user', 'name');
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+    res.json({ success: true, reactions: message.reactions });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
+

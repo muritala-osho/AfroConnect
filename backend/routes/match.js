@@ -189,7 +189,71 @@ router.get('/my-matches', protect, async (req, res) => {
       return true;
     });
 
-    res.json({ success: true, matches: uniqueMatches });
+    const enriched = uniqueMatches.map(match => {
+      const matchObj = match.toObject();
+      const expiresAt = match.hasFirstMessage ? null : match.expiresAt;
+      const now = new Date();
+      const isExpired = expiresAt && new Date(expiresAt) < now;
+      const msLeft = expiresAt ? Math.max(0, new Date(expiresAt) - now) : null;
+
+      const otherUser = match.users.find(u => u._id.toString() !== req.user._id.toString());
+      const myInterests = currentUser.interests || [];
+      const theirInterests = (otherUser && otherUser.interests) ? otherUser.interests : [];
+      const sharedCount = myInterests.filter(i => theirInterests.includes(i)).length;
+      const computedScore = Math.min(100, 60 + sharedCount * 8);
+
+      return {
+        ...matchObj,
+        expiresAt,
+        isExpired,
+        msLeft,
+        compatibilityScore: match.compatibilityScore || computedScore
+      };
+    });
+
+    res.json({ success: true, matches: enriched });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/second-chance', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('swipedLeft secondChancePasses');
+    const passedIds = (user.secondChancePasses || []).map(p => p.targetUserId.toString());
+    const eligibleIds = (user.swipedLeft || [])
+      .filter(id => !passedIds.includes(id.toString()))
+      .slice(-20);
+
+    if (eligibleIds.length === 0) {
+      return res.json({ success: true, profiles: [] });
+    }
+
+    const profiles = await User.find({ _id: { $in: eligibleIds } })
+      .select('name age bio photos interests verified location lifestyle gender');
+
+    const processedProfiles = profiles.map(p => {
+      const pObj = p.toObject();
+      const myInterests = user.interests || [];
+      const sharedInterests = (pObj.interests || []).filter(i => myInterests.includes(i));
+      return { ...pObj, sharedInterests };
+    });
+
+    res.json({ success: true, profiles: processedProfiles });
+  } catch (error) {
+    console.error('Second chance error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/second-chance/pass', protect, async (req, res) => {
+  try {
+    const { targetUserId } = req.body;
+    if (!targetUserId) return res.status(400).json({ success: false, message: 'targetUserId required' });
+    await User.findByIdAndUpdate(req.user._id, {
+      $push: { secondChancePasses: { targetUserId } }
+    });
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }

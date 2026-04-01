@@ -27,6 +27,20 @@ const matchSchema = new mongoose.Schema({
   lastMessageAt: {
     type: Date,
     default: null
+  },
+  expiresAt: {
+    type: Date,
+    default: function() {
+      return new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+  },
+  hasFirstMessage: {
+    type: Boolean,
+    default: false
+  },
+  compatibilityScore: {
+    type: Number,
+    default: null
   }
 }, {
   timestamps: true

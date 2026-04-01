@@ -495,6 +495,16 @@ const userSchema = new mongoose.Schema({
     count: { type: Number, default: 0 },
     lastReset: { type: Date, default: Date.now }
   },
+  streak: {
+    current: { type: Number, default: 0 },
+    longest: { type: Number, default: 0 },
+    lastLoginDate: { type: Date, default: null },
+    freezeUsed: { type: Boolean, default: false }
+  },
+  secondChancePasses: [{
+    targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    passedAt: { type: Date, default: Date.now }
+  }],
   profileComments: [{
     _id: mongoose.Schema.Types.ObjectId,
     authorId: mongoose.Schema.Types.ObjectId,

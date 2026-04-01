@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { View, StyleSheet, Pressable, FlatList, ActivityIndicator, Dimensions, RefreshControl } from "react-native";
+import { View, StyleSheet, Pressable, FlatList, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -10,7 +11,6 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -53,6 +53,10 @@ interface MatchWithUser {
   compatibilityScore?: number;
   isPerfectMatch?: boolean;
   isSuggested?: boolean;
+  expiresAt?: string | null;
+  isExpired?: boolean;
+  msLeft?: number | null;
+  hasFirstMessage?: boolean;
 }
 
 const getCountryFlag = (countryCode?: string): string => {
@@ -62,6 +66,36 @@ const getCountryFlag = (countryCode?: string): string => {
     .split('')
     .map(char => 127397 + char.charCodeAt(0));
   return String.fromCodePoint(...codePoints);
+};
+
+const useCountdown = (expiresAt?: string | null, hasFirstMessage?: boolean) => {
+  const getMs = () => {
+    if (!expiresAt || hasFirstMessage) return null;
+    return Math.max(0, new Date(expiresAt).getTime() - Date.now());
+  };
+  const [msLeft, setMsLeft] = useState<number | null>(getMs);
+
+  useEffect(() => {
+    if (!expiresAt || hasFirstMessage) { setMsLeft(null); return; }
+    const interval = setInterval(() => {
+      const ms = getMs();
+      setMsLeft(ms);
+      if (ms !== null && ms <= 0) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, hasFirstMessage]);
+
+  return msLeft;
+};
+
+const formatCountdown = (ms: number): string => {
+  if (ms <= 0) return 'Expired';
+  const totalSecs = Math.floor(ms / 1000);
+  const h = Math.floor(totalSecs / 3600);
+  const m = Math.floor((totalSecs % 3600) / 60);
+  const s = totalSecs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s}s`;
 };
 
 const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibilityColor, t }: {
@@ -75,6 +109,8 @@ const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibil
   const photoSource = item.user.photos && item.user.photos[0] ? getPhotoSource(item.user.photos[0]) : null;
   const score = item.compatibilityScore || 0;
   const cardHeight = isTall ? TALL_CARD_HEIGHT : SHORT_CARD_HEIGHT;
+  const msLeft = useCountdown(item.expiresAt, item.hasFirstMessage);
+  const isExpiringSoon = msLeft !== null && msLeft < 3 * 60 * 60 * 1000;
 
   return (
     <Pressable
@@ -101,6 +137,13 @@ const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibil
       <View style={[styles.matchBadge, { backgroundColor: getCompatibilityColor(score) }]}>
         <ThemedText style={styles.matchBadgeText}>{t('match')} {score}%</ThemedText>
       </View>
+
+      {msLeft !== null && !item.hasFirstMessage && (
+        <View style={[styles.expiryBadge, { backgroundColor: isExpiringSoon ? '#FF3B30' : 'rgba(0,0,0,0.65)' }]}>
+          <Feather name="clock" size={9} color="#FFF" />
+          <ThemedText style={styles.expiryText}>{formatCountdown(msLeft)}</ThemedText>
+        </View>
+      )}
 
       {item.user.online && (
         <View style={styles.onlineDot} />
@@ -230,6 +273,9 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
             })(),
             isPerfectMatch: match.isPerfectMatch || false,
             isSuggested: match.isSuggested || false,
+            expiresAt: match.expiresAt || null,
+            hasFirstMessage: match.hasFirstMessage || false,
+            isExpired: match.isExpired || false,
           };
         });
         
@@ -667,6 +713,22 @@ const styles = StyleSheet.create({
     backgroundColor: "#4CAF50",
     borderWidth: 2,
     borderColor: "#121212",
+  },
+  expiryBadge: {
+    position: "absolute",
+    bottom: Spacing.lg + 8,
+    right: Spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  expiryText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFF",
   },
   cardInfo: {
     position: "absolute",

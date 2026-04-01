@@ -545,11 +545,26 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       return viewData;
     });
 
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const weeklyViews = (user.profileViews || []).filter(v => new Date(v.viewedAt) >= oneWeekAgo);
+    const weeklyViewCount = new Set(weeklyViews.map(v => v.user?._id?.toString()).filter(Boolean)).size;
+
+    const FriendRequest = require('../models/FriendRequest');
+    const almostLiked = await FriendRequest.countDocuments({
+      receiver: req.user._id,
+      status: 'pending',
+      createdAt: { $gte: oneWeekAgo }
+    });
+
     res.json({
       success: true,
       views: processedViews,
       isPremium,
-      totalCount: processedViews.length
+      totalCount: processedViews.length,
+      weeklyInsights: {
+        viewsThisWeek: weeklyViewCount,
+        almostLikedYou: almostLiked
+      }
     });
   } catch (error) {
     console.error('Who viewed me error:', error);

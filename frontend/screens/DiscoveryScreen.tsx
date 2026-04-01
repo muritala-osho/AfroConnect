@@ -40,6 +40,7 @@ import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { Dimension } from 'react-native'
+import StreakWidget from "@/components/StreakWidget";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -125,6 +126,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countries, setCountries] = useState<string[]>([]);
+  const [showSecondChance, setShowSecondChance] = useState(false);
+  const [secondChanceProfiles, setSecondChanceProfiles] = useState<any[]>([]);
+  const [secondChanceLoading, setSecondChanceLoading] = useState(false);
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
   
@@ -674,6 +678,42 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [token, api, showAlert, loadPotentialMatches]);
 
+  const openSecondChance = useCallback(async () => {
+    if (!token) return;
+    setShowSecondChance(true);
+    setSecondChanceLoading(true);
+    try {
+      const res = await api.get<{ success: boolean; profiles: any[] }>('/match/second-chance', token);
+      if (res.success && res.data?.profiles) {
+        setSecondChanceProfiles(res.data.profiles);
+      }
+    } catch (e) {
+      console.error('Second chance fetch error:', e);
+    } finally {
+      setSecondChanceLoading(false);
+    }
+  }, [token, api]);
+
+  const handleSecondChanceLike = useCallback(async (targetUser: any) => {
+    if (!token) return;
+    try {
+      await api.post<any>('/friends/request', { receiverId: targetUser._id }, token);
+      setSecondChanceProfiles(prev => prev.filter(p => p._id !== targetUser._id));
+    } catch (e) {
+      console.error('Second chance like error:', e);
+    }
+  }, [token, api]);
+
+  const handleSecondChancePass = useCallback(async (targetUser: any) => {
+    if (!token) return;
+    try {
+      await api.post<any>('/match/second-chance/pass', { targetUserId: targetUser._id }, token);
+      setSecondChanceProfiles(prev => prev.filter(p => p._id !== targetUser._id));
+    } catch (e) {
+      console.error('Second chance pass error:', e);
+    }
+  }, [token, api]);
+
   const renderHeader = () => (
     <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
       <View style={styles.headerLeft}>
@@ -723,6 +763,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       </View>
 
       <View style={styles.headerRight}>
+        <Pressable
+          style={styles.headerIconButton}
+          onPress={openSecondChance}
+        >
+          <Feather name="rotate-ccw" size={22} color={theme.text} />
+        </Pressable>
         <Pressable 
           style={[styles.headerIconButton, passportActive && { backgroundColor: theme.primary + '20' }]}
           onPress={handlePassportPress}
@@ -1409,6 +1455,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         </Modal>
 
+        <StreakWidget
+          compact={false}
+          onPress={() => {}}
+        />
+
         <View style={styles.cardWrapper}>
           {nextUser && (
             <View style={[styles.profileCard, styles.stackedCard]}>
@@ -1628,6 +1679,76 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         )}
         <AlertComponent />
+
+        <Modal
+          visible={showSecondChance}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowSecondChance(false)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
+            <View style={[{ backgroundColor: theme.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <ThemedText style={{ fontSize: 20, fontWeight: '700', color: theme.text }}>Second Chance 🔄</ThemedText>
+                <Pressable onPress={() => setShowSecondChance(false)}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <ThemedText style={{ color: theme.textSecondary, marginBottom: 20, fontSize: 14 }}>
+                People you may have swiped past. Give them another look!
+              </ThemedText>
+
+              {secondChanceLoading ? (
+                <ActivityIndicator size="large" color={theme.primary} style={{ marginTop: 40 }} />
+              ) : secondChanceProfiles.length === 0 ? (
+                <View style={{ alignItems: 'center', marginTop: 40, marginBottom: 40 }}>
+                  <Feather name="rotate-ccw" size={48} color={theme.textSecondary} />
+                  <ThemedText style={{ color: theme.textSecondary, marginTop: 16, textAlign: 'center' }}>
+                    No second chances yet.{'\n'}Keep swiping to build your list!
+                  </ThemedText>
+                </View>
+              ) : (
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {secondChanceProfiles.map(profile => {
+                    const photo = profile.photos?.[0];
+                    const photoSrc = photo ? (typeof photo === 'string' ? { uri: photo } : photo.url ? { uri: photo.url } : null) : null;
+                    return (
+                      <View key={profile._id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 10, backgroundColor: theme.surface }}>
+                        {photoSrc ? (
+                          <Image source={photoSrc} style={{ width: 60, height: 60, borderRadius: 30 }} contentFit="cover" />
+                        ) : (
+                          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }}>
+                            <Feather name="user" size={28} color={theme.textSecondary} />
+                          </View>
+                        )}
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <ThemedText style={{ fontSize: 16, fontWeight: '600', color: theme.text }}>{profile.name}, {profile.age}</ThemedText>
+                          {profile.sharedInterests?.length > 0 && (
+                            <ThemedText style={{ fontSize: 12, color: theme.primary, marginTop: 2 }}>
+                              {profile.sharedInterests.slice(0, 3).join(' · ')}
+                            </ThemedText>
+                          )}
+                        </View>
+                        <Pressable
+                          onPress={() => handleSecondChancePass(profile)}
+                          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.textSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}
+                        >
+                          <Feather name="x" size={18} color={theme.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          onPress={() => handleSecondChanceLike(profile)}
+                          style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' }}
+                        >
+                          <Feather name="heart" size={18} color="#FFF" />
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+          </View>
+        </Modal>
       </ThemedView>
     </GestureHandlerRootView>
   );

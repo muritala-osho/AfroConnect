@@ -65,6 +65,11 @@ interface ChatDetailScreenProps {
   route: ChatDetailScreenRouteProp;
 }
 
+interface MessageReaction {
+  user: string | { _id: string };
+  emoji: string;
+}
+
 interface Message {
   _id: string;
   sender: string | { _id: string };
@@ -87,6 +92,7 @@ interface Message {
   };
   deletedForEveryone?: boolean;
   deletedFor?: string[];
+  reactions?: MessageReaction[];
 }
 
 const EMOJI_LIST = [
@@ -352,6 +358,7 @@ export default function ChatDetailScreen({
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showTranslateModal, setShowTranslateModal] = useState(false);
   const [translatedText, setTranslatedText] = useState("");
   const [translating, setTranslating] = useState(false);
@@ -785,16 +792,20 @@ export default function ChatDetailScreen({
     socketService.on("chat:message-deleted", handleMessageDeleted);
     socketService.on("chat:user-typing", handleTyping);
     socketService.on("chat:recording-voice", handleRecordingVoice);
+    socketService.on("message:reaction", (data: { messageId: string; reactions: MessageReaction[] }) => {
+      setMessages(prev => prev.map(m => m._id === data.messageId ? { ...m, reactions: data.reactions } : m));
+    });
 
     return () => {
       socketService.off("chat:new-message");
       socketService.off("message:new");
-      socketService.off("chat:message-delivered"); // FIX: was missing
+      socketService.off("chat:message-delivered");
       socketService.off("chat:messages-read");
       socketService.off("chat:message-read");
       socketService.off("chat:read");
       socketService.off("chat:message-updated");
       socketService.off("chat:message-deleted");
+      socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
     };
@@ -1275,6 +1286,27 @@ export default function ChatDetailScreen({
     if (translatedText) { await Clipboard.setStringAsync(translatedText); Alert.alert("Copied", "Translation copied to clipboard"); }
   }, [translatedText]);
 
+  const handleReact = useCallback(async (emoji: string) => {
+    if (!selectedMessage || !matchId || !token) return;
+    setShowReactionPicker(false);
+    setShowMessageMenu(false);
+    try {
+      const response = await post<{ reactions: MessageReaction[] }>(
+        `/chat/${matchId}/messages/${selectedMessage._id}/react`,
+        { emoji },
+        token
+      );
+      if (response.success && response.data?.reactions) {
+        setMessages(prev => prev.map(m =>
+          m._id === selectedMessage._id ? { ...m, reactions: response.data!.reactions } : m
+        ));
+      }
+    } catch (e) {
+      console.error('React error:', e);
+    }
+    setSelectedMessage(null);
+  }, [selectedMessage, matchId, token, post]);
+
   const handleSubmitReport = async () => {
     if (!selectedReportReason) { Alert.alert("Select Reason", "Please select a reason for reporting"); return; }
     setSubmittingReport(true);
@@ -1499,13 +1531,34 @@ export default function ChatDetailScreen({
                         <Ionicons
                           name={item.status === "seen" || item.status === "delivered" ? "checkmark-done" : "checkmark"}
                           size={14}
-                          // seen = blue, delivered = bright white double tick, sent = dim single tick
                           color={item.status === "seen" ? "#4FC3F7" : item.status === "delivered" ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.4)"}
                           style={{ marginLeft: 4 }}
                         />
                       )}
                     </View>
                   </View>
+
+                  {item.reactions && item.reactions.length > 0 && (
+                    <View style={[styles.reactionsRow, isMe ? { alignSelf: 'flex-end', marginRight: 4 } : { alignSelf: 'flex-start', marginLeft: 48 }]}>
+                      {(() => {
+                        const grouped: Record<string, number> = {};
+                        (item.reactions || []).forEach(r => { grouped[r.emoji] = (grouped[r.emoji] || 0) + 1; });
+                        return Object.entries(grouped).map(([emoji, count]) => (
+                          <Pressable
+                            key={emoji}
+                            style={[styles.reactionBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.07)' }]}
+                            onPress={() => {
+                              setSelectedMessage(item);
+                              handleReact(emoji);
+                            }}
+                          >
+                            <ThemedText style={styles.reactionEmoji}>{emoji}</ThemedText>
+                            {count > 1 && <ThemedText style={[styles.reactionCount, { color: theme.textSecondary }]}>{count}</ThemedText>}
+                          </Pressable>
+                        ));
+                      })()}
+                    </View>
+                  )}
                 </View>
               </Pressable>
             </SwipeableMessage>
@@ -1880,6 +1933,15 @@ export default function ChatDetailScreen({
                 </ThemedText>
               </View>
             )}
+
+            <View style={styles.quickReactionBar}>
+              {["❤️","😂","😍","😮","😢","🔥","👏","💯"].map(emoji => (
+                <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
+                  <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
             <Pressable style={styles.messageMenuItem} onPress={handleReply}>
               <Feather name="corner-up-left" size={22} color={theme.primary} />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Reply</ThemedText>
@@ -2054,6 +2116,13 @@ const styles = StyleSheet.create<any>({
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
+  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 2 },
+  reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3 },
+  reactionEmoji: { fontSize: 14 },
+  reactionCount: { fontSize: 11, fontWeight: "600" },
+  quickReactionBar: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
+  quickReactionBtn: { padding: 6 },
+  quickReactionEmoji: { fontSize: 26 },
   audioWaveform: { flex: 1 },
   audioProgressBar: { height: 4, borderRadius: 2, overflow: "hidden" },
   audioProgressFill: { height: "100%", borderRadius: 2 },

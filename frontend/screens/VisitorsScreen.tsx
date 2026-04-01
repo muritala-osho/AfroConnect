@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal } from "react-native";
+import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
@@ -37,6 +38,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
 
   const [loading, setLoading] = useState(true);
   const [visitors, setVisitors] = useState<Visitor[]>([]);
+  const [weeklyInsights, setWeeklyInsights] = useState<{ viewsThisWeek: number; almostLikedYou: number } | null>(null);
   const isPremium = user?.premium?.isActive;
 
   const fetchVisitors = async () => {
@@ -46,6 +48,9 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
       const response = await get<any>('/users/who-viewed-me', token);
       if (response.success && response.data?.views) {
         setVisitors(response.data.views);
+      }
+      if (response.data?.weeklyInsights) {
+        setWeeklyInsights(response.data.weeklyInsights);
       }
     } catch (error) {
       console.error('Failed to fetch visitors:', error);
@@ -142,6 +147,37 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         <ThemedText style={styles.headerTitle}>Profile Visitors</ThemedText>
         <View style={{ width: 40 }} />
       </View>
+
+      {weeklyInsights && (weeklyInsights.viewsThisWeek > 0 || weeklyInsights.almostLikedYou > 0) && (
+        <LinearGradient
+          colors={['#FF6B6B', '#FF8E53']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.insightsBanner}
+        >
+          <ThemedText style={styles.insightsTitle}>Your Week in Review</ThemedText>
+          <View style={styles.insightsRow}>
+            <View style={styles.insightStat}>
+              <ThemedText style={styles.insightNumber}>{weeklyInsights.viewsThisWeek}</ThemedText>
+              <ThemedText style={styles.insightLabel}>Profile views{'\n'}this week</ThemedText>
+            </View>
+            <View style={styles.insightDivider} />
+            <View style={styles.insightStat}>
+              <ThemedText style={styles.insightNumber}>{weeklyInsights.almostLikedYou}</ThemedText>
+              <ThemedText style={styles.insightLabel}>People almost{'\n'}liked you</ThemedText>
+            </View>
+          </View>
+          {!isPremium && (
+            <Pressable
+              style={styles.insightsUpgradeBtn}
+              onPress={() => navigation.navigate("Premium")}
+            >
+              <Feather name="star" size={14} color="#FF6B6B" />
+              <ThemedText style={styles.insightsUpgradeText}>Upgrade to see who</ThemedText>
+            </Pressable>
+          )}
+        </LinearGradient>
+      )}
 
       <FlatList
         data={visitors}
@@ -277,6 +313,63 @@ const styles = StyleSheet.create({
   emptyText: {
     marginTop: Spacing.md,
     fontSize: 16,
+  },
+  insightsBanner: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 16,
+    padding: 16,
+  },
+  insightsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.85)',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  insightsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  insightStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  insightNumber: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#FFF',
+  },
+  insightLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    textAlign: 'center',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  insightDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 16,
+  },
+  insightsUpgradeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignSelf: 'center',
+    marginTop: 14,
+  },
+  insightsUpgradeText: {
+    color: '#FF6B6B',
+    fontWeight: '700',
+    fontSize: 13,
   },
   premiumBanner: {
     flexDirection: 'row',
