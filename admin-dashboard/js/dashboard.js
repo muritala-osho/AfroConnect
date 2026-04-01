@@ -377,22 +377,24 @@ async function loadUsers() {
       return;
     }
     tbody.innerHTML = users.slice(0, 50).map(u => {
-      const photo = Array.isArray(u.photos) ? (typeof u.photos[0] === 'string' ? u.photos[0] : u.photos[0]?.url) : null;
+      const rawPhoto = Array.isArray(u.photos) ? (typeof u.photos[0] === 'string' ? u.photos[0] : u.photos[0]?.url) : null;
+      const photo = sanitizeUrl(rawPhoto) || 'https://via.placeholder.com/32';
+      const id = escapeHtml(u._id);
       return `
       <tr>
         <td style="display:flex;align-items:center;gap:10px">
-          <img src="${photo || 'https://via.placeholder.com/32'}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.src='https://via.placeholder.com/32'">
+          <img src="${photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.src='https://via.placeholder.com/32'">
           <div>
-            <strong>${u.name || 'Unknown'}</strong>
-            <br><small style="color:var(--text-muted)">${u.email || ''}</small>
+            <strong>${escapeHtml(u.name || 'Unknown')}</strong>
+            <br><small style="color:var(--text-muted)">${escapeHtml(u.email || '')}</small>
           </div>
         </td>
         <td><span class="badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span></td>
-        <td>${u.location?.city || u.location?.country || 'N/A'}</td>
+        <td>${escapeHtml(u.location?.city || u.location?.country || 'N/A')}</td>
         <td>${u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'N/A'}</td>
         <td>
-          <button class="btn-sm btn-primary" onclick="viewUserDetail('${u._id}')">View</button>
-          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" onclick="toggleBan('${u._id}', ${!u.isBanned})">${u.isBanned ? 'Unban' : 'Ban'}</button>
+          <button class="btn-sm btn-primary" onclick="viewUserDetail('${id}')">View</button>
+          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" onclick="toggleBan('${id}', ${!u.isBanned})">${u.isBanned ? 'Unban' : 'Ban'}</button>
         </td>
       </tr>`;
     }).join('');
