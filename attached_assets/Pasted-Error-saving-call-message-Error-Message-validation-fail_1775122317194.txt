@@ -1,0 +1,113 @@
+Error saving call message: Error: Message validation failed: callType: `voice` is not a valid enum value for path `callType`.
+    at ValidationError.inspect (/home/runner/workspace/backend/node_modules/mongoose/lib/error/validation.js:52:26)
+    at formatValue (node:internal/util/inspect:828:19)
+    at inspect (node:internal/util/inspect:371:10)
+    at formatWithOptionsInternal (node:internal/util/inspect:2367:40)
+    at formatWithOptions (node:internal/util/inspect:2229:10)
+    at console.value (node:internal/console/constructor:350:14)
+    at console.warn (node:internal/console/constructor:383:61)
+    at saveCallMessage (/home/runner/workspace/backend/server.js:538:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)                                               
+    at async Socket.<anonymous> (/home/runner/workspace/backend/server.js:651:7) {
+  errors: {
+    callType: ValidatorError: `voice` is not a valid enum value for path `callType`.
+        at validate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1443:13)
+        at SchemaType.doValidate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1427:7)
+        at /home/runner/workspace/backend/node_modules/mongoose/lib/document.js:3126:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+      properties: [Object],
+      kind: 'enum',
+      path: 'callType',
+      value: 'voice',
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    }
+  },
+  _message: 'Message validation failed'
+}
+Call declined by 69ce2ba0671134d6f31490a6
+and check if the  match sounts work and if the count cancel once the match start chatting. also for the video call the users are not able to see themseleve and even  hear themselve end-enError saving call message: Error: Message validation failed: callType: `voice` is not a valid enum value for path `callType`.
+    at ValidationError.inspect (/home/runner/workspace/backend/node_modules/mongoose/lib/error/validation.js:52:26)
+    at formatValue (node:internal/util/inspect:828:19)
+    at inspect (node:internal/util/inspect:371:10)
+    at formatWithOptionsInternal (node:internal/util/inspect:2367:40)
+    at formatWithOptions (node:internal/util/inspect:2229:10)
+    at console.value (node:internal/console/constructor:350:14)
+    at console.warn (node:internal/console/constructor:383:61)
+    at saveCallMessage (/home/runner/workspace/backend/server.js:538:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)                                               
+    at async Socket.<anonymous> (/home/runner/workspace/backend/server.js:651:7) {
+  errors: {
+    callType: ValidatorError: `voice` is not a valid enum value for path `callType`.
+        at validate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1443:13)
+        at SchemaType.doValidate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1427:7)
+        at /home/runner/workspace/backend/node_modules/mongoose/lib/document.js:3126:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+      properties: [Object],
+      kind: 'enum',
+      path: 'callType',
+      value: 'voice',
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    }
+  },
+  _message: 'Message validation failed'
+}
+Call declined by 69ce2ba0671134d6f31490a6
+and check if the  match sounts work and if the count cancel once the match start chatting. also for the video call the users are not able to see themseleve and even  hear themselve end-endError saving call message: Error: Message validation failed: callType: `voice` is not a valid enum value for path `callType`.
+    at ValidationError.inspect (/home/runner/workspace/backend/node_modules/mongoose/lib/error/validation.js:52:26)
+    at formatValue (node:internal/util/inspect:828:19)
+    at inspect (node:internal/util/inspect:371:10)
+    at formatWithOptionsInternal (node:internal/util/inspect:2367:40)
+    at formatWithOptions (node:internal/util/inspect:2229:10)
+    at console.value (node:internal/console/constructor:350:14)
+    at console.warn (node:internal/console/constructor:383:61)
+    at saveCallMessage (/home/runner/workspace/backend/server.js:538:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)                                               
+    at async Socket.<anonymous> (/home/runner/workspace/backend/server.js:651:7) {
+  errors: {
+    callType: ValidatorError: `voice` is not a valid enum value for path `callType`.
+        at validate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1443:13)
+        at SchemaType.doValidate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1427:7)
+        at /home/runner/workspace/backend/node_modules/mongoose/lib/document.js:3126:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+      properties: [Object],
+      kind: 'enum',
+      path: 'callType',
+      value: 'voice',
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    }
+  },
+  _message: 'Message validation failed'
+}
+Call declined by 69ce2ba0671134d6f31490a6
+and check if the  match sounts work and if the count cancel once the match start chatting. also for the video call the users are not able to see themseleve and even  hear themselve end-endError saving call message: Error: Message validation failed: callType: `voice` is not a valid enum value for path `callType`.
+    at ValidationError.inspect (/home/runner/workspace/backend/node_modules/mongoose/lib/error/validation.js:52:26)
+    at formatValue (node:internal/util/inspect:828:19)
+    at inspect (node:internal/util/inspect:371:10)
+    at formatWithOptionsInternal (node:internal/util/inspect:2367:40)
+    at formatWithOptions (node:internal/util/inspect:2229:10)
+    at console.value (node:internal/console/constructor:350:14)
+    at console.warn (node:internal/console/constructor:383:61)
+    at saveCallMessage (/home/runner/workspace/backend/server.js:538:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)                                               
+    at async Socket.<anonymous> (/home/runner/workspace/backend/server.js:651:7) {
+  errors: {
+    callType: ValidatorError: `voice` is not a valid enum value for path `callType`.
+        at validate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1443:13)
+        at SchemaType.doValidate (/home/runner/workspace/backend/node_modules/mongoose/lib/schemaType.js:1427:7)
+        at /home/runner/workspace/backend/node_modules/mongoose/lib/document.js:3126:18
+        at process.processTicksAndRejections (node:internal/process/task_queues:77:11) {
+      properties: [Object],
+      kind: 'enum',
+      path: 'callType',
+      value: 'voice',
+      reason: undefined,
+      [Symbol(mongoose#validatorError)]: true
+    }
+  },
+  _message: 'Message validation failed'
+}
+Call declined by 69ce2ba0671134d6f31490a6
+and check if the  match sounts work and if the count cancel once the match start chatting. also for the video call the users are not able to see themseleve and even  hear themselve end-end

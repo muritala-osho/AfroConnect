@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Dimensions, Platform } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,6 +11,7 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
+import { Audio } from 'expo-av';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -38,6 +39,7 @@ interface MatchPopupScreenProps {
 export default function MatchPopupScreen({ navigation, route }: MatchPopupScreenProps) {
   const { currentUser, matchedUser, isSuperLike } = route.params;
   const insets = useSafeAreaInsets();
+  const matchSoundRef = useRef<Audio.Sound | null>(null);
   
   const leftPhotoScale = useSharedValue(0);
   const rightPhotoScale = useSharedValue(0);
@@ -56,7 +58,41 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-    
+
+    const playMatchSound = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/sounds/match-success.mp3'),
+          { shouldPlay: true, volume: 0.8 }
+        );
+        matchSoundRef.current = sound;
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.isLoaded && status.didJustFinish) {
+            sound.unloadAsync();
+            matchSoundRef.current = null;
+          }
+        });
+      } catch (err) {
+        console.log('Match sound error:', err);
+      }
+    };
+    playMatchSound();
+
+    return () => {
+      if (matchSoundRef.current) {
+        matchSoundRef.current.stopAsync().catch(() => {});
+        matchSoundRef.current.unloadAsync().catch(() => {});
+        matchSoundRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     // Photos fly in from sides and scale up
     leftPhotoScale.value = withDelay(100, withSpring(1, { damping: 12, stiffness: 100 }));
     rightPhotoScale.value = withDelay(200, withSpring(1, { damping: 12, stiffness: 100 }));

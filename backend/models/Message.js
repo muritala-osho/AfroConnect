@@ -38,7 +38,7 @@ const messageSchema = new mongoose.Schema({
   },
   callType: {
     type: String,
-    enum: ['video', 'audio']
+    enum: ['video', 'audio', 'voice']
   },
   callStatus: {
     type: String,

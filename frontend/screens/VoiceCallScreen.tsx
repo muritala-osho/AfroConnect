@@ -396,6 +396,9 @@ export default function VoiceCallScreen() {
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
+          onPermissionRequest={(request) => {
+            request.grant(request.resources);
+          }}
           onLoad={() => {
             setWebviewReady(true);
           }}

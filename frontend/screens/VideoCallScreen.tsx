@@ -516,6 +516,9 @@ export default function VideoCallScreen() {
             javaScriptEnabled={true}
             domStorageEnabled={true}
             onMessage={handleWebViewMessage}
+            onPermissionRequest={(request) => {
+              request.grant(request.resources);
+            }}
             onLoad={() => {
               setWebviewReady(true);
             }}
