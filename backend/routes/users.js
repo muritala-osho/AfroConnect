@@ -341,11 +341,19 @@ router.get('/nearby', protect, async (req, res) => {
 
     if (genders) {
       const genderArray = genders.split(',');
-      query.gender = { $in: genderArray };
+      const expandedGenders = [];
+      genderArray.forEach(g => {
+        expandedGenders.push(g);
+        if (g === 'male') expandedGenders.push('man');
+        else if (g === 'man') expandedGenders.push('male');
+        else if (g === 'female') expandedGenders.push('woman');
+        else if (g === 'woman') expandedGenders.push('female');
+      });
+      query.gender = { $in: [...new Set(expandedGenders)] };
     } else {
       const genderPref = currentUser.preferences?.genderPreference || 'both';
-      if (genderPref === 'male') query.gender = 'male';
-      else if (genderPref === 'female') query.gender = 'female';
+      if (genderPref === 'male') query.gender = { $in: ['male', 'man'] };
+      else if (genderPref === 'female') query.gender = { $in: ['female', 'woman'] };
     }
 
     let maxDist = maxDistance ? parseInt(maxDistance) : 50;
