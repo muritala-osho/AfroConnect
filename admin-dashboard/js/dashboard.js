@@ -376,30 +376,78 @@ async function loadUsers() {
       tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No users found</td></tr>';
       return;
     }
-    tbody.innerHTML = users.slice(0, 50).map(u => {
+    tbody.textContent = '';
+    users.slice(0, 50).forEach(u => {
       const rawPhoto = Array.isArray(u.photos) ? (typeof u.photos[0] === 'string' ? u.photos[0] : u.photos[0]?.url) : null;
-      const photo = escapeHtml(sanitizeUrl(rawPhoto) || 'https://via.placeholder.com/32');
-      const id = escapeHtml(u._id);
-      return `
-      <tr>
-        <td style="display:flex;align-items:center;gap:10px">
-          <img src="${photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover" onerror="this.src='https://via.placeholder.com/32'">
-          <div>
-            <strong>${escapeHtml(u.name || 'Unknown')}</strong>
-            <br><small style="color:var(--text-muted)">${escapeHtml(u.email || '')}</small>
-          </div>
-        </td>
-        <td><span class="badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span></td>
-        <td>${escapeHtml(u.location?.city || u.location?.country || 'N/A')}</td>
-        <td>${u.lastActive ? escapeHtml(new Date(u.lastActive).toLocaleDateString()) : 'N/A'}</td>
-        <td>
-          <button class="btn-sm btn-primary" data-action="view" data-userid="${id}">View</button>
-          <button class="btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}" data-action="ban" data-userid="${id}" data-banned="${escapeHtml(String(u.isBanned))}">
-            ${u.isBanned ? 'Unban' : 'Ban'}
-          </button>
-        </td>
-      </tr>`;
-    }).join('');
+      const photoSrc = sanitizeUrl(rawPhoto) || 'https://via.placeholder.com/32';
+      const id = String(u._id || '');
+
+      const tr = document.createElement('tr');
+
+      // Column 1: avatar + name / email
+      const td1 = document.createElement('td');
+      td1.style.cssText = 'display:flex;align-items:center;gap:10px';
+
+      const img = document.createElement('img');
+      img.src = photoSrc;
+      img.style.cssText = 'width:32px;height:32px;border-radius:50%;object-fit:cover';
+      img.onerror = function() { this.src = 'https://via.placeholder.com/32'; };
+
+      const infoDiv = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = u.name || 'Unknown';
+      const small = document.createElement('small');
+      small.style.color = 'var(--text-muted)';
+      small.textContent = u.email || '';
+      infoDiv.appendChild(strong);
+      infoDiv.appendChild(document.createElement('br'));
+      infoDiv.appendChild(small);
+
+      td1.appendChild(img);
+      td1.appendChild(infoDiv);
+
+      // Column 2: status badge
+      const td2 = document.createElement('td');
+      const badge = document.createElement('span');
+      badge.className = `badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}`;
+      badge.textContent = u.isBanned ? 'Banned' : 'Active';
+      td2.appendChild(badge);
+
+      // Column 3: location
+      const td3 = document.createElement('td');
+      td3.textContent = u.location?.city || u.location?.country || 'N/A';
+
+      // Column 4: last active
+      const td4 = document.createElement('td');
+      td4.textContent = u.lastActive ? new Date(u.lastActive).toLocaleDateString() : 'N/A';
+
+      // Column 5: actions
+      const td5 = document.createElement('td');
+
+      const viewBtn = document.createElement('button');
+      viewBtn.className = 'btn-sm btn-primary';
+      viewBtn.dataset.action = 'view';
+      viewBtn.dataset.userid = id;
+      viewBtn.textContent = 'View';
+
+      const banBtn = document.createElement('button');
+      banBtn.className = `btn-sm ${u.isBanned ? 'btn-success' : 'btn-danger'}`;
+      banBtn.dataset.action = 'ban';
+      banBtn.dataset.userid = id;
+      banBtn.dataset.banned = String(u.isBanned);
+      banBtn.textContent = u.isBanned ? 'Unban' : 'Ban';
+
+      td5.appendChild(viewBtn);
+      td5.appendChild(banBtn);
+
+      tr.appendChild(td1);
+      tr.appendChild(td2);
+      tr.appendChild(td3);
+      tr.appendChild(td4);
+      tr.appendChild(td5);
+
+      tbody.appendChild(tr);
+    });
     if (tbody._userClickHandler) {
       tbody.removeEventListener('click', tbody._userClickHandler);
     }
