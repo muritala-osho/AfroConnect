@@ -8,7 +8,11 @@
     "dev": "nodemon server.js",
     "test": "jest --detectOpenHandles",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "snyk:test": "snyk test --severity-threshold=high",
+    "snyk:monitor": "snyk monitor",
+    "snyk:fix": "snyk fix",
+    "security": "snyk test --severity-threshold=medium --json > snyk-report.json || true"
   },
   "jest": {
     "testEnvironment": "node",
@@ -56,6 +60,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "nodemon": "^3.0.1",
+    "snyk": "^1.1303.2",
     "supertest": "^7.1.4"
   },
   "overrides": {

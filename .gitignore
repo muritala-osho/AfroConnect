@@ -31,3 +31,9 @@ Thumbs.db
 # Replit
 .replit
 replit.nix
+
+# Snyk security reports
+snyk-report.json
+snyk-backend.sarif
+snyk-frontend.sarif
+*.sarif
