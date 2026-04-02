@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import DashboardHome from './views/DashboardHome';
 import UserManagement from './views/UserManagement';
@@ -14,10 +14,15 @@ import SupportDesk from './views/SupportDesk';
 import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
 import { AuthState, AdminRole } from './types';
-import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2 } from 'lucide-react';
+import { NAV_ITEMS } from './constants';
+import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 
 const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'appeals', 'churn'];
+
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_SECONDS = 60;
 
 
 const App: React.FC = () => {
@@ -41,6 +46,9 @@ const App: React.FC = () => {
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -62,14 +70,65 @@ const App: React.FC = () => {
     }
   }, [notification]);
 
+  const handleLogout = useCallback(() => {
+    setAuth({ isAuthenticated: false, user: null });
+    localStorage.removeItem('afroconnect_auth');
+    clearToken();
+    showToast('Session terminated safely.', 'success');
+  }, []);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated) return;
+
+    const resetTimer = () => {
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(() => {
+        handleLogout();
+        setNotification({ message: 'Session expired due to inactivity.', type: 'error' });
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'click'];
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive: true }));
+    resetTimer();
+
+    return () => {
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+    };
+  }, [auth.isAuthenticated, handleLogout]);
+
+  useEffect(() => {
+    if (lockoutRemaining <= 0) return;
+    const id = setInterval(() => {
+      setLockoutRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(id);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [lockoutRemaining]);
+
   const showToast = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
   };
 
   const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
 
+  const canAccessTab = (tabId: string): boolean => {
+    const role = auth.user?.role;
+    if (!role) return false;
+    const item = NAV_ITEMS.find(n => n.id === tabId);
+    if (!item) return true;
+    return item.roles.includes(role);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutRemaining > 0) return;
     setLoginLoading(true);
     setLoginError('');
     try {
@@ -80,6 +139,7 @@ const App: React.FC = () => {
         setLoginLoading(false);
         return;
       }
+      setLoginAttempts(0);
       setAuth({
         isAuthenticated: true,
         user: {
@@ -92,17 +152,18 @@ const App: React.FC = () => {
       showToast('Access authorized. Welcome back.', 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please try again.';
-      setLoginError(msg);
+      const next = loginAttempts + 1;
+      setLoginAttempts(next);
+      if (next >= MAX_LOGIN_ATTEMPTS) {
+        setLoginAttempts(0);
+        setLockoutRemaining(LOCKOUT_SECONDS);
+        setLoginError(`Too many failed attempts. Please wait ${LOCKOUT_SECONDS} seconds.`);
+      } else {
+        setLoginError(`${msg} (${MAX_LOGIN_ATTEMPTS - next} attempt${MAX_LOGIN_ATTEMPTS - next === 1 ? '' : 's'} remaining)`);
+      }
     } finally {
       setLoginLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    setAuth({ isAuthenticated: false, user: null });
-    localStorage.removeItem('afroconnect_auth');
-    clearToken();
-    showToast('Session terminated safely.', 'success');
   };
 
   const handleUpdateAdminProfile = (updatedAdmin: AuthState['user']) => {
@@ -168,13 +229,22 @@ const App: React.FC = () => {
               </div>
             )}
 
+            {lockoutRemaining > 0 && (
+              <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-2xl">
+                <Lock size={16} className="text-amber-500 shrink-0" />
+                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Account locked. Try again in {lockoutRemaining}s.
+                </span>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loginLoading}
-              className="w-full py-5 bg-teal-600 dark:bg-teal-500 text-white font-black rounded-2xl hover:bg-teal-700 shadow-xl shadow-teal-500/20 transition-all flex items-center justify-center uppercase tracking-widest text-xs active:scale-[0.98] disabled:opacity-60"
+              disabled={loginLoading || lockoutRemaining > 0}
+              className="w-full py-5 bg-teal-600 dark:bg-teal-500 text-white font-black rounded-2xl hover:bg-teal-700 shadow-xl shadow-teal-500/20 transition-all flex items-center justify-center uppercase tracking-widest text-xs active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loginLoading ? <Loader2 size={20} className="mr-3 animate-spin" /> : <LogIn size={20} className="mr-3" />}
-              {loginLoading ? 'Authenticating...' : 'Sign In'}
+              {loginLoading ? <Loader2 size={20} className="mr-3 animate-spin" /> : lockoutRemaining > 0 ? <Lock size={20} className="mr-3" /> : <LogIn size={20} className="mr-3" />}
+              {loginLoading ? 'Authenticating...' : lockoutRemaining > 0 ? `Locked (${lockoutRemaining}s)` : 'Sign In'}
             </button>
           </form>
 
@@ -233,19 +303,33 @@ const App: React.FC = () => {
 
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <div className="max-w-7xl mx-auto">
-            {activeTab === 'dashboard'    && <DashboardHome />}
-            {activeTab === 'users'        && <UserManagement showToast={showToast} />}
-            {activeTab === 'analytics'    && <Analytics />}
-            {activeTab === 'payments'     && <Payments />}
-            {activeTab === 'reports'      && <ReportsQueue />}
-            {activeTab === 'content'      && <ContentModeration showToast={showToast} />}
-            {activeTab === 'support'      && <SupportDesk showToast={showToast} />}
-            {activeTab === 'settings'     && <SystemSettings showToast={showToast} />}
-            {activeTab === 'verification' && <IDVerification />}
-            {activeTab === 'broadcasts'   && <Broadcasts showToast={showToast} />}
-            {activeTab === 'appeals'      && <Appeals showToast={showToast} />}
-            {activeTab === 'churn'        && <ChurnIntelligence showToast={showToast} />}
-            {activeTab === 'profile'      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
+            {activeTab === 'dashboard'    && canAccessTab('dashboard')    && <DashboardHome />}
+            {activeTab === 'users'        && canAccessTab('users')        && <UserManagement showToast={showToast} />}
+            {activeTab === 'analytics'    && canAccessTab('analytics')    && <Analytics />}
+            {activeTab === 'payments'     && canAccessTab('payments')     && <Payments />}
+            {activeTab === 'reports'      && canAccessTab('reports')      && <ReportsQueue />}
+            {activeTab === 'content'      && canAccessTab('content')      && <ContentModeration showToast={showToast} />}
+            {activeTab === 'support'      && canAccessTab('support')      && <SupportDesk showToast={showToast} />}
+            {activeTab === 'settings'     && canAccessTab('settings')     && <SystemSettings showToast={showToast} />}
+            {activeTab === 'verification' && canAccessTab('verification') && <IDVerification />}
+            {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}
+            {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
+            {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
+            {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
+
+            {ALL_TABS.includes(activeTab) && !canAccessTab(activeTab) && (
+              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-rose-100 dark:border-rose-900 animate-fadeIn">
+                <ShieldCheck size={48} className="text-rose-400 mb-4" />
+                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">Access Denied</h3>
+                <p className="text-gray-500 dark:text-slate-400 mb-8">You do not have permission to view this section.</p>
+                <button
+                  onClick={() => setActiveTab('dashboard')}
+                  className="px-8 py-3 bg-teal-600 text-white font-bold rounded-2xl hover:bg-teal-700 transition-all"
+                >
+                  Return to Dashboard
+                </button>
+              </div>
+            )}
 
             {!ALL_TABS.includes(activeTab) && (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-gray-100 dark:border-slate-800 animate-fadeIn">
