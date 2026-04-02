@@ -233,9 +233,22 @@ router.get('/nearby', protect, async (req, res) => {
 
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
+
+    // Priority 1: Passport location (premium globe feature)
     if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
       searchLng = currentUser.passportLocation.coordinates[0];
       searchLat = currentUser.passportLocation.coordinates[1];
+    }
+    // Priority 2: Active saved location from Manage Locations
+    else if (currentUser.premium?.isActive && currentUser.activeLocationId) {
+      const activeLoc = (currentUser.additionalLocations || []).find(
+        l => l._id.toString() === currentUser.activeLocationId.toString()
+      );
+      if (activeLoc?.lat && activeLoc?.lng) {
+        searchLat = activeLoc.lat;
+        searchLng = activeLoc.lng;
+        console.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
+      }
     }
 
     const blockedUserIds = currentUser.blockedUsers || [];
@@ -684,9 +697,60 @@ router.post('/me/locations', protect, async (req, res) => {
     if (user.additionalLocations.length >= 3) {
       return res.status(400).json({ success: false, message: 'Maximum 3 additional locations reached' });
     }
-    user.additionalLocations.push({ name: req.body.name });
+
+    const { name } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: 'Location name is required' });
+    }
+
+    // Geocode the location name using OpenStreetMap Nominatim (free, no key needed)
+    let lat = null, lng = null, city = '', country = '';
+    try {
+      const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`;
+      const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'AfroConnect/1.0' } });
+      const geoData = await geoRes.json();
+      if (geoData && geoData.length > 0) {
+        lat = parseFloat(geoData[0].lat);
+        lng = parseFloat(geoData[0].lon);
+        const display = geoData[0].display_name?.split(',') || [];
+        city = display[0]?.trim() || name;
+        country = display[display.length - 1]?.trim() || '';
+      }
+    } catch (geoErr) {
+      console.warn('Geocoding failed for location:', name, geoErr.message);
+    }
+
+    user.additionalLocations.push({ name: name.trim(), lat, lng, city, country });
     await user.save();
     res.json({ success: true, locations: user.additionalLocations });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/me/locations/active', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const { locationId } = req.body;
+
+    if (!locationId) {
+      // Clear active location — revert to GPS
+      user.activeLocationId = null;
+      await user.save();
+      return res.json({ success: true, message: 'Reverted to GPS location', activeLocationId: null });
+    }
+
+    const loc = (user.additionalLocations || []).find(l => l._id.toString() === locationId);
+    if (!loc) {
+      return res.status(404).json({ success: false, message: 'Location not found' });
+    }
+    if (!loc.lat || !loc.lng) {
+      return res.status(400).json({ success: false, message: 'This location could not be geocoded. Please try a more specific name.' });
+    }
+
+    user.activeLocationId = loc._id;
+    await user.save();
+    res.json({ success: true, message: `Discovery set to ${loc.city || loc.name}`, activeLocationId: loc._id, location: loc });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -725,11 +789,15 @@ router.post('/passport-location', protect, async (req, res) => {
 router.delete('/me/locations/:locationId', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    user.additionalLocations = user.additionalLocations.filter(
+    // If deleting the currently active location, revert to GPS
+    if (user.activeLocationId?.toString() === req.params.locationId) {
+      user.activeLocationId = null;
+    }
+    user.additionalLocations = (user.additionalLocations || []).filter(
       loc => loc._id.toString() !== req.params.locationId
     );
     await user.save();
-    res.json({ success: true, locations: user.additionalLocations });
+    res.json({ success: true, locations: user.additionalLocations, activeLocationId: user.activeLocationId });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

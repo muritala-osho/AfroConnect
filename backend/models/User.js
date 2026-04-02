@@ -570,6 +570,18 @@ const userSchema = new mongoose.Schema({
     targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     passedAt: { type: Date, default: Date.now }
   }],
+  additionalLocations: [{
+    name: { type: String, required: true },
+    city: { type: String, default: '' },
+    country: { type: String, default: '' },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  activeLocationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
+  },
   profileComments: [{
     _id: mongoose.Schema.Types.ObjectId,
     authorId: mongoose.Schema.Types.ObjectId,
