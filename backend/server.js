@@ -47,6 +47,11 @@ const helmet = require('helmet');
 const app = express();
 app.set('trust proxy', 1);
 const server = http.createServer(app);
+
+// Increase timeouts for large file uploads (voice notes, photos, videos)
+server.headersTimeout = 5 * 60 * 1000;  // 5 minutes
+server.requestTimeout = 5 * 60 * 1000;  // 5 minutes
+server.timeout = 5 * 60 * 1000;         // 5 minutes
 const io = socketIO(server, {
   path: '/socket.io',
   transports: ['websocket', 'polling'],

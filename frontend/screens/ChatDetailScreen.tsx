@@ -483,6 +483,7 @@ export default function ChatDetailScreen({
       if (Platform.OS !== "web") {
         try {
           subscription = ScreenCapture.addScreenshotListener(async () => {
+            // Only notify if protection is OFF (if it's ON, screenshot is already blocked by OS)
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
@@ -497,10 +498,10 @@ export default function ChatDetailScreen({
               post(`/chat/${matchIdRef.current}/message`, { content: "📸 A screenshot was taken!", type: "system" }, token).catch(() => {});
             }
           });
-          if (!screenshotProtection) {
-            await ScreenCapture.allowScreenCaptureAsync();
-          } else {
+          if (screenshotProtection) {
             await ScreenCapture.preventScreenCaptureAsync();
+          } else {
+            await ScreenCapture.allowScreenCaptureAsync();
           }
         } catch (e) {
           console.log("Screenshot listener error:", e);
@@ -510,7 +511,9 @@ export default function ChatDetailScreen({
     setupListener();
     return () => {
       if (subscription) subscription.remove();
-      if (Platform.OS !== "web") {
+      // Only lift the protection on cleanup if it is NOT enabled.
+      // When protection is ON it should remain active app-wide even after navigating away.
+      if (Platform.OS !== "web" && !screenshotProtection) {
         try { ScreenCapture.allowScreenCaptureAsync(); } catch (e) {}
       }
     };

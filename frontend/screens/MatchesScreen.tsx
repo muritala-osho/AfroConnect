@@ -30,6 +30,7 @@ import { getPhotoSource } from "@/utils/photos";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { Image as ExpoImage } from "expo-image";
 import LikeCard from "@/components/LikeCard";
+import socketService from "@/services/socket";
 
 const { width } = Dimensions.get("window");
 const CARD_GAP = 10;
@@ -195,6 +196,25 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       loadMatches();
     }, [token])
   );
+
+  // Real-time: when a first message is sent in any match, clear that match's countdown immediately
+  useEffect(() => {
+    const handleNewMessage = (data: any) => {
+      const matchId = data.matchId || data.message?.matchId;
+      if (!matchId) return;
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === matchId ? { ...m, hasFirstMessage: true } : m
+        )
+      );
+    };
+    socketService.on("chat:new-message", handleNewMessage);
+    socketService.on("message:new", handleNewMessage);
+    return () => {
+      socketService.off("chat:new-message");
+      socketService.off("message:new");
+    };
+  }, []);
 
   const handleGoBack = useCallback(() => {
     if (navigation.canGoBack()) {

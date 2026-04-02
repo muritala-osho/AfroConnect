@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
 const cloudinary = require('cloudinary').v2;
+const { Readable } = require('stream');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -11,6 +12,20 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
+
+// Stream-based Cloudinary upload — avoids slow base64 encoding for audio/video
+const uploadBufferToCloudinary = (buffer, options) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
+    });
+    const readable = new Readable();
+    readable.push(buffer);
+    readable.push(null);
+    readable.pipe(uploadStream);
+  });
+};
 
 const storage = multer.memoryStorage();
 
@@ -83,6 +98,16 @@ const upload = multer({
 const multiUpload = (req, res, next) => {
   upload.any()(req, res, (err) => {
     if (err) {
+      // "Request aborted" happens when the client drops the connection mid-upload.
+      // Suppress noisy logging for this expected case; still respond if possible.
+      if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
+        console.warn('Upload request aborted by client (connection dropped)');
+        // Connection is already closed — safe to just return without sending a response
+        if (!res.headersSent) {
+          return res.status(499).json({ success: false, message: 'Upload cancelled' });
+        }
+        return;
+      }
       console.error('Multer error:', err);
       return res.status(400).json({ success: false, message: err.message });
     }
@@ -190,10 +215,8 @@ router.post('/chat-video', protect, multiUpload, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No video uploaded' });
     }
 
-    const b64 = Buffer.from(file.buffer).toString('base64');
-    const dataURI = `data:${file.mimetype};base64,${b64}`;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Use streaming upload for speed — no base64 overhead
+    const result = await uploadBufferToCloudinary(file.buffer, {
       folder: 'afroconnect/chat-videos',
       resource_type: 'video',
     });
@@ -222,10 +245,8 @@ const handleAudioUpload = async (req, res) => {
       });
     }
 
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Use streaming upload — much faster than base64 for audio/video files
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
       folder: 'afroconnect/voice-notes',
       resource_type: 'video',
     });
@@ -246,6 +267,13 @@ const handleAudioUpload = async (req, res) => {
 const audioMultiUpload = (req, res, next) => {
   audioUpload.any()(req, res, (err) => {
     if (err) {
+      if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
+        console.warn('Audio upload request aborted by client');
+        if (!res.headersSent) {
+          return res.status(499).json({ success: false, message: 'Upload cancelled' });
+        }
+        return;
+      }
       console.error('Audio multer error:', err);
       return res.status(400).json({ success: false, message: err.message });
     }
@@ -323,10 +351,8 @@ router.post('/file', protect, fileUpload.single('file'), async (req, res) => {
       });
     }
 
-    const b64 = Buffer.from(req.file.buffer).toString('base64');
-    const dataURI = `data:${req.file.mimetype};base64,${b64}`;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Use streaming upload for speed
+    const result = await uploadBufferToCloudinary(req.file.buffer, {
       folder: 'afroconnect/files',
       resource_type: 'auto',
     });
@@ -354,12 +380,10 @@ router.post('/video', protect, multiUpload, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No video uploaded' });
     }
 
-    const b64 = file.buffer.toString('base64');
-    const dataURI = `data:${file.mimetype};base64,${b64}`;
-    
     console.log('Video upload starting for:', file.originalname);
 
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Use streaming upload for speed — no base64 overhead
+    const result = await uploadBufferToCloudinary(file.buffer, {
       folder: 'afroconnect/stories',
       resource_type: 'auto',
     });
