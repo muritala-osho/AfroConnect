@@ -5,6 +5,9 @@ const User = require('../models/User');
 const Match = require('../models/Match');
 const Boost = require('../models/Boost');
 const auth = protect;
+const validate = require('../middleware/validate');
+const { swipeLimiter } = require('../middleware/rateLimiter');
+const schemas = require('../validators/schemas');
 
 // @route   GET /api/match/who-likes-me
 // @desc    Get list of users who liked current user (pending friend requests)
@@ -81,7 +84,7 @@ router.get('/who-likes-me', protect, async (req, res) => {
 // @route   POST /api/match/swipe
 // @desc    Swipe right/left/super on a user
 // @access  Private
-router.post('/swipe', protect, async (req, res) => {
+router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), async (req, res) => {
   try {
     const { targetUserId, action } = req.body;
 

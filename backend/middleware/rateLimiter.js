@@ -48,9 +48,23 @@ const messageLimiter = rateLimit({
   }
 });
 
+const swipeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user ? req.user._id.toString() : null) || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown',
+  validate: { trustProxy: false, xForwardedForHeader: false },
+  message: {
+    success: false,
+    message: 'Swipe limit reached for this hour. Please come back later.'
+  }
+});
+
 module.exports = {
   apiLimiter,
   authLimiter,
   uploadLimiter,
-  messageLimiter
+  messageLimiter,
+  swipeLimiter
 };

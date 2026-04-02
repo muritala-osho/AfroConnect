@@ -5,11 +5,14 @@ const Story = require('../models/Story');
 const Match = require('../models/Match');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const validate = require('../middleware/validate');
+const { uploadLimiter } = require('../middleware/rateLimiter');
+const schemas = require('../validators/schemas');
 
 // @route   POST /api/stories
 // @desc    Create a new story
 // @access  Private
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), async (req, res) => {
   try {
     const { type, content, textContent, backgroundColor, mediaUrl, thumbnail, durationHours } = req.body;
 
@@ -314,7 +317,7 @@ router.post('/:storyId/view', protect, async (req, res) => {
 // @route   POST /api/stories/:storyId/react
 // @desc    Add reaction to a story
 // @access  Private
-router.post('/:storyId/react', protect, async (req, res) => {
+router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), async (req, res) => {
   try {
     const { emoji } = req.body;
     
@@ -407,7 +410,7 @@ router.post('/:storyId/react', protect, async (req, res) => {
 // @route   POST /api/stories/:storyId/reply
 // @desc    Reply to a story
 // @access  Private
-router.post('/:storyId/reply', protect, async (req, res) => {
+router.post('/:storyId/reply', protect, validate(schemas.stories.storyReply), async (req, res) => {
   try {
     const { message } = req.body;
 

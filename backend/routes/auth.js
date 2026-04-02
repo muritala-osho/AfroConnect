@@ -6,6 +6,8 @@ const crypto = require('crypto');
 const User = require('../models/User');
 const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
 const { authLimiter } = require('../middleware/rateLimiter');
+const validate = require('../middleware/validate');
+const schemas = require('../validators/schemas');
 
 // Generate JWT token
 const generateToken = (userId) => {
@@ -17,7 +19,7 @@ const generateToken = (userId) => {
 // @route   POST /api/auth/signup
 // @desc    Register new user and send OTP
 // @access  Public
-router.post('/signup', async (req, res) => {
+router.post('/signup', validate(schemas.auth.signup), async (req, res) => {
   try {
     const { email, password, username, name, age, gender } = req.body;
 
@@ -203,7 +205,7 @@ router.post('/resend-otp', async (req, res) => {
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', authLimiter, validate(schemas.auth.login), async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -295,7 +297,7 @@ router.post('/login', authLimiter, async (req, res) => {
 // @route   POST /api/auth/forgot-password
 // @desc    Request password reset via OTP
 // @access  Public
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', validate(schemas.auth.forgotPassword), async (req, res) => {
   try {
     const { email } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
@@ -344,7 +346,7 @@ router.post('/forgot-password', async (req, res) => {
 // @route   POST /api/auth/reset-password
 // @desc    Step 3: Reset password with OTP and new password
 // @access  Public
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', validate(schemas.auth.resetPassword), async (req, res) => {
   try {
     const { email, otp, newPassword } = req.body;
 

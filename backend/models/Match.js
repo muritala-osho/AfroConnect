@@ -55,5 +55,8 @@ matchSchema.pre('save', async function() {
 matchSchema.index({ users: 1 });
 matchSchema.index({ matchedAt: -1 });
 matchSchema.index({ users: 1, lastMessageAt: -1 });
+matchSchema.index({ users: 1, status: 1 });
+matchSchema.index({ status: 1, expiresAt: 1 });
+matchSchema.index({ hasFirstMessage: 1, expiresAt: 1 });
 
 module.exports = mongoose.model('Match', matchSchema);

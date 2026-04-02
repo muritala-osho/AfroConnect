@@ -6,6 +6,8 @@ const Message = require("../models/Message");
 const Match = require("../models/Match");
 const User = require("../models/User");
 const redis = require("../utils/redis");
+const validate = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 // @route   GET /api/chat/conversations
 // @desc    Get all conversations for user sorted by latest message (WhatsApp-style)
@@ -237,7 +239,7 @@ router.get("/:matchId", protect, async (req, res) => {
 // @route   POST /api/chat/:matchId
 // @desc    Send a message (text, image, audio, file)
 // @access  Private
-router.post("/:matchId", protect, async (req, res) => {
+router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req, res) => {
   try {
     const { matchId } = req.params;
     const {
@@ -616,7 +618,7 @@ router.delete("/message/:messageId", protect, async (req, res) => {
 // @route   POST /api/chat/:matchId/message
 // @desc    Send a message (text, image, audio, location) — used by ChatDetailScreen
 // @access  Private
-router.post("/:matchId/message", protect, async (req, res) => {
+router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), async (req, res) => {
   try {
     const { matchId } = req.params;
     const {

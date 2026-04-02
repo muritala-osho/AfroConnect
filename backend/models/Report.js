@@ -31,6 +31,10 @@ const reportSchema = new mongoose.Schema({
   timestamps: true
 });
 
+reportSchema.index({ reportedUser: 1, status: 1 });
+reportSchema.index({ reportedBy: 1, createdAt: -1 });
+reportSchema.index({ status: 1, createdAt: -1 });
+
 reportSchema.pre(/^find/, function (next) {
   this.populate('reportedBy').populate('reportedUser');
   next();

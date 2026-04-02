@@ -151,10 +151,8 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
       })
       .toBuffer();
 
-    const b64 = compressedBuffer.toString('base64');
-    const dataURI = `data:image/jpeg;base64,${b64}`;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Stream-based upload (no base64 overhead)
+    const result = await uploadBufferToCloudinary(compressedBuffer, {
       folder: 'afroconnect/profiles',
       resource_type: 'image',
       transformation: [
@@ -189,10 +187,8 @@ router.post('/chat-image', protect, multiUpload, async (req, res) => {
       .jpeg({ quality: 80, progressive: true })
       .toBuffer();
 
-    const b64 = compressedBuffer.toString('base64');
-    const dataURI = `data:image/jpeg;base64,${b64}`;
-
-    const result = await cloudinary.uploader.upload(dataURI, {
+    // Stream-based upload (no base64 overhead)
+    const result = await uploadBufferToCloudinary(compressedBuffer, {
       folder: 'afroconnect/chat-images',
       resource_type: 'image',
     });

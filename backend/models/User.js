@@ -556,8 +556,13 @@ const userSchema = new mongoose.Schema({
 
 
 userSchema.index({ location: '2dsphere' });
-
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ onlineStatus: 1, lastActive: -1 });
+userSchema.index({ gender: 1, age: 1 });
+userSchema.index({ 'premium.isActive': 1 });
+userSchema.index({ verified: 1 });
+userSchema.index({ isActive: 1, createdAt: -1 });
+userSchema.index({ name: 'text', bio: 'text' });
 
 
 userSchema.pre('save', async function() {
