@@ -449,14 +449,6 @@ const userSchema = new mongoose.Schema({
       enum: ['free', 'plus', 'gold', 'platinum'],
       default: 'free'
     },
-    stripeCustomerId: {
-      type: String,
-      default: null
-    },
-    stripeSubscriptionId: {
-      type: String,
-      default: null
-    },
     expiresAt: {
       type: Date,
       default: null

@@ -39,8 +39,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
-import { Dimension } from 'react-native'
-import StreakWidget from "@/components/StreakWidget";
+
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -716,72 +715,67 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
   const renderHeader = () => (
     <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
-      <View style={styles.headerLeft}>
-        <Image 
-          source={AfroConnectLogo} 
-          style={styles.logo} 
-          contentFit="contain"
-        />
-        <Pressable 
-          style={styles.headerIconButton}
-          onPress={() => navigation.navigate("LoveRadar")}
-        >
-          <View style={styles.radarIconContainer}>
-            <Feather name="target" size={22} color={theme.primary} />
-          </View>
-        </Pressable>
-      </View>
+      <Image
+        source={AfroConnectLogo}
+        style={styles.logo}
+        contentFit="contain"
+      />
 
-      <View style={styles.headerCenter}>
-        <View style={styles.toggleContainer}>
-          <Pressable 
-            onPress={() => handleDiscoveryTypeChange('local')}
-            style={[
-              styles.toggleButton,
-              discoveryType === 'local' && { backgroundColor: theme.surface, ...Shadow.small }
-            ]}
-          >
-            <ThemedText style={[styles.toggleText, discoveryType === 'local' && { color: theme.primary, fontWeight: '700' }]}>
-              Local
-            </ThemedText>
-          </Pressable>
-          <Pressable 
-            onPress={() => handleDiscoveryTypeChange('global')}
-            style={[
-              styles.toggleButton,
-              discoveryType === 'global' && { backgroundColor: theme.surface, ...Shadow.small }
-            ]}
-          >
-            <ThemedText style={[styles.toggleText, discoveryType === 'global' && { color: theme.primary, fontWeight: '700' }]}>
-              Global
-            </ThemedText>
-            {!user?.premium?.isActive && (
-              <Feather name="lock" size={10} color={theme.textSecondary} style={{ marginLeft: 2 }} />
-            )}
-          </Pressable>
-        </View>
-      </View>
+      <Pressable
+        style={styles.headerIconButton}
+        onPress={() => navigation.navigate("LoveRadar")}
+      >
+        <Feather name="target" size={22} color={theme.primary} />
+      </Pressable>
 
-      <View style={styles.headerRight}>
+      <View style={styles.toggleContainer}>
         <Pressable
-          style={styles.headerIconButton}
-          onPress={openSecondChance}
+          onPress={() => handleDiscoveryTypeChange('local')}
+          style={[
+            styles.toggleButton,
+            discoveryType === 'local' && { backgroundColor: theme.surface, ...Shadow.small }
+          ]}
         >
-          <Feather name="rotate-ccw" size={22} color={theme.text} />
+          <ThemedText style={[styles.toggleText, discoveryType === 'local' && { color: theme.primary, fontWeight: '700' }]}>
+            Local
+          </ThemedText>
         </Pressable>
-        <Pressable 
-          style={[styles.headerIconButton, passportActive && { backgroundColor: theme.primary + '20' }]}
-          onPress={handlePassportPress}
+        <Pressable
+          onPress={() => handleDiscoveryTypeChange('global')}
+          style={[
+            styles.toggleButton,
+            discoveryType === 'global' && { backgroundColor: theme.surface, ...Shadow.small }
+          ]}
         >
-          <Feather name="globe" size={22} color={passportActive ? theme.primary : theme.text} />
-        </Pressable>
-        <Pressable 
-          style={styles.headerIconButton}
-          onPress={() => navigation.navigate('Filters')}
-        >
-          <Feather name="sliders" size={22} color={theme.text} />
+          <ThemedText style={[styles.toggleText, discoveryType === 'global' && { color: theme.primary, fontWeight: '700' }]}>
+            Global
+          </ThemedText>
+          {!user?.premium?.isActive && (
+            <Feather name="lock" size={10} color={theme.textSecondary} style={{ marginLeft: 2 }} />
+          )}
         </Pressable>
       </View>
+
+      <Pressable
+        style={styles.headerIconButton}
+        onPress={openSecondChance}
+      >
+        <Feather name="rotate-ccw" size={20} color={theme.text} />
+      </Pressable>
+
+      <Pressable
+        style={[styles.headerIconButton, passportActive && { backgroundColor: theme.primary + '22', borderRadius: 8 }]}
+        onPress={handlePassportPress}
+      >
+        <Feather name="globe" size={20} color={passportActive ? theme.primary : theme.text} />
+      </Pressable>
+
+      <Pressable
+        style={styles.headerIconButton}
+        onPress={() => navigation.navigate('Filters')}
+      >
+        <Feather name="sliders" size={20} color={theme.text} />
+      </Pressable>
     </View>
   );
 
@@ -1455,11 +1449,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         </Modal>
 
-        <StreakWidget
-          compact={false}
-          onPress={() => {}}
-        />
-
         <View style={styles.cardWrapper}>
           {nextUser && (
             <View style={[styles.profileCard, styles.stackedCard]}>
@@ -1758,41 +1747,20 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    height: Platform.OS === 'ios' ? 110 : 90,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    height: Platform.OS === 'ios' ? 108 : 88,
     backgroundColor: 'transparent',
     zIndex: 100,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  headerCenter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 12,
-    zIndex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 2,
+    gap: 4,
   },
   headerIconButton: {
-    padding: 8,
+    padding: 7,
   },
   logo: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: 8,
-    marginRight: 10,
   },
   radarIconContainer: {
     position: 'relative',
@@ -1810,19 +1778,20 @@ const styles = StyleSheet.create({
   },
   toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(225, 225, 225, 0.1)',
+    backgroundColor: 'rgba(150, 150, 150, 0.15)',
     borderRadius: 20,
     padding: 2,
-    alignSelf: 'center',
-    minWith: 120,
+    flex: 1,
+    justifyContent: 'center',
   },
   toggleButton: {
+    flex: 1,
     paddingVertical: 6,
-    paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 18,
     flexDirection: 'row',
+    gap: 3,
   },
   toggleText: {
     fontSize: 13,
