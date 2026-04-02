@@ -122,5 +122,8 @@
     "typescript": "~5.9.2",
     "webpack-dev-server": "^5.2.3"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "@xmldom/xmldom": "0.8.12"
+  }
 }
