@@ -1379,13 +1379,6 @@ export default function ChatDetailScreen({
             <SwipeableMessage item={item} isMe={isMe} onReply={handleSwipeReply} themeTextSecondary={theme.textSecondary}>
               <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={400}>
                 <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
-                  {!isMe && (
-                    <Image
-                      source={getPhotoSource(userPhoto) || { uri: "https://via.placeholder.com/40" }}
-                      style={styles.messageAvatar}
-                      contentFit="cover"
-                    />
-                  )}
 
                   <View
                     style={[

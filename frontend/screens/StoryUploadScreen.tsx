@@ -184,16 +184,22 @@ export default function StoryUploadScreen({
 
       const durationInt = parseInt(duration.toString());
 
-      const storyData = {
+      const storyData: Record<string, any> = {
         type: storyType,
-        textContent: storyType === "text" ? textContent : null,
-        backgroundColor:
-          storyType === "text" ? (Array.isArray(BACKGROUND_COLORS[selectedBgIndex]) ? BACKGROUND_COLORS[selectedBgIndex][0] : BACKGROUND_COLORS[selectedBgIndex]) : null,
-        mediaUrl: mediaUrl,
-        imageUrl: mediaUrl,
         content: storyType === "text" ? textContent : (storyType === "image" ? "Photo story" : "Video story"),
         durationHours: durationInt,
       };
+
+      if (storyType === "text") {
+        storyData.textContent = textContent;
+        storyData.backgroundColor = Array.isArray(BACKGROUND_COLORS[selectedBgIndex])
+          ? BACKGROUND_COLORS[selectedBgIndex][0]
+          : BACKGROUND_COLORS[selectedBgIndex];
+      }
+
+      if (mediaUrl) {
+        storyData.mediaUrl = mediaUrl;
+      }
 
       const response = await post<{ story: any }>("/stories", storyData, token || "");
 

@@ -422,7 +422,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           />
         </View>
       ) : currentStory.type === "video" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
-        <View style={StyleSheet.absoluteFillObject}>
+        <View style={[StyleSheet.absoluteFillObject, { borderRadius: 24, overflow: 'hidden' }]}>
           <Video
             source={{ uri: (currentStory.imageUrl || currentStory.mediaUrl) as string }}
             style={{ width: '100%', height: '100%' }}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { View, StyleSheet, Pressable, FlatList, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { 
   useSharedValue, 
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
   interpolate
 } from "react-native-reanimated";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView, ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Image } from "expo-image";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -568,26 +568,9 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           </Pressable>
         </View>
 
-        <FlatList
-          data={[activeTab]}
-          keyExtractor={(item) => item}
-          renderItem={() => (
-            <>
-              {activeTab === 'matches' && renderMasonryGrid()}
-              {activeTab === 'likes' && renderLikesMasonryGrid()}
-            </>
-          )}
-          getItemLayout={(_, index) => ({
-            length: TALL_CARD_HEIGHT * 3,
-            offset: TALL_CARD_HEIGHT * 3 * index,
-            index,
-          })}
-          contentContainerStyle={styles.scrollContent}
+        <GHScrollView
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={true}
-          initialNumToRender={1}
-          maxToRenderPerBatch={1}
-          windowSize={3}
+          contentContainerStyle={styles.scrollContent}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -595,7 +578,10 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
               tintColor={theme.primary}
             />
           }
-        />
+        >
+          {activeTab === 'matches' && renderMasonryGrid()}
+          {activeTab === 'likes' && renderLikesMasonryGrid()}
+        </GHScrollView>
       </ThemedView>
     </GestureHandlerRootView>
   );
