@@ -155,28 +155,36 @@ const ChatItem = memo(
       }
     };
 
+    const hasUnread = item.unreadCount > 0 && !item.isMuted;
     return (
       <Pressable
         style={({ pressed }) => [
           styles.chatItem,
-          pressed && { backgroundColor: theme.primary + '08' },
+          pressed && { backgroundColor: theme.primary + '0A' },
         ]}
         onPress={onPress}
         onLongPress={onLongPress}
         delayLongPress={400}
       >
         <View style={styles.avatarContainer}>
+          {/* Unread glow ring around avatar */}
+          {hasUnread && (
+            <LinearGradient
+              colors={[theme.primary, theme.primary + 'AA']}
+              style={{ position: 'absolute', inset: -2, borderRadius: 34, zIndex: 0 }}
+            />
+          )}
           {item.user.photo ? (
             <Image
               source={{ uri: item.user.photo }}
-              style={styles.avatar}
+              style={[styles.avatar, { zIndex: 1 }]}
               contentFit="cover"
             />
           ) : (
             <View
               style={[
                 styles.avatarPlaceholder,
-                { backgroundColor: theme.backgroundSecondary },
+                { backgroundColor: theme.backgroundSecondary, zIndex: 1 },
               ]}
             >
               <Feather name="user" size={30} color={theme.textSecondary} />
@@ -186,13 +194,13 @@ const ChatItem = memo(
             <View
               style={[
                 styles.onlineBadge,
-                { backgroundColor: "#4CAF50", borderColor: theme.background },
+                { backgroundColor: "#22C55E", borderColor: theme.background, zIndex: 2 },
               ]}
             />
           )}
         </View>
 
-        <View style={[styles.chatContent, { borderBottomColor: theme.border + '60' }]}>
+        <View style={[styles.chatContent, { borderBottomColor: theme.border + '40' }]}>
           <View style={styles.chatHeader}>
             <View style={styles.nameRow}>
               {item.isPinned && (
@@ -207,7 +215,7 @@ const ChatItem = memo(
                 style={[
                   styles.name,
                   { color: theme.text },
-                  item.unreadCount > 0 && !item.isMuted && { fontWeight: '700' },
+                  hasUnread && { fontWeight: '800', letterSpacing: -0.2 },
                 ]}
                 numberOfLines={1}
               >
@@ -232,8 +240,8 @@ const ChatItem = memo(
             <ThemedText
               style={[
                 styles.timestamp,
-                { color: item.unreadCount > 0 && !item.isMuted ? theme.primary : theme.textSecondary },
-                item.unreadCount > 0 && !item.isMuted && { fontWeight: '600' },
+                { color: hasUnread ? theme.primary : theme.textSecondary },
+                hasUnread && { fontWeight: '700' },
               ]}
             >
               {formatTimestamp(item.timestamp)}
@@ -244,28 +252,24 @@ const ChatItem = memo(
               style={[
                 styles.lastMessage,
                 { color: theme.textSecondary },
-                item.unreadCount > 0 &&
-                  !item.isMuted && { color: theme.text, fontWeight: "600" },
+                hasUnread && { color: theme.text, fontWeight: "600" },
               ]}
               numberOfLines={1}
             >
               {getMessagePreview(item.lastMessage, item.lastMessageType)}
             </ThemedText>
             {item.unreadCount > 0 && (
-              <View
-                style={[
-                  styles.unreadBadge,
-                  {
-                    backgroundColor: item.isMuted
-                      ? theme.textSecondary
-                      : theme.primary,
-                  },
-                ]}
+              <LinearGradient
+                colors={item.isMuted
+                  ? [theme.textSecondary, theme.textSecondary]
+                  : [theme.primary, theme.primary + 'DD']
+                }
+                style={styles.unreadBadge}
               >
                 <ThemedText style={styles.unreadText}>
                   {item.unreadCount > 99 ? "99+" : item.unreadCount}
                 </ThemedText>
-              </View>
+              </LinearGradient>
             )}
           </View>
         </View>
@@ -825,13 +829,26 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       );
     };
 
+    // Real-time verified badge: admin approves → chat list updates instantly
+    const handleUserVerified = (data: { userId: string; verified: boolean }) => {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.user.id === data.userId
+            ? { ...conv, user: { ...conv.user, verified: data.verified } }
+            : conv,
+        ),
+      );
+    };
+
     if (socketService && typeof socketService.on === "function") {
       socketService.on("user:status", handleUserStatus);
+      socketService.on("user:verified", handleUserVerified);
     }
 
     return () => {
       if (socketService && typeof socketService.off === "function") {
         socketService.off("user:status", handleUserStatus);
+        socketService.off("user:verified", handleUserVerified);
       }
     };
   }, []);

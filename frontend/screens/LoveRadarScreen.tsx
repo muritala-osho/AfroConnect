@@ -246,7 +246,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
       <ScreenScrollView contentContainerStyle={{ paddingBottom: 40, paddingTop: 0 }}>
         {/* PREMIUM HEADER */}
         <LinearGradient
-          colors={['rgba(139,92,246,0.15)', 'rgba(139,92,246,0.05)', 'transparent']}
+          colors={['rgba(16,185,129,0.15)', 'rgba(16,185,129,0.05)', 'transparent']}
           style={[styles.headerGradient, { paddingTop: insets.top + 16 }]}
         >
           <View style={styles.headerContent}>
@@ -273,7 +273,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 <Feather
                   name={locationSharingEnabled ? "eye" : "eye-off"}
                   size={18}
-                  color={locationSharingEnabled ? "#8b5cf6" : "rgba(255,255,255,0.5)"}
+                  color={locationSharingEnabled ? "#10B981" : "rgba(255,255,255,0.5)"}
                 />
               </TouchableOpacity>
             </View>
@@ -315,7 +315,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
             style={styles.filterToggle}
             onPress={() => setShowFilters(!showFilters)}
           >
-            <Feather name="sliders" size={18} color="#8b5cf6" />
+            <Feather name="sliders" size={18} color="#10B981" />
             <ThemedText style={styles.filterToggleText}>
               {showFilters ? 'Hide Filters' : 'Show Filters'}
             </ThemedText>
@@ -330,7 +330,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
             <Animated.View style={styles.filterContent}>
               <View style={styles.filterRow}>
                 <View style={styles.filterLabel}>
-                  <Feather name="compass" size={16} color="#8b5cf6" />
+                  <Feather name="compass" size={16} color="#10B981" />
                   <ThemedText style={styles.filterLabelText}>Distance</ThemedText>
                 </View>
                 <ThemedText style={styles.filterValue}>{filters.radius}km</ThemedText>
@@ -341,14 +341,14 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 maximumValue={100}
                 value={filters.radius}
                 onValueChange={(v) => setFilters({ ...filters, radius: Math.round(v) })}
-                minimumTrackTintColor="#8b5cf6"
+                minimumTrackTintColor="#10B981"
                 maximumTrackTintColor="rgba(255,255,255,0.1)"
-                thumbTintColor="#8b5cf6"
+                thumbTintColor="#10B981"
               />
 
               <View style={[styles.filterRow, { marginTop: 16 }]}>
                 <View style={styles.filterLabel}>
-                  <Feather name="users" size={16} color="#8b5cf6" />
+                  <Feather name="users" size={16} color="#10B981" />
                   <ThemedText style={styles.filterLabelText}>Age Range</ThemedText>
                 </View>
                 <ThemedText style={styles.filterValue}>
@@ -365,9 +365,9 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                     maximumValue={80}
                     value={filters.ageMin}
                     onValueChange={(v) => setFilters({ ...filters, ageMin: Math.round(v) })}
-                    minimumTrackTintColor="#8b5cf6"
+                    minimumTrackTintColor="#10B981"
                     maximumTrackTintColor="rgba(255,255,255,0.1)"
-                    thumbTintColor="#8b5cf6"
+                    thumbTintColor="#10B981"
                   />
                 </View>
                 <View style={styles.ageSliderRow}>
@@ -378,16 +378,16 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                     maximumValue={80}
                     value={filters.ageMax}
                     onValueChange={(v) => setFilters({ ...filters, ageMax: Math.round(v) })}
-                    minimumTrackTintColor="#8b5cf6"
+                    minimumTrackTintColor="#10B981"
                     maximumTrackTintColor="rgba(255,255,255,0.1)"
-                    thumbTintColor="#8b5cf6"
+                    thumbTintColor="#10B981"
                   />
                 </View>
               </View>
 
               <View style={[styles.filterRow, { marginTop: 16 }]}>
                 <View style={styles.filterLabel}>
-                  <Feather name="users" size={16} color="#8b5cf6" />
+                  <Feather name="users" size={16} color="#10B981" />
                   <ThemedText style={styles.filterLabelText}>Show Me</ThemedText>
                 </View>
               </View>
@@ -409,7 +409,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                     <ThemedText
                       style={[
                         styles.genderPillText,
-                        { color: filters.gender === g.value ? '#8b5cf6' : 'rgba(255,255,255,0.6)' },
+                        { color: filters.gender === g.value ? '#10B981' : 'rgba(255,255,255,0.6)' },
                       ]}
                     >
                       {g.label}
@@ -426,7 +426,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 }}
               >
                 <LinearGradient
-                  colors={['#8b5cf6', '#7c3aed']}
+                  colors={['#10B981', '#059669']}
                   style={styles.applyFiltersGradient}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
@@ -450,8 +450,8 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
               <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
                 <Defs>
                   <RadialGradient id="beamGrad" cx="50%" cy="50%">
-                    <Stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.4" />
-                    <Stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
+                    <Stop offset="0%" stopColor="#10B981" stopOpacity="0.4" />
+                    <Stop offset="100%" stopColor="#10B981" stopOpacity="0" />
                   </RadialGradient>
                 </Defs>
 
@@ -462,7 +462,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                     cx={CENTER}
                     cy={CENTER}
                     r={(RADAR_SIZE / 2 - 30) * f}
-                    stroke="rgba(139,92,246,0.15)"
+                    stroke="rgba(16,185,129,0.15)"
                     strokeDasharray="4,4"
                     fill="none"
                     strokeWidth={1.5}
@@ -482,7 +482,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 </Animated.View>
 
                 {/* Center point */}
-                <Circle cx={CENTER} cy={CENTER} r="10" fill="#8b5cf6" opacity={0.8} />
+                <Circle cx={CENTER} cy={CENTER} r="10" fill="#10B981" opacity={0.8} />
                 <Circle cx={CENTER} cy={CENTER} r="6" fill="#fff" />
               </Svg>
 
@@ -540,13 +540,13 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
             disabled={locationLoading}
           >
             <LinearGradient
-              colors={['rgba(139,92,246,0.2)', 'rgba(139,92,246,0.1)']}
+              colors={['rgba(16,185,129,0.2)', 'rgba(16,185,129,0.1)']}
               style={styles.refreshGradient}
             >
               {locationLoading ? (
-                <ActivityIndicator size="small" color="#8b5cf6" />
+                <ActivityIndicator size="small" color="#10B981" />
               ) : (
-                <Feather name="refresh-cw" size={18} color="#8b5cf6" />
+                <Feather name="refresh-cw" size={18} color="#10B981" />
               )}
               <ThemedText style={styles.refreshText}>
                 {locationLoading ? 'Updating...' : 'Refresh Location'}
@@ -569,7 +569,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
           {nearbyUsers.length === 0 ? (
             <View style={styles.emptyState}>
               <View style={styles.emptyIconContainer}>
-                <Feather name="users" size={48} color="rgba(139,92,246,0.3)" />
+                <Feather name="users" size={48} color="rgba(16,185,129,0.3)" />
               </View>
               <ThemedText style={styles.emptyText}>No one nearby</ThemedText>
               <ThemedText style={styles.emptySubtext}>
@@ -701,8 +701,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.1)",
   },
   headerIconButtonActive: {
-    backgroundColor: "rgba(139,92,246,0.15)",
-    borderColor: "rgba(139,92,246,0.3)",
+    backgroundColor: "rgba(16,185,129,0.15)",
+    borderColor: "rgba(16,185,129,0.3)",
   },
 
   // STATS CARD
@@ -759,15 +759,15 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: "rgba(139,92,246,0.1)",
+    backgroundColor: "rgba(16,185,129,0.1)",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(139,92,246,0.2)",
+    borderColor: "rgba(16,185,129,0.2)",
   },
   filterToggleText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#8b5cf6",
+    color: "#10B981",
   },
   filterContent: {
     marginTop: 16,
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
   filterValue: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#8b5cf6",
+    color: "#10B981",
   },
   slider: {
     width: '100%',
@@ -837,8 +837,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   genderPillActive: {
-    backgroundColor: 'rgba(139,92,246,0.15)',
-    borderColor: 'rgba(139,92,246,0.5)',
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    borderColor: 'rgba(16,185,129,0.5)',
   },
   genderPillEmoji: {
     fontSize: 14,
@@ -882,14 +882,14 @@ const styles = StyleSheet.create({
     width: RADAR_SIZE + 120,
     height: RADAR_SIZE + 120,
     borderRadius: (RADAR_SIZE + 120) / 2,
-    backgroundColor: 'rgba(139,92,246,0.15)',
+    backgroundColor: 'rgba(16,185,129,0.15)',
   },
   radarCard: {
     backgroundColor: "rgba(255,255,255,0.02)",
     borderRadius: 32,
     padding: 20,
     borderWidth: 1,
-    borderColor: "rgba(139,92,246,0.2)",
+    borderColor: "rgba(16,185,129,0.2)",
     zIndex: 1,
   },
   radarContainer: {
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
     height: RADAR_SIZE,
     borderRadius: RADAR_SIZE / 2,
     borderWidth: 2,
-    borderColor: '#8b5cf6',
+    borderColor: '#10B981',
   },
   userDot: {
     position: "absolute",
@@ -970,13 +970,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderWidth: 1,
-    borderColor: "rgba(139,92,246,0.2)",
+    borderColor: "rgba(16,185,129,0.2)",
     borderRadius: 16,
   },
   refreshText: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#8b5cf6",
+    color: "#10B981",
   },
 
   // NEARBY USERS
@@ -996,7 +996,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   countBadge: {
-    backgroundColor: "rgba(139,92,246,0.2)",
+    backgroundColor: "rgba(16,185,129,0.2)",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1004,7 +1004,7 @@ const styles = StyleSheet.create({
   countBadgeText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#8b5cf6",
+    color: "#10B981",
   },
   emptyState: {
     alignItems: 'center',
@@ -1014,7 +1014,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: "rgba(139,92,246,0.1)",
+    backgroundColor: "rgba(16,185,129,0.1)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 20,

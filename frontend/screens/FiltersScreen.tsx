@@ -518,29 +518,97 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
             </View>
           </View>
 
-          <View style={styles.lifestyleGrid}>
-            <View style={styles.lifestyleItem}>
-              <View style={styles.lifestyleLabel}>
+          <View style={{ gap: 20 }}>
+            {/* Smoking */}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                 <Feather name="wind" size={14} color={theme.textSecondary} />
-                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary }]}>
-                  Smoking
-                </ThemedText>
+                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }]}>Smoking</ThemedText>
               </View>
-              <ThemedText style={[styles.lifestyleValue, { color: theme.text }]}>
-                {smoking === 'any' ? 'Any' : smoking.charAt(0).toUpperCase() + smoking.slice(1)}
-              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[
+                  { value: 'any', label: 'Any', emoji: '✓' },
+                  { value: 'never', label: 'Never', emoji: '🚭' },
+                  { value: 'sometimes', label: 'Sometimes', emoji: '🤔' },
+                  { value: 'often', label: 'Often', emoji: '🚬' },
+                ].map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.compactPill,
+                      {
+                        backgroundColor: smoking === opt.value ? theme.primary + '20' : 'rgba(255,255,255,0.04)',
+                        borderColor: smoking === opt.value ? theme.primary : 'rgba(255,255,255,0.1)',
+                      },
+                    ]}
+                    onPress={() => { setSmoking(opt.value); Haptics.selectionAsync(); }}
+                  >
+                    <ThemedText style={{ fontSize: 12 }}>{opt.emoji}</ThemedText>
+                    <ThemedText style={[styles.compactPillLabel, { color: smoking === opt.value ? theme.primary : theme.textSecondary, fontWeight: smoking === opt.value ? '700' : '500' }]}>{opt.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
 
-            <View style={styles.lifestyleItem}>
-              <View style={styles.lifestyleLabel}>
+            {/* Drinking */}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                 <Feather name="coffee" size={14} color={theme.textSecondary} />
-                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary }]}>
-                  Drinking
-                </ThemedText>
+                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }]}>Drinking</ThemedText>
               </View>
-              <ThemedText style={[styles.lifestyleValue, { color: theme.text }]}>
-                {drinking === 'any' ? 'Any' : drinking.charAt(0).toUpperCase() + drinking.slice(1)}
-              </ThemedText>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[
+                  { value: 'any', label: 'Any', emoji: '✓' },
+                  { value: 'never', label: 'Never', emoji: '🚱' },
+                  { value: 'socially', label: 'Socially', emoji: '🥂' },
+                  { value: 'often', label: 'Often', emoji: '🍺' },
+                ].map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.compactPill,
+                      {
+                        backgroundColor: drinking === opt.value ? theme.primary + '20' : 'rgba(255,255,255,0.04)',
+                        borderColor: drinking === opt.value ? theme.primary : 'rgba(255,255,255,0.1)',
+                      },
+                    ]}
+                    onPress={() => { setDrinking(opt.value); Haptics.selectionAsync(); }}
+                  >
+                    <ThemedText style={{ fontSize: 12 }}>{opt.emoji}</ThemedText>
+                    <ThemedText style={[styles.compactPillLabel, { color: drinking === opt.value ? theme.primary : theme.textSecondary, fontWeight: drinking === opt.value ? '700' : '500' }]}>{opt.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Wants Kids */}
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Feather name="heart" size={14} color={theme.textSecondary} />
+                <ThemedText style={[styles.lifestyleLabelText, { color: theme.textSecondary, fontSize: 12, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }]}>Wants Kids</ThemedText>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[
+                  { value: 'any', label: 'Any', emoji: '✓' },
+                  { value: 'true', label: 'Yes', emoji: '👶' },
+                  { value: 'false', label: 'No', emoji: '🙅' },
+                ].map((opt) => (
+                  <Pressable
+                    key={opt.value}
+                    style={[
+                      styles.compactPill,
+                      {
+                        backgroundColor: wantsKids === opt.value ? theme.primary + '20' : 'rgba(255,255,255,0.04)',
+                        borderColor: wantsKids === opt.value ? theme.primary : 'rgba(255,255,255,0.1)',
+                      },
+                    ]}
+                    onPress={() => { setWantsKids(opt.value); Haptics.selectionAsync(); }}
+                  >
+                    <ThemedText style={{ fontSize: 12 }}>{opt.emoji}</ThemedText>
+                    <ThemedText style={[styles.compactPillLabel, { color: wantsKids === opt.value ? theme.primary : theme.textSecondary, fontWeight: wantsKids === opt.value ? '700' : '500' }]}>{opt.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
             </View>
           </View>
         </View>
@@ -835,6 +903,20 @@ const styles = StyleSheet.create({
   lifestyleValue: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  compactPill: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 9,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  compactPillLabel: {
+    fontSize: 12,
   },
 
   // FOOTER

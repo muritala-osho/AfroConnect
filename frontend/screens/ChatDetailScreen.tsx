@@ -786,9 +786,26 @@ export default function ChatDetailScreen({
       }
     };
 
+    // chat:message-status is what the backend emits for delivery acknowledgements
+    const handleMessageStatus = (data: any) => {
+      if (!data.messageId || !data.status) return;
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m._id !== data.messageId) return m;
+          // Only advance status (never downgrade: seen > delivered > sent)
+          const rank = { sent: 0, delivered: 1, seen: 2 };
+          const current = rank[m.status as keyof typeof rank] ?? 0;
+          const incoming = rank[data.status as keyof typeof rank] ?? 0;
+          return incoming > current ? { ...m, status: data.status } : m;
+        }),
+      );
+    };
+
     socketService.on("chat:new-message", handleNewMessage);
     socketService.on("message:new", handleNewMessage);
-    socketService.on("chat:message-delivered", handleMessageDelivered); // FIX: was missing
+    socketService.on("chat:message-delivered", handleMessageDelivered);
+    socketService.on("chat:message-status", handleMessageStatus);
+    socketService.on("message:delivered", handleMessageDelivered);
     socketService.on("chat:messages-read", handleMessagesRead);
     socketService.on("chat:message-read", handleMessagesRead);
     socketService.on("chat:read", handleMessagesRead);
@@ -799,11 +816,19 @@ export default function ChatDetailScreen({
     socketService.on("message:reaction", (data: { messageId: string; reactions: MessageReaction[] }) => {
       setMessages(prev => prev.map(m => m._id === data.messageId ? { ...m, reactions: data.reactions } : m));
     });
+    // Real-time verified badge update when admin approves verification
+    socketService.on("user:verified", (data: any) => {
+      if (data.userId && String(data.userId) === String(userId)) {
+        setOtherUserVerified(true);
+      }
+    });
 
     return () => {
       socketService.off("chat:new-message");
       socketService.off("message:new");
       socketService.off("chat:message-delivered");
+      socketService.off("chat:message-status");
+      socketService.off("message:delivered");
       socketService.off("chat:messages-read");
       socketService.off("chat:message-read");
       socketService.off("chat:read");
@@ -812,6 +837,7 @@ export default function ChatDetailScreen({
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
+      socketService.off("user:verified");
     };
   }, [matchId, userId, myId, token, put]);
 
@@ -1679,7 +1705,7 @@ export default function ChatDetailScreen({
         </Pressable>
 
         <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
-          <View style={[styles.avatarContainer, { borderWidth: 2.5, borderColor: theme.primary, borderRadius: 30, padding: 2 }]}>
+          <View style={[styles.avatarContainer, { borderWidth: 2.5, borderColor: theme.primary, borderRadius: 28, padding: 2 }]}>
             <Image source={photoSource || { uri: "https://via.placeholder.com/50" }} style={styles.headerAvatar} contentFit="cover" />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
@@ -2039,12 +2065,12 @@ export default function ChatDetailScreen({
 
 const styles = StyleSheet.create<any>({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 10, borderBottomWidth: 1 },
-  backButton: { padding: 8 },
-  headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 4 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 12, borderBottomWidth: 1 },
+  backButton: { padding: 8, marginRight: 2 },
+  headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 2 },
   avatarContainer: { position: "relative" },
-  headerAvatar: { width: 46, height: 46, borderRadius: 23 },
-  onlineIndicator: { position: "absolute", bottom: 2, right: 2, width: 13, height: 13, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2, borderColor: "#FFF" },
+  headerAvatar: { width: 50, height: 50, borderRadius: 25 },
+  onlineIndicator: { position: "absolute", bottom: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2.5, borderColor: "#FFF" },
   headerInfo: { marginLeft: 12, flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   headerName: { fontSize: 17, fontWeight: "700" },

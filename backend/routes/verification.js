@@ -136,6 +136,20 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
       console.error('Failed to send verification approved email:', emailError);
     }
 
+    // Real-time push: instantly update the user's verified badge on their device
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(user._id.toString()).emit('user:verified', {
+          userId: user._id.toString(),
+          verified: true,
+          verificationStatus: 'approved',
+        });
+      }
+    } catch (socketError) {
+      console.error('Failed to emit verification socket event:', socketError);
+    }
+
     res.json({
       success: true,
       message: 'User verified successfully',
