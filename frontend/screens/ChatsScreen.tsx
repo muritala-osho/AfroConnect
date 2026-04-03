@@ -157,7 +157,10 @@ const ChatItem = memo(
 
     return (
       <Pressable
-        style={[styles.chatItem, { backgroundColor: theme.surface }]}
+        style={({ pressed }) => [
+          styles.chatItem,
+          pressed && { backgroundColor: theme.primary + '08' },
+        ]}
         onPress={onPress}
         onLongPress={onLongPress}
         delayLongPress={400}
@@ -176,32 +179,36 @@ const ChatItem = memo(
                 { backgroundColor: theme.backgroundSecondary },
               ]}
             >
-              <Feather name="user" size={28} color={theme.textSecondary} />
+              <Feather name="user" size={30} color={theme.textSecondary} />
             </View>
           )}
           {item.user.online && (
             <View
               style={[
                 styles.onlineBadge,
-                { backgroundColor: "#4CAF50", borderColor: theme.surface },
+                { backgroundColor: "#4CAF50", borderColor: theme.background },
               ]}
             />
           )}
         </View>
 
-        <View style={styles.chatContent}>
+        <View style={[styles.chatContent, { borderBottomColor: theme.border + '60' }]}>
           <View style={styles.chatHeader}>
             <View style={styles.nameRow}>
               {item.isPinned && (
                 <Ionicons
                   name="pin"
-                  size={14}
+                  size={13}
                   color={theme.primary}
                   style={{ marginRight: 4 }}
                 />
               )}
               <ThemedText
-                style={[styles.name, { color: theme.text }]}
+                style={[
+                  styles.name,
+                  { color: theme.text },
+                  item.unreadCount > 0 && !item.isMuted && { fontWeight: '700' },
+                ]}
                 numberOfLines={1}
               >
                 {item.user.name}
@@ -209,21 +216,25 @@ const ChatItem = memo(
               {item.user.verified && (
                 <Image
                   source={require("@/assets/icons/verified-tick.png")}
-                  style={{ width: 18, height: 18, marginLeft: 4 }}
+                  style={{ width: 16, height: 16, marginLeft: 4 }}
                   contentFit="contain"
                 />
               )}
               {item.isMuted && (
                 <Ionicons
                   name="notifications-off"
-                  size={14}
+                  size={13}
                   color={theme.textSecondary}
                   style={{ marginLeft: 4 }}
                 />
               )}
             </View>
             <ThemedText
-              style={[styles.timestamp, { color: theme.textSecondary }]}
+              style={[
+                styles.timestamp,
+                { color: item.unreadCount > 0 && !item.isMuted ? theme.primary : theme.textSecondary },
+                item.unreadCount > 0 && !item.isMuted && { fontWeight: '600' },
+              ]}
             >
               {formatTimestamp(item.timestamp)}
             </ThemedText>
@@ -1989,31 +2000,31 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   listContent: {
-    padding: Spacing.lg,
-    paddingTop: Spacing.sm,
-    gap: 8,
+    paddingTop: 4,
+    paddingBottom: 16,
   },
   emptyListContent: {
     flex: 1,
   },
   chatItem: {
     flexDirection: "row",
-    padding: Spacing.md,
-    borderRadius: 16,
-    gap: Spacing.md,
+    alignItems: "center",
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    gap: 14,
   },
   avatarContainer: {
     position: "relative",
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   avatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2024,12 +2035,15 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    borderWidth: 2,
+    borderWidth: 2.5,
   },
   chatContent: {
     flex: 1,
     justifyContent: "center",
     gap: 4,
+    borderBottomWidth: 1,
+    paddingBottom: 12,
+    paddingTop: 0,
   },
   chatHeader: {
     flexDirection: "row",

@@ -37,8 +37,8 @@ router.get("/conversations", protect, async (req, res) => {
     );
 
     // Fetch ALL matches sorted by lastMessageAt desc (most recent chat first)
-    // Fall back to updatedAt then matchedAt for matches with no messages yet
-    const matches = await Match.find({ users: req.user._id, status: 'active' })
+    // Include both active and unmatched so old conversations remain visible
+    const matches = await Match.find({ users: req.user._id, status: { $in: ['active', 'unmatched'] } })
       .populate(
         "users",
         "name photos onlineStatus lastActive blockedUsers verified",

@@ -1,5 +1,12 @@
 # AfroConnect — Project Structure
 
+## Recent Changes
+- **Chat (backend)**: `backend/routes/chat.js` — Conversations query now includes `status: 'unmatched'` so old chat histories remain visible (previously only `status: 'active'` matches were returned, hiding any conversations where someone unmatched).
+- **VerificationScreen** (`frontend/screens/VerificationScreen.tsx`): Full layout redesign — gradient hero card, 2×2 benefits grid, numbered steps card, improved camera selfie UI with corner bracket face guide overlay.
+- **LoveRadarScreen** (`frontend/screens/LoveRadarScreen.tsx`): Added missing gender filter pills (Everyone / Women / Men) to the filter panel. Gender was in state but had no UI.
+- **FiltersScreen** (`frontend/screens/FiltersScreen.tsx`): Fixed `disabled={!!isPremium}` on the Verified Only card (was blocking Switch interaction on Android for premium users). Non-premium users still see the lock badge and are redirected to Premium on tap.
+- **ChatsScreen** (`frontend/screens/ChatsScreen.tsx`): Tinder/Bumble-style flat conversation rows — 60px avatars, subtle bottom-border dividers instead of individual cards, unread timestamp coloured in theme primary.
+
 ## Overview
 AfroConnect is a dating/social app for the African diaspora. It consists of three independent folders:
 

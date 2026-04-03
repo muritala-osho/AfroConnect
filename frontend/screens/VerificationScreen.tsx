@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import * as ImagePicker from 'expo-image-picker';
 import { Camera, CameraView } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import { getApiBaseUrl } from '@/constants/config';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type VerificationStatus = 'not_requested' | 'pending' | 'approved' | 'rejected';
 
@@ -25,13 +26,26 @@ interface VerificationState {
   rejectionReason?: string | null;
 }
 
+const BENEFITS = [
+  { icon: 'shield-checkmark', title: 'Trust Badge', desc: 'Blue tick on your profile', color: '#4CAF50' },
+  { icon: 'trending-up', title: 'More Matches', desc: 'Appear higher in discovery', color: '#2196F3' },
+  { icon: 'heart', title: 'Better Connections', desc: 'Quality over quantity', color: '#E91E63' },
+  { icon: 'star', title: 'Stand Out', desc: 'Premium verified look', color: '#FF9800' },
+];
+
+const STEPS = [
+  { num: 1, icon: 'camera-outline', title: 'Take a selfie', desc: 'Front camera, good lighting' },
+  { num: 2, icon: 'cloud-upload-outline', title: 'Submit for review', desc: 'Our team reviews within 24h' },
+  { num: 3, icon: 'checkmark-circle-outline', title: 'Get your badge', desc: 'Verified tick appears on profile' },
+];
+
 export default function VerificationScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { token, user } = useAuth();
   const { get } = useApi();
-  
+
   const [verificationState, setVerificationState] = useState<VerificationState | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -41,21 +55,12 @@ export default function VerificationScreen() {
   const [verificationStep, setVerificationStep] = useState<'selfie' | 'review'>('selfie');
   const cameraRef = useRef<any>(null);
 
-  const selfieTips = [
-    'Position your face in the center',
-    'Good lighting on your face',
-    'Clear background behind you',
-    'Look directly at the camera'
-  ];
-
-
   useEffect(() => {
     fetchVerificationStatus();
   }, []);
 
   const fetchVerificationStatus = async () => {
     if (!token) return;
-    
     try {
       const response = await get<any>('/verification/status', {}, token);
       const resData: any = response;
@@ -108,7 +113,6 @@ export default function VerificationScreen() {
 
   const submitVerification = async () => {
     if (!capturedSelfiePhoto || !token) return;
-
     setSubmitting(true);
     try {
       const formData = new FormData();
@@ -128,13 +132,12 @@ export default function VerificationScreen() {
       });
 
       const data = await response.json();
-
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
-          'Verification Submitted',
-          'Your selfie has been submitted for review. Our team will compare it with your profile and you\'ll receive a "Photo Verified" badge once approved.',
-          [{ text: 'OK', onPress: () => navigation.goBack() }]
+          'Submitted!',
+          'Your selfie has been submitted. Our team will compare it with your profile photos and award your verified badge within 24 hours.',
+          [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
       } else {
         throw new Error(data.message || 'Verification failed');
@@ -146,153 +149,125 @@ export default function VerificationScreen() {
     }
   };
 
-  const renderVerificationBadge = () => {
-    if (!verificationState) return null;
-
-    if (verificationState.verified) {
-      return (
-        <View style={[styles.statusBadge, { backgroundColor: 'rgba(76, 175, 80, 0.15)' }]}>
-          <Image 
-            source={require("@/assets/icons/verified-tick.png")} 
-            style={{ width: 24, height: 24 }} 
-            contentFit="contain"
-          />
-          <ThemedText style={[styles.statusText, { color: '#4CAF50' }]}>Verified</ThemedText>
-        </View>
-      );
-    }
-
-    switch (verificationState.status) {
-      case 'pending':
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(255, 193, 7, 0.15)' }]}>
-            <Ionicons name="time" size={24} color="#FFC107" />
-            <ThemedText style={[styles.statusText, { color: '#FFC107' }]}>Pending Review</ThemedText>
-          </View>
-        );
-      case 'rejected':
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(244, 67, 54, 0.15)' }]}>
-            <Ionicons name="close-circle" size={24} color="#F44336" />
-            <ThemedText style={[styles.statusText, { color: '#F44336' }]}>Not Approved</ThemedText>
-            {verificationState.rejectionReason && (
-              <ThemedText style={[{ color: '#F44336', fontSize: 12, marginTop: 4 }]}>
-                {verificationState.rejectionReason}
-              </ThemedText>
-            )}
-          </View>
-        );
-      default:
-        return (
-          <View style={[styles.statusBadge, { backgroundColor: 'rgba(158, 158, 158, 0.15)' }]}>
-            <Ionicons name="shield-outline" size={24} color="#9E9E9E" />
-            <ThemedText style={[styles.statusText, { color: '#9E9E9E' }]}>Not Verified</ThemedText>
-          </View>
-        );
-    }
-  };
-
   if (showCamera) {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="front"
-        />
-        <View style={[StyleSheet.absoluteFill, { paddingTop: insets.top }]}>
-          {/* Header */}
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
+
+        <LinearGradient
+          colors={['rgba(0,0,0,0.7)', 'transparent']}
+          style={[styles.cameraTopOverlay, { paddingTop: insets.top + 8 }]}
+        >
           <View style={styles.cameraHeader}>
-            <Pressable
-              style={styles.closeButton}
-              onPress={() => setShowCamera(false)}
-            >
-              <Ionicons name="close" size={28} color="#FFF" />
+            <Pressable style={styles.cameraCloseBtn} onPress={() => setShowCamera(false)}>
+              <Ionicons name="close" size={24} color="#FFF" />
             </Pressable>
-            <ThemedText style={{ color: '#FFF', fontSize: 18, fontWeight: '700' }}>
-              Take a Selfie
-            </ThemedText>
-            <View style={{ width: 40 }} />
+            <ThemedText style={styles.cameraTitle}>Take a Selfie</ThemedText>
+            <View style={{ width: 44 }} />
           </View>
 
-          {/* Tips at the top - improved visibility */}
-          <View style={styles.topTipsContainer}>
-            {selfieTips.map((tip, idx) => (
-              <View key={idx} style={styles.topTipItem}>
-                <Feather name="check-circle" size={14} color="#4CAF50" />
-                <ThemedText style={styles.topTipText}>{tip}</ThemedText>
+          <View style={styles.tipsList}>
+            {['Face centered & visible', 'Good lighting', 'No sunglasses or hats'].map((tip, i) => (
+              <View key={i} style={styles.tipRow}>
+                <View style={styles.tipDot} />
+                <ThemedText style={styles.tipText}>{tip}</ThemedText>
               </View>
             ))}
           </View>
+        </LinearGradient>
 
-          {/* Face Guide in center */}
-          <View style={styles.faceGuide}>
-            <View style={[styles.faceCircle, { borderColor: '#4CAF50', borderWidth: 3 }]} />
-            <ThemedText style={styles.faceGuideText}>
-              Position your face in the circle
-            </ThemedText>
+        <View style={styles.faceGuideWrapper}>
+          <View style={styles.faceOval}>
+            <View style={styles.faceOvalCornerTL} />
+            <View style={styles.faceOvalCornerTR} />
+            <View style={styles.faceOvalCornerBL} />
+            <View style={styles.faceOvalCornerBR} />
           </View>
-
-          {/* Capture Controls */}
-          <View style={[styles.cameraControls, { position: 'absolute', bottom: 0, left: 0, right: 0, paddingBottom: insets.bottom + 20 }]}>
-            <Pressable style={styles.captureButton} onPress={takePhoto}>
-              <View style={styles.captureButtonInner} />
-            </Pressable>
-            <ThemedText style={{ color: '#FFF', marginTop: 12, textAlign: 'center', fontSize: 14 }}>Tap to capture</ThemedText>
-          </View>
+          <ThemedText style={styles.faceGuideLabel}>Fit your face inside</ThemedText>
         </View>
+
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.8)']}
+          style={[styles.cameraBottomOverlay, { paddingBottom: insets.bottom + 24 }]}
+        >
+          <Pressable style={styles.captureBtn} onPress={takePhoto}>
+            <View style={styles.captureBtnOuter}>
+              <LinearGradient
+                colors={['#4CAF50', '#2E7D32']}
+                style={styles.captureBtnInner}
+              >
+                <Ionicons name="camera" size={28} color="#FFF" />
+              </LinearGradient>
+            </View>
+          </Pressable>
+          <ThemedText style={styles.captureBtnLabel}>Tap to capture</ThemedText>
+        </LinearGradient>
       </View>
     );
-  }
-
-  // Check if user needs verification and show blocking screen if they are on Discovery
-  if (user?.needsVerification && !verificationState?.verified && verificationState?.status !== 'pending') {
-     // We allow them to see the verification screen which is this screen
   }
 
   if (verificationStep === 'review' && capturedSelfiePhoto) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <Pressable style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs' as any)}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+        <LinearGradient
+          colors={[theme.primary + '20', theme.primary + '08', 'transparent']}
+          style={[styles.reviewHeader, { paddingTop: insets.top + 8 }]}
+        >
+          <Pressable style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : (navigation as any).navigate('MainTabs')}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
           </Pressable>
-          <ThemedText style={styles.headerTitle}>Review Your Photo</ThemedText>
+          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Review Photo</ThemedText>
           <View style={{ width: 40 }} />
-        </View>
+        </LinearGradient>
 
-        <ScrollView style={styles.reviewContent} contentContainerStyle={{ alignItems: 'center', padding: 20 }}>
-          <ThemedText style={[styles.reviewLabel, { marginBottom: 16 }]}>Your Selfie</ThemedText>
-          <SafeImage source={{ uri: capturedSelfiePhoto }} style={styles.previewImage} />
-          <Pressable style={styles.retakeButton} onPress={retakePhoto}>
-            <Ionicons name="refresh" size={16} color={theme.primary} />
-            <ThemedText style={[styles.retakeText, { color: theme.primary }]}>Retake Photo</ThemedText>
-          </Pressable>
-
-          <View style={[styles.infoBox, { backgroundColor: theme.surface, marginTop: 24 }]}>
-            <Ionicons name="information-circle" size={20} color={theme.primary} />
-            <ThemedText style={[styles.infoText, { color: theme.textSecondary }]}>
-              Our team will compare this selfie with your profile photos to verify your identity.
+        <ScrollView contentContainerStyle={styles.reviewContent}>
+          <View style={styles.reviewPhotoWrapper}>
+            <LinearGradient
+              colors={[theme.primary, theme.primary + '80']}
+              style={styles.reviewPhotoRing}
+            >
+              <SafeImage source={{ uri: capturedSelfiePhoto }} style={styles.reviewPhoto} />
+            </LinearGradient>
+            <ThemedText style={[styles.reviewPhotoLabel, { color: theme.textSecondary }]}>
+              Your selfie
             </ThemedText>
           </View>
+
+          <View style={[styles.reviewInfoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={styles.reviewInfoRow}>
+              <View style={[styles.reviewInfoIcon, { backgroundColor: theme.primary + '20' }]}>
+                <Ionicons name="eye-outline" size={20} color={theme.primary} />
+              </View>
+              <ThemedText style={[styles.reviewInfoText, { color: theme.textSecondary }]}>
+                Our team will compare this selfie with your profile photos to confirm your identity. Only our moderators will see it.
+              </ThemedText>
+            </View>
+          </View>
+
+          <Pressable style={[styles.retakeBtn, { borderColor: theme.border }]} onPress={retakePhoto}>
+            <Ionicons name="refresh-outline" size={18} color={theme.primary} />
+            <ThemedText style={[styles.retakeBtnText, { color: theme.primary }]}>Retake Photo</ThemedText>
+          </Pressable>
         </ScrollView>
 
-        <View style={[styles.actions, { paddingBottom: insets.bottom + 20 }]}>
+        <View style={[styles.reviewFooter, { paddingBottom: insets.bottom + 16 }]}>
           <Pressable
-            style={[styles.submitButton, submitting && styles.disabledButton]}
+            style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
             onPress={submitVerification}
             disabled={submitting}
           >
             <LinearGradient
-              colors={[theme.primary, theme.secondary || theme.primary]}
-              style={styles.submitGradient}
+              colors={[theme.primary, (theme as any).secondary || theme.primary + 'CC']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.submitBtnGradient}
             >
               {submitting ? (
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <>
-                  <ThemedText style={styles.submitText}>Submit for Verification</ThemedText>
                   <Ionicons name="shield-checkmark" size={20} color="#FFF" />
+                  <ThemedText style={styles.submitBtnText}>Submit for Verification</ThemedText>
                 </>
               )}
             </LinearGradient>
@@ -304,105 +279,150 @@ export default function VerificationScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <Pressable style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('MainTabs' as any)}>
-            <Ionicons name="arrow-back" size={24} color={theme.text} />
+      <LinearGradient
+        colors={[theme.primary + '25', theme.primary + '08', 'transparent']}
+        style={[styles.mainHeader, { paddingTop: insets.top + 8 }]}
+      >
+        <View style={styles.mainHeaderRow}>
+          <Pressable style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : (navigation as any).navigate('MainTabs')}>
+            <Ionicons name="arrow-back" size={22} color={theme.text} />
           </Pressable>
-          <ThemedText style={styles.headerTitle}>Get Verified</ThemedText>
+          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Get Verified</ThemedText>
           <View style={{ width: 40 }} />
         </View>
+      </LinearGradient>
 
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.primary} />
+          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>Loading...</ThemedText>
         </View>
       ) : (
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.verifiedHeroCard}>
-            <View style={styles.verifiedBadgeCircle}>
-              <Ionicons name="shield-checkmark-outline" size={48} color={theme.primary} />
-            </View>
-            <ThemedText style={[styles.heroTitle, { color: theme.text }]}>
-              Verify Your Profile
-            </ThemedText>
-            <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-              Build trust and get more matches
-            </ThemedText>
-            {renderVerificationBadge()}
+        <ScrollView
+          contentContainerStyle={[styles.mainContent, { paddingBottom: insets.bottom + 32 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.heroSection}>
+            <LinearGradient
+              colors={[theme.primary + '25', theme.primary + '10']}
+              style={styles.heroCard}
+            >
+              <LinearGradient
+                colors={[theme.primary, (theme as any).secondary || theme.primary + 'CC']}
+                style={styles.heroIconCircle}
+              >
+                <Ionicons name="shield-checkmark" size={36} color="#FFF" />
+              </LinearGradient>
+              <ThemedText style={[styles.heroTitle, { color: theme.text }]}>
+                Verify Your Identity
+              </ThemedText>
+              <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
+                A quick selfie is all it takes. Get your verified badge and stand out.
+              </ThemedText>
+
+              {verificationState?.verified && (
+                <View style={[styles.statusPill, { backgroundColor: '#4CAF5025' }]}>
+                  <Image source={require("@/assets/icons/verified-tick.png")} style={{ width: 18, height: 18 }} contentFit="contain" />
+                  <ThemedText style={[styles.statusPillText, { color: '#4CAF50' }]}>You're Verified</ThemedText>
+                </View>
+              )}
+              {verificationState?.status === 'pending' && (
+                <View style={[styles.statusPill, { backgroundColor: '#FFC10720' }]}>
+                  <Ionicons name="time" size={16} color="#FFC107" />
+                  <ThemedText style={[styles.statusPillText, { color: '#FFC107' }]}>Pending Review</ThemedText>
+                </View>
+              )}
+              {verificationState?.status === 'rejected' && (
+                <View style={[styles.statusPill, { backgroundColor: '#F4433620' }]}>
+                  <Ionicons name="close-circle" size={16} color="#F44336" />
+                  <ThemedText style={[styles.statusPillText, { color: '#F44336' }]}>Not Approved</ThemedText>
+                </View>
+              )}
+            </LinearGradient>
           </View>
 
+          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Why get verified?</ThemedText>
           <View style={styles.benefitsGrid}>
-            {[
-              { icon: 'shield-checkmark', title: 'Trust Badge', desc: 'Show you\'re real' },
-              { icon: 'trending-up', title: 'More Visibility', desc: 'Appear in more feeds' },
-              { icon: 'heart', title: 'Better Matches', desc: 'Quality connections' },
-              { icon: 'star', title: 'Stand Out', desc: 'Premium profile' },
-            ].map((item, index) => (
-              <View key={index} style={[styles.benefitCard, { backgroundColor: theme.surface }]}>
-                <View style={[styles.benefitIconCircle, { backgroundColor: theme.primary + '20' }]}>
-                  <Ionicons name={item.icon as any} size={22} color={theme.primary} />
+            {BENEFITS.map((b, i) => (
+              <View key={i} style={[styles.benefitCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={[styles.benefitIconCircle, { backgroundColor: b.color + '20' }]}>
+                  <Ionicons name={b.icon as any} size={22} color={b.color} />
                 </View>
-                <ThemedText style={[styles.benefitCardTitle, { color: theme.text }]}>{item.title}</ThemedText>
-                <ThemedText style={[styles.benefitCardDesc, { color: theme.textSecondary }]}>{item.desc}</ThemedText>
+                <ThemedText style={[styles.benefitTitle, { color: theme.text }]}>{b.title}</ThemedText>
+                <ThemedText style={[styles.benefitDesc, { color: theme.textSecondary }]}>{b.desc}</ThemedText>
               </View>
             ))}
           </View>
 
-          <View style={[styles.stepsCard, { backgroundColor: theme.surface }]}>
-            <ThemedText style={[styles.stepsTitle, { color: theme.text }]}>How It Works</ThemedText>
-            
-            <View style={styles.stepsRow}>
-              {[
-                { num: '1', icon: 'camera', title: 'Take Selfie' },
-                { num: '2', icon: 'checkmark-done', title: 'Get Verified' },
-              ].map((step, index) => (
-                <View key={index} style={styles.stepColumn}>
-                  <View style={[styles.stepCircle, { backgroundColor: theme.primary }]}>
-                    <Ionicons name={step.icon as any} size={20} color="#FFF" />
+          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>How it works</ThemedText>
+          <View style={[styles.stepsCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            {STEPS.map((step, i) => (
+              <View key={i}>
+                <View style={styles.stepRow}>
+                  <View style={[styles.stepNumCircle, { backgroundColor: theme.primary }]}>
+                    <ThemedText style={styles.stepNum}>{step.num}</ThemedText>
                   </View>
-                  <ThemedText style={[styles.stepLabel, { color: theme.text }]}>{step.title}</ThemedText>
-                  {index < 1 && <View style={[styles.stepConnector, { backgroundColor: theme.primary + '40' }]} />}
+                  <View style={styles.stepInfo}>
+                    <ThemedText style={[styles.stepTitle, { color: theme.text }]}>{step.title}</ThemedText>
+                    <ThemedText style={[styles.stepDesc, { color: theme.textSecondary }]}>{step.desc}</ThemedText>
+                  </View>
+                  <Ionicons name={step.icon as any} size={22} color={theme.primary + '80'} />
                 </View>
-              ))}
-            </View>
+                {i < STEPS.length - 1 && (
+                  <View style={[styles.stepLine, { backgroundColor: theme.border }]} />
+                )}
+              </View>
+            ))}
           </View>
 
-          {(!verificationState?.verified && verificationState?.status !== 'pending') && (
-            <Pressable style={styles.verifyButton} onPress={requestCameraPermission}>
-              <LinearGradient
-                colors={[theme.primary, theme.secondary || theme.primary]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.verifyGradient}
-              >
-                <Ionicons name="camera" size={22} color="#FFF" />
-                <ThemedText style={styles.verifyButtonText}>Start Verification</ThemedText>
-              </LinearGradient>
-            </Pressable>
-          )}
-
           {verificationState?.status === 'pending' && (
-            <View style={[styles.pendingCard, { backgroundColor: '#FFC10720' }]}>
+            <View style={[styles.alertCard, { backgroundColor: '#FFC10715', borderColor: '#FFC10740' }]}>
               <Ionicons name="time" size={24} color="#FFC107" />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <ThemedText style={[styles.pendingTitle, { color: '#FFC107' }]}>Under Review</ThemedText>
-                <ThemedText style={[styles.pendingDesc, { color: theme.textSecondary }]}>
-                  We're comparing your selfie with your profile photos. This usually takes up to 24 hours.
+                <ThemedText style={[styles.alertTitle, { color: '#FFC107' }]}>Under Review</ThemedText>
+                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
+                  We're reviewing your selfie now. This usually takes up to 24 hours.
+                </ThemedText>
+              </View>
+            </View>
+          )}
+
+          {verificationState?.status === 'rejected' && verificationState.rejectionReason && (
+            <View style={[styles.alertCard, { backgroundColor: '#F4433615', borderColor: '#F4433640' }]}>
+              <Ionicons name="alert-circle" size={24} color="#F44336" />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <ThemedText style={[styles.alertTitle, { color: '#F44336' }]}>Rejection Reason</ThemedText>
+                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
+                  {verificationState.rejectionReason}
                 </ThemedText>
               </View>
             </View>
           )}
 
           {verificationState?.verified && (
-            <View style={[styles.verifiedCard, { backgroundColor: '#4CAF5020' }]}>
+            <View style={[styles.alertCard, { backgroundColor: '#4CAF5015', borderColor: '#4CAF5040' }]}>
               <Feather name="check-circle" size={24} color="#4CAF50" />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <ThemedText style={[styles.verifiedTitle, { color: '#4CAF50' }]}>You're Verified!</ThemedText>
-                <ThemedText style={[styles.verifiedDesc, { color: theme.textSecondary }]}>
-                  Your profile has been verified. Enjoy your premium badge!
+                <ThemedText style={[styles.alertTitle, { color: '#4CAF50' }]}>You're Verified!</ThemedText>
+                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
+                  Your verified badge is live on your profile. Keep enjoying AfroConnect!
                 </ThemedText>
               </View>
             </View>
+          )}
+
+          {(!verificationState?.verified && verificationState?.status !== 'pending') && (
+            <Pressable style={styles.startBtn} onPress={requestCameraPermission}>
+              <LinearGradient
+                colors={[theme.primary, (theme as any).secondary || theme.primary + 'CC']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.startBtnGradient}
+              >
+                <Ionicons name="camera" size={22} color="#FFF" />
+                <ThemedText style={styles.startBtnText}>Start Verification</ThemedText>
+              </LinearGradient>
+            </Pressable>
           )}
         </ScrollView>
       )}
@@ -414,22 +434,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  heroSection: {
-    marginBottom: 24,
-  },
-  heroBg: {
-    padding: 24,
-    borderRadius: 24,
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
   },
-  header: {
+  loadingText: {
+    fontSize: 15,
+  },
+
+  mainHeader: {
+    paddingBottom: 16,
+  },
+  mainHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  reviewHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  backButton: {
+  backBtn: {
     width: 40,
     height: 40,
     alignItems: 'center',
@@ -437,338 +469,79 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  loadingContainer: {
-    flex: 1,
+
+  mainContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+
+  heroSection: {
+    marginBottom: 28,
+  },
+  heroCard: {
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+  },
+  heroIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 24,
-    paddingBottom: 40,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  iconGradient: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  description: {
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-    marginBottom: 32,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  benefitsSection: {
-    marginBottom: 32,
-  },
-  benefitsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  benefitItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-  },
-  benefitText: {
-    fontSize: 16,
-    flex: 1,
-    fontWeight: '500',
-    color: '#EEE',
-  },
-  howItWorks: {
-    marginBottom: 40,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    padding: 24,
-    borderRadius: 24,
-  },
-  howItWorksTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: '#FFF',
-  },
-  stepItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    marginBottom: 16,
-  },
-  stepNumber: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  stepNumberText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  stepTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  stepText: {
-    fontSize: 14,
-    flex: 1,
-    color: '#999',
-    marginTop: 4,
-  },
-  verifyButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  verifyGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    gap: 8,
-  },
-  verifyButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  pendingMessage: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 16,
-    backgroundColor: 'rgba(255, 193, 7, 0.1)',
-    borderRadius: 12,
-  },
-  pendingText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  cameraContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  camera: {
-    flex: 1,
-  },
-  cameraOverlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  closeButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  faceGuide: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -40,
-  },
-  faceCircle: {
-    width: 280,
-    height: 380,
-    borderRadius: 140,
-    borderWidth: 3,
-    borderColor: '#4CAF50',
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(76, 175, 80, 0.05)',
-  },
-  poseInstruction: {
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    marginHorizontal: 40,
-    borderRadius: 16,
-    gap: 8,
-  },
-  poseText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  cameraControls: {
-    alignItems: 'center',
-    paddingVertical: 24,
-  },
-  captureButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  captureButtonInner: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#4CAF50',
-  },
-  cameraHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 10,
-  },
-  tipsSection: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginHorizontal: 16,
-    marginBottom: 20,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-  },
-  previewContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  previewImage: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    borderRadius: 16,
-  },
-  reviewContent: {
-    flex: 1,
-    padding: 24,
-  },
-  reviewLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 12,
-  },
-  actions: {
-    padding: 24,
-    gap: 16,
-  },
-  retakeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    padding: 16,
-  },
-  retakeText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  submitButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  submitGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    gap: 8,
-  },
-  submitText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  verifiedHeroCard: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  verifiedBadgeCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(76, 175, 80, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
   heroTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '800',
+    textAlign: 'center',
     marginBottom: 8,
   },
   heroSubtitle: {
     fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
     marginBottom: 16,
   },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  statusPillText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 14,
+  },
+
   benefitsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 24,
+    gap: 12,
+    marginBottom: 28,
   },
   benefitCard: {
-    width: '48%',
+    width: (SCREEN_WIDTH - 52) / 2,
+    borderRadius: 18,
     padding: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-    marginBottom: 12,
+    borderWidth: 1,
+    alignItems: 'flex-start',
   },
   benefitIconCircle: {
     width: 44,
@@ -778,127 +551,320 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 10,
   },
-  benefitCardTitle: {
+  benefitTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 4,
   },
-  benefitCardDesc: {
+  benefitDesc: {
     fontSize: 12,
-    textAlign: 'center',
+    lineHeight: 17,
   },
+
   stepsCard: {
-    padding: 20,
     borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
     marginBottom: 24,
   },
-  stepsTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  stepsRow: {
+  stepRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
+    gap: 14,
+    paddingVertical: 4,
   },
-  stepColumn: {
-    alignItems: 'center',
-    position: 'relative',
-  },
-  stepCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  stepNumCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  stepLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+  stepNum: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '800',
   },
-  stepConnector: {
-    position: 'absolute',
-    top: 24,
-    left: 48,
-    width: 40,
-    height: 2,
+  stepInfo: {
+    flex: 1,
   },
-  pendingCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginTop: 8,
+  stepTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
   },
-  pendingTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  pendingDesc: {
+  stepDesc: {
     fontSize: 13,
     lineHeight: 18,
   },
-  verifiedCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginTop: 8,
-  },
-  verifiedTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  verifiedDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  topTipsContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    marginHorizontal: 20,
-    marginTop: 20,
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  topTipItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  stepLine: {
+    width: 2,
+    height: 20,
+    marginLeft: 17,
     marginVertical: 4,
   },
-  topTipText: {
-    color: '#FFF',
-    fontSize: 14,
-    marginLeft: 10,
-    fontWeight: '500',
-  },
-  faceGuideText: {
-    color: '#FFF',
-    marginTop: 20,
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  infoBox: {
+
+  alertCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    borderRadius: 16,
     padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    borderWidth: 1,
+    marginBottom: 20,
   },
-  infoText: {
+  alertTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  alertDesc: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  startBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  startBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 18,
+  },
+  startBtnText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+
+  reviewContent: {
+    padding: 24,
+    alignItems: 'center',
+  },
+  reviewPhotoWrapper: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  reviewPhotoRing: {
+    padding: 4,
+    borderRadius: 130,
+    marginBottom: 10,
+  },
+  reviewPhoto: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+  },
+  reviewPhotoLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  reviewInfoCard: {
+    width: '100%',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  reviewInfoRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  reviewInfoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewInfoText: {
     flex: 1,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
+  },
+  retakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  retakeBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  reviewFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  submitBtn: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  submitBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 18,
+  },
+  submitBtnText: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  cameraTopOverlay: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  cameraHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  cameraCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  tipsList: {
+    gap: 6,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#4CAF50',
+  },
+  tipText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  faceGuideWrapper: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faceOval: {
+    width: 260,
+    height: 340,
+    borderRadius: 130,
+    borderWidth: 2.5,
+    borderColor: 'rgba(76,175,80,0.8)',
+    borderStyle: 'dashed',
+    backgroundColor: 'transparent',
+    position: 'relative',
+  },
+  faceOvalCornerTL: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    width: 30,
+    height: 30,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+    borderColor: '#4CAF50',
+    borderTopLeftRadius: 8,
+  },
+  faceOvalCornerTR: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 30,
+    height: 30,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderColor: '#4CAF50',
+    borderTopRightRadius: 8,
+  },
+  faceOvalCornerBL: {
+    position: 'absolute',
+    bottom: -2,
+    left: -2,
+    width: 30,
+    height: 30,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderColor: '#4CAF50',
+    borderBottomLeftRadius: 8,
+  },
+  faceOvalCornerBR: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 30,
+    height: 30,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderColor: '#4CAF50',
+    borderBottomRightRadius: 8,
+  },
+  faceGuideLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 14,
+    marginTop: 16,
+    fontWeight: '500',
+  },
+  cameraBottomOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingTop: 40,
+  },
+  captureBtn: {
+    marginBottom: 10,
+  },
+  captureBtnOuter: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.8)',
+    padding: 4,
+  },
+  captureBtnInner: {
+    flex: 1,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureBtnLabel: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

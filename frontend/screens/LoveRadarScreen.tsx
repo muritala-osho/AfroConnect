@@ -385,6 +385,39 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
                 </View>
               </View>
 
+              <View style={[styles.filterRow, { marginTop: 16 }]}>
+                <View style={styles.filterLabel}>
+                  <Feather name="users" size={16} color="#8b5cf6" />
+                  <ThemedText style={styles.filterLabelText}>Show Me</ThemedText>
+                </View>
+              </View>
+              <View style={styles.genderPills}>
+                {[
+                  { value: 'any', label: 'Everyone', emoji: '🌈' },
+                  { value: 'female', label: 'Women', emoji: '👩' },
+                  { value: 'male', label: 'Men', emoji: '👨' },
+                ].map((g) => (
+                  <TouchableOpacity
+                    key={g.value}
+                    style={[
+                      styles.genderPill,
+                      filters.gender === g.value && styles.genderPillActive,
+                    ]}
+                    onPress={() => setFilters({ ...filters, gender: g.value as any })}
+                  >
+                    <ThemedText style={styles.genderPillEmoji}>{g.emoji}</ThemedText>
+                    <ThemedText
+                      style={[
+                        styles.genderPillText,
+                        { color: filters.gender === g.value ? '#8b5cf6' : 'rgba(255,255,255,0.6)' },
+                      ]}
+                    >
+                      {g.label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               <TouchableOpacity
                 style={styles.applyFiltersButton}
                 onPress={() => {
@@ -784,6 +817,35 @@ const styles = StyleSheet.create({
   ageSlider: {
     width: '100%',
     height: 40,
+  },
+  genderPills: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  genderPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  genderPillActive: {
+    backgroundColor: 'rgba(139,92,246,0.15)',
+    borderColor: 'rgba(139,92,246,0.5)',
+  },
+  genderPillEmoji: {
+    fontSize: 14,
+  },
+  genderPillText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   applyFiltersButton: {
     marginTop: 16,

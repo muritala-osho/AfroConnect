@@ -454,13 +454,17 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
 
         {/* VERIFIED ONLY */}
         <Pressable
-          style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: isPremium ? theme.border : theme.border }]}
+          style={[
+            styles.filterCard,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+            !isPremium && { opacity: 0.8 },
+          ]}
           onPress={() => {
             if (!isPremium) {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
               navigation.navigate('Premium' as any);
             }
           }}
-          disabled={!!isPremium}
         >
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleRow}>
