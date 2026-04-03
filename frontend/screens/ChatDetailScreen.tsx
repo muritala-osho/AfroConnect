@@ -27,6 +27,7 @@ import {
   DeviceEventEmitter,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
