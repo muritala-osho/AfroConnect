@@ -385,6 +385,7 @@ export default function ChatDetailScreen({
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingDurationRef = useRef<number>(0);
+  const maxRecordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
@@ -1003,6 +1004,19 @@ export default function ChatDetailScreen({
         recordingDurationRef.current += 1;
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
+      const isPremium = user?.premium?.isActive;
+      const voiceLimit = isPremium ? 600 : 30;
+      if (maxRecordingTimerRef.current) clearTimeout(maxRecordingTimerRef.current);
+      maxRecordingTimerRef.current = setTimeout(() => {
+        if (!isPremium) {
+          Alert.alert(
+            'Voice Note Limit',
+            'Free accounts are limited to 30-second voice notes. Upgrade to Premium for unlimited length.',
+            [{ text: 'OK' }]
+          );
+        }
+        stopRecording();
+      }, voiceLimit * 1000);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error("Recording error:", error);
@@ -1015,6 +1029,7 @@ export default function ChatDetailScreen({
   const stopRecording = async () => {
     if (!recordingRef.current) { setIsRecording(false); return; }
     try {
+      if (maxRecordingTimerRef.current) { clearTimeout(maxRecordingTimerRef.current); maxRecordingTimerRef.current = null; }
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       const recording = recordingRef.current;
       const duration = recordingDurationRef.current;
@@ -1060,6 +1075,7 @@ export default function ChatDetailScreen({
   };
 
   const cancelRecording = async () => {
+    if (maxRecordingTimerRef.current) { clearTimeout(maxRecordingTimerRef.current); maxRecordingTimerRef.current = null; }
     if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
     if (!recordingRef.current) { setIsRecording(false); setRecordingDuration(0); recordingDurationRef.current = 0; return; }
     try {

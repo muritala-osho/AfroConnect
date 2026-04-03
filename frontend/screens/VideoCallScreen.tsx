@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Animated, Dimensions, StatusBar, Platform, Alert } from 'react-native';
 import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -395,6 +395,21 @@ export default function VideoCallScreen() {
       }, 500);
     }
   };
+
+  useEffect(() => {
+    const isPremium = user?.premium?.isActive;
+    if (isPremium || callStatus !== 'connected') return;
+    if (callDuration === 240) {
+      Alert.alert(
+        '1 Minute Remaining',
+        'Free video calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.',
+        [{ text: 'OK' }]
+      );
+    }
+    if (callDuration >= 300) {
+      handleEndCall();
+    }
+  }, [callDuration, callStatus, user]);
 
   const handleAcceptCall = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

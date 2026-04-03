@@ -458,7 +458,7 @@ const userSchema = new mongoose.Schema({
       seeWhoLikesYou: { type: Boolean, default: false },
       unlimitedRewinds: { type: Boolean, default: false },
       boostPerMonth: { type: Number, default: 0 },
-      superLikesPerDay: { type: Number, default: 1 },
+      superLikesPerDay: { type: Number, default: 0 },
       noAds: { type: Boolean, default: false },
       advancedFilters: { type: Boolean, default: false },
       readReceipts: { type: Boolean, default: false },

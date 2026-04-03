@@ -7,6 +7,7 @@ import {
   StatusBar,
   Vibration,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { ThemedText } from "@/components/ThemedText";
@@ -183,6 +184,21 @@ export default function VoiceCallScreen() {
     });
     setTimeout(() => navigation.goBack(), 500);
   }, [callStatus, duration, callerId, userId, isIncoming, stopRingtoneSound, sendToWebView, navigation]);
+
+  useEffect(() => {
+    const isPremium = user?.premium?.isActive;
+    if (isPremium || callStatus !== 'connected') return;
+    if (duration === 240) {
+      Alert.alert(
+        '1 Minute Remaining',
+        'Free calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.',
+        [{ text: 'OK' }]
+      );
+    }
+    if (duration >= 300) {
+      handleEndCall();
+    }
+  }, [duration, callStatus, user, handleEndCall]);
 
   const handleAccept = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

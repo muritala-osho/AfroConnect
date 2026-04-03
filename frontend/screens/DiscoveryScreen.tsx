@@ -840,8 +840,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
       }
     } catch (error: any) {
-      // Handle duplicate request gracefully
-      if (error?.message?.includes('already sent')) {
+      const errMsg = error?.message || error?.response?.data?.message || '';
+      if (errMsg.toLowerCase().includes('daily swipe limit') || errMsg.toLowerCase().includes('swipe limit')) {
+        showAlert(
+          'Out of Likes',
+          "You've used all 10 daily likes. Upgrade to Premium for unlimited likes!",
+          [
+            { text: 'Not Now', style: 'cancel' },
+            { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Premium') },
+          ],
+          'heart'
+        );
+      } else if (errMsg.includes('already sent')) {
         showAlert('Already Sent', `You've already sent a request to ${targetUser.name}`, [{ text: 'OK', style: 'default' }], 'info');
       } else {
         console.error("Error sending match request:", error);
