@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, ScrollView, Platform } from "react-native";
+import { View, StyleSheet, Pressable, ScrollView, Platform, Switch } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -37,7 +37,11 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   const [wantsKids, setWantsKids] = useState<string>(
     user?.preferences?.wantsKids != null ? String(user.preferences.wantsKids) : "any"
   );
+  const [showVerifiedOnly, setShowVerifiedOnly] = useState<boolean>(
+    user?.preferences?.showVerifiedOnly || false
+  );
   const [saving, setSaving] = useState(false);
+  const isPremium = user?.premium?.isActive;
 
   const handleApply = async () => {
     if (!token) return;
@@ -54,6 +58,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
         smoking: smoking === "any" ? undefined : smoking,
         drinking: drinking === "any" ? undefined : drinking,
         wantsKids: wantsKids === "any" ? undefined : wantsKids === "true",
+        showVerifiedOnly: isPremium ? showVerifiedOnly : false,
       };
 
       const lifestyleUpdates = {
@@ -98,6 +103,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
     setSmoking("any");
     setDrinking("any");
     setWantsKids("any");
+    setShowVerifiedOnly(false);
   };
 
   const getLookingForLabel = (value: string) => {
@@ -445,6 +451,52 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
             ))}
           </ScrollView>
         </View>
+
+        {/* VERIFIED ONLY */}
+        <Pressable
+          style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: isPremium ? theme.border : theme.border }]}
+          onPress={() => {
+            if (!isPremium) {
+              navigation.navigate('Premium' as any);
+            }
+          }}
+          disabled={!!isPremium}
+        >
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleRow}>
+              <View style={[styles.filterIcon, { backgroundColor: '#4ade8015' }]}>
+                <Feather name="check-circle" size={18} color="#4ade80" />
+              </View>
+              <View style={styles.filterTitleContent}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ThemedText style={[styles.filterTitle, { color: theme.text }]}>Verified Only</ThemedText>
+                  {!isPremium && (
+                    <View style={[styles.premiumBadge, { backgroundColor: theme.primary + '20' }]}>
+                      <Feather name="lock" size={10} color={theme.primary} />
+                      <ThemedText style={[styles.premiumBadgeText, { color: theme.primary }]}>Premium</ThemedText>
+                    </View>
+                  )}
+                </View>
+                <ThemedText style={[styles.filterSubtitle, { color: theme.textSecondary }]}>
+                  Only show verified profiles
+                </ThemedText>
+              </View>
+            </View>
+            {isPremium ? (
+              <Switch
+                value={showVerifiedOnly}
+                onValueChange={(v) => {
+                  setShowVerifiedOnly(v);
+                  Haptics.selectionAsync();
+                }}
+                trackColor={{ false: 'rgba(255,255,255,0.1)', true: theme.primary + '80' }}
+                thumbColor={showVerifiedOnly ? theme.primary : 'rgba(255,255,255,0.4)'}
+              />
+            ) : (
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+            )}
+          </View>
+        </Pressable>
 
         {/* LIFESTYLE PREFERENCES */}
         <View style={[styles.filterCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
