@@ -1670,13 +1670,16 @@ export default function ChatDetailScreen({
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER */}
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]}>
+      <LinearGradient
+        colors={isDark ? ['#161B22', '#0D1117'] : ['#FFFFFF', '#F5F7FA']}
+        style={[styles.header, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}
+      >
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color={theme.text} />
         </Pressable>
 
         <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
-          <View style={styles.avatarContainer}>
+          <View style={[styles.avatarContainer, { borderWidth: 2.5, borderColor: theme.primary, borderRadius: 30, padding: 2 }]}>
             <Image source={photoSource || { uri: "https://via.placeholder.com/50" }} style={styles.headerAvatar} contentFit="cover" />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
@@ -1692,18 +1695,21 @@ export default function ChatDetailScreen({
         </Pressable>
 
         <View style={styles.headerActions}>
-          <Pressable onPress={handleVoiceCall} style={styles.headerActionButton}><Feather name="phone" size={22} color={theme.primary} /></Pressable>
-          <Pressable onPress={handleVideoCall} style={styles.headerActionButton}><Feather name="video" size={22} color={theme.primary} /></Pressable>
-          <Pressable onPress={() => setShowOptionsMenu(true)} style={styles.headerActionButton}><Feather name="more-vertical" size={22} color={theme.text} /></Pressable>
+          <Pressable onPress={handleVoiceCall} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', borderRadius: 12 }]}><Feather name="phone" size={20} color={theme.primary} /></Pressable>
+          <Pressable onPress={handleVideoCall} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', borderRadius: 12 }]}><Feather name="video" size={20} color={theme.primary} /></Pressable>
+          <Pressable onPress={() => setShowOptionsMenu(true)} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderRadius: 12 }]}><Feather name="more-vertical" size={20} color={theme.text} /></Pressable>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* BODY */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "padding"} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} enabled={Platform.OS !== "web"}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
-          <View style={[styles.chatBackground, { flex: 1, backgroundColor: isDark ? "#0a0d14" : "#E8E8E8" }]}>{chatContent}</View>
+          <LinearGradient
+            colors={isDark ? ['#0D1117', '#0a0d14', '#0D1117'] : ['#EAECEF', '#E8E8E8', '#EAECEF']}
+            style={[styles.chatBackground, { flex: 1 }]}
+          >{chatContent}</LinearGradient>
         )}
 
         {showAISuggestions && (
@@ -2033,19 +2039,19 @@ export default function ChatDetailScreen({
 
 const styles = StyleSheet.create<any>({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 1 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 10, borderBottomWidth: 1 },
   backButton: { padding: 8 },
   headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 4 },
   avatarContainer: { position: "relative" },
-  headerAvatar: { width: 44, height: 44, borderRadius: 22 },
-  onlineIndicator: { position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2, borderColor: "#FFF" },
+  headerAvatar: { width: 46, height: 46, borderRadius: 23 },
+  onlineIndicator: { position: "absolute", bottom: 2, right: 2, width: 13, height: 13, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2, borderColor: "#FFF" },
   headerInfo: { marginLeft: 12, flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   headerName: { fontSize: 17, fontWeight: "700" },
   verifiedBadge: { width: 18, height: 18, marginLeft: 6 },
   headerStatus: { fontSize: 13, marginTop: 2 },
-  headerActions: { flexDirection: "row", alignItems: "center" },
-  headerActionButton: { padding: 10, marginLeft: 4 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  headerActionButton: { padding: 9, marginLeft: 0 },
   chatBackground: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   messagesList: { paddingHorizontal: 12, paddingVertical: 16, flexGrow: 1 },
@@ -2055,19 +2061,19 @@ const styles = StyleSheet.create<any>({
   systemMessageContainer: { alignItems: "center", marginVertical: 8 },
   systemMessage: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
   systemMessageText: { color: "#FFF", fontSize: 13 },
-  messageRow: { flexDirection: "row", marginVertical: 4, alignItems: "flex-end" },
+  messageRow: { flexDirection: "row", marginVertical: 3, alignItems: "flex-end" },
   messageRowLeft: { justifyContent: "flex-start" },
   messageRowRight: { justifyContent: "flex-end" },
-  messageAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
-  messageBubble: { maxWidth: "75%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
-  myBubble: { borderBottomRightRadius: 4 },
-  theirBubble: { borderBottomLeftRadius: 4 },
+  messageAvatar: { width: 0, height: 0, marginRight: 0 },
+  messageBubble: { maxWidth: "78%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22 },
+  myBubble: { borderTopRightRadius: 22, borderBottomRightRadius: 8 },
+  theirBubble: { borderTopLeftRadius: 22, borderBottomLeftRadius: 8 },
   messageText: { fontSize: 15, lineHeight: 21 },
   messageImage: { width: 200, height: 150, borderRadius: 16, marginBottom: 6, overflow: "hidden" },
   messageFooter: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
   messageTime: { fontSize: 11 },
   typingIndicator: { paddingHorizontal: 16, paddingVertical: 6 },
-  typingBubble: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderBottomLeftRadius: 4, gap: 8 },
+  typingBubble: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, borderTopLeftRadius: 22, borderBottomLeftRadius: 8, gap: 8 },
   typingDots: { flexDirection: "row", alignItems: "center" },
   typingDot: { width: 7, height: 7, borderRadius: 4 },
   typingLabel: { fontSize: 12, fontWeight: "500" },
@@ -2087,7 +2093,7 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1, borderTopColor: "#1c1f26", backgroundColor: "#0a0d14" },
+  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 10, paddingTop: 10, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -2095,13 +2101,13 @@ const styles = StyleSheet.create<any>({
   recordingTime: { fontSize: 18, fontWeight: "600" },
   recordingLabel: { fontSize: 13, fontWeight: "500" },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-  attachButton: { padding: 6, marginBottom: 2 },
-  inputWrapper: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 4, minHeight: 45, maxHeight: 120 },
-  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 8, paddingTop: Platform.OS === "ios" ? 10 : 0, paddingBottom: Platform.OS === "ios" ? 10 : 5 },
-  emojiToggle: { padding: 4, marginLeft: 8 },
-  aiButton: { padding: 6, marginBottom: 2 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 2 },
-  micButton: { padding: 8, marginBottom: 2 },
+  attachButton: { padding: 6, marginBottom: 3 },
+  inputWrapper: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 26, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 6, minHeight: 46, maxHeight: 120 },
+  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 6, paddingTop: Platform.OS === "ios" ? 8 : 0, paddingBottom: Platform.OS === "ios" ? 8 : 5 },
+  emojiToggle: { padding: 4, marginLeft: 6 },
+  aiButton: { padding: 6, marginBottom: 3 },
+  sendButton: { width: 42, height: 42, borderRadius: 21, justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  micButton: { padding: 8, marginBottom: 3 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   attachmentMenu: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   attachmentTitle: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 20 },
