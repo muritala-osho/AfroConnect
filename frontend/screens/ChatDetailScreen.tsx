@@ -733,9 +733,13 @@ export default function ChatDetailScreen({
       const msgMatchId = data.matchId || data.chatId || data.roomId;
       const readByUserId = data.userId || data.readBy;
 
-      // Strict matching â€” must have at least one identifier
+      // Only process read receipts from the OTHER user.
+      // When we open the chat, the server emits userId === myId.
+      // We ignore that  our own read action must not flip our sent messages to "seen".
+      if (!readByUserId || String(readByUserId) === String(myId)) return;
+
       const matchesByRoom = msgMatchId && msgMatchId === matchId;
-      const matchesByUser = readByUserId && String(readByUserId) === String(userId);
+      const matchesByUser = String(readByUserId) === String(userId);
       if (!matchesByRoom && !matchesByUser) return;
 
       setMessages((prev) =>
