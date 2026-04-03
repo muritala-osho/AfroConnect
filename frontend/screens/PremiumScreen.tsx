@@ -357,16 +357,6 @@ export default function PremiumScreen({ navigation }: any) {
             ))}
           </View>
 
-          <View style={styles.guaranteeSection}>
-            <MaterialCommunityIcons name="shield-check" size={32} color="#4CAF50" />
-            <View style={styles.guaranteeText}>
-              <Text style={styles.guaranteeTitle}>30-Day Money Back Guarantee</Text>
-              <Text style={styles.guaranteeDesc}>
-                Not satisfied? Get a full refund within 30 days, no questions asked.
-              </Text>
-            </View>
-          </View>
-
           <View style={{ height: 120 }} />
         </ScrollView>
 
@@ -649,30 +639,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#FFF',
-  },
-  guaranteeSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(76, 175, 80, 0.2)',
-  },
-  guaranteeText: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  guaranteeTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#4CAF50',
-    marginBottom: 4,
-  },
-  guaranteeDesc: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    lineHeight: 18,
   },
   bottomCta: {
     position: 'absolute',

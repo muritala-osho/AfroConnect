@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/auth");
+const { matchParticipant } = require("../middleware/rls");
 const Message = require("../models/Message");
 const Match = require("../models/Match");
 const User = require("../models/User");
@@ -819,7 +820,7 @@ router.delete("/:matchId", protect, async (req, res) => {
   }
 });
 
-router.post('/:matchId/messages/:messageId/react', protect, async (req, res) => {
+router.post('/:matchId/messages/:messageId/react', protect, matchParticipant, async (req, res) => {
   try {
     const { emoji } = req.body;
     const { matchId, messageId } = req.params;
@@ -859,7 +860,7 @@ router.post('/:matchId/messages/:messageId/react', protect, async (req, res) => 
   }
 });
 
-router.get('/:matchId/messages/:messageId/reactions', protect, async (req, res) => {
+router.get('/:matchId/messages/:messageId/reactions', protect, matchParticipant, async (req, res) => {
   try {
     const { matchId, messageId } = req.params;
     const Message = require('../models/Message');

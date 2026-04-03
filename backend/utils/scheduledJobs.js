@@ -96,6 +96,27 @@ const runInactivityEmails = async () => {
   }
 };
 
+// ─── Premium Expiry Sweep ─────────────────────────────────────────────────────
+// Finds users whose premium subscription has passed expiresAt and marks them
+// as no longer active. This is a safety net in addition to the per-request
+// check in auth middleware.
+const runPremiumExpiry = async () => {
+  try {
+    const result = await User.updateMany(
+      {
+        'premium.isActive': true,
+        'premium.expiresAt': { $lt: new Date() },
+      },
+      { $set: { 'premium.isActive': false } }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`[ScheduledJobs] Expired premium for ${result.modifiedCount} user(s).`);
+    }
+  } catch (err) {
+    console.error('[ScheduledJobs] Premium expiry sweep error:', err.message);
+  }
+};
+
 // ─── Start All Jobs ───────────────────────────────────────────────────────────
 const startScheduledJobs = () => {
   console.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
@@ -103,9 +124,11 @@ const startScheduledJobs = () => {
   // Run email jobs immediately on startup, then on interval
   runRenewalReminders();
   runInactivityEmails();
+  runPremiumExpiry();
 
   setInterval(runRenewalReminders, CHECK_INTERVAL);
   setInterval(runInactivityEmails, CHECK_INTERVAL);
+  setInterval(runPremiumExpiry, CHECK_INTERVAL);
 
   // Churn prediction runs every 6 hours (more intensive — queries multiple collections)
   const SIX_HOURS = 6 * 60 * 60 * 1000;

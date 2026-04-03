@@ -76,6 +76,15 @@ const protect = async (req, res, next) => {
       }
     }
 
+    if (
+      req.user.premium?.isActive &&
+      req.user.premium?.expiresAt &&
+      new Date(req.user.premium.expiresAt) < new Date()
+    ) {
+      req.user.premium.isActive = false;
+      await User.findByIdAndUpdate(req.user._id, { 'premium.isActive': false });
+    }
+
     next();
   } catch (error) {
     console.error('Auth middleware error:', error.message);

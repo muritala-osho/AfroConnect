@@ -53,15 +53,22 @@ router.get('/status', protect, async (req, res) => {
     const user = await User.findById(req.user._id).select('premium dailySwipes dailySuperLikes');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    let isActive = user.premium?.isActive || false;
+    if (isActive && user.premium?.expiresAt && new Date(user.premium.expiresAt) < new Date()) {
+      isActive = false;
+      await User.findByIdAndUpdate(user._id, { 'premium.isActive': false });
+    }
+
     res.json({
       success: true,
       subscription: {
-        isActive: user.premium?.isActive || false,
+        isActive,
         expiresAt: user.premium?.expiresAt,
-        features: user.premium?.isActive ? PREMIUM_INFO.features : []
+        plan: user.premium?.plan,
+        features: isActive ? PREMIUM_INFO.features : []
       },
       usage: {
-        swipesRemaining: user.premium?.isActive ? 999 : Math.max(0, 10 - (user.dailySwipes?.count || 0))
+        swipesRemaining: isActive ? 999 : Math.max(0, 10 - (user.dailySwipes?.count || 0))
       }
     });
   } catch (error) {
