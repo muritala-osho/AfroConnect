@@ -1,125 +1,136 @@
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
-const User = require('../models/User');
-const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
-const { authLimiter, otpLimiter, forgotPasswordLimiter } = require('../middleware/rateLimiter');
-const validate = require('../middleware/validate');
-const schemas = require('../validators/schemas');
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const User = require("../models/User");
+const {
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+} = require("../utils/emailService");
+const {
+  authLimiter,
+  otpLimiter,
+  forgotPasswordLimiter,
+} = require("../middleware/rateLimiter");
+const validate = require("../middleware/validate");
+const schemas = require("../validators/schemas");
 
 // Generate JWT token
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || '30d'
+    expiresIn: process.env.JWT_EXPIRE || "30d",
   });
 };
 
 // @route   POST /api/auth/signup
 // @desc    Register new user and send OTP
 // @access  Public
-router.post('/signup', authLimiter, validate(schemas.auth.signup), async (req, res) => {
-  try {
-    const { email, password, username, name, age, gender } = req.body;
+router.post(
+  "/signup",
+  authLimiter,
+  validate(schemas.auth.signup),
+  async (req, res) => {
+    try {
+      const { email, password, confirmPassword } = req.body;
 
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide email and password' 
-      });
-    }
-
-    // Check if username is taken
-    if (username) {
-      const usernameExists = await User.findOne({ username });
-      if (usernameExists) {
+      // Validation
+      if (!email || !password) {
         return res.status(400).json({
           success: false,
-          message: 'Username is already taken'
+          message: "Please provide email and password",
         });
       }
-    }
 
-    // Check if user exists
-    let existingUser = await User.findOne({ email });
-    
-    // If user exists and has verified their email, they should login instead
-    if (existingUser && existingUser.emailVerified) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'User already exists. Please login instead.' 
+      // Check if username is taken
+      if (username) {
+        const usernameExists = await User.findOne({ username });
+        if (usernameExists) {
+          return res.status(400).json({
+            success: false,
+            message: "Username is already taken",
+          });
+        }
+      }
+
+      // Check if user exists
+      let existingUser = await User.findOne({ email });
+
+      // If user exists and has verified their email, they should login instead
+      if (existingUser && existingUser.emailVerified) {
+        return res.status(400).json({
+          success: false,
+          message: "User already exists. Please login instead.",
+        });
+      }
+
+      // If user exists but email not verified (abandoned signup), delete and recreate
+      if (existingUser && !existingUser.emailVerified) {
+        await User.deleteOne({ _id: existingUser._id });
+        console.log("Deleted unverified user for re-registration:", email);
+      }
+
+      // Generate OTP
+      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const otpCode = generateOTP();
+
+      // Create user with minimal data - not verified yet
+      const user = await User.create({
+        name: name || "User",
+        username,
+        email,
+        password,
+        age: age || 18,
+        gender: gender || "other",
+        location: {
+          type: "Point",
+          coordinates: [0, 0], // Temporary location
+        },
+        verified: false,
+        verificationOTP: otpCode,
+        verificationOTPExpire: Date.now() + 10 * 60 * 1000, // 10 minutes
+      });
+
+      // Send OTP email
+      try {
+        await sendOTPEmail(email, "User", otpCode);
+      } catch (emailError) {
+        console.error("Failed to send OTP email:", emailError);
+        // Continue anyway - user can request resend
+      }
+
+      res.status(201).json({
+        success: true,
+        message: "Verification code sent to your email",
+        userId: user._id,
+        email: user.email,
+      });
+    } catch (error) {
+      console.error("Signup error");
+      res.status(500).json({
+        success: false,
+        message: "Server error during signup",
       });
     }
-    
-    // If user exists but email not verified (abandoned signup), delete and recreate
-    if (existingUser && !existingUser.emailVerified) {
-      await User.deleteOne({ _id: existingUser._id });
-      console.log('Deleted unverified user for re-registration:', email);
-    }
-
-    // Generate OTP
-    const { generateOTP, sendOTPEmail } = require('../utils/emailService');
-    const otpCode = generateOTP();
-
-    // Create user with minimal data - not verified yet
-    const user = await User.create({
-      name: name || 'User',
-      username,
-      email,
-      password,
-      age: age || 18,
-      gender: gender || 'other',
-      location: {
-        type: 'Point',
-        coordinates: [0, 0]  // Temporary location
-      },
-      verified: false,
-      verificationOTP: otpCode,
-      verificationOTPExpire: Date.now() + 10 * 60 * 1000 // 10 minutes
-    });
-
-    // Send OTP email
-    try {
-      await sendOTPEmail(email, 'User', otpCode);
-    } catch (emailError) {
-      console.error('Failed to send OTP email:', emailError);
-      // Continue anyway - user can request resend
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Verification code sent to your email',
-      userId: user._id,
-      email: user.email
-    });
-  } catch (error) {
-    console.error('Signup error');
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error during signup' 
-    });
-  }
-});
+  },
+);
 
 // @route   POST /api/auth/verify-otp
 // @desc    Verify OTP and complete registration
 // @access  Public
-router.post('/verify-otp', otpLimiter, async (req, res) => {
+router.post("/verify-otp", otpLimiter, async (req, res) => {
   try {
     const { userId, otp } = req.body;
 
     const user = await User.findOne({
       _id: userId,
       verificationOTP: otp,
-      verificationOTPExpire: { $gt: Date.now() }
+      verificationOTPExpire: { $gt: Date.now() },
     });
 
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification code'
+        message: "Invalid or expired verification code",
       });
     }
 
@@ -130,8 +141,8 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
     await user.save();
 
     // Send welcome email — fire and forget, don't block the response
-    sendWelcomeEmail(user.email, user.name || 'there').catch((err) =>
-      console.error('Welcome email failed (non-blocking):', err.message)
+    sendWelcomeEmail(user.email, user.name || "there").catch((err) =>
+      console.error("Welcome email failed (non-blocking):", err.message),
     );
 
     const token = generateToken(user._id);
@@ -146,14 +157,14 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
         email: user.email,
         age: user.age,
         gender: user.gender,
-        isAdmin: user.isAdmin || false
-      }
+        isAdmin: user.isAdmin || false,
+      },
     });
   } catch (error) {
-    console.error('OTP verification error:', error);
+    console.error("OTP verification error:", error);
     res.status(500).json({
       success: false,
-      message: 'Server error during verification'
+      message: "Server error during verification",
     });
   }
 });
@@ -161,7 +172,7 @@ router.post('/verify-otp', otpLimiter, async (req, res) => {
 // @route   POST /api/auth/resend-otp
 // @desc    Resend OTP
 // @access  Public
-router.post('/resend-otp', otpLimiter, async (req, res) => {
+router.post("/resend-otp", otpLimiter, async (req, res) => {
   try {
     const { userId } = req.body;
 
@@ -169,18 +180,18 @@ router.post('/resend-otp', otpLimiter, async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
 
     if (user.emailVerified) {
       return res.status(400).json({
         success: false,
-        message: 'Email already verified'
+        message: "Email already verified",
       });
     }
 
-    const { generateOTP, sendOTPEmail } = require('../utils/emailService');
+    const { generateOTP, sendOTPEmail } = require("../utils/emailService");
     const otpCode = generateOTP();
 
     user.verificationOTP = otpCode;
@@ -191,13 +202,13 @@ router.post('/resend-otp', otpLimiter, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'New verification code sent to your email'
+      message: "New verification code sent to your email",
     });
   } catch (error) {
-    console.error('Resend OTP error:', error);
+    console.error("Resend OTP error:", error);
     res.status(500).json({
       success: false,
-      message: 'Failed to resend verification code'
+      message: "Failed to resend verification code",
     });
   }
 });
@@ -205,228 +216,246 @@ router.post('/resend-otp', otpLimiter, async (req, res) => {
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public
-router.post('/login', authLimiter, validate(schemas.auth.login), async (req, res) => {
-  try {
-    const { email, password } = req.body;
+router.post(
+  "/login",
+  authLimiter,
+  validate(schemas.auth.login),
+  async (req, res) => {
+    try {
+      const { email, password } = req.body;
 
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Please provide email and password' 
-      });
-    }
-
-    // Check user exists
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid credentials' 
-      });
-    }
-
-    // Check if user is banned
-    if (user.banned) {
-      // Generate a short-lived appeal token (15 minutes)
-      const appealToken = jwt.sign(
-        { id: user._id, purpose: 'appeal', email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '15m' }
-      );
-      
-      return res.status(403).json({ 
-        success: false, 
-        message: 'Your account has been suspended. Please appeal in the app for more information.',
-        isBanned: true,
-        appealToken,
-        email: user.email,
-        banReason: user.banReason || 'Violation of community guidelines',
-        bannedAt: user.bannedAt,
-        appeal: user.appeal || null
-      });
-    }
-
-    // Check password
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid credentials' 
-      });
-    }
-
-    // Update last active
-    user.lastActive = Date.now();
-    user.onlineStatus = 'online';
-    await user.save();
-
-    const token = generateToken(user._id);
-
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        username: user.username,
-        email: user.email,
-        age: user.age,
-        gender: user.gender,
-        bio: user.bio,
-        interests: user.interests,
-        photos: user.photos,
-        verified: user.verified,
-        isAdmin: user.isAdmin || false,
-        location: user.location,
-        lookingFor: user.lookingFor,
-        preferences: user.preferences,
-        lifestyle: user.lifestyle,
-        favoriteSong: user.favoriteSong
+      // Validation
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide email and password",
+        });
       }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error during login' 
-    });
-  }
-});
+
+      // Check user exists
+      const user = await User.findOne({ email }).select("+password");
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      // Check if user is banned
+      if (user.banned) {
+        // Generate a short-lived appeal token (15 minutes)
+        const appealToken = jwt.sign(
+          { id: user._id, purpose: "appeal", email: user.email },
+          process.env.JWT_SECRET,
+          { expiresIn: "15m" },
+        );
+
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your account has been suspended. Please appeal in the app for more information.",
+          isBanned: true,
+          appealToken,
+          email: user.email,
+          banReason: user.banReason || "Violation of community guidelines",
+          bannedAt: user.bannedAt,
+          appeal: user.appeal || null,
+        });
+      }
+
+      // Check password
+      const isMatch = await user.comparePassword(password);
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      // Update last active
+      user.lastActive = Date.now();
+      user.onlineStatus = "online";
+      await user.save();
+
+      const token = generateToken(user._id);
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          age: user.age,
+          gender: user.gender,
+          bio: user.bio,
+          interests: user.interests,
+          photos: user.photos,
+          verified: user.verified,
+          isAdmin: user.isAdmin || false,
+          location: user.location,
+          lookingFor: user.lookingFor,
+          preferences: user.preferences,
+          lifestyle: user.lifestyle,
+          favoriteSong: user.favoriteSong,
+        },
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error during login",
+      });
+    }
+  },
+);
 
 // @route   POST /api/auth/forgot-password
 // @desc    Request password reset via OTP
 // @access  Public
-router.post('/forgot-password', forgotPasswordLimiter, validate(schemas.auth.forgotPassword), async (req, res) => {
-  try {
-    const { email } = req.body;
-    const normalizedEmail = email.toLowerCase().trim();
-
-    const user = await User.findOne({ email: normalizedEmail });
-
-    // Always return the same response to prevent email enumeration
-    if (!user) {
-      return res.json({
-        success: true,
-        message: 'If an account with that email exists, a verification code has been sent.'
-      });
-    }
-
-    const { generateOTP, sendOTPEmail } = require('../utils/emailService');
-    const otpCode = generateOTP();
-
-    user.resetPasswordOTP = otpCode;
-    user.resetPasswordOTPExpire = Date.now() + 15 * 60 * 1000;
-    await user.save();
-
+router.post(
+  "/forgot-password",
+  forgotPasswordLimiter,
+  validate(schemas.auth.forgotPassword),
+  async (req, res) => {
     try {
-      await sendOTPEmail(user.email, user.name, otpCode);
-    } catch (emailError) {
-      console.error('Forgot password email failed');
-    }
+      const { email } = req.body;
+      const normalizedEmail = email.toLowerCase().trim();
 
-    res.json({
-      success: true,
-      message: 'If an account with that email exists, a verification code has been sent.',
-      userId: user._id
-    });
-  } catch (error) {
-    console.error('Forgot password error');
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+      const user = await User.findOne({ email: normalizedEmail });
+
+      // Always return the same response to prevent email enumeration
+      if (!user) {
+        return res.json({
+          success: true,
+          message:
+            "If an account with that email exists, a verification code has been sent.",
+        });
+      }
+
+      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const otpCode = generateOTP();
+
+      user.resetPasswordOTP = otpCode;
+      user.resetPasswordOTPExpire = Date.now() + 15 * 60 * 1000;
+      await user.save();
+
+      try {
+        await sendOTPEmail(user.email, user.name, otpCode);
+      } catch (emailError) {
+        console.error("Forgot password email failed");
+      }
+
+      res.json({
+        success: true,
+        message:
+          "If an account with that email exists, a verification code has been sent.",
+        userId: user._id,
+      });
+    } catch (error) {
+      console.error("Forgot password error");
+      res.status(500).json({ success: false, message: "Server error" });
+    }
+  },
+);
 
 // @route   POST /api/auth/reset-password
 // @desc    Step 3: Reset password with OTP and new password
 // @access  Public
-router.post('/reset-password', validate(schemas.auth.resetPassword), async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
+router.post(
+  "/reset-password",
+  validate(schemas.auth.resetPassword),
+  async (req, res) => {
+    try {
+      const { email, otp, newPassword } = req.body;
 
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({
+      if (!email || !otp || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide email, code, and new password",
+        });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const providedOTP = otp.toString().trim();
+
+      const user = await User.findOne({
+        email: normalizedEmail,
+      });
+
+      if (!user) {
+        console.log("[RESET_PASSWORD] User not found:", normalizedEmail);
+        return res.status(400).json({
+          success: false,
+          message: "Invalid verification code",
+        });
+      }
+
+      // Only accept the dedicated password reset OTP — never cross-accept signup OTPs
+      const matchesOTP =
+        user.resetPasswordOTP && user.resetPasswordOTP === providedOTP;
+
+      if (!matchesOTP) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid verification code",
+        });
+      }
+
+      const isExpired = user.resetPasswordOTPExpire <= Date.now();
+
+      if (isExpired) {
+        return res.status(400).json({
+          success: false,
+          message: "Verification code has expired",
+        });
+      }
+
+      user.password = newPassword;
+      user.resetPasswordOTP = undefined;
+      user.resetPasswordOTPExpire = undefined;
+      await user.save();
+
+      res.json({
+        success: true,
+        message: "Password reset successful",
+      });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      res.status(500).json({
         success: false,
-        message: 'Please provide email, code, and new password'
+        message: "Server error",
       });
     }
-
-    const normalizedEmail = email.toLowerCase().trim();
-    const providedOTP = otp.toString().trim();
-
-    const user = await User.findOne({
-      email: normalizedEmail
-    });
-
-    if (!user) {
-      console.log('[RESET_PASSWORD] User not found:', normalizedEmail);
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid verification code'
-      });
-    }
-
-    // Only accept the dedicated password reset OTP — never cross-accept signup OTPs
-    const matchesOTP = user.resetPasswordOTP && user.resetPasswordOTP === providedOTP;
-
-    if (!matchesOTP) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid verification code'
-      });
-    }
-
-    const isExpired = user.resetPasswordOTPExpire <= Date.now();
-
-    if (isExpired) {
-      return res.status(400).json({
-        success: false,
-        message: 'Verification code has expired'
-      });
-    }
-
-    user.password = newPassword;
-    user.resetPasswordOTP = undefined;
-    user.resetPasswordOTPExpire = undefined;
-    await user.save();
-
-    res.json({
-      success: true,
-      message: 'Password reset successful'
-    });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
-  }
-});
+  },
+);
 
 // @route   POST /api/auth/appeal
 // @desc    Submit a ban appeal
 // @access  Public (via appeal token)
-router.post('/appeal', async (req, res) => {
+router.post("/appeal", async (req, res) => {
   try {
     const { appealToken, message } = req.body;
 
     if (!appealToken) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Appeal token is required' 
+      return res.status(401).json({
+        success: false,
+        message: "Appeal token is required",
       });
     }
 
     if (!message || message.trim().length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Appeal message is required' 
+      return res.status(400).json({
+        success: false,
+        message: "Appeal message is required",
       });
     }
 
     if (message.length > 1000) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Appeal message must be under 1000 characters' 
+      return res.status(400).json({
+        success: false,
+        message: "Appeal message must be under 1000 characters",
       });
     }
 
@@ -435,73 +464,79 @@ router.post('/appeal', async (req, res) => {
     try {
       decoded = jwt.verify(appealToken, process.env.JWT_SECRET);
     } catch (err) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid or expired appeal token. Please try logging in again.' 
+      return res.status(401).json({
+        success: false,
+        message:
+          "Invalid or expired appeal token. Please try logging in again.",
       });
     }
 
     // Ensure it's an appeal token
-    if (decoded.purpose !== 'appeal') {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid token type' 
+    if (decoded.purpose !== "appeal") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token type",
       });
     }
 
     const user = await User.findById(decoded.id);
     if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
       });
     }
 
     if (!user.banned && !user.suspended) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'You do not have an active ban or suspension to appeal' 
+      return res.status(400).json({
+        success: false,
+        message: "You do not have an active ban or suspension to appeal",
       });
     }
 
     // Check if already has pending appeal
-    if (user.appeal && user.appeal.status === 'pending') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'You already have a pending appeal' 
+    if (user.appeal && user.appeal.status === "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "You already have a pending appeal",
       });
     }
 
     // Check 30-day cooldown after rejection ONLY
-    if (user.appeal && user.appeal.status === 'rejected' && user.appeal.lastAppealRejectedAt) {
-      const daysSinceRejection = (Date.now() - user.appeal.lastAppealRejectedAt) / (1000 * 60 * 60 * 24);
+    if (
+      user.appeal &&
+      user.appeal.status === "rejected" &&
+      user.appeal.lastAppealRejectedAt
+    ) {
+      const daysSinceRejection =
+        (Date.now() - user.appeal.lastAppealRejectedAt) / (1000 * 60 * 60 * 24);
       if (daysSinceRejection < 30) {
         const daysLeft = Math.ceil(30 - daysSinceRejection);
-        return res.status(400).json({ 
-          success: false, 
-          message: `You can submit a new appeal in ${daysLeft} days` 
+        return res.status(400).json({
+          success: false,
+          message: `You can submit a new appeal in ${daysLeft} days`,
         });
       }
     }
-    
+
     // Note: If appeal was accepted, user can appeal again if banned again later
 
     user.appeal = {
-      status: 'pending',
+      status: "pending",
       message,
-      submittedAt: Date.now()
+      submittedAt: Date.now(),
     };
     await user.save();
 
-    res.json({ 
-      success: true, 
-      message: 'Appeal submitted successfully. Admins will review it soon.' 
+    res.json({
+      success: true,
+      message: "Appeal submitted successfully. Admins will review it soon.",
     });
   } catch (error) {
-    console.error('Appeal submission error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error' 
+    console.error("Appeal submission error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
     });
   }
 });
