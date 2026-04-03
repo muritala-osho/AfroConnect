@@ -43,6 +43,7 @@ const commentsRoutes = require('./routes/comments');
 
 const compression = require('compression');
 const helmet = require('helmet');
+const hpp = require('hpp');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -52,12 +53,30 @@ const server = http.createServer(app);
 server.headersTimeout = 5 * 60 * 1000;  // 5 minutes
 server.requestTimeout = 5 * 60 * 1000;  // 5 minutes
 server.timeout = 5 * 60 * 1000;         // 5 minutes
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : [];
+
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // allow non-browser requests (mobile apps, Postman)
+  if (ALLOWED_ORIGINS.length === 0) return true; // dev mode: no restriction
+  return ALLOWED_ORIGINS.some(allowed =>
+    origin === allowed || origin.endsWith('.replit.app') || origin.endsWith('.replit.dev')
+  );
+};
+
 const io = socketIO(server, {
   path: '/socket.io',
   transports: ['websocket', 'polling'],
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    origin: (origin, callback) => {
+      if (isOriginAllowed(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Socket.IO CORS: origin not allowed'));
+      }
+    },
+    methods: ['GET', 'POST'],
     credentials: true,
     allowEIO3: true
   },
@@ -124,9 +143,15 @@ const setupRedisAdapter = async () => {
 
 setupRedisAdapter();
 
-// CORS configuration
+// CORS configuration — only allow known origins
 const corsOptions = {
-  origin: true, // Reflect request origin
+  origin: (origin, callback) => {
+    if (isOriginAllowed(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS: origin not allowed'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
@@ -156,21 +181,71 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-app.use('/admin-web', express.static(path.join(__dirname, '..', 'admin-dashboard'), { index: 'index.html' }));
-app.get('/admin-web', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'admin-dashboard', 'index.html'));
+// JSON middleware for all routes
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Sanitize request data against NoSQL injection
+// Recursively removes keys starting with $ or containing . from req.body and req.params
+const sanitizeObject = (obj) => {
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(key => {
+    if (key.startsWith('$') || key.includes('.')) {
+      delete obj[key];
+    } else if (typeof obj[key] === 'object') {
+      sanitizeObject(obj[key]);
+    }
+  });
+};
+app.use((req, res, next) => {
+  sanitizeObject(req.body);
+  sanitizeObject(req.params);
+  next();
 });
 
-// JSON middleware for all routes
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Prevent HTTP parameter pollution
+app.use(hpp());
 
 // Rate limiting
-const { authLimiter, apiLimiter, uploadLimiter, messageLimiter } = require('./middleware/rateLimiter');
+const { authLimiter, otpLimiter, forgotPasswordLimiter, adminLimiter, apiLimiter, uploadLimiter, messageLimiter } = require('./middleware/rateLimiter');
 app.use('/api', apiLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/signup', authLimiter);
-app.use('/api/auth/verify-otp', authLimiter);
+app.use('/api/auth/verify-otp', otpLimiter);
+app.use('/api/auth/resend-otp', otpLimiter);
+app.use('/api/auth/forgot-password', forgotPasswordLimiter);
+app.use('/api/auth/reset-password', forgotPasswordLimiter);
+app.use('/api/admin', adminLimiter);
+
+// Admin dashboard — require a valid admin JWT before serving the HTML
+const { protect } = require('./middleware/auth');
+const adminWebAuth = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+  if (!token) {
+    return res.status(401).sendFile(path.join(__dirname, '..', 'admin-dashboard', 'login.html'),
+      (err) => {
+        if (err) res.status(401).json({ success: false, message: 'Admin authentication required' });
+      }
+    );
+  }
+  try {
+    const jwt = require('jsonwebtoken');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const User = require('./models/User');
+    const user = await User.findById(decoded.id);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+};
+
+app.use('/admin-web', adminWebAuth, express.static(path.join(__dirname, '..', 'admin-dashboard'), { index: 'index.html' }));
+app.get('/admin-web', adminWebAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'admin-dashboard', 'index.html'));
+});
 
 // MongoDB Connection
 const connectionString = process.env.MONGODB_URI || process.env.DATABASE_URL;
@@ -323,62 +398,55 @@ const updateUserOnlineStatus = async (userId, status) => {
 };
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
-  
-  // Extract userId from token in auth or query
+  // Extract and verify userId ONLY from the JWT — never trust client-provided user IDs
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
   if (token) {
     try {
       const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
-      // Handle both 'id' and '_id' in token payload
       const userId = decoded.id || decoded._id;
       if (userId) {
         socket.userId = userId.toString();
         onlineUsers.set(socket.userId, socket.id);
         socket.join(socket.userId);
-        console.log('User authenticated from token:', socket.userId);
         updateUserOnlineStatus(socket.userId, 'online');
         io.emit('user:status', { userId: socket.userId, isOnline: true });
       }
     } catch (err) {
-      console.log('Socket token verification failed:', err.message);
+      // Token invalid — socket connects but is not authenticated
     }
   }
 
-  // User goes online - also allows explicit user registration
-  socket.on('user:online', (userId) => {
-    if (userId) {
-      onlineUsers.set(userId, socket.id);
-      socket.userId = userId;
-      socket.join(userId);
-      io.emit('user:status', { userId, isOnline: true });
-      updateUserOnlineStatus(userId, 'online');
+  // user:online — only update status for the verified user, ignore any client-provided ID
+  socket.on('user:online', () => {
+    if (socket.userId) {
+      onlineUsers.set(socket.userId, socket.id);
+      io.emit('user:status', { userId: socket.userId, isOnline: true });
+      updateUserOnlineStatus(socket.userId, 'online');
     }
   });
 
-  // Join chat room
+  // Join chat room — only authenticated sockets may join, and sender must match token userId
   socket.on('chat:join', (chatId) => {
-    if (chatId) {
+    if (chatId && socket.userId) {
       socket.join(chatId);
-      console.log(`User ${socket.userId || socket.id} joined chat: ${chatId}`);
     }
   });
 
-  // Send message - broadcast immediately
+  // Send message — only relay if sender matches the authenticated socket user
   socket.on('chat:message', (data) => {
-    if (data.chatId) {
-      const messageData = {
-        ...data,
-        _id: data._id || data.id || Date.now().toString(),
-        createdAt: data.createdAt || new Date().toISOString(),
-        status: 'delivered'
-      };
-      io.to(data.chatId).emit('chat:new-message', messageData);
-      
-      // Also send to receiver's personal room for notification
-      if (data.receiverId) {
-        io.to(data.receiverId).emit('chat:new-message', messageData);
-      }
+    if (!data.chatId || !socket.userId) return;
+    // Enforce that the sender field matches the authenticated user
+    if (data.senderId && data.senderId !== socket.userId) return;
+    const messageData = {
+      ...data,
+      senderId: socket.userId, // always use server-verified identity
+      _id: data._id || data.id || Date.now().toString(),
+      createdAt: data.createdAt || new Date().toISOString(),
+      status: 'delivered'
+    };
+    io.to(data.chatId).emit('chat:new-message', messageData);
+    if (data.receiverId) {
+      io.to(data.receiverId).emit('chat:new-message', messageData);
     }
   });
 
@@ -393,14 +461,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Helper: mark messages as read and broadcast status updates
+  // Helper: mark messages as read — always use the server-verified socket.userId
   const handleMarkRead = async (data) => {
-    if (!data || !data.chatId || !data.userId) return;
+    if (!data || !data.chatId || !socket.userId) return;
 
     try {
       const filter = {
         matchId: data.chatId,
-        receiver: data.userId,
+        receiver: socket.userId,
         seen: false
       };
       if (data.messageId) {
@@ -416,7 +484,7 @@ io.on('connection', (socket) => {
 
     io.to(data.chatId).emit('chat:message-read', {
       chatId: data.chatId,
-      userId: data.userId,
+      userId: socket.userId,
       messageId: data.messageId,
       readAt: new Date().toISOString()
     });

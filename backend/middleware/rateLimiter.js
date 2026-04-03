@@ -12,6 +12,40 @@ const authLimiter = rateLimit({
   }
 });
 
+const otpLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: false,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many OTP attempts, please try again in 10 minutes.'
+  }
+});
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many password reset requests, please try again after 15 minutes.'
+  }
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many admin requests, please try again after 15 minutes.'
+  }
+});
+
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 120,
@@ -64,6 +98,9 @@ const swipeLimiter = rateLimit({
 module.exports = {
   apiLimiter,
   authLimiter,
+  otpLimiter,
+  forgotPasswordLimiter,
+  adminLimiter,
   uploadLimiter,
   messageLimiter,
   swipeLimiter

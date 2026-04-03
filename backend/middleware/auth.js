@@ -18,13 +18,10 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Auth middleware - decoded token userId:', decoded.id);
-    
+
     req.user = await User.findById(decoded.id);
-    console.log('Auth middleware - user found:', !!req.user);
-    
+
     if (!req.user) {
-      console.log('Auth middleware - User not found for ID:', decoded.id);
       return res.status(401).json({ 
         success: false, 
         message: 'User not found' 

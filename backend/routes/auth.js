@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const User = require('../models/User');
 const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
-const { authLimiter } = require('../middleware/rateLimiter');
+const { authLimiter, otpLimiter, forgotPasswordLimiter } = require('../middleware/rateLimiter');
 const validate = require('../middleware/validate');
 const schemas = require('../validators/schemas');
 
@@ -19,7 +19,7 @@ const generateToken = (userId) => {
 // @route   POST /api/auth/signup
 // @desc    Register new user and send OTP
 // @access  Public
-router.post('/signup', validate(schemas.auth.signup), async (req, res) => {
+router.post('/signup', authLimiter, validate(schemas.auth.signup), async (req, res) => {
   try {
     const { email, password, username, name, age, gender } = req.body;
 
@@ -95,10 +95,10 @@ router.post('/signup', validate(schemas.auth.signup), async (req, res) => {
       email: user.email
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Signup error');
     res.status(500).json({ 
       success: false, 
-      message: error.message || 'Server error during signup' 
+      message: 'Server error during signup' 
     });
   }
 });
@@ -106,7 +106,7 @@ router.post('/signup', validate(schemas.auth.signup), async (req, res) => {
 // @route   POST /api/auth/verify-otp
 // @desc    Verify OTP and complete registration
 // @access  Public
-router.post('/verify-otp', async (req, res) => {
+router.post('/verify-otp', otpLimiter, async (req, res) => {
   try {
     const { userId, otp } = req.body;
 
@@ -161,7 +161,7 @@ router.post('/verify-otp', async (req, res) => {
 // @route   POST /api/auth/resend-otp
 // @desc    Resend OTP
 // @access  Public
-router.post('/resend-otp', async (req, res) => {
+router.post('/resend-otp', otpLimiter, async (req, res) => {
   try {
     const { userId } = req.body;
 
@@ -297,48 +297,41 @@ router.post('/login', authLimiter, validate(schemas.auth.login), async (req, res
 // @route   POST /api/auth/forgot-password
 // @desc    Request password reset via OTP
 // @access  Public
-router.post('/forgot-password', validate(schemas.auth.forgotPassword), async (req, res) => {
+router.post('/forgot-password', forgotPasswordLimiter, validate(schemas.auth.forgotPassword), async (req, res) => {
   try {
     const { email } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
 
     const user = await User.findOne({ email: normalizedEmail });
+
+    // Always return the same response to prevent email enumeration
     if (!user) {
-      // For debugging
-      console.log('[FORGOT_PASSWORD] No account found with email:', email);
-      return res.status(404).json({ 
-        success: false, 
-        message: 'No account found with this email' 
+      return res.json({
+        success: true,
+        message: 'If an account with that email exists, a verification code has been sent.'
       });
     }
 
-    // Generate OTP for password reset
     const { generateOTP, sendOTPEmail } = require('../utils/emailService');
     const otpCode = generateOTP();
-    
+
     user.resetPasswordOTP = otpCode;
-    user.resetPasswordOTPExpire = Date.now() + 15 * 60 * 1000; // 15 minutes
+    user.resetPasswordOTPExpire = Date.now() + 15 * 60 * 1000;
     await user.save();
 
-    console.log('[FORGOT_PASSWORD] Generated OTP for:', email, 'OTP:', otpCode);
-
-    // Send OTP email
     try {
       await sendOTPEmail(user.email, user.name, otpCode);
-      res.json({
-        success: true,
-        message: 'Verification code sent to your email',
-        userId: user._id
-      });
     } catch (emailError) {
-      console.error('Email failed:', emailError);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send email. Please try again.'
-      });
+      console.error('Forgot password email failed');
     }
+
+    res.json({
+      success: true,
+      message: 'If an account with that email exists, a verification code has been sent.',
+      userId: user._id
+    });
   } catch (error) {
-    console.error('Forgot password error:', error);
+    console.error('Forgot password error');
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -372,32 +365,23 @@ router.post('/reset-password', validate(schemas.auth.resetPassword), async (req,
       });
     }
 
-    const matchesOTP = (user.resetPasswordOTP && user.resetPasswordOTP === providedOTP) ||
-                       (user.verificationOTP && user.verificationOTP === providedOTP);
+    // Only accept the dedicated password reset OTP — never cross-accept signup OTPs
+    const matchesOTP = user.resetPasswordOTP && user.resetPasswordOTP === providedOTP;
 
     if (!matchesOTP) {
-      console.log(`[RESET_PASSWORD] Failure details for ${normalizedEmail}:`, {
-        providedOTP: providedOTP,
-        resetOTP: user.resetPasswordOTP,
-        verifyOTP: user.verificationOTP,
-        now: Date.now()
-      });
-      
       return res.status(400).json({
         success: false,
         message: 'Invalid verification code'
       });
     }
 
-    // Check expiry separately for better UX
-    const isExpired = (user.resetPasswordOTP === providedOTP && user.resetPasswordOTPExpire <= Date.now()) ||
-                     (user.verificationOTP === providedOTP && user.verificationOTPExpire <= Date.now());
+    const isExpired = user.resetPasswordOTPExpire <= Date.now();
 
     if (isExpired) {
-        return res.status(400).json({
-            success: false,
-            message: 'Verification code has expired'
-        });
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code has expired'
+      });
     }
 
     user.password = newPassword;
