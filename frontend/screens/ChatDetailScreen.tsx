@@ -27,7 +27,6 @@ import {
   DeviceEventEmitter,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
@@ -97,15 +96,15 @@ interface Message {
 }
 
 const EMOJI_LIST = [
-  "😀","😂","😍","🥰","😘","🤗","😊","🙂","😉","😎","🤩","🥳","😋","🤤",
-  "😜","🤪","😝","🤑","🤔","🤭","🤫","🤐","😏","😌","😔","😪","🤒","😷",
-  "🤕","🤢","🤮","🥵","🥶","😱","😨","😰","😥","😢","😭","😤","😠","🤬",
-  "😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖","🎃","😺",
-  "😸","😹","😻","😼","😽","🙀","😿","😾","❤️","🧡","💛","💚","💙","💜",
-  "🖤","🤍","🤎","💔","❣️","💕","💞","💓","💗","💖","💘","💝","👍","👎",
-  "👏","🙌","🤝","🤲","🙏","✌️","🤟","🤘","🤙","👋","🖐️","✋","👌","🤌",
-  "🔥","✨","⭐","🌟","💫","💥","💢","💦","💨","🎉","🎊","🎁","🎈","🎀",
-  "🏆","🥇","🥈","🥉",
+  "ðŸ˜€","ðŸ˜‚","ðŸ˜","ðŸ¥°","ðŸ˜˜","ðŸ¤—","ðŸ˜Š","ðŸ™‚","ðŸ˜‰","ðŸ˜Ž","ðŸ¤©","ðŸ¥³","ðŸ˜‹","ðŸ¤¤",
+  "ðŸ˜œ","ðŸ¤ª","ðŸ˜","ðŸ¤‘","ðŸ¤”","ðŸ¤­","ðŸ¤«","ðŸ¤","ðŸ˜","ðŸ˜Œ","ðŸ˜”","ðŸ˜ª","ðŸ¤’","ðŸ˜·",
+  "ðŸ¤•","ðŸ¤¢","ðŸ¤®","ðŸ¥µ","ðŸ¥¶","ðŸ˜±","ðŸ˜¨","ðŸ˜°","ðŸ˜¥","ðŸ˜¢","ðŸ˜­","ðŸ˜¤","ðŸ˜ ","ðŸ¤¬",
+  "ðŸ˜ˆ","ðŸ‘¿","ðŸ’€","â˜ ï¸","ðŸ’©","ðŸ¤¡","ðŸ‘¹","ðŸ‘º","ðŸ‘»","ðŸ‘½","ðŸ‘¾","ðŸ¤–","ðŸŽƒ","ðŸ˜º",
+  "ðŸ˜¸","ðŸ˜¹","ðŸ˜»","ðŸ˜¼","ðŸ˜½","ðŸ™€","ðŸ˜¿","ðŸ˜¾","â¤ï¸","ðŸ§¡","ðŸ’›","ðŸ’š","ðŸ’™","ðŸ’œ",
+  "ðŸ–¤","ðŸ¤","ðŸ¤Ž","ðŸ’”","â£ï¸","ðŸ’•","ðŸ’ž","ðŸ’“","ðŸ’—","ðŸ’–","ðŸ’˜","ðŸ’","ðŸ‘","ðŸ‘Ž",
+  "ðŸ‘","ðŸ™Œ","ðŸ¤","ðŸ¤²","ðŸ™","âœŒï¸","ðŸ¤Ÿ","ðŸ¤˜","ðŸ¤™","ðŸ‘‹","ðŸ–ï¸","âœ‹","ðŸ‘Œ","ðŸ¤Œ",
+  "ðŸ”¥","âœ¨","â­","ðŸŒŸ","ðŸ’«","ðŸ’¥","ðŸ’¢","ðŸ’¦","ðŸ’¨","ðŸŽ‰","ðŸŽŠ","ðŸŽ","ðŸŽˆ","ðŸŽ€",
+  "ðŸ†","ðŸ¥‡","ðŸ¥ˆ","ðŸ¥‰",
 ];
 
 const REPORT_REASONS = [
@@ -137,19 +136,19 @@ const CHAT_THEMES = [
 ];
 
 const AI_SUGGESTIONS = [
-  "Hey! How's your day going? 😊",
+  "Hey! How's your day going? ðŸ˜Š",
   "I love your profile! What are your hobbies?",
   "What's your favorite thing to do on weekends?",
   "I noticed we have similar interests! Tell me more about yourself",
   "You seem really interesting! What do you do for fun?",
-  "Hi there! What made you swipe right on me? 😄",
+  "Hi there! What made you swipe right on me? ðŸ˜„",
   "I'd love to get to know you better!",
   "What's the best trip you've ever taken?",
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // SwipeableMessage
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const SwipeableMessage = React.memo(
   ({
     item,
@@ -222,9 +221,9 @@ const SwipeableMessage = React.memo(
   },
 );
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WavyWaveform — FIX: removed duplicate recordingPulse that was here before
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// WavyWaveform â€” FIX: removed duplicate recordingPulse that was here before
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const WavyWaveform = ({
   isPlaying,
   progress,
@@ -299,9 +298,9 @@ const WavyWaveform = ({
   );
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // ChatDetailScreen
-// ─────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function ChatDetailScreen({
   navigation,
   route,
@@ -386,7 +385,6 @@ export default function ChatDetailScreen({
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingDurationRef = useRef<number>(0);
-  const maxRecordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
@@ -396,7 +394,7 @@ export default function ChatDetailScreen({
   const [typingDotAnim1] = useState(new Animated.Value(0));
   const [typingDotAnim2] = useState(new Animated.Value(0));
   const [typingDotAnim3] = useState(new Animated.Value(0));
-  // FIX: only declared once here — was also incorrectly inside WavyWaveform
+  // FIX: only declared once here â€” was also incorrectly inside WavyWaveform
   const [recordingPulse] = useState(new Animated.Value(1));
 
   useFocusEffect(
@@ -489,7 +487,7 @@ export default function ChatDetailScreen({
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
-                content: "📸 A screenshot was taken!",
+                content: "ðŸ“¸ A screenshot was taken!",
                 type: "system",
                 sender: myId,
                 matchId: matchIdRef.current,
@@ -497,7 +495,7 @@ export default function ChatDetailScreen({
                 status: "sent",
               };
               setMessages((prev) => [...prev, systemMsg as any]);
-              post(`/chat/${matchIdRef.current}/message`, { content: "📸 A screenshot was taken!", type: "system" }, token).catch(() => {});
+              post(`/chat/${matchIdRef.current}/message`, { content: "ðŸ“¸ A screenshot was taken!", type: "system" }, token).catch(() => {});
             }
           });
           if (screenshotProtection) {
@@ -603,7 +601,7 @@ export default function ChatDetailScreen({
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  // ─── Load chat ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Load chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadChat = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -685,7 +683,7 @@ export default function ChatDetailScreen({
     }
   }, [matchId, token, loadingMore, hasMoreMessages, messageSkip, get]);
 
-  // ─── Socket listeners ─────────────────────────────────────────────────────
+  // â”€â”€â”€ Socket listeners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!matchId) return;
 
@@ -693,7 +691,7 @@ export default function ChatDetailScreen({
     socketService.joinChat(matchId);
     socketService.markMessagesRead({ chatId: matchId, userId: myId });
 
-    // ── New message ──
+    // â”€â”€ New message â”€â”€
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;
@@ -715,7 +713,7 @@ export default function ChatDetailScreen({
       DeviceEventEmitter.emit("chat:read-local", matchId);
     };
 
-    // ── Delivered: sender's single tick → double grey tick ──
+    // â”€â”€ Delivered: sender's single tick â†’ double grey tick â”€â”€
     // FIX: this listener was completely missing in the original
     const handleMessageDelivered = (data: any) => {
       if (!data.messageId) return;
@@ -728,14 +726,14 @@ export default function ChatDetailScreen({
       );
     };
 
-    // ── Read receipt: double grey → double blue ──
+    // â”€â”€ Read receipt: double grey â†’ double blue â”€â”€
     // FIX: removed the dangerous `|| (!msgMatchId && !readByUserId)` fallthrough
     // FIX: works for ALL users not just premium (the backend now emits for everyone)
     const handleMessagesRead = (data: any) => {
       const msgMatchId = data.matchId || data.chatId || data.roomId;
       const readByUserId = data.userId || data.readBy;
 
-      // Strict matching — must have at least one identifier
+      // Strict matching â€” must have at least one identifier
       const matchesByRoom = msgMatchId && msgMatchId === matchId;
       const matchesByUser = readByUserId && String(readByUserId) === String(userId);
       if (!matchesByRoom && !matchesByUser) return;
@@ -787,26 +785,9 @@ export default function ChatDetailScreen({
       }
     };
 
-    // chat:message-status is what the backend emits for delivery acknowledgements
-    const handleMessageStatus = (data: any) => {
-      if (!data.messageId || !data.status) return;
-      setMessages((prev) =>
-        prev.map((m) => {
-          if (m._id !== data.messageId) return m;
-          // Only advance status (never downgrade: seen > delivered > sent)
-          const rank = { sent: 0, delivered: 1, seen: 2 };
-          const current = rank[m.status as keyof typeof rank] ?? 0;
-          const incoming = rank[data.status as keyof typeof rank] ?? 0;
-          return incoming > current ? { ...m, status: data.status } : m;
-        }),
-      );
-    };
-
     socketService.on("chat:new-message", handleNewMessage);
     socketService.on("message:new", handleNewMessage);
-    socketService.on("chat:message-delivered", handleMessageDelivered);
-    socketService.on("chat:message-status", handleMessageStatus);
-    socketService.on("message:delivered", handleMessageDelivered);
+    socketService.on("chat:message-delivered", handleMessageDelivered); // FIX: was missing
     socketService.on("chat:messages-read", handleMessagesRead);
     socketService.on("chat:message-read", handleMessagesRead);
     socketService.on("chat:read", handleMessagesRead);
@@ -817,19 +798,11 @@ export default function ChatDetailScreen({
     socketService.on("message:reaction", (data: { messageId: string; reactions: MessageReaction[] }) => {
       setMessages(prev => prev.map(m => m._id === data.messageId ? { ...m, reactions: data.reactions } : m));
     });
-    // Real-time verified badge update when admin approves verification
-    socketService.on("user:verified", (data: any) => {
-      if (data.userId && String(data.userId) === String(userId)) {
-        setOtherUserVerified(true);
-      }
-    });
 
     return () => {
       socketService.off("chat:new-message");
       socketService.off("message:new");
       socketService.off("chat:message-delivered");
-      socketService.off("chat:message-status");
-      socketService.off("message:delivered");
       socketService.off("chat:messages-read");
       socketService.off("chat:message-read");
       socketService.off("chat:read");
@@ -838,11 +811,10 @@ export default function ChatDetailScreen({
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
-      socketService.off("user:verified");
     };
   }, [matchId, userId, myId, token, put]);
 
-  // ─── Send message ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Send message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const sendMessage = async (content?: string, type: string = "text", extraData?: any) => {
     const textToSend = content || message.trim();
     if (!textToSend && type === "text") return;
@@ -886,7 +858,7 @@ export default function ChatDetailScreen({
         token,
       );
       if (response.success && response.data?.message) {
-        // FIX: preserve "sent" status on replace — socket events will upgrade it
+        // FIX: preserve "sent" status on replace â€” socket events will upgrade it
         setMessages((prev) =>
           prev.map((m) =>
             m._id === tempMessage._id ? { ...response.data!.message, status: "sent" } : m,
@@ -912,7 +884,7 @@ export default function ChatDetailScreen({
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
 
-  // ─── Media pickers ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Media pickers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -931,7 +903,7 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url });
+        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
         else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
@@ -957,7 +929,7 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url });
+        if (uploadData.success && uploadData.url) await sendMessage("ðŸŽ¬ Video", "video", { videoUrl: uploadData.url });
         else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
@@ -981,7 +953,7 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url });
+        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");
       }
@@ -1000,13 +972,13 @@ export default function ChatDetailScreen({
         const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (geocode) address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(", ");
       } catch (e) {}
-      await sendMessage(`📍 ${address}`, "location", { latitude, longitude, address });
+      await sendMessage(`ðŸ“ ${address}`, "location", { latitude, longitude, address });
     } catch (error) {
       Alert.alert("Error", "Could not get your location");
     }
   };
 
-  // ─── Recording ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const startRecording = async () => {
     if (Platform.OS === "web") { Alert.alert("Not Supported", "Voice recording is only available in the mobile app"); return; }
     if (isRecording || recordingRef.current) return;
@@ -1031,19 +1003,6 @@ export default function ChatDetailScreen({
         recordingDurationRef.current += 1;
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
-      const isPremium = user?.premium?.isActive;
-      const voiceLimit = isPremium ? 600 : 30;
-      if (maxRecordingTimerRef.current) clearTimeout(maxRecordingTimerRef.current);
-      maxRecordingTimerRef.current = setTimeout(() => {
-        if (!isPremium) {
-          Alert.alert(
-            'Voice Note Limit',
-            'Free accounts are limited to 30-second voice notes. Upgrade to Premium for unlimited length.',
-            [{ text: 'OK' }]
-          );
-        }
-        stopRecording();
-      }, voiceLimit * 1000);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
       console.error("Recording error:", error);
@@ -1056,7 +1015,6 @@ export default function ChatDetailScreen({
   const stopRecording = async () => {
     if (!recordingRef.current) { setIsRecording(false); return; }
     try {
-      if (maxRecordingTimerRef.current) { clearTimeout(maxRecordingTimerRef.current); maxRecordingTimerRef.current = null; }
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       const recording = recordingRef.current;
       const duration = recordingDurationRef.current;
@@ -1080,7 +1038,7 @@ export default function ChatDetailScreen({
             body: formData,
           });
           const uploadData = await uploadResponse.json();
-          if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
+          if (uploadData.success && uploadData.url) await sendMessage(`ðŸŽ¤ Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
           else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
         } catch (error) {
           console.error("Voice upload error:", error);
@@ -1102,7 +1060,6 @@ export default function ChatDetailScreen({
   };
 
   const cancelRecording = async () => {
-    if (maxRecordingTimerRef.current) { clearTimeout(maxRecordingTimerRef.current); maxRecordingTimerRef.current = null; }
     if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
     if (!recordingRef.current) { setIsRecording(false); setRecordingDuration(0); recordingDurationRef.current = 0; return; }
     try {
@@ -1121,7 +1078,7 @@ export default function ChatDetailScreen({
     recordingDurationRef.current = 0;
   };
 
-  // ─── Audio playback ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Audio playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const updatePlayingId = (id: string | null) => {
     playingAudioIdRef.current = id;
     setPlayingAudioId(id);
@@ -1208,7 +1165,7 @@ export default function ChatDetailScreen({
     };
   }, []);
 
-  // ─── Save media ───────────────────────────────────────────────────────────
+  // â”€â”€â”€ Save media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const saveImage = async (imageUrl: string) => {
     try {
       if (Platform.OS === "web") { const link = document.createElement("a"); link.href = imageUrl; link.download = `afroconnect_${Date.now()}.jpg`; link.target = "_blank"; link.click(); return; }
@@ -1233,7 +1190,7 @@ export default function ChatDetailScreen({
     } catch (error) { console.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
-  // ─── AI suggestions ───────────────────────────────────────────────────────
+  // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchAISuggestions = async () => {
     if (!token) return;
     setShowAISuggestions(true);
@@ -1247,7 +1204,7 @@ export default function ChatDetailScreen({
     } catch (error) { setAiSuggestions(AI_SUGGESTIONS); }
   };
 
-  // ─── Block / Report ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Block / Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBlockUser = async () => {
     setShowOptionsMenu(false);
     Alert.alert("Block User", `Are you sure you want to block ${userName}? They won't be able to contact you anymore.`, [
@@ -1263,7 +1220,7 @@ export default function ChatDetailScreen({
     ]);
   };
 
-  // ─── Message actions ──────────────────────────────────────────────────────
+  // â”€â”€â”€ Message actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleMessageLongPress = useCallback((msg: Message) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedMessage(msg);
@@ -1363,7 +1320,7 @@ export default function ChatDetailScreen({
     finally { setSubmittingReport(false); }
   };
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const formatDateHeader = (dateStr: string) => {
@@ -1389,7 +1346,7 @@ export default function ChatDetailScreen({
 
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
-  // ─── Render message ───────────────────────────────────────────────────────
+  // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
       const senderId = typeof item.sender === "string" ? item.sender : item.sender?._id;
@@ -1446,7 +1403,7 @@ export default function ChatDetailScreen({
                       <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary }]}>
                         <ThemedText style={[styles.replyPreviewName, { color: isMe ? "rgba(255,255,255,0.9)" : theme.primary }]} numberOfLines={1}>{item.replyTo.senderName}</ThemedText>
                         <ThemedText style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]} numberOfLines={2}>
-                          {item.replyTo.type === "image" ? "📷 Photo" : item.replyTo.type === "video" ? "🎬 Video" : item.replyTo.type === "audio" ? "🎤 Voice message" : item.replyTo.content}
+                          {item.replyTo.type === "image" ? "ðŸ“· Photo" : item.replyTo.type === "video" ? "ðŸŽ¬ Video" : item.replyTo.type === "audio" ? "ðŸŽ¤ Voice message" : item.replyTo.content}
                         </ThemedText>
                       </View>
                     )}
@@ -1619,7 +1576,7 @@ export default function ChatDetailScreen({
   const currentTheme = CHAT_THEMES.find((t) => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
 
-  // ─── Chat body ────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Chat body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chatContent = (
     <>
       {loading ? (
@@ -1693,20 +1650,17 @@ export default function ChatDetailScreen({
     </>
   );
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER */}
-      <LinearGradient
-        colors={isDark ? ['#161B22', '#0D1117'] : ['#FFFFFF', '#F5F7FA']}
-        style={[styles.header, { borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}
-      >
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="chevron-back" size={28} color={theme.text} />
         </Pressable>
 
         <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
-          <View style={[styles.avatarContainer, { borderWidth: 2.5, borderColor: theme.primary, borderRadius: 28, padding: 2 }]}>
+          <View style={styles.avatarContainer}>
             <Image source={photoSource || { uri: "https://via.placeholder.com/50" }} style={styles.headerAvatar} contentFit="cover" />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
@@ -1722,21 +1676,18 @@ export default function ChatDetailScreen({
         </Pressable>
 
         <View style={styles.headerActions}>
-          <Pressable onPress={handleVoiceCall} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', borderRadius: 12 }]}><Feather name="phone" size={20} color={theme.primary} /></Pressable>
-          <Pressable onPress={handleVideoCall} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', borderRadius: 12 }]}><Feather name="video" size={20} color={theme.primary} /></Pressable>
-          <Pressable onPress={() => setShowOptionsMenu(true)} style={[styles.headerActionButton, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', borderRadius: 12 }]}><Feather name="more-vertical" size={20} color={theme.text} /></Pressable>
+          <Pressable onPress={handleVoiceCall} style={styles.headerActionButton}><Feather name="phone" size={22} color={theme.primary} /></Pressable>
+          <Pressable onPress={handleVideoCall} style={styles.headerActionButton}><Feather name="video" size={22} color={theme.primary} /></Pressable>
+          <Pressable onPress={() => setShowOptionsMenu(true)} style={styles.headerActionButton}><Feather name="more-vertical" size={22} color={theme.text} /></Pressable>
         </View>
-      </LinearGradient>
+      </View>
 
       {/* BODY */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "padding"} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} enabled={Platform.OS !== "web"}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
-          <LinearGradient
-            colors={isDark ? ['#0D1117', '#0a0d14', '#0D1117'] : ['#EAECEF', '#E8E8E8', '#EAECEF']}
-            style={[styles.chatBackground, { flex: 1 }]}
-          >{chatContent}</LinearGradient>
+          <View style={[styles.chatBackground, { flex: 1, backgroundColor: isDark ? "#0a0d14" : "#E8E8E8" }]}>{chatContent}</View>
         )}
 
         {showAISuggestions && (
@@ -1776,7 +1727,7 @@ export default function ChatDetailScreen({
                 {(() => { const sid = typeof replyingTo.sender === "string" ? replyingTo.sender : replyingTo.sender?._id; return String(sid) === String(myId) ? "You" : userName; })()}
               </ThemedText>
               <ThemedText style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {replyingTo.type === "image" ? "📷 Photo" : replyingTo.type === "video" ? "🎬 Video" : replyingTo.type === "audio" ? "🎤 Voice message" : replyingTo.content || replyingTo.text || ""}
+                {replyingTo.type === "image" ? "ðŸ“· Photo" : replyingTo.type === "video" ? "ðŸŽ¬ Video" : replyingTo.type === "audio" ? "ðŸŽ¤ Voice message" : replyingTo.content || replyingTo.text || ""}
               </ThemedText>
             </View>
             <Pressable onPress={() => setReplyingTo(null)} style={styles.replyBarClose}><Feather name="x" size={20} color={theme.textSecondary} /></Pressable>
@@ -1981,13 +1932,13 @@ export default function ChatDetailScreen({
             {selectedMessage && (
               <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
                 <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
-                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "📷 Photo" : selectedMessage.type === "video" ? "🎬 Video" : "🎤 Voice")}
+                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "ðŸ“· Photo" : selectedMessage.type === "video" ? "ðŸŽ¬ Video" : "ðŸŽ¤ Voice")}
                 </ThemedText>
               </View>
             )}
 
             <View style={styles.quickReactionBar}>
-              {["❤️","😂","😍","😮","😢","🔥","👏","💯"].map(emoji => (
+              {["â¤ï¸","ðŸ˜‚","ðŸ˜","ðŸ˜®","ðŸ˜¢","ðŸ”¥","ðŸ‘","ðŸ’¯"].map(emoji => (
                 <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
                   <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
                 </Pressable>
@@ -2066,19 +2017,19 @@ export default function ChatDetailScreen({
 
 const styles = StyleSheet.create<any>({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 12, borderBottomWidth: 1 },
-  backButton: { padding: 8, marginRight: 2 },
-  headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 2 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 1 },
+  backButton: { padding: 8 },
+  headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 4 },
   avatarContainer: { position: "relative" },
-  headerAvatar: { width: 50, height: 50, borderRadius: 25 },
-  onlineIndicator: { position: "absolute", bottom: 1, right: 1, width: 14, height: 14, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2.5, borderColor: "#FFF" },
+  headerAvatar: { width: 44, height: 44, borderRadius: 22 },
+  onlineIndicator: { position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2, borderColor: "#FFF" },
   headerInfo: { marginLeft: 12, flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   headerName: { fontSize: 17, fontWeight: "700" },
   verifiedBadge: { width: 18, height: 18, marginLeft: 6 },
   headerStatus: { fontSize: 13, marginTop: 2 },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  headerActionButton: { padding: 9, marginLeft: 0 },
+  headerActions: { flexDirection: "row", alignItems: "center" },
+  headerActionButton: { padding: 10, marginLeft: 4 },
   chatBackground: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   messagesList: { paddingHorizontal: 12, paddingVertical: 16, flexGrow: 1 },
@@ -2088,19 +2039,19 @@ const styles = StyleSheet.create<any>({
   systemMessageContainer: { alignItems: "center", marginVertical: 8 },
   systemMessage: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
   systemMessageText: { color: "#FFF", fontSize: 13 },
-  messageRow: { flexDirection: "row", marginVertical: 3, alignItems: "flex-end" },
+  messageRow: { flexDirection: "row", marginVertical: 4, alignItems: "flex-end" },
   messageRowLeft: { justifyContent: "flex-start" },
   messageRowRight: { justifyContent: "flex-end" },
-  messageAvatar: { width: 0, height: 0, marginRight: 0 },
-  messageBubble: { maxWidth: "78%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22 },
-  myBubble: { borderTopRightRadius: 22, borderBottomRightRadius: 8 },
-  theirBubble: { borderTopLeftRadius: 22, borderBottomLeftRadius: 8 },
+  messageAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
+  messageBubble: { maxWidth: "75%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
+  myBubble: { borderBottomRightRadius: 4 },
+  theirBubble: { borderBottomLeftRadius: 4 },
   messageText: { fontSize: 15, lineHeight: 21 },
   messageImage: { width: 200, height: 150, borderRadius: 16, marginBottom: 6, overflow: "hidden" },
   messageFooter: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
   messageTime: { fontSize: 11 },
   typingIndicator: { paddingHorizontal: 16, paddingVertical: 6 },
-  typingBubble: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 22, borderTopLeftRadius: 22, borderBottomLeftRadius: 8, gap: 8 },
+  typingBubble: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderBottomLeftRadius: 4, gap: 8 },
   typingDots: { flexDirection: "row", alignItems: "center" },
   typingDot: { width: 7, height: 7, borderRadius: 4 },
   typingLabel: { fontSize: 12, fontWeight: "500" },
@@ -2120,7 +2071,7 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 10, paddingTop: 10, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1 },
+  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1, borderTopColor: "#1c1f26", backgroundColor: "#0a0d14" },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -2128,13 +2079,13 @@ const styles = StyleSheet.create<any>({
   recordingTime: { fontSize: 18, fontWeight: "600" },
   recordingLabel: { fontSize: 13, fontWeight: "500" },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-  attachButton: { padding: 6, marginBottom: 3 },
-  inputWrapper: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 26, paddingHorizontal: 14, paddingVertical: 8, marginHorizontal: 6, minHeight: 46, maxHeight: 120 },
-  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 6, paddingTop: Platform.OS === "ios" ? 8 : 0, paddingBottom: Platform.OS === "ios" ? 8 : 5 },
-  emojiToggle: { padding: 4, marginLeft: 6 },
-  aiButton: { padding: 6, marginBottom: 3 },
-  sendButton: { width: 42, height: 42, borderRadius: 21, justifyContent: "center", alignItems: "center", marginBottom: 2 },
-  micButton: { padding: 8, marginBottom: 3 },
+  attachButton: { padding: 6, marginBottom: 2 },
+  inputWrapper: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 4, minHeight: 45, maxHeight: 120 },
+  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 8, paddingTop: Platform.OS === "ios" ? 10 : 0, paddingBottom: Platform.OS === "ios" ? 10 : 5 },
+  emojiToggle: { padding: 4, marginLeft: 8 },
+  aiButton: { padding: 6, marginBottom: 2 },
+  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  micButton: { padding: 8, marginBottom: 2 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   attachmentMenu: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   attachmentTitle: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 20 },
