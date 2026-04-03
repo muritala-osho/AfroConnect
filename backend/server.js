@@ -425,10 +425,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Join chat room — only authenticated sockets may join, and sender must match token userId
-  socket.on('chat:join', (chatId) => {
-    if (chatId && socket.userId) {
-      socket.join(chatId);
+  // Join chat room — verify the authenticated user is actually a participant before joining
+  socket.on('chat:join', async (chatId) => {
+    if (!chatId || !socket.userId) return;
+    try {
+      const Match = require('./models/Match');
+      const match = await Match.findById(chatId).select('users').lean();
+      if (!match) return;
+      const isParticipant = match.users.some(uid => uid.toString() === socket.userId);
+      if (isParticipant) {
+        socket.join(chatId);
+      }
+    } catch (err) {
+      // Silently reject invalid join attempts
     }
   });
 
@@ -450,11 +459,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Typing indicator
+  // Typing indicator — use server-verified identity, require authentication
   socket.on('chat:typing', (data) => {
-    if (data.chatId) {
+    if (data.chatId && socket.userId) {
       socket.to(data.chatId).emit('chat:user-typing', {
-        userId: data.userId,
+        userId: socket.userId,
         isTyping: data.isTyping !== false,
         chatId: data.chatId
       });
@@ -494,9 +503,9 @@ io.on('connection', (socket) => {
   socket.on('chat:read', handleMarkRead);
   socket.on('message:read', handleMarkRead);
 
-  // Message delivered acknowledgment
+  // Message delivered acknowledgment — require authentication
   socket.on('chat:delivered', (data) => {
-    if (data.chatId && data.messageId) {
+    if (data.chatId && data.messageId && socket.userId) {
       io.to(data.chatId).emit('chat:message-status', {
         messageId: data.messageId,
         status: 'delivered'
@@ -504,11 +513,11 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Voice recording indicator
+  // Voice recording indicator — use server-verified identity
   socket.on('chat:recording-voice', (data) => {
-    if (data.chatId) {
+    if (data.chatId && socket.userId) {
       socket.to(data.chatId).emit('chat:recording-voice', {
-        userId: data.userId,
+        userId: socket.userId,
         isRecording: data.isRecording
       });
     }
