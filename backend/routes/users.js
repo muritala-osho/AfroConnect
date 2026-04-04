@@ -42,7 +42,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     const allowedUpdates = [
       'name', 'age', 'gender', 'bio', 'interests', 'photos', 'lookingFor', 
       'preferences', 'location', 'favoriteSong', 'zodiacSign', 'relationshipGoal',
-      'jobTitle', 'education', 'livingIn', 'lifestyle', 'ethnicity', 
+      'jobTitle', 'education', 'school', 'livingIn', 'lifestyle', 'ethnicity', 
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
       'pets', 'relationshipStatus',
       'height', 'countryOfOrigin', 'tribe', 'languages', 'diasporaGeneration', 'language',

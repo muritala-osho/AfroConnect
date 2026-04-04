@@ -151,16 +151,6 @@ const RELIGION_OPTIONS = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
 
-const EDUCATION_OPTIONS = [
-  { value: "high_school", label: "High School" },
-  { value: "some_college", label: "Some College" },
-  { value: "bachelors", label: "Bachelor's Degree" },
-  { value: "masters", label: "Master's Degree" },
-  { value: "doctorate", label: "Doctorate" },
-  { value: "trade_school", label: "Trade School" },
-  { value: "other", label: "Other" },
-  { value: "prefer_not_to_say", label: "Prefer not to say" },
-];
 
 const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
 const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
@@ -272,7 +262,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [reorderSource, setReorderSource] = useState<number | null>(null);
 
   const [religionModalVisible, setReligionModalVisible] = useState(false);
-  const [educationModalVisible, setEducationModalVisible] = useState(false);
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
   const [photoPickerSlotIndex, setPhotoPickerSlotIndex] = useState<number>(0);
 
@@ -367,8 +356,8 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     } else if (step === 2) {
       const trimmedName = name.trim();
       const trimmedAge = age.trim();
-      if (!trimmedName || !trimmedAge || !gender || !jobTitle.trim() || !education || !livingIn.trim() || !ethnicity) {
-        Alert.alert("Required Fields", "Please fill in all required fields (Name, Age, Gender, Job Title, Education, Living In, Ethnicity)");
+      if (!trimmedName || !trimmedAge || !gender || !jobTitle.trim() || !livingIn.trim() || !ethnicity) {
+        Alert.alert("Required Fields", "Please fill in all required fields (Name, Age, Gender, Job Title, Living In, Ethnicity)");
         return;
       }
       if (!/^\d+$/.test(trimmedAge)) {
@@ -581,7 +570,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         gender: finalGender,
         zodiacSign: zodiacSign || undefined,
         jobTitle: jobTitle.trim() || undefined,
-        education: education || undefined,
+        school: education || undefined,
         livingIn: livingIn.trim() || undefined,
         religion: religion || undefined,
         ethnicity: ethnicity.trim() || undefined,
@@ -1055,16 +1044,16 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Education Level *</ThemedText>
-                  <Pressable
-                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
-                    onPress={() => setEducationModalVisible(true)}
-                  >
-                    <ThemedText style={{ color: education ? theme.text : theme.textSecondary, fontSize: 15 }}>
-                      {education ? EDUCATION_OPTIONS.find((e) => e.value === education)?.label : "Select education level"}
-                    </ThemedText>
-                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
-                  </Pressable>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>School / University</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. University of Lagos"
+                    placeholderTextColor={theme.textSecondary}
+                    value={education}
+                    onChangeText={setEducation}
+                    maxLength={150}
+                    autoCapitalize="words"
+                  />
                 </View>
               </View>
 
@@ -1574,34 +1563,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 >
                   <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
                   {religion === option.value && <Feather name="check" size={18} color={theme.primary} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={educationModalVisible} transparent animationType="slide" onRequestClose={() => setEducationModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.listModal, { backgroundColor: theme.background }]}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Education Level</ThemedText>
-              <Pressable onPress={() => setEducationModalVisible(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={theme.text} />
-              </Pressable>
-            </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {EDUCATION_OPTIONS.map((option) => (
-                <Pressable
-                  key={option.value}
-                  style={[
-                    styles.listItem,
-                    { borderColor: education === option.value ? theme.primary : theme.border, backgroundColor: education === option.value ? `${theme.primary}10` : theme.surface },
-                  ]}
-                  onPress={() => { setEducation(option.value); setEducationModalVisible(false); }}
-                >
-                  <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
-                  {education === option.value && <Feather name="check" size={18} color={theme.primary} />}
                 </Pressable>
               ))}
             </ScrollView>

@@ -62,6 +62,12 @@ const userSchema = new mongoose.Schema({
     enum: ['high_school', 'some_college', 'bachelors', 'masters', 'doctorate', 'trade_school', 'other', 'prefer_not_to_say'],
     default: null
   },
+  school: {
+    type: String,
+    maxlength: 150,
+    trim: true,
+    default: ''
+  },
   livingIn: {
     type: String,
     maxlength: 100,

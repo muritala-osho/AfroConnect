@@ -49,6 +49,7 @@ export interface User {
   zodiacSign?: string;
   jobTitle?: string;
   education?: string;
+  school?: string;
   livingIn?: string;
   privacySettings?: {
     hideAge?: boolean;
