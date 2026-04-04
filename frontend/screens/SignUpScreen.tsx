@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -7,18 +6,25 @@ import {
   Pressable,
   ActivityIndicator,
   Platform,
+  Animated,
+  KeyboardAvoidingView,
+  ScrollView,
+  Dimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
-import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
+import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const { width } = Dimensions.get("window");
 
 type SignUpScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -31,6 +37,85 @@ interface SignUpScreenProps {
 
 const SIGNUP_STORAGE_KEY = "afroconnect_signup_draft";
 
+function AnimatedInput({
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  secureTextEntry,
+  keyboardType,
+  autoComplete,
+  autoCapitalize,
+  rightElement,
+  theme,
+}: any) {
+  const focusAnim = useRef(new Animated.Value(0)).current;
+
+  const onFocus = () => {
+    Animated.spring(focusAnim, {
+      toValue: 1,
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  };
+
+  const onBlur = () => {
+    Animated.spring(focusAnim, {
+      toValue: 0,
+      useNativeDriver: false,
+      friction: 6,
+    }).start();
+  };
+
+  const borderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.border, theme.primary],
+  });
+
+  const shadowOpacity = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.18],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.inputWrapper,
+        {
+          backgroundColor: theme.surface,
+          borderColor,
+          shadowColor: theme.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity,
+          shadowRadius: 10,
+          elevation: 2,
+        },
+      ]}
+    >
+      <Feather
+        name={icon}
+        size={18}
+        color={theme.textSecondary}
+        style={styles.inputIcon}
+      />
+      <TextInput
+        style={[styles.input, { color: theme.text }]}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textSecondary}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      {rightElement}
+    </Animated.View>
+  );
+}
+
 export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   const { theme } = useTheme();
   const { signup } = useAuth();
@@ -40,21 +125,39 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        friction: 8,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     const loadDraft = async () => {
       try {
         const draft = await AsyncStorage.getItem(SIGNUP_STORAGE_KEY);
         if (draft) {
-          const { email: savedEmail, agreeToTerms: savedAgree } =
-            JSON.parse(draft);
+          const { email: savedEmail, agreeToTerms: savedAgree } = JSON.parse(draft);
           setEmail(savedEmail || "");
           setAgreeToTerms(savedAgree || false);
         }
-      } catch (error) {
-        console.error("Failed to load signup draft:", error);
-      }
+      } catch {}
     };
     loadDraft();
   }, []);
@@ -62,462 +165,449 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
   useEffect(() => {
     const saveDraft = async () => {
       try {
-        await AsyncStorage.setItem(
-          SIGNUP_STORAGE_KEY,
-          JSON.stringify({ email, agreeToTerms }),
-        );
-      } catch (error) {
-        console.error("Failed to save signup draft:", error);
-      }
+        await AsyncStorage.setItem(SIGNUP_STORAGE_KEY, JSON.stringify({ email, agreeToTerms }));
+      } catch {}
     };
     saveDraft();
   }, [email, agreeToTerms]);
 
-  const validateEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
+  const validateEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+
+  const onButtonPressIn = () => {
+    Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, friction: 6 }).start();
+  };
+
+  const onButtonPressOut = () => {
+    Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
   };
 
   const handleSignUp = async () => {
     if (!email || !password || !confirmPassword) {
-      showAlert(
-        "Error",
-        "Please fill in all fields",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Missing Fields", "Please fill in all fields", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
-
     if (!validateEmail(email)) {
-      showAlert(
-        "Error",
-        "Please enter a valid email address",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Invalid Email", "Please enter a valid email address", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
-
     if (password !== confirmPassword) {
-      showAlert(
-        "Error",
-        "Passwords do not match",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Password Mismatch", "Passwords do not match", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
-
     if (password.length < 6) {
-      showAlert(
-        "Error",
-        "Password must be at least 6 characters",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Weak Password", "Password must be at least 6 characters", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
-
     if (!agreeToTerms) {
-      showAlert(
-        "Error",
-        "Please agree to the Terms and Privacy Policy",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Terms Required", "Please agree to the Terms and Privacy Policy", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
 
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       const result = await signup(email.trim().toLowerCase(), password);
       await AsyncStorage.removeItem(SIGNUP_STORAGE_KEY);
-      navigation.navigate("OTPVerification", {
-        userId: result.userId,
-        email: result.email,
-      });
+      navigation.navigate("OTPVerification", { userId: result.userId, email: result.email });
     } catch (error: any) {
-      showAlert(
-        "Error",
-        error.message || "Failed to create account",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Sign Up Failed", error.message || "Failed to create account", [{ text: "OK", style: "default" }], "alert-circle");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScreenKeyboardAwareScrollView>
-      <View style={styles.header}>
-        <Pressable
-          style={[styles.backButton, { backgroundColor: theme.surface }]}
-          onPress={() => navigation.goBack()}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={["#10B981", "#059669", "#0D9488"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientHeader}
         >
-          <Feather name="arrow-left" size={20} color={theme.text} />
-        </Pressable>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.logoSection}>
-          <Image
-            source={require("@/assets/afroconnect-logo.png")}
-            style={styles.logo}
-            contentFit="contain"
-          />
-        </View>
-
-        <View style={styles.titleSection}>
-          <ThemedText
-            style={[styles.title, { color: theme.text, fontWeight: "800" }]}
+          <Pressable
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={12}
           >
-            Create an account
-          </ThemedText>
-          <ThemedText
-            style={[
-              styles.subtitle,
-              { color: theme.textSecondary, fontWeight: "700" },
-            ]}
-          >
-            Join AfroConnect and start connecting today
-          </ThemedText>
-        </View>
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </Pressable>
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <ThemedText
-              style={[styles.label, { color: theme.text, fontWeight: "700" }]}
-            >
-              Email
-            </ThemedText>
-            <View
-              style={[
-                styles.inputWrapper,
-                {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                  borderWidth: 1.5,
-                },
-              ]}
-            >
-              <Feather
-                name="mail"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.text, fontWeight: "600" }]}
-                placeholder="Enter your email"
-                placeholderTextColor={theme.textSecondary}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
+          <Animated.View
+            style={[styles.headerContent, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+          >
+            <View style={styles.logoRing}>
+              <Image
+                source={require("@/assets/afroconnect-logo.png")}
+                style={styles.logo}
+                contentFit="contain"
               />
             </View>
+            <ThemedText style={styles.headerTitle}>Create Account</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>
+              Join AfroConnect and start connecting
+            </ThemedText>
+          </Animated.View>
+
+          {/* Progress step dots */}
+          <View style={styles.stepDots}>
+            <View style={[styles.dot, styles.dotActive]} />
+            <View style={styles.dot} />
+            <View style={styles.dot} />
+          </View>
+        </LinearGradient>
+
+        {/* Form Card */}
+        <Animated.View
+          style={[
+            styles.formCard,
+            { backgroundColor: theme.background, opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Email Address
+            </ThemedText>
+            <AnimatedInput
+              icon="mail"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoComplete="email"
+              autoCapitalize="none"
+              theme={theme}
+            />
           </View>
 
-          <View style={styles.inputContainer}>
-            <ThemedText style={[styles.label, { color: theme.text }]}>
+          {/* Password */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
               Password
             </ThemedText>
-            <View
-              style={[
-                styles.inputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <Feather
-                name="lock"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="At least 6 characters"
-                placeholderTextColor={theme.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-              <Pressable
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Feather
-                  name={showPassword ? "eye-off" : "eye"}
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </Pressable>
-            </View>
+            <AnimatedInput
+              icon="lock"
+              placeholder="At least 6 characters"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="new-password"
+              autoCapitalize="none"
+              theme={theme}
+              rightElement={
+                <Pressable
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={styles.eyeBtn}
+                  hitSlop={8}
+                >
+                  <Feather
+                    name={showPassword ? "eye-off" : "eye"}
+                    size={18}
+                    color={theme.textSecondary}
+                  />
+                </Pressable>
+              }
+            />
           </View>
 
-          <View style={styles.inputContainer}>
-            <ThemedText style={[styles.label, { color: theme.text }]}>
+          {/* Confirm Password */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
               Confirm Password
             </ThemedText>
-            <View
-              style={[
-                styles.inputWrapper,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <Feather
-                name="lock"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.text }]}
-                placeholder="Re-enter your password"
-                placeholderTextColor={theme.textSecondary}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-            </View>
+            <AnimatedInput
+              icon="lock"
+              placeholder="Re-enter your password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              autoComplete="new-password"
+              autoCapitalize="none"
+              theme={theme}
+              rightElement={
+                <Pressable
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={styles.eyeBtn}
+                  hitSlop={8}
+                >
+                  <Feather
+                    name={showConfirmPassword ? "eye-off" : "eye"}
+                    size={18}
+                    color={theme.textSecondary}
+                  />
+                </Pressable>
+              }
+            />
+            {confirmPassword.length > 0 && password !== confirmPassword && (
+              <ThemedText style={styles.errorHint}>Passwords don't match</ThemedText>
+            )}
+            {confirmPassword.length > 0 && password === confirmPassword && password.length > 0 && (
+              <ThemedText style={styles.successHint}>
+                <Feather name="check" size={12} /> Passwords match
+              </ThemedText>
+            )}
           </View>
 
+          {/* Terms */}
           <Pressable
             style={styles.termsRow}
-            onPress={() => setAgreeToTerms(!agreeToTerms)}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setAgreeToTerms(!agreeToTerms);
+            }}
           >
             <View
               style={[
                 styles.checkbox,
-                { borderColor: agreeToTerms ? theme.primary : theme.border },
-                agreeToTerms && { backgroundColor: theme.primary },
+                agreeToTerms
+                  ? { backgroundColor: theme.primary, borderColor: theme.primary }
+                  : { borderColor: theme.border, backgroundColor: theme.surface },
               ]}
             >
-              {agreeToTerms && (
-                <Feather name="check" size={14} color="#FFFFFF" />
-              )}
+              {agreeToTerms && <Feather name="check" size={13} color="#fff" />}
             </View>
-            <View style={styles.termsTextContainer}>
+            <ThemedText style={[styles.termsText, { color: theme.textSecondary }]}>
+              I agree to the{" "}
               <ThemedText
-                style={[styles.termsText, { color: theme.textSecondary }]}
+                style={{ color: theme.primary, fontWeight: "600" }}
+                onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}
               >
-                I agree to the{" "}
-                <ThemedText
-                  style={{ color: theme.primary, fontWeight: "700" }}
-                  onPress={() =>
-                    navigation.navigate("Legal" as any, { type: "terms" })
-                  }
-                >
-                  Terms of Service
-                </ThemedText>{" "}
-                and{" "}
-                <ThemedText
-                  style={{ color: theme.primary, fontWeight: "700" }}
-                  onPress={() =>
-                    navigation.navigate("Legal" as any, { type: "privacy" })
-                  }
-                >
-                  Privacy Policy
-                </ThemedText>
-              </ThemedText>
-            </View>
-          </Pressable>
-
-          <Pressable
-            style={[
-              styles.button,
-              { backgroundColor: theme.primary },
-              Shadow.button,
-            ]}
-            onPress={handleSignUp}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.buttonText} />
-            ) : (
+                Terms of Service
+              </ThemedText>{" "}
+              and{" "}
               <ThemedText
-                style={[styles.buttonText, { color: theme.buttonText }]}
+                style={{ color: theme.primary, fontWeight: "600" }}
+                onPress={() => navigation.navigate("Legal" as any, { type: "privacy" })}
               >
-                Create Account
-              </ThemedText>
-            )}
-          </Pressable>
-
-          <Pressable
-            style={styles.loginLink}
-            onPress={() => navigation.navigate("Login")}
-          >
-            <ThemedText
-              style={[styles.loginLinkText, { color: theme.textSecondary }]}
-            >
-              Already have an account?{" "}
-              <ThemedText style={{ color: theme.primary, fontWeight: "600" }}>
-                Sign in
+                Privacy Policy
               </ThemedText>
             </ThemedText>
           </Pressable>
-        </View>
-      </View>
+
+          {/* CTA Button */}
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <Pressable
+              onPressIn={onButtonPressIn}
+              onPressOut={onButtonPressOut}
+              onPress={handleSignUp}
+              disabled={loading}
+              style={({ pressed }) => [styles.ctaButton, pressed && { opacity: 0.95 }]}
+            >
+              <LinearGradient
+                colors={["#10B981", "#059669"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <ThemedText style={styles.ctaText}>Create Account</ThemedText>
+                    <Feather name="arrow-right" size={18} color="#fff" style={{ marginLeft: 6 }} />
+                  </>
+                )}
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+
+          {/* Switch to login */}
+          <Pressable
+            style={styles.switchRow}
+            onPress={() => navigation.navigate("Login")}
+          >
+            <ThemedText style={[styles.switchText, { color: theme.textSecondary }]}>
+              Already have an account?{" "}
+              <ThemedText style={{ color: theme.primary, fontWeight: "700" }}>Sign In</ThemedText>
+            </ThemedText>
+          </Pressable>
+        </Animated.View>
+      </ScrollView>
       <AlertComponent />
-    </ScreenKeyboardAwareScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-const ACCENT_COLOR = "#10B981";
-
 const styles = StyleSheet.create({
-  header: {
-    height: 60,
-    paddingHorizontal: Spacing.lg,
-    marginTop: Platform.OS === "ios" ? 50 : 30,
-    flexDirection: "row",
+  gradientHeader: {
+    paddingTop: Platform.OS === "ios" ? 60 : 44,
+    paddingBottom: 40,
+    paddingHorizontal: Spacing.xl,
     alignItems: "center",
-    justifyContent: "center", // Dating apps usually center titles
-    zIndex: 10,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   backButton: {
     position: "absolute",
-    left: Spacing.lg,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    top: Platform.OS === "ios" ? 60 : 44,
+    left: Spacing.xl,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(16, 185, 129, 0.08)", // Light emerald tint
   },
-  content: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
-  },
-  logoSection: {
+  headerContent: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginTop: Spacing.lg,
+  },
+  logoRing: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.md,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50, // Circles feel friendlier for dating apps
+    width: 68,
+    height: 68,
+    borderRadius: 34,
   },
-  titleSection: {
-    alignItems: "center",
-    marginBottom: Spacing.xxl,
-  },
-  title: {
-    ...Typography.h1,
-    fontSize: 32,
+  headerTitle: {
+    fontSize: 26,
     fontWeight: "800",
-    color: "#1A1A1A",
+    color: "#fff",
     letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  subtitle: {
-    ...Typography.body,
-    textAlign: "center",
-    color: "rgba(0,0,0,0.5)",
-    fontSize: 16,
+  headerSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "500",
   },
-  form: {
+  stepDots: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: Spacing.lg,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.35)",
+  },
+  dotActive: {
+    width: 20,
+    backgroundColor: "#fff",
+  },
+  formCard: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xxxl,
     gap: Spacing.lg,
   },
-  inputContainer: {
-    gap: Spacing.xs,
+  fieldGroup: {
+    gap: Spacing.xs + 2,
   },
-  label: {
-    ...Typography.captionBold,
-    fontSize: 13,
-    color: "#4A4A4A",
-    marginLeft: Spacing.sm,
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.8,
     textTransform: "uppercase",
-    letterSpacing: 1,
+    marginLeft: 2,
   },
-  // FIX: Added missing inputWrapper to clear your error
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    height: 58,
+    height: 56,
     borderRadius: BorderRadius.xl,
-    backgroundColor: "#F7F8F9", // Soft modern background
     borderWidth: 1.5,
-    borderColor: "#F0F0F0",
     paddingHorizontal: Spacing.lg,
   },
   inputIcon: {
-    marginRight: Spacing.md,
-    opacity: 0.5,
+    marginRight: Spacing.sm,
   },
   input: {
     flex: 1,
-    ...Typography.body,
     fontSize: 16,
-    fontWeight: "600",
-    color: "#1A1A1A",
+    fontWeight: "500",
+    height: "100%",
   },
-  eyeButton: {
-    padding: Spacing.sm,
+  eyeBtn: {
+    padding: Spacing.xs,
+    marginLeft: Spacing.xs,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: "#FF6B6B",
+    marginLeft: 4,
+    fontWeight: "500",
+  },
+  successHint: {
+    fontSize: 12,
+    color: "#10B981",
+    marginLeft: 4,
+    fontWeight: "500",
   },
   termsRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  // FIX: Added missing termsTextContainer to clear your error
-  termsTextContainer: {
-    flex: 1,
-    justifyContent: "center",
+    marginTop: Spacing.xs,
   },
   checkbox: {
     width: 22,
     height: 22,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: ACCENT_COLOR,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
+    marginTop: 1,
+    flexShrink: 0,
   },
   termsText: {
-    ...Typography.caption,
     fontSize: 13,
     lineHeight: 20,
-    color: "#666",
+    flex: 1,
   },
-  button: {
-    height: 56,
+  ctaButton: {
     borderRadius: BorderRadius.full,
-    backgroundColor: ACCENT_COLOR,
+    overflow: "hidden",
+    marginTop: Spacing.sm,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  ctaGradient: {
+    height: 58,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: Spacing.xl,
-    // Soft glowing shadow for dating app aesthetic
-    shadowColor: ACCENT_COLOR,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 5,
+    flexDirection: "row",
   },
-  buttonText: {
-    ...Typography.bodyBold,
-    fontSize: 18,
-    color: "#FFF",
+  ctaText: {
+    fontSize: 17,
     fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
   },
-  loginLink: {
+  switchRow: {
     alignItems: "center",
-    paddingVertical: Spacing.xl,
-    marginTop: Spacing.lg,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
-  loginLinkText: {
-    ...Typography.body,
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#666",
+  switchText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });
-
