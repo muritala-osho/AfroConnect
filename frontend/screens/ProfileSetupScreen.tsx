@@ -155,6 +155,72 @@ const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
 const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
 const BIG_SLOT_HEIGHT = BIG_SLOT_WIDTH * 1.1;
 
+// ─── Animated Interest Chip ────────────────────────────────────────────────
+function InterestChip({
+  item,
+  selected,
+  onPress,
+}: {
+  item: { label: string; value: string; color: string };
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scale, {
+        toValue: selected ? 0.88 : 1.18,
+        useNativeDriver: true,
+        friction: 3,
+        tension: 400,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 4,
+        tension: 200,
+      }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Animated.View
+        style={[
+          {
+            paddingHorizontal: 14,
+            paddingVertical: 9,
+            borderRadius: 999,
+            borderWidth: 1.5,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            transform: [{ scale }],
+          },
+          selected
+            ? { backgroundColor: item.color, borderColor: item.color }
+            : { backgroundColor: `${item.color}14`, borderColor: `${item.color}50` },
+        ]}
+      >
+        {selected && (
+          <Feather name="check" size={11} color="#fff" />
+        )}
+        <ThemedText
+          style={{
+            fontSize: 13,
+            fontWeight: selected ? "700" : "500",
+            color: selected ? "#fff" : item.color,
+          }}
+        >
+          {item.label}
+        </ThemedText>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
 export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenProps) {
   const { theme } = useTheme();
   const { completeProfileSetup, token } = useAuth();
@@ -192,6 +258,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [loveStyle, setLoveStyle] = useState("");
 
   const [zodiacModalVisible, setZodiacModalVisible] = useState(false);
+  const [reorderSource, setReorderSource] = useState<number | null>(null);
 
   const [religionModalVisible, setReligionModalVisible] = useState(false);
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
@@ -405,6 +472,28 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     const compacted: PhotoSlot[] = [null, null, null, null, null, null];
     validPhotos.forEach((photo, i) => { compacted[i] = photo; });
     setPhotos(compacted);
+    if (reorderSource === index) setReorderSource(null);
+  };
+
+  const handlePhotoLongPress = (index: number) => {
+    if (!photos[index]) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setReorderSource(reorderSource === index ? null : index);
+  };
+
+  const handlePhotoTapInReorderMode = (index: number) => {
+    if (reorderSource === null) return;
+    if (reorderSource === index) {
+      setReorderSource(null);
+      return;
+    }
+    const newPhotos = [...photos];
+    const temp = newPhotos[reorderSource];
+    newPhotos[reorderSource] = newPhotos[index];
+    newPhotos[index] = temp;
+    setPhotos(newPhotos);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setReorderSource(null);
   };
 
   const openPrivacyModal = (index: number) => {
@@ -590,9 +679,22 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 <Pressable
                   style={[
                     styles.heroPhotoSlot,
-                    { borderColor: photos[0] ? theme.primary : theme.border, backgroundColor: theme.surface },
+                    {
+                      borderColor: reorderSource === 0 ? "#FFC629" : photos[0] ? theme.primary : theme.border,
+                      backgroundColor: theme.surface,
+                      borderWidth: reorderSource === 0 ? 3 : 2,
+                      opacity: reorderSource === 0 ? 0.75 : 1,
+                    },
                   ]}
-                  onPress={() => showPhotoOptions(0)}
+                  onPress={() => {
+                    if (reorderSource !== null) {
+                      handlePhotoTapInReorderMode(0);
+                    } else {
+                      showPhotoOptions(0);
+                    }
+                  }}
+                  onLongPress={() => handlePhotoLongPress(0)}
+                  delayLongPress={400}
                   disabled={uploadingPhoto === 0}
                 >
                   {photos[0] ? (
@@ -647,52 +749,105 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
               </View>
 
               {/* Additional photos grid */}
-              <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary }]}>Add more photos</ThemedText>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary, marginBottom: 0 }]}>
+                  {reorderSource !== null ? "📍 Tap a slot to swap position" : "Add more photos"}
+                </ThemedText>
+                {reorderSource !== null && (
+                  <Pressable onPress={() => setReorderSource(null)} hitSlop={8}>
+                    <ThemedText style={{ fontSize: 12, color: theme.error, fontWeight: "600" }}>Cancel</ThemedText>
+                  </Pressable>
+                )}
+              </View>
               <View style={styles.smallPhotoGrid}>
                 {[1, 2, 3, 4, 5].map((slotIndex) => {
                   const photo = photos[slotIndex];
                   const isUploading = uploadingPhoto === slotIndex;
+                  const isReorderSrc = reorderSource === slotIndex;
+                  const isReorderTarget = reorderSource !== null && reorderSource !== slotIndex;
                   return (
                     <Pressable
                       key={slotIndex}
                       style={[
                         styles.smallPhotoSlot,
-                        { borderColor: photo ? theme.primary : theme.border, backgroundColor: theme.surface },
+                        {
+                          borderColor: isReorderSrc
+                            ? theme.primary
+                            : isReorderTarget && photo
+                            ? "#FFC629"
+                            : photo
+                            ? theme.primary
+                            : theme.border,
+                          backgroundColor: theme.surface,
+                          borderWidth: isReorderSrc ? 2.5 : 1.5,
+                          opacity: isReorderSrc ? 0.7 : 1,
+                        },
                       ]}
-                      onPress={() => showPhotoOptions(slotIndex)}
+                      onPress={() => {
+                        if (reorderSource !== null) {
+                          handlePhotoTapInReorderMode(slotIndex);
+                        } else {
+                          showPhotoOptions(slotIndex);
+                        }
+                      }}
+                      onLongPress={() => handlePhotoLongPress(slotIndex)}
+                      delayLongPress={400}
                       disabled={isUploading}
                     >
                       {photo ? (
                         <>
                           <Image source={{ uri: photo.url }} style={styles.smallPhotoImage} contentFit="cover" />
-                          <Pressable
-                            style={[styles.smallRemoveBtn, { backgroundColor: theme.error }]}
-                            onPress={() => removePhoto(slotIndex)}
-                          >
-                            <Feather name="x" size={9} color="#fff" />
-                          </Pressable>
-                          <Pressable
-                            style={styles.smallPrivacyBtn}
-                            onPress={() => openPrivacyModal(slotIndex)}
-                          >
-                            <Feather
-                              name={getPrivacyIcon(photo.privacy) as any}
-                              size={10}
-                              color={photo.privacy === "private" ? "#FF6B6B" : photo.privacy === "friends" ? "#FFC629" : "#10B981"}
-                            />
-                          </Pressable>
+                          {isReorderSrc ? (
+                            <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12 }]}>
+                              <Feather name="move" size={18} color="#fff" />
+                            </View>
+                          ) : (
+                            <>
+                              {reorderSource === null && (
+                                <Pressable
+                                  style={[styles.smallRemoveBtn, { backgroundColor: theme.error }]}
+                                  onPress={() => removePhoto(slotIndex)}
+                                >
+                                  <Feather name="x" size={9} color="#fff" />
+                                </Pressable>
+                              )}
+                              {isReorderTarget && (
+                                <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,198,41,0.25)", borderRadius: 12 }]}>
+                                  <Feather name="corner-left-down" size={16} color="#FFC629" />
+                                </View>
+                              )}
+                            </>
+                          )}
+                          {!isReorderSrc && reorderSource === null && (
+                            <Pressable
+                              style={styles.smallPrivacyBtn}
+                              onPress={() => openPrivacyModal(slotIndex)}
+                            >
+                              <Feather
+                                name={getPrivacyIcon(photo.privacy) as any}
+                                size={10}
+                                color={photo.privacy === "private" ? "#FF6B6B" : photo.privacy === "friends" ? "#FFC629" : "#10B981"}
+                              />
+                            </Pressable>
+                          )}
                         </>
                       ) : isUploading ? (
                         <ActivityIndicator color={theme.primary} size="small" />
                       ) : (
-                        <View style={[styles.smallAddIcon, { backgroundColor: `${theme.primary}15` }]}>
-                          <Feather name="plus" size={18} color={theme.primary} />
+                        <View style={[styles.smallAddIcon, { backgroundColor: reorderSource !== null ? `${theme.primary}08` : `${theme.primary}15` }]}>
+                          <Feather name={reorderSource !== null ? "corner-left-down" : "plus"} size={18} color={reorderSource !== null ? "#FFC629" : theme.primary} />
                         </View>
                       )}
                     </Pressable>
                   );
                 })}
               </View>
+              {reorderSource === null && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 }}>
+                  <Feather name="move" size={11} color={theme.textSecondary} />
+                  <ThemedText style={{ fontSize: 11, color: theme.textSecondary }}>Long press any photo to reorder</ThemedText>
+                </View>
+              )}
 
               {/* Photo progress indicator */}
               <View style={[styles.photoProgressCard, {
@@ -1019,20 +1174,12 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 {INTERESTS_OPTIONS.map((item) => {
                   const selected = interests.includes(item.value);
                   return (
-                    <Pressable
+                    <InterestChip
                       key={item.value}
+                      item={item}
+                      selected={selected}
                       onPress={() => toggleInterest(item.value)}
-                      style={[
-                        styles.chip,
-                        selected
-                          ? { backgroundColor: item.color, borderColor: item.color }
-                          : { backgroundColor: theme.surface, borderColor: theme.border },
-                      ]}
-                    >
-                      <ThemedText style={[styles.chipText, { color: selected ? "#fff" : theme.text }]}>
-                        {item.label}
-                      </ThemedText>
-                    </Pressable>
+                    />
                   );
                 })}
               </View>

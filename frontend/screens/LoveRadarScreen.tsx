@@ -274,7 +274,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   }, []);
 
   useEffect(() => {
-    handleRefreshLocation();
+    handleRefreshLocation(true);
   }, []);
 
   const scannerStyle = useAnimatedStyle(() => ({
@@ -334,26 +334,33 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
     [userLocation, token, filters]
   );
 
-  const handleRefreshLocation = useCallback(async () => {
+  const handleRefreshLocation = useCallback(async (silent = false) => {
     try {
       setLocationLoading(true);
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        showAlert(t("locationRequired"), t("enableLocationAccess"), [{ text: t("ok") }], "map-pin");
-        setLocationLoading(false);
+        setLocationPermission(false);
         setLoading(false);
+        if (!silent) {
+          showAlert(t("locationRequired"), t("enableLocationAccess"), [{ text: t("ok") }], "map-pin");
+        }
+        setLocationLoading(false);
         return;
       }
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
       setUserLocation(coords);
       setLocationPermission(true);
-      await updateServerLocation(coords.lat, coords.lng);
-      await updateProfile({ location: coords });
+      try { await updateServerLocation(coords.lat, coords.lng); } catch {}
+      try { await updateProfile({ location: coords }); } catch {}
       await fetchNearbyUsers(coords);
-      showAlert(t("success"), t("locationUpdated"), [{ text: t("ok") }], "check-circle");
+      if (!silent) {
+        showAlert(t("success"), t("locationUpdated"), [{ text: t("ok") }], "check-circle");
+      }
     } catch (error) {
-      showAlert(t("error"), t("locationError"), [{ text: t("ok") }], "alert-circle");
+      if (!silent) {
+        showAlert(t("error"), t("locationError"), [{ text: t("ok") }], "alert-circle");
+      }
     } finally {
       setLocationLoading(false);
     }
