@@ -28,16 +28,31 @@ const generateToken = (userId) => {
 router.post(
   "/signup",
   authLimiter,
-  validate(schemas.auth.signup),
   async (req, res) => {
     try {
       const { email, password } = req.body;
 
-      // Validation
+      // Validation — only email and password are required at signup
+      // Name and other profile fields are collected later during profile setup
       if (!email || !password) {
         return res.status(400).json({
           success: false,
           message: "Please provide email and password",
+        });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address",
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters",
         });
       }
 

@@ -316,12 +316,20 @@ router.get('/daily-match', protect, async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const me = await User.findById(req.user._id);
 
+    if (!me) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
     if (me.dailyMatch?.date === today && me.dailyMatch?.userId) {
-      const cached = await User.findById(me.dailyMatch.userId)
-        .select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio');
-      if (cached) {
-        const score = calculateCulturalScore(me, cached);
-        return res.json({ success: true, match: { ...cached.toObject(), culturalScore: score.totalScore, culturalBreakdown: score.breakdown } });
+      try {
+        const cached = await User.findById(me.dailyMatch.userId)
+          .select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio');
+        if (cached) {
+          const score = calculateCulturalScore(me, cached);
+          return res.json({ success: true, match: { ...cached.toObject(), culturalScore: score.totalScore, culturalBreakdown: score.breakdown } });
+        }
+      } catch (cacheErr) {
+        console.error('Daily match cache lookup failed:', cacheErr.message);
       }
     }
 
@@ -343,26 +351,34 @@ router.get('/daily-match', protect, async (req, res) => {
       'photos.0': { $exists: true },
       age: { $gte: me.preferences?.ageRange?.min || 18, $lte: me.preferences?.ageRange?.max || 60 },
       ...genderFilter
-    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(100);
+    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(30);
 
     if (!candidates.length) {
       return res.json({ success: true, match: null, message: 'No match available today. Check back tomorrow!' });
     }
 
     const scored = candidates.map(c => {
-      const cultural = calculateCulturalScore(me, c);
-      const sharedInterests = (me.interests || []).filter(i => (c.interests || []).includes(i)).length;
-      const total = cultural.totalScore * 0.6 + sharedInterests * 5;
-      return { user: c, culturalScore: cultural, interestScore: sharedInterests, totalScore: total };
+      try {
+        const cultural = calculateCulturalScore(me, c);
+        const sharedInterests = (me.interests || []).filter(i => (c.interests || []).includes(i)).length;
+        const total = cultural.totalScore * 0.6 + sharedInterests * 5;
+        return { user: c, culturalScore: cultural, interestScore: sharedInterests, totalScore: total };
+      } catch (scoreErr) {
+        return { user: c, culturalScore: { totalScore: 0, breakdown: [] }, interestScore: 0, totalScore: 0 };
+      }
     });
 
     scored.sort((a, b) => b.totalScore - a.totalScore);
     const best = scored[0];
 
-    me.dailyMatch = { userId: best.user._id, date: today };
-    await me.save();
+    try {
+      me.dailyMatch = { userId: best.user._id, date: today };
+      await me.save();
+    } catch (saveErr) {
+      console.error('Failed to cache daily match:', saveErr.message);
+    }
 
-    res.json({
+    return res.json({
       success: true,
       match: {
         ...best.user.toObject(),
@@ -373,7 +389,7 @@ router.get('/daily-match', protect, async (req, res) => {
     });
   } catch (error) {
     console.error('Daily match error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    return res.status(500).json({ success: false, message: 'Could not load match. Please try again.' });
   }
 });
 

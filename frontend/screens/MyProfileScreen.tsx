@@ -480,90 +480,372 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
           </View>
         )}
 
-        <View style={styles.section}>
-          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
-            Personality Prompt
-          </ThemedText>
-          <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            <ThemedText style={[styles.bio, { color: theme.text }]}>
-              {(user as any)?.lifestyle?.personalityType || "Add your personality type in Edit Profile to help matches understand your vibe!"}
-            </ThemedText>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
-            Location & Distance
-          </ThemedText>
-          <Pressable 
-            style={[styles.card, { backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', padding: Spacing.md }]}
-            onPress={() => {
-              if (user?.location?.coordinates || user?.location?.lat) {
-                navigation.navigate("MapView" as any);
-              } else {
-                showAlert(
-                  "Location Not Found", 
-                  "Your location is not set. Please ensure location permissions are enabled.",
-                  [{ text: "OK", style: "default" }],
-                  "map"
-                );
-              }
-            }}
-          >
-            <View style={[styles.detailIconContainer, { backgroundColor: theme.primary + '15', marginRight: Spacing.md }]}>
-              <Feather name="map-pin" size={20} color={theme.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={{ fontWeight: '600' }}>View Nearby Users</ThemedText>
-              <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>See who's around you on the map</ThemedText>
-            </View>
-            <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-          </Pressable>
-        </View>
-
         <ProfilePrompts isOwnProfile={true} />
 
-        {profileDetails.length > 0 && (
+        {/* DATING PREFERENCES SECTION */}
+        {((user as any)?.lookingFor || (user as any)?.relationshipGoal || (user as any)?.lifestyle?.relationshipStatus) && (
           <View style={styles.section}>
-            <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
-              {t('details')}
-            </ThemedText>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#8B5CF620' }]}>
+                <Feather name="target" size={15} color="#8B5CF6" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Dating Preferences</ThemedText>
+            </View>
             <View style={[styles.card, { backgroundColor: theme.surface }]}>
-              {profileDetails.map((detail: any, index) => (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.detailRow, 
-                    index !== profileDetails.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border }
-                  ]}
-                >
+              {(user as any)?.lookingFor && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                   <View style={styles.detailLeft}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: theme.primary + '15' }]}>
-                      <Feather name={detail.icon} size={16} color={theme.primary} />
-                    </View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>
-                      {detail.label}
-                    </ThemedText>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="search" size={15} color="#8B5CF6" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Looking For</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]} numberOfLines={1}>
-                    {detail.value}
-                  </ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lookingFor}</ThemedText>
                 </View>
-              ))}
+              )}
+              {(user as any)?.relationshipGoal && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="heart" size={15} color="#8B5CF6" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Relationship Goal</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).relationshipGoal}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.relationshipStatus && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="info" size={15} color="#8B5CF6" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Status</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.relationshipStatus}</ThemedText>
+                </View>
+              )}
             </View>
           </View>
         )}
 
+        {/* PERSONALITY SECTION */}
+        {((user as any)?.lifestyle?.personalityType || (user as any)?.lifestyle?.communicationStyle || (user as any)?.lifestyle?.loveStyle || (user as any)?.zodiacSign) && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#F59E0B20' }]}>
+                <Feather name="zap" size={15} color="#F59E0B" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Personality</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              {(user as any)?.lifestyle?.personalityType && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="star" size={15} color="#F59E0B" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Personality</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.personalityType}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.communicationStyle && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="message-circle" size={15} color="#F59E0B" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Communication</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.communicationStyle}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.loveStyle && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="heart" size={15} color="#F59E0B" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Love Language</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.loveStyle}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.zodiacSign && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="star" size={15} color="#F59E0B" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Zodiac</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {`${(user as any).zodiacSign.charAt(0).toUpperCase()}${(user as any).zodiacSign.slice(1)} ${ZODIAC_EMOJI[(user as any).zodiacSign] || ''}`}
+                  </ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* LIFESTYLE SECTION */}
+        {((user as any)?.lifestyle?.smoking || (user as any)?.lifestyle?.drinking || (user as any)?.lifestyle?.workout || (user as any)?.lifestyle?.pets || (user as any)?.lifestyle?.hasKids !== undefined || (user as any)?.lifestyle?.wantsKids !== undefined) && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#10B98120' }]}>
+                <Feather name="coffee" size={15} color="#10B981" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Lifestyle</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              {(user as any)?.lifestyle?.smoking && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="wind" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Smoking</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.smoking] || (user as any).lifestyle.smoking}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.drinking && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="coffee" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Drinking</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.drinking] || (user as any).lifestyle.drinking}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.workout && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="activity" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Workout</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.workout] || (user as any).lifestyle.workout}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.pets && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="heart" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.pets}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.hasKids !== undefined && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="users" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Has Kids</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.hasKids ? 'Yes' : 'No'}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.wantsKids !== undefined && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="smile" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Wants Kids</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.wantsKids ? 'Yes' : 'No'}</ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* CULTURAL IDENTITY SECTION */}
+        {((user as any)?.countryOfOrigin || (user as any)?.tribe || (user as any)?.languages?.length > 0 || (user as any)?.diasporaGeneration) && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#F9731620' }]}>
+                <Feather name="globe" size={15} color="#F97316" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Cultural Identity</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              {(user as any)?.countryOfOrigin && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="map-pin" size={15} color="#F97316" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Country of Origin</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).countryOfOrigin}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.tribe && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="users" size={15} color="#F97316" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Tribe / Ethnicity</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).tribe}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.languages?.length > 0 && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="message-square" size={15} color="#F97316" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Languages</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages}
+                  </ThemedText>
+                </View>
+              )}
+              {(user as any)?.diasporaGeneration && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="git-branch" size={15} color="#F97316" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Diaspora Generation</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).diasporaGeneration}</ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* BACKGROUND SECTION */}
+        {((user as any)?.lifestyle?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.education || user?.gender || (user as any)?.height) && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#0EA5E920' }]}>
+                <Feather name="book" size={15} color="#0EA5E9" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Background</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              {user?.gender && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="user" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Gender</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{GENDER_LABELS[user.gender] || user.gender}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.height && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="trending-up" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Height</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).height} cm</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.ethnicity && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="globe" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.ethnicity}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.lifestyle?.religion && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="sun" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Religion</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.religion] || (user as any).lifestyle.religion}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.education && (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="book" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Education</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{EDUCATION_LABELS[(user as any).education] || (user as any).education}</ThemedText>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* WORK & LOCATION SECTION */}
+        {((user as any)?.jobTitle || (user as any)?.livingIn || (user as any)?.location?.city) && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#EF444420' }]}>
+                <Feather name="briefcase" size={15} color="#EF4444" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Work & Location</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              {(user as any)?.jobTitle && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#EF444415' }]}><Feather name="briefcase" size={15} color="#EF4444" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Job Title</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).jobTitle}</ThemedText>
+                </View>
+              )}
+              {((user as any)?.livingIn || (user as any)?.location?.city) && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#EF444415' }]}><Feather name="map-pin" size={15} color="#EF4444" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Living In</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {(user as any).livingIn || `${(user as any).location?.city || ''}${(user as any).location?.country ? `, ${(user as any).location.country}` : ''}`}
+                  </ThemedText>
+                </View>
+              )}
+              <Pressable
+                style={[styles.detailRow]}
+                onPress={() => {
+                  if (user?.location?.coordinates || (user as any)?.location?.lat) {
+                    navigation.navigate("MapView" as any);
+                  } else {
+                    showAlert("Location Not Found", "Your location is not set. Please ensure location permissions are enabled.", [{ text: "OK", style: "default" }], "map");
+                  }
+                }}
+              >
+                <View style={styles.detailLeft}>
+                  <View style={[styles.detailIconContainer, { backgroundColor: '#EF444415' }]}><Feather name="map" size={15} color="#EF4444" /></View>
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Nearby Users</ThemedText>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <ThemedText style={[styles.detailValue, { color: '#EF4444' }]}>View Map</ThemedText>
+                  <Feather name="chevron-right" size={14} color="#EF4444" />
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* SOUNDTRACK SECTION */}
+        {(user as any)?.favoriteSong?.title && (
+          <View style={styles.section}>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#9333EA20' }]}>
+                <Feather name="music" size={15} color="#9333EA" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Soundtrack</ThemedText>
+            </View>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              <View style={styles.songRow}>
+                <View style={[styles.songIconWrap, { backgroundColor: '#9333EA' }]}>
+                  <Feather name="music" size={18} color="#FFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={[styles.songTitle, { color: theme.text }]}>{(user as any).favoriteSong.title}</ThemedText>
+                  {(user as any).favoriteSong.artist && (
+                    <ThemedText style={[styles.songArtist, { color: theme.textSecondary }]}>{(user as any).favoriteSong.artist}</ThemedText>
+                  )}
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* INTERESTS SECTION */}
         {user?.interests && user.interests.length > 0 && (
           <View style={styles.section}>
-            <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
-              {t('interests')}
-            </ThemedText>
+            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#FF6B9D20' }]}>
+                <Feather name="heart" size={15} color="#FF6B9D" />
+              </View>
+              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{t('interests')}</ThemedText>
+            </View>
             <View style={styles.interestsContainer}>
               {user.interests.map((interest, index) => (
                 <View
                   key={index}
-                  style={[styles.interestTag, { backgroundColor: theme.primary + '20', borderColor: theme.primary, borderWidth: 1 }]}
+                  style={[styles.interestTag, { backgroundColor: '#FF6B9D12', borderColor: '#FF6B9D40', borderWidth: 1 }]}
                 >
                   <ThemedText style={[styles.interestText, { color: theme.primary }]}>
                     {interest}
@@ -1074,5 +1356,41 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 10,
     fontWeight: '800',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+  },
+  sectionIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  songRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 4,
+  },
+  songIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  songTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  songArtist: {
+    fontSize: 13,
+    marginTop: 2,
   },
 });

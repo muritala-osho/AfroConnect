@@ -356,14 +356,23 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const handleVoiceBioRecord = async (uri: string, duration: number) => {
     try {
       const formData = new FormData();
-      formData.append('audio', { uri, name: 'voice_bio.m4a', type: 'audio/m4a' } as any);
+      formData.append('audio', { uri, name: 'voice_bio.m4a', type: 'audio/mp4' } as any);
       const res = await fetch(`${getApiBaseUrl()}/api/upload/voice-bio`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Upload failed');
+
+      let data: any;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(text.startsWith('<') ? 'Server error. Please try again.' : text || 'Upload failed');
+      }
+
+      if (!res.ok) throw new Error(data?.message || 'Upload failed');
       setVoiceBioUrl(data.url);
       setVoiceBioDuration(duration);
       if (fetchUser) await fetchUser();
@@ -1002,7 +1011,9 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
 
   // HEADER
   header: {
@@ -1011,15 +1022,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 14,
     gap: 12,
-  },
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 14,
   },
   headerIconBtn: {
     width: 40,
