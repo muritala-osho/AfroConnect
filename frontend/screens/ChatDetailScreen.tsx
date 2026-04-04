@@ -416,6 +416,7 @@ export default function ChatDetailScreen({
   const [screenshotProtection, setScreenshotProtection] = useState(false);
   const [viewOnceMode, setViewOnceMode] = useState(false);
   const viewOnceModeRef = React.useRef(false);
+  const [viewOnceSent, setViewOnceSent] = useState(false);
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
   const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
   const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -990,7 +991,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOImg = viewOnceModeRef.current;
           await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) setViewOnceModeSync(false);
+          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
@@ -1019,7 +1020,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOVid = viewOnceModeRef.current;
           await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
-          if (isVOVid) setViewOnceModeSync(false);
+          if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
@@ -1046,7 +1047,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOImg = viewOnceModeRef.current;
           await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) setViewOnceModeSync(false);
+          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         }
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");
@@ -1922,7 +1923,12 @@ export default function ChatDetailScreen({
               {/* View-once active indicator — visible in the input bar when toggle is ON.
                   Persists after the attachment menu closes so the user always knows
                   the next media will be sent as view-once. Tap it to cancel. */}
-              {viewOnceMode && (
+              {viewOnceSent ? (
+                <View style={[styles.viewOnceChip, { backgroundColor: '#22C55E18', borderColor: '#22C55E40' }]}>
+                  <Ionicons name="checkmark-circle-outline" size={13} color="#22C55E" />
+                  <ThemedText style={[styles.viewOnceChipText, { color: '#22C55E' }]}>Saved & Sent</ThemedText>
+                </View>
+              ) : viewOnceMode && (
                 <Pressable
                   style={styles.viewOnceChip}
                   onPress={() => setViewOnceModeSync(false)}
@@ -2154,13 +2160,20 @@ export default function ChatDetailScreen({
               </View>
             )}
 
-            <View style={styles.quickReactionBar}>
-              {["❤️","😂","😍","😮","😢","🔥","👍","💯"].map(emoji => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.quickReactionBar}
+              contentContainerStyle={{ paddingHorizontal: 8, alignItems: 'center' }}
+              scrollEnabled
+              onStartShouldSetResponder={() => true}
+            >
+              {["❤️","😂","😍","😮","😢","🔥","👍","💯","🥰","😭","😤","🤣","💀","🥺","🤩","😎","🙌","👏","💪","🫶","🎉","✨","💅","🤔","😏","🤯","💔","🤍","😇","🥳"].map(emoji => (
                 <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
                   <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
 
             <Pressable style={styles.messageMenuItem} onPress={handleReply}>
               <Feather name="corner-up-left" size={22} color={theme.primary} />
@@ -2341,7 +2354,7 @@ const styles = StyleSheet.create<any>({
   reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3 },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 11, fontWeight: "600" },
-  quickReactionBar: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
+  quickReactionBar: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
   quickReactionBtn: { padding: 6 },
   quickReactionEmoji: { fontSize: 26 },
   audioWaveform: { flex: 1 },

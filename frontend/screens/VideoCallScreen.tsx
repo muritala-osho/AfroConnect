@@ -765,18 +765,6 @@ export default function VideoCallScreen() {
                 <ThemedText style={styles.controlLabel}>Flip</ThemedText>
               </View>
 
-              <View style={styles.controlItem}>
-                <Pressable style={styles.controlButton} onPress={() => {
-                  handleEndCall(true);
-                  navigation.goBack();
-                  setTimeout(() => {
-                    (navigation as any).navigate('ChatDetail', { userId: isIncoming ? callerId : userId, userName });
-                  }, 100);
-                }}>
-                  <MaterialCommunityIcons name="message-text" size={22} color="#FFF" />
-                </Pressable>
-                <ThemedText style={styles.controlLabel}>Message</ThemedText>
-              </View>
             </View>
 
             <Pressable style={styles.endCallButton} onPress={handleEndCall}>
