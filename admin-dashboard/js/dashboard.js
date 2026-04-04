@@ -477,7 +477,12 @@ async function viewUserDetail(userId) {
     document.getElementById('detailUserAvatar').src = photo || 'https://via.placeholder.com/120';
     document.getElementById('detailUserName').textContent = u.name || 'Unknown';
     document.getElementById('detailUserEmail').textContent = u.email || '';
-    document.getElementById('detailUserStatus').innerHTML = `<span class="badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span>`;
+    const statusEl = document.getElementById('detailUserStatus');
+    statusEl.innerHTML = '';
+    const statusBadge = document.createElement('span');
+    statusBadge.className = `badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}`;
+    statusBadge.textContent = u.isBanned ? 'Banned' : 'Active';
+    statusEl.appendChild(statusBadge);
     document.getElementById('detailUserBio').textContent = u.bio || 'No bio';
     const picsGrid = document.getElementById('detailProfilePictures');
     const photos = (u.photos || []).map(p => typeof p === 'string' ? p : p?.url).filter(Boolean);

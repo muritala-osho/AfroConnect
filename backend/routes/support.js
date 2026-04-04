@@ -86,23 +86,21 @@ async function pushToStaff(ticket, title, body) {
  */
 router.post('/ticket', async (req, res) => {
   try {
-    const { name, email, message, subject, category, userId: bodyUserId } = req.body;
+    const { name, email, message, subject, category } = req.body;
 
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, message: 'Name, email and message are required' });
     }
 
-    // Resolve userId from auth token if present (without hard-failing)
-    let resolvedUserId = bodyUserId || null;
-    if (!resolvedUserId) {
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const jwt = require('jsonwebtoken');
-          const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
-          resolvedUserId = decoded.id;
-        } catch (_) {}
-      }
+    // Resolve userId exclusively from auth token — never trust userId from request body
+    let resolvedUserId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
+        resolvedUserId = decoded.id;
+      } catch (_) {}
     }
 
     const priorityMap = { billing: 'high', account: 'medium', technical: 'medium', safety: 'high', other: 'low' };

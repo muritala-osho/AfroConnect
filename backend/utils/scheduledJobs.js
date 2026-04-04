@@ -52,7 +52,7 @@ const runRenewalReminders = async () => {
         user.renewalReminderSentAt = now;
         await user.save();
       } catch (err) {
-        console.error(`Renewal reminder failed for ${user.email}:`, err.message);
+        console.error(`Renewal reminder failed for user ID ${user._id}:`, err.message);
       }
     }
 
@@ -84,7 +84,7 @@ const runInactivityEmails = async () => {
         user.inactivityEmailSentAt = new Date();
         await user.save();
       } catch (err) {
-        console.error(`Inactivity email failed for ${user.email}:`, err.message);
+        console.error(`Inactivity email failed for user ID ${user._id}:`, err.message);
       }
     }
 

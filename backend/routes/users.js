@@ -65,14 +65,14 @@ router.put('/me', protect, async (req, res) => {
         else if (field === 'preferences') {
           // Merge preferences instead of replacing
           const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language'];
-          Object.keys(updates.preferences).forEach(prefKey => {
-            if (!allowedPrefKeys.includes(prefKey)) return;
+          allowedPrefKeys.forEach(prefKey => {
+            if (updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
               user.preferences.ageRange = {
                 ...(user.preferences.ageRange || {}),
                 ...updates.preferences.ageRange
               };
-            } else if (updates.preferences[prefKey] !== undefined) {
+            } else {
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
           });
@@ -283,7 +283,7 @@ router.get('/nearby', protect, async (req, res) => {
 
     if (isGlobal) {
       if (countryFilter) {
-        query['location.country'] = { $regex: new RegExp(countryFilter, 'i') };
+        query['location.country'] = { $regex: new RegExp(countryFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       }
     } else {
       const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);

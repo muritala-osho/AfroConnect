@@ -70,7 +70,7 @@ router.post(
       // If user exists but email not verified (abandoned signup), delete and recreate
       if (existingUser && !existingUser.emailVerified) {
         await User.deleteOne({ _id: existingUser._id });
-        console.log("Deleted unverified user for re-registration:", email);
+        console.log("Deleted unverified user for re-registration (user ID redacted).");
       }
 
       // Generate OTP
@@ -391,7 +391,7 @@ router.post(
       });
 
       if (!user) {
-        console.log("[RESET_PASSWORD] User not found:", normalizedEmail);
+        console.log("[RESET_PASSWORD] User not found for provided email.");
         return res.status(400).json({
           success: false,
           message: "Invalid verification code",

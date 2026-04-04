@@ -181,7 +181,7 @@ router.get('/nearby-users', protect, async (req, res) => {
 
     console.log(`[RADAR] Returning ${nearbyUsers.length} users for radius ${searchRadius}km`);
     if (nearbyUsers.length > 0) {
-      console.log(`[RADAR] First user sample: ${nearbyUsers[0].name}, photo: ${nearbyUsers[0].profilePhoto ? 'YES' : 'NO'}`);
+      console.log(`[RADAR] First result has photo: ${nearbyUsers[0].profilePhoto ? 'YES' : 'NO'}`);
     }
     res.json({
       success: true,
