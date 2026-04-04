@@ -571,7 +571,7 @@ export default function VideoCallScreen() {
     if (isCameraOff) {
       return (
         <View style={styles.cameraOffPlaceholder}>
-          <Ionicons name="videocam-off" size={32} color="rgba(255,255,255,0.6)" />
+          <Ionicons name="videocam-off" size={28} color="rgba(255,255,255,0.6)" />
           <ThemedText style={styles.cameraOffText}>Camera Off</ThemedText>
         </View>
       );
@@ -580,9 +580,12 @@ export default function VideoCallScreen() {
       return <CameraView style={styles.selfVideo} facing={isFrontCamera ? 'front' : 'back'} />;
     }
     return (
-      <LinearGradient colors={['#2c3e50', '#000000']} style={styles.selfVideo}>
-        <Ionicons name="videocam" size={32} color="rgba(255,255,255,0.5)" />
-      </LinearGradient>
+      <Pressable style={styles.selfVideo} onPress={requestCameraPermission}>
+        <LinearGradient colors={['#1a2a3a', '#0a0a0a']} style={styles.selfVideoPermissionPlaceholder}>
+          <Ionicons name="videocam-outline" size={28} color="rgba(255,255,255,0.55)" />
+          <ThemedText style={styles.cameraOffText}>Tap to enable</ThemedText>
+        </LinearGradient>
+      </Pressable>
     );
   };
 
@@ -631,8 +634,11 @@ export default function VideoCallScreen() {
       </Animated.View>
 
       {callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'failed' && callStatus !== 'missed' && (
-        <View style={[styles.selfVideoContainer, { top: insets.top + 100 }]}>
+        <View style={[styles.selfVideoContainer, { top: insets.top + 90 }]}>
           {renderLocalVideo()}
+          <View style={styles.selfVideoLabel}>
+            <ThemedText style={styles.selfVideoLabelText}>You</ThemedText>
+          </View>
           <Pressable style={styles.flipButton} onPress={flipCamera}>
             <Ionicons name="camera-reverse" size={16} color="#FFF" />
           </Pressable>
@@ -846,19 +852,19 @@ const styles = StyleSheet.create({
   selfVideoContainer: {
     position: 'absolute',
     right: 16,
-    width: 110,
-    height: 160,
+    width: 120,
+    height: 170,
     borderRadius: 20,
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
     backgroundColor: '#1C1C1E',
-    zIndex: 10,
+    zIndex: 30,
+    elevation: 30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOpacity: 0.55,
+    shadowRadius: 16,
   },
   selfVideo: {
     width: '100%',
@@ -867,18 +873,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  selfVideoLabel: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  selfVideoLabelText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
   flipButton: {
     position: 'absolute',
     bottom: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   cameraOffPlaceholder: {
     width: '100%',
@@ -887,6 +908,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
+  },
+  selfVideoPermissionPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cameraOffText: {
     color: 'rgba(255,255,255,0.6)',

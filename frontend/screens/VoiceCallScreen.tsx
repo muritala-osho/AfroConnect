@@ -534,10 +534,12 @@ export default function VoiceCallScreen() {
               </View>
             </View>
 
-            <Pressable style={styles.hangupBtn} onPress={handleEndCall}>
-              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
-            </Pressable>
-            <ThemedText style={[styles.btnLabel, { marginTop: -4 }]}>Hang Up</ThemedText>
+            <View style={styles.hangupWrap}>
+              <Pressable style={styles.hangupBtn} onPress={handleEndCall}>
+                <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+              </Pressable>
+              <ThemedText style={styles.btnLabel}>Hang Up</ThemedText>
+            </View>
           </View>
         ) : callStatus === "connecting" || (!isIncoming && callStatus === "ringing") ? (
           <View style={styles.cancelWrap}>
@@ -545,6 +547,13 @@ export default function VoiceCallScreen() {
               <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
             </Pressable>
             <ThemedText style={styles.btnLabel}>Cancel</ThemedText>
+          </View>
+        ) : (callStatus === "ended" || callStatus === "declined" || callStatus === "missed" || callStatus === "failed" || callStatus === "busy") ? (
+          <View style={styles.cancelWrap}>
+            <Pressable style={[styles.circleBtn, styles.dismissBtn]} onPress={() => navigation.goBack()}>
+              <Ionicons name="close" size={30} color="#FFF" />
+            </Pressable>
+            <ThemedText style={styles.btnLabel}>Close</ThemedText>
           </View>
         ) : null}
       </View>
@@ -746,6 +755,10 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
   },
+  hangupWrap: {
+    alignItems: "center",
+    gap: 8,
+  },
   hangupBtn: {
     width: 68,
     height: 68,
@@ -772,6 +785,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
+  },
+  dismissBtn: {
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1.5,
+    borderColor: "rgba(255,255,255,0.25)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   secondaryBtn: {
     width: 58,

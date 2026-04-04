@@ -1178,10 +1178,10 @@ const styles = StyleSheet.create({
   sectionHeaderText: { flex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   sectionDescription: { fontSize: 12, marginTop: 1 },
-  sectionBody: { padding: 16, gap: 4 },
+  sectionBody: { padding: 16, gap: 12 },
 
   // FIELDS
-  fieldContainer: { marginBottom: 14 },
+  fieldContainer: { marginBottom: 0 },
   fieldLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1233,9 +1233,9 @@ const styles = StyleSheet.create({
   row2: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 14,
+    marginBottom: 0,
   },
-  halfField: { flex: 1 },
+  halfField: { flex: 1, gap: 6 },
 
   // INTERESTS
   interestsTrigger: {
@@ -1246,7 +1246,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 0,
   },
   interestsGrid: {
     flexDirection: 'row',
@@ -1269,7 +1269,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
-    marginTop: 4,
+    marginTop: 0,
   },
   toggleRow: {
     flexDirection: 'row',
