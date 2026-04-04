@@ -319,7 +319,7 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         .json({ success: false, message: "Cannot send message to this user" });
     }
 
-    const { replyTo } = req.body;
+    const { replyTo, viewOnce } = req.body;
 
     const messageData = {
       matchId,
@@ -333,10 +333,12 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
     if (type === "text") messageData.content = content;
     else if (type === "image") {
       messageData.imageUrl = imageUrl;
-      messageData.content = "📷 Photo";
+      messageData.content = viewOnce ? "📷 View Once Photo" : "📷 Photo";
+      if (viewOnce) messageData.viewOnce = true;
     } else if (type === "video") {
       messageData.videoUrl = videoUrl;
-      messageData.content = "🎥 Video";
+      messageData.content = viewOnce ? "🎥 View Once Video" : "🎥 Video";
+      if (viewOnce) messageData.viewOnce = true;
     } else if (type === "audio") {
       messageData.audioUrl = audioUrl;
       messageData.audioDuration = audioDuration || 0;

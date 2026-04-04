@@ -53,6 +53,7 @@ const sendMessage = Joi.object({
   address: Joi.string().max(500).optional().allow(''),
   callStatus: Joi.string().valid('missed', 'ended', 'rejected').optional(),
   callType: Joi.string().valid('voice', 'video').optional(),
+  viewOnce: Joi.boolean().optional(),
   replyTo: Joi.object({
     messageId: Joi.string().required(),
     content: Joi.string().max(500).required(),

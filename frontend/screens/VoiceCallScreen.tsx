@@ -12,7 +12,7 @@ import {
 import { SafeImage } from "@/components/SafeImage";
 import { ThemedText } from "@/components/ThemedText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "expo-av";
@@ -252,17 +252,6 @@ export default function VoiceCallScreen() {
       console.log("Speaker toggle error:", e);
     }
   }, [isSpeakerOn]);
-
-  const navigateToChat = useCallback(() => {
-    handleEndCall();
-    setTimeout(() => {
-      navigation.navigate("ChatDetail", {
-        userId: isIncoming ? callerId : userId,
-        userName,
-        matchId,
-      });
-    }, 600);
-  }, [handleEndCall, navigation, isIncoming, callerId, userId, userName, matchId]);
 
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setCallStatus("failed");
@@ -551,12 +540,6 @@ export default function VoiceCallScreen() {
                   <ThemedText style={styles.btnLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
                 </View>
 
-                <View style={styles.controlWrap}>
-                  <Pressable style={styles.secondaryBtn} onPress={navigateToChat}>
-                    <MaterialCommunityIcons name="message-text" size={22} color="#FFF" />
-                  </Pressable>
-                  <ThemedText style={styles.btnLabel}>Message</ThemedText>
-                </View>
               </View>
 
               {/* Hang up row */}

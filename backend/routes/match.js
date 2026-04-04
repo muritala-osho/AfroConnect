@@ -143,6 +143,30 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
         await currentUser.save();
 
+        // Send match push notifications to both users (non-blocking)
+        try {
+          const { sendExpoPushNotification } = require('../utils/pushNotifications');
+          const [currentUserFull, targetUserFull] = await Promise.all([
+            User.findById(currentUser._id).select('pushToken pushNotificationsEnabled name'),
+            User.findById(targetUserId).select('pushToken pushNotificationsEnabled name'),
+          ]);
+          const matchPayload = (recipientToken, senderName) => ({
+            title: "It's a Match! 🎉",
+            body: `You and ${senderName} liked each other!`,
+            data: { type: 'match' },
+            sound: 'default',
+            channelId: 'matches',
+          });
+          if (currentUserFull?.pushToken && currentUserFull.pushNotificationsEnabled) {
+            sendExpoPushNotification(currentUserFull.pushToken, matchPayload(currentUserFull.pushToken, targetUser.name)).catch(() => {});
+          }
+          if (targetUserFull?.pushToken && targetUserFull.pushNotificationsEnabled) {
+            sendExpoPushNotification(targetUserFull.pushToken, matchPayload(targetUserFull.pushToken, currentUser.name)).catch(() => {});
+          }
+        } catch (pushErr) {
+          console.error('Match push notification error (non-critical):', pushErr.message);
+        }
+
         // Send match notification emails to both users (non-blocking)
         try {
           const { sendNewMatchEmail } = require('../utils/emailService');
