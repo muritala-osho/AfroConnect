@@ -622,6 +622,48 @@ router.delete("/message/:messageId", protect, async (req, res) => {
   }
 });
 
+// @route   PATCH /api/chat/message/:messageId
+// @desc    Edit a sent text message (sender only, within 15 minutes)
+// @access  Private
+router.patch("/message/:messageId", protect, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: "Content is required" });
+    }
+    const message = await Message.findById(req.params.messageId);
+    if (!message) return res.status(404).json({ success: false, message: "Message not found" });
+    if (!message.sender.equals(req.user._id)) {
+      return res.status(403).json({ success: false, message: "Only the sender can edit a message" });
+    }
+    if (message.type !== "text") {
+      return res.status(400).json({ success: false, message: "Only text messages can be edited" });
+    }
+    const fifteenMinutes = 15 * 60 * 1000;
+    if (Date.now() - new Date(message.createdAt).getTime() > fifteenMinutes) {
+      return res.status(400).json({ success: false, message: "Messages can only be edited within 15 minutes of sending" });
+    }
+    message.content = content.trim();
+    message.edited = true;
+    message.editedAt = new Date();
+    await message.save();
+    const io = req.app.get("io");
+    if (io) {
+      io.to(message.matchId.toString()).emit("chat:message-edited", {
+        messageId: message._id,
+        matchId: message.matchId,
+        content: message.content,
+        edited: true,
+        editedAt: message.editedAt,
+      });
+    }
+    return res.json({ success: true, message: "Message updated", data: message });
+  } catch (error) {
+    console.error("Edit message error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 // @route   POST /api/chat/:matchId/message
 // @desc    Send a message (text, image, audio, location) — used by ChatDetailScreen
 // @access  Private

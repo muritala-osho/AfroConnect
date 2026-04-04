@@ -53,6 +53,8 @@ const messageSchema = new mongoose.Schema({
       return this.type === 'text' || this.type === 'system';
     }
   },
+  edited: { type: Boolean, default: false },
+  editedAt: { type: Date },
   imageUrl: {
     type: String
   },

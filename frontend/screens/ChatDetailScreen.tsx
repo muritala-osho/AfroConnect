@@ -96,6 +96,8 @@ interface Message {
   reactions?: MessageReaction[];
   viewOnce?: boolean;
   viewOnceOpenedBy?: string[];
+  edited?: boolean;
+  editedAt?: string;
 }
 
 const EMOJI_LIST = [
@@ -411,6 +413,11 @@ export default function ChatDetailScreen({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showTranslateModal, setShowTranslateModal] = useState(false);
   const [translatedText, setTranslatedText] = useState("");
+  const [savedTranslateLang, setSavedTranslateLang] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [submittingEdit, setSubmittingEdit] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateTargetLang, setTranslateTargetLang] = useState("");
   const [screenshotProtection, setScreenshotProtection] = useState(false);
@@ -429,13 +436,17 @@ export default function ChatDetailScreen({
     setViewOnceMode(next);
   };
 
-  // Load draft on mount
+  // Load draft + saved translation language on mount
   useEffect(() => {
     const loadDraft = async () => {
       if (!userId) return;
       try {
-        const savedDraft = await AsyncStorage.getItem(`chat_draft_${userId}`);
+        const [savedDraft, savedLang] = await Promise.all([
+          AsyncStorage.getItem(`chat_draft_${userId}`),
+          AsyncStorage.getItem("@afroconnect_translate_lang"),
+        ]);
         if (savedDraft) setMessage(savedDraft);
+        if (savedLang) setSavedTranslateLang(savedLang);
       } catch (error) {
         console.error("Failed to load draft:", error);
       }
@@ -867,6 +878,17 @@ export default function ChatDetailScreen({
     socketService.on("chat:read", handleMessagesRead);
     socketService.on("chat:message-updated", handleMessageUpdated);
     socketService.on("chat:message-deleted", handleMessageDeleted);
+    socketService.on("chat:message-edited", (data: any) => {
+      if (data.messageId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === data.messageId
+              ? { ...m, content: data.content, edited: true, editedAt: data.editedAt }
+              : m
+          )
+        );
+      }
+    });
     socketService.on("chat:user-typing", handleTyping);
     socketService.on("chat:recording-voice", handleRecordingVoice);
     socketService.on("message:reaction", (data: { messageId: string; reactions: MessageReaction[] }) => {
@@ -882,6 +904,7 @@ export default function ChatDetailScreen({
       socketService.off("chat:read");
       socketService.off("chat:message-updated");
       socketService.off("chat:message-deleted");
+      socketService.off("chat:message-edited");
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
@@ -1360,12 +1383,52 @@ export default function ChatDetailScreen({
     setSelectedMessage(null);
   }, [selectedMessage, token]);
 
+  const handleEditOpen = useCallback(() => {
+    if (!selectedMessage) return;
+    setShowMessageMenu(false);
+    setEditText(selectedMessage.content || selectedMessage.text || "");
+    setEditingMessage(selectedMessage);
+    setShowEditModal(true);
+  }, [selectedMessage]);
+
+  const handleEditSubmit = useCallback(async () => {
+    if (!editingMessage || !token || !editText.trim()) return;
+    setSubmittingEdit(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/chat/message/${editingMessage._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: editText.trim() }),
+      });
+      const data = await response.json();
+      if (data.success || response.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === editingMessage._id
+              ? { ...m, content: editText.trim(), edited: true, editedAt: new Date().toISOString() }
+              : m
+          )
+        );
+        setShowEditModal(false);
+        setEditingMessage(null);
+        setEditText("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert("Cannot edit", data.message || "Failed to edit message");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to edit message");
+    } finally {
+      setSubmittingEdit(false);
+    }
+  }, [editingMessage, token, editText]);
+
   const handleTranslateOpen = useCallback(() => {
     setShowMessageMenu(false);
     setTranslatedText("");
-    setTranslateTargetLang("");
+    setTranslateTargetLang(savedTranslateLang);
     setShowTranslateModal(true);
-  }, []);
+  }, [savedTranslateLang]);
 
   const handleTranslate = useCallback(async (targetLanguage: string) => {
     if (!selectedMessage || !token) return;
@@ -1373,9 +1436,12 @@ export default function ChatDetailScreen({
     if (!textToTranslate) return;
     setTranslating(true);
     try {
-      const response = await post<{ translatedText: string }>("/ai/translate", { text: textToTranslate, targetLanguage, sourceLanguage: "en" }, token);
-      if (response.success && response.data?.translatedText) setTranslatedText(response.data.translatedText);
-      else Alert.alert("Error", response.message || "Translation failed");
+      const response = await post<{ translatedText: string }>("/ai/translate", { text: textToTranslate, targetLanguage, sourceLanguage: "auto" }, token);
+      if (response.success && response.data?.translatedText) {
+        setTranslatedText(response.data.translatedText);
+        setSavedTranslateLang(targetLanguage);
+        AsyncStorage.setItem("@afroconnect_translate_lang", targetLanguage).catch(() => {});
+      } else Alert.alert("Error", response.message || "Translation failed");
     } catch (error) { Alert.alert("Error", (error as any)?.message || "Translation failed"); }
     finally { setTranslating(false); }
   }, [selectedMessage, token, post]);
@@ -1702,6 +1768,9 @@ export default function ChatDetailScreen({
                     ) : null}
 
                     <View style={styles.messageFooter}>
+                      {item.edited && (
+                        <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.55)" : theme.textSecondary, fontStyle: "italic", marginRight: 4 }]}>edited</ThemedText>
+                      )}
                       <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>{formatTime(item.createdAt)}</ThemedText>
                       {isMe && (
                         <Ionicons
@@ -2183,6 +2252,15 @@ export default function ChatDetailScreen({
               <MaterialCommunityIcons name="translate" size={22} color={theme.primary} />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Translate</ThemedText>
             </Pressable>
+            {selectedMessage && (() => {
+              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
+              return String(sid) === String(myId) && selectedMessage.type === "text" && !selectedMessage.deletedForEveryone;
+            })() && (
+              <Pressable style={styles.messageMenuItem} onPress={handleEditOpen}>
+                <Feather name="edit-3" size={22} color={theme.primary} />
+                <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Edit Message</ThemedText>
+              </Pressable>
+            )}
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
               <Feather name="trash-2" size={22} color="#FF9800" />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
@@ -2198,6 +2276,51 @@ export default function ChatDetailScreen({
             </Pressable>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* Edit message modal */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setEditingMessage(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+            <Pressable style={[styles.translateModal, { backgroundColor: theme.background }]} onPress={() => {}}>
+              <View style={styles.translateHeader}>
+                <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Edit Message</ThemedText>
+                <Pressable onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <TextInput
+                style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", minHeight: 80, textAlignVertical: "top", paddingTop: 12 }]}
+                value={editText}
+                onChangeText={setEditText}
+                multiline
+                autoFocus
+                placeholderTextColor={theme.textSecondary}
+                placeholder="Edit your message..."
+              />
+              <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary, fontSize: 11, marginTop: 4 }]}>Messages can only be edited within 15 minutes of sending</ThemedText>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <Pressable style={[styles.cancelButton, { flex: 1, borderColor: theme.border }]} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+                  <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.translateButton, { flex: 1, backgroundColor: editText.trim() ? theme.primary : theme.primary + "55", marginTop: 0 }]}
+                  onPress={handleEditSubmit}
+                  disabled={!editText.trim() || submittingEdit}
+                >
+                  {submittingEdit ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Feather name="check" size={18} color="#FFF" />
+                      <ThemedText style={styles.translateButtonText}>Save</ThemedText>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Translate modal */}
@@ -2221,17 +2344,34 @@ export default function ChatDetailScreen({
               </View>
             ) : translatedText ? (
               <View style={[styles.translateResult, { backgroundColor: theme.primary + "15", borderColor: theme.primary }]}>
-                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation</ThemedText>
+                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation ({translateTargetLang})</ThemedText>
                 <ThemedText style={[styles.translateResultText, { color: theme.text }]}>{translatedText}</ThemedText>
-                <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary }]} onPress={handleCopyTranslation}>
-                  <Feather name="copy" size={16} color="#FFF" />
-                  <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
-                </Pressable>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary, flex: 1 }]} onPress={handleCopyTranslation}>
+                    <Feather name="copy" size={16} color="#FFF" />
+                    <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
+                  </Pressable>
+                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: isDark ? "#333" : "#E0E0E0", flex: 1 }]} onPress={() => { setTranslatedText(""); setTranslateTargetLang(savedTranslateLang); }}>
+                    <MaterialCommunityIcons name="translate" size={16} color={theme.text} />
+                    <ThemedText style={[styles.translateCopyText, { color: theme.text }]}>Retranslate</ThemedText>
+                  </Pressable>
+                </View>
               </View>
             ) : (
               <View>
-                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Enter target language</ThemedText>
-                <TextInput style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Type any language (e.g., Swahili, Korean, Tagalog...)" placeholderTextColor={theme.textSecondary} value={translateTargetLang} onChangeText={setTranslateTargetLang} autoFocus />
+                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Quick pick or type a language</ThemedText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                  {["English","French","Swahili","Yoruba","Hausa","Amharic","Arabic","Zulu","Somali","Igbo","Portuguese","Spanish"].map((lang) => (
+                    <Pressable
+                      key={lang}
+                      style={[{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: translateTargetLang === lang ? theme.primary : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"), backgroundColor: translateTargetLang === lang ? theme.primary + "22" : "transparent" }]}
+                      onPress={() => setTranslateTargetLang(lang)}
+                    >
+                      <ThemedText style={{ fontSize: 13, color: translateTargetLang === lang ? theme.primary : theme.textSecondary }}>{lang}</ThemedText>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <TextInput style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Or type any language..." placeholderTextColor={theme.textSecondary} value={translateTargetLang} onChangeText={setTranslateTargetLang} />
                 <Pressable style={[styles.translateButton, { backgroundColor: theme.primary, opacity: translateTargetLang.trim() ? 1 : 0.5 }]} onPress={() => translateTargetLang.trim() && handleTranslate(translateTargetLang.trim())} disabled={!translateTargetLang.trim()}>
                   <MaterialCommunityIcons name="translate" size={20} color="#FFF" />
                   <ThemedText style={styles.translateButtonText}>Translate</ThemedText>

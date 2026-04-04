@@ -116,11 +116,13 @@ const ChatItem = memo(
     theme,
     onPress,
     onLongPress,
+    draft,
   }: {
     item: Conversation;
     theme: any;
     onPress: () => void;
     onLongPress: () => void;
+    draft?: string;
   }) => {
     const formatTimestamp = (timestamp: string) => {
       if (!timestamp) return "";
@@ -254,10 +256,13 @@ const ChatItem = memo(
                 styles.lastMessage,
                 { color: theme.textSecondary },
                 hasUnread && { color: theme.text, fontWeight: "600" },
+                !!draft && { color: "#E53935" },
               ]}
               numberOfLines={1}
             >
-              {getMessagePreview(item.lastMessage, item.lastMessageType)}
+              {draft
+                ? `Draft: ${draft}`
+                : getMessagePreview(item.lastMessage, item.lastMessageType)}
             </ThemedText>
             {item.unreadCount > 0 && (
               <LinearGradient
@@ -501,6 +506,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const { resetUnread } = useUnread();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
   const [mutedChats, setMutedChats] = useState<Set<string>>(new Set());
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(new Set());
@@ -806,6 +812,23 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         ];
 
         await Promise.all(loadPromises);
+
+        // Reload drafts every time the screen is focused (user may have typed and left a chat)
+        try {
+          const currentConvs = conversations;
+          if (currentConvs.length > 0) {
+            const keys = currentConvs.map((c) => `chat_draft_${c.user.id}`);
+            const pairs = await AsyncStorage.multiGet(keys);
+            const newDrafts: Record<string, string> = {};
+            pairs.forEach(([key, value]) => {
+              if (value) {
+                const userId = key.replace("chat_draft_", "");
+                newDrafts[userId] = value;
+              }
+            });
+            setDrafts(newDrafts);
+          }
+        } catch { /* ignore */ }
 
         if (storyPosted) {
           await fetchMyStories();
@@ -1191,6 +1214,22 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     [conversations, archivedChats],
   );
 
+  // Load drafts whenever the conversations list changes
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    const keys = conversations.map((c) => `chat_draft_${c.user.id}`);
+    AsyncStorage.multiGet(keys).then((pairs) => {
+      const newDrafts: Record<string, string> = {};
+      pairs.forEach(([key, value]) => {
+        if (value) {
+          const userId = key.replace("chat_draft_", "");
+          newDrafts[userId] = value;
+        }
+      });
+      setDrafts(newDrafts);
+    }).catch(() => {});
+  }, [conversations]);
+
   const handleViewOwnStory = () => {
     const uid = (user as any)?._id || user?.id;
     if (uid) {
@@ -1474,6 +1513,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
           <ChatItem
             item={item}
             theme={theme}
+            draft={drafts[item.user.id]}
             onPress={() =>
               navigation.navigate("ChatDetail", {
                 userId: item.user.id,

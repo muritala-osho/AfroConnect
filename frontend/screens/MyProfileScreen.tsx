@@ -510,15 +510,25 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             style={[styles.actionButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
             onPress={() => navigation.navigate("EditProfile")}
           >
-            <Feather name="edit-2" size={20} color={theme.primary} />
-            <ThemedText style={[styles.actionButtonText, { color: theme.text }]}>{t('editProfile')}</ThemedText>
+            <Feather name="edit-2" size={18} color={theme.primary} />
+            <ThemedText style={[styles.actionButtonText, { color: theme.text, fontSize: 12 }]}>{t('editProfile')}</ThemedText>
+          </Pressable>
+          <Pressable
+            style={[styles.actionButton, { backgroundColor: theme.surface, borderColor: theme.primary, borderWidth: 1.5 }]}
+            onPress={() => {
+              const uid = (user as any)?._id || user?.id;
+              if (uid) navigation.navigate("ProfileDetail", { userId: uid });
+            }}
+          >
+            <Feather name="user-check" size={18} color={theme.primary} />
+            <ThemedText style={[styles.actionButtonText, { color: theme.primary, fontSize: 12 }]}>Preview</ThemedText>
           </Pressable>
           <Pressable 
             style={[styles.actionButton, { backgroundColor: theme.primary }]}
             onPress={() => navigation.navigate("Visitors" as any)}
           >
-            <Feather name="eye" size={20} color="#FFF" />
-            <ThemedText style={[styles.actionButtonText, { color: '#FFF' }]}>Visitors</ThemedText>
+            <Feather name="eye" size={18} color="#FFF" />
+            <ThemedText style={[styles.actionButtonText, { color: '#FFF', fontSize: 12 }]}>Visitors</ThemedText>
           </Pressable>
         </View>
 
