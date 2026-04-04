@@ -278,6 +278,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         .json({ success: false, message: "Not authorized" });
     }
 
+    // Block messages on expired matches that haven't had a first message yet
+    if (!match.hasFirstMessage && match.expiresAt && new Date(match.expiresAt) < new Date()) {
+      return res.status(403).json({ success: false, message: "This match has expired. You can no longer send messages." });
+    }
+
     const receiver = match.users.find((id) => !id.equals(req.user._id));
 
     // Create system message for call history

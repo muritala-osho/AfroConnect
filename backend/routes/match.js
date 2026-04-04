@@ -118,6 +118,7 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
       if (!currentUser.swipedRight.includes(targetUserId)) {
         currentUser.swipedRight.push(targetUserId);
       }
+      currentUser.lastSwipeAction = { targetId: targetUserId, direction: 'right' };
 
       if (action === 'superlike') {
         if (!currentUser.superLiked.includes(targetUserId)) {
@@ -186,6 +187,7 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
       if (!currentUser.swipedLeft.includes(targetUserId)) {
         currentUser.swipedLeft.push(targetUserId);
       }
+      currentUser.lastSwipeAction = { targetId: targetUserId, direction: 'left' };
       const FriendRequest = require('../models/FriendRequest');
       await FriendRequest.updateMany(
         { sender: targetUserId, receiver: currentUser._id, status: 'pending' },
@@ -304,8 +306,22 @@ router.post('/rewind', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Rewind is a Premium feature!' });
     }
     const user = await User.findById(req.user._id);
-    const lastSwipedId = user.swipedRight.pop() || user.swipedLeft.pop();
-    if (!lastSwipedId) return res.status(400).json({ success: false, message: 'No swipes to rewind' });
+
+    const last = user.lastSwipeAction;
+    if (!last || !last.targetId || !last.direction) {
+      return res.status(400).json({ success: false, message: 'No swipes to rewind' });
+    }
+
+    const targetId = last.targetId.toString();
+
+    if (last.direction === 'right') {
+      user.swipedRight = user.swipedRight.filter(id => id.toString() !== targetId);
+      user.superLiked = user.superLiked.filter(id => id.toString() !== targetId);
+    } else {
+      user.swipedLeft = user.swipedLeft.filter(id => id.toString() !== targetId);
+    }
+
+    user.lastSwipeAction = { targetId: null, direction: null };
     await user.save();
     res.json({ success: true, message: 'Last swipe rewound!' });
   } catch (error) {

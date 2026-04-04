@@ -311,6 +311,10 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  lastSwipeAction: {
+    targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    direction: { type: String, enum: ['right', 'left'], default: null }
+  },
   superLiked: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

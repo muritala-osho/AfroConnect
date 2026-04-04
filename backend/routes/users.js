@@ -31,7 +31,7 @@ router.get('/me', protect, async (req, res) => {
 // @route   PUT /api/users/me
 // @desc    Update current user profile
 // @access  Private
-router.put('/me', protect, async (req, res) => {
+router.put('/me', protect, require('../middleware/validate')(require('../validators/schemas').updateProfile), async (req, res) => {
   try {
     // Ensure the user has verified their email before allowing profile updates
     if (!req.user.emailVerified) {

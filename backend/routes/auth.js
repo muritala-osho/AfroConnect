@@ -28,6 +28,7 @@ const generateToken = (userId) => {
 router.post(
   "/signup",
   authLimiter,
+  validate(schemas.auth.signup),
   async (req, res) => {
     try {
       const { email, password } = req.body;

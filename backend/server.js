@@ -220,7 +220,7 @@ app.use('/api/admin', adminLimiter);
 // Admin dashboard — require a valid admin JWT before serving the HTML
 const { protect } = require('./middleware/auth');
 const adminWebAuth = async (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+  const token = req.headers.authorization?.split(' ')[1];
   if (!token) {
     return res.status(401).sendFile(path.join(__dirname, '..', 'admin-dashboard', 'login.html'),
       (err) => {
