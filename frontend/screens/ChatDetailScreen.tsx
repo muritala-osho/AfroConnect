@@ -367,7 +367,7 @@ export default function ChatDetailScreen({
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
-  const { get, post, put } = useApi();
+  const { get, post, put, patch } = useApi();
 
   const myId = useMemo(() => (user as any)?._id || user?.id || "", [user]);
 
@@ -1395,13 +1395,12 @@ export default function ChatDetailScreen({
     if (!editingMessage || !token || !editText.trim()) return;
     setSubmittingEdit(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/chat/message/${editingMessage._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content: editText.trim() }),
-      });
-      const data = await response.json();
-      if (data.success || response.ok) {
+      const response = await patch<{ message: any }>(
+        `/chat/message/${editingMessage._id}`,
+        { content: editText.trim() },
+        token
+      );
+      if (response.success) {
         setMessages((prev) =>
           prev.map((m) =>
             m._id === editingMessage._id
@@ -1414,14 +1413,14 @@ export default function ChatDetailScreen({
         setEditText("");
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        Alert.alert("Cannot edit", data.message || "Failed to edit message");
+        Alert.alert("Cannot edit", response.message || response.error || "Failed to edit message");
       }
     } catch {
       Alert.alert("Error", "Failed to edit message");
     } finally {
       setSubmittingEdit(false);
     }
-  }, [editingMessage, token, editText]);
+  }, [editingMessage, token, editText, patch]);
 
   const handleTranslateOpen = useCallback(() => {
     setShowMessageMenu(false);
@@ -2325,6 +2324,7 @@ export default function ChatDetailScreen({
 
       {/* Translate modal */}
       <Modal visible={showTranslateModal} transparent animationType="slide" onRequestClose={() => { setShowTranslateModal(false); setSelectedMessage(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.translateModal, { backgroundColor: theme.background }]}>
             <View style={styles.translateHeader}>
@@ -2380,6 +2380,7 @@ export default function ChatDetailScreen({
             )}
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ThemedView>
   );

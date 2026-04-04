@@ -105,6 +105,14 @@ export function useApi() {
     });
   }, [request]);
 
+  const patch = useCallback(<T,>(endpoint: string, body: any, token?: string) => {
+    return request<T>(endpoint, {
+      method: 'PATCH',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(body),
+    });
+  }, [request]);
+
   const del = useCallback(<T,>(endpoint: string, token?: string, body?: any) => {
     return request<T>(endpoint, {
       method: 'DELETE',
@@ -113,5 +121,5 @@ export function useApi() {
     });
   }, [request]);
 
-  return { get, post, put, del, loading, error };
+  return { get, post, put, patch, del, loading, error };
 }
