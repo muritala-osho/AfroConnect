@@ -25,6 +25,8 @@ import { useApi } from "@/hooks/useApi";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import VoiceBio from "@/components/VoiceBio";
+import { getApiBaseUrl } from "@/constants/config";
 
 type EditProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "EditProfile">;
 
@@ -199,6 +201,14 @@ const INTEREST_OPTIONS = [
   { id: 'food', label: 'Food', icon: 'fast-food' },
 ];
 
+const DIASPORA_GENERATION_OPTIONS = [
+  { value: '1st', label: '1st Generation (Born in Africa)' },
+  { value: '2nd', label: '2nd Generation (Parents born in Africa)' },
+  { value: '3rd', label: '3rd Generation (Grandparents born in Africa)' },
+  { value: 'returnee', label: 'Returnee (Moved back to Africa)' },
+  { value: 'other', label: 'Other' },
+];
+
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
   const { theme, isDark } = useTheme();
   const { user, updateProfile, fetchUser, token } = useAuth();
@@ -234,6 +244,13 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [username, setUsername] = useState(user?.username || "");
   const [interests, setInterests] = useState<string[]>(user?.interests || []);
   const [saving, setSaving] = useState(false);
+
+  const [countryOfOrigin, setCountryOfOrigin] = useState((user as any)?.countryOfOrigin || "");
+  const [tribe, setTribe] = useState((user as any)?.tribe || "");
+  const [languagesSpoken, setLanguagesSpoken] = useState((user as any)?.languages?.join(", ") || "");
+  const [diasporaGeneration, setDiasporaGeneration] = useState((user as any)?.diasporaGeneration || "");
+  const [voiceBioUrl, setVoiceBioUrl] = useState((user as any)?.voiceBio?.url || "");
+  const [voiceBioDuration, setVoiceBioDuration] = useState((user as any)?.voiceBio?.duration || 0);
 
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [interestsModalVisible, setInterestsModalVisible] = useState(false);
@@ -314,6 +331,10 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         },
         interests,
         language: user?.language || 'en',
+        countryOfOrigin: countryOfOrigin.trim() || undefined,
+        tribe: tribe.trim() || undefined,
+        languages: languagesSpoken.trim() ? languagesSpoken.split(",").map((l: string) => l.trim()).filter(Boolean) : undefined,
+        diasporaGeneration: diasporaGeneration || undefined,
       } as any);
 
       await AsyncStorage.removeItem(EDIT_PROFILE_STORAGE_KEY);
@@ -332,6 +353,36 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     setInterests(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     );
+  };
+
+  const handleVoiceBioRecord = async (uri: string, duration: number) => {
+    try {
+      const formData = new FormData();
+      formData.append('audio', { uri, name: 'voice_bio.m4a', type: 'audio/m4a' } as any);
+      const res = await fetch(`${getApiBaseUrl()}/api/upload/voice-bio`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Upload failed');
+      setVoiceBioUrl(data.url);
+      setVoiceBioDuration(duration);
+      if (fetchUser) await fetchUser();
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Failed to upload voice bio', [{ text: 'OK', style: 'default' }], 'alert-circle');
+    }
+  };
+
+  const handleVoiceBioDelete = async () => {
+    try {
+      await del('/api/upload/voice-bio');
+      setVoiceBioUrl('');
+      setVoiceBioDuration(0);
+      if (fetchUser) await fetchUser();
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Failed to delete voice bio', [{ text: 'OK', style: 'default' }], 'alert-circle');
+    }
   };
 
   const InterestModal = ({ visible, onClose }: any) => (
@@ -869,6 +920,34 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
             </View>
           </View>
 
+          {/* CULTURAL IDENTITY */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="globe" label="Cultural Identity" color="#F97316" description="Your African roots" />
+            <View style={styles.sectionBody}>
+              <InputField label="Country of Origin" value={countryOfOrigin} onChangeText={setCountryOfOrigin} placeholder="e.g. Nigeria, Ghana, Kenya..." icon="map-pin" accent="#F97316" />
+              <InputField label="Tribe / Ethnic Group" value={tribe} onChangeText={setTribe} placeholder="e.g. Yoruba, Ashanti, Kikuyu..." icon="users" accent="#F97316" />
+              <InputField label="African Languages Spoken" value={languagesSpoken} onChangeText={setLanguagesSpoken} placeholder="Comma-separated, e.g. Yoruba, Twi" icon="message-square" accent="#F97316" />
+              <View style={styles.fieldContainer}>
+                <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Diaspora Generation</ThemedText>
+                <SelectButton label="Which generation?" value={diasporaGeneration} options={DIASPORA_GENERATION_OPTIONS} onPress={() => setActiveModal('diasporaGeneration')} icon="git-branch" accent="#F97316" />
+              </View>
+            </View>
+          </View>
+
+          {/* VOICE BIO */}
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <SectionHeader icon="mic" label="Voice Bio" color="#EC4899" description="Record a 30-second intro" />
+            <View style={styles.sectionBody}>
+              <VoiceBio
+                voiceBioUrl={voiceBioUrl}
+                duration={voiceBioDuration}
+                isOwn={true}
+                onRecord={handleVoiceBioRecord}
+                onDelete={handleVoiceBioDelete}
+              />
+            </View>
+          </View>
+
           {/* BOTTOM SAVE BUTTON */}
           <Pressable
             style={[styles.bottomSaveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
@@ -904,6 +983,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
       <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
+      <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={setDiasporaGeneration} />
       <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
       <AlertComponent />
     </View>

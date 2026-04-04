@@ -1359,6 +1359,28 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         )}
 
+        <Pressable
+          style={[styles.dailyMatchBanner, { backgroundColor: theme.surface, borderColor: theme.primary + '40' }]}
+          onPress={() => navigation.navigate('DailyMatch' as any)}
+          android_ripple={{ color: theme.primary + '20' }}
+        >
+          <LinearGradient
+            colors={[theme.primary + '18', theme.primary + '06']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.dailyMatchGradient}
+          >
+            <View style={[styles.dailyMatchIconWrap, { backgroundColor: theme.primary }]}>
+              <Feather name="star" size={15} color="#FFF" />
+            </View>
+            <View style={styles.dailyMatchTextWrap}>
+              <ThemedText style={[styles.dailyMatchLabel, { color: theme.primary }]}>The One Today</ThemedText>
+              <ThemedText style={[styles.dailyMatchSub, { color: theme.textSecondary }]}>Your curated match awaits</ThemedText>
+            </View>
+            <Feather name="chevron-right" size={18} color={theme.primary} />
+          </LinearGradient>
+        </Pressable>
+
         <Modal
           visible={showCountryPicker}
           transparent
@@ -1766,6 +1788,38 @@ const styles = StyleSheet.create({
   },
   headerIconButton: {
     padding: 7,
+  },
+  dailyMatchBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  dailyMatchGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  dailyMatchIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dailyMatchTextWrap: {
+    flex: 1,
+  },
+  dailyMatchLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dailyMatchSub: {
+    fontSize: 12,
+    marginTop: 1,
   },
   logo: {
     width: 30,

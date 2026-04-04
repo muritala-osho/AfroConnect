@@ -289,6 +289,135 @@ router.post('/rewind', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/match/cultural-score/:userId
+// @desc    Get cultural compatibility breakdown between current user and another user
+// @access  Private
+router.get('/cultural-score/:userId', protect, async (req, res) => {
+  try {
+    const me = await User.findById(req.user._id);
+    const other = await User.findById(req.params.userId)
+      .select('countryOfOrigin tribe languages diasporaGeneration lifestyle interests');
+
+    if (!other) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const breakdown = calculateCulturalScore(me, other);
+    res.json({ success: true, ...breakdown });
+  } catch (error) {
+    console.error('Cultural score error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/match/daily-match
+// @desc    Get today's single curated match (The One Today)
+// @access  Private
+router.get('/daily-match', protect, async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const me = await User.findById(req.user._id);
+
+    if (me.dailyMatch?.date === today && me.dailyMatch?.userId) {
+      const cached = await User.findById(me.dailyMatch.userId)
+        .select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus');
+      if (cached) {
+        const score = calculateCulturalScore(me, cached);
+        return res.json({ success: true, match: { ...cached.toObject(), culturalScore: score.totalScore, culturalBreakdown: score.breakdown } });
+      }
+    }
+
+    const alreadySwiped = [
+      ...(me.swipedRight || []),
+      ...(me.swipedLeft || []),
+      me._id
+    ].map(id => id.toString());
+
+    const genderPref = me.preferences?.genderPreference || 'both';
+    const genderFilter = genderPref === 'both'
+      ? {}
+      : { gender: genderPref === 'male' ? { $in: ['male', 'man'] } : { $in: ['female', 'woman'] } };
+
+    const candidates = await User.find({
+      _id: { $nin: alreadySwiped },
+      banned: { $ne: true },
+      emailVerified: true,
+      'photos.0': { $exists: true },
+      age: { $gte: me.preferences?.ageRange?.min || 18, $lte: me.preferences?.ageRange?.max || 60 },
+      ...genderFilter
+    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus').limit(100);
+
+    if (!candidates.length) {
+      return res.json({ success: true, match: null, message: 'No match available today. Check back tomorrow!' });
+    }
+
+    const scored = candidates.map(c => {
+      const cultural = calculateCulturalScore(me, c);
+      const sharedInterests = (me.interests || []).filter(i => (c.interests || []).includes(i)).length;
+      const total = cultural.totalScore * 0.6 + sharedInterests * 5;
+      return { user: c, culturalScore: cultural, interestScore: sharedInterests, totalScore: total };
+    });
+
+    scored.sort((a, b) => b.totalScore - a.totalScore);
+    const best = scored[0];
+
+    me.dailyMatch = { userId: best.user._id, date: today };
+    await me.save();
+
+    res.json({
+      success: true,
+      match: {
+        ...best.user.toObject(),
+        culturalScore: best.culturalScore.totalScore,
+        culturalBreakdown: best.culturalScore.breakdown,
+        sharedInterests: best.interestScore
+      }
+    });
+  } catch (error) {
+    console.error('Daily match error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+function calculateCulturalScore(me, other) {
+  const breakdown = [];
+  let total = 0;
+
+  const countryScore = me.countryOfOrigin && other.countryOfOrigin &&
+    me.countryOfOrigin.toLowerCase() === other.countryOfOrigin.toLowerCase() ? 25 : 0;
+  breakdown.push({ label: 'Country of Origin', score: countryScore, max: 25,
+    mine: me.countryOfOrigin || null, theirs: other.countryOfOrigin || null });
+  total += countryScore;
+
+  const tribeScore = me.tribe && other.tribe &&
+    me.tribe.toLowerCase() === other.tribe.toLowerCase() ? 20 : 0;
+  breakdown.push({ label: 'Tribe / Ethnicity', score: tribeScore, max: 20,
+    mine: me.tribe || null, theirs: other.tribe || null });
+  total += tribeScore;
+
+  const myLangs = (me.languages || []).map(l => l.toLowerCase());
+  const theirLangs = (other.languages || []).map(l => l.toLowerCase());
+  const sharedLangs = myLangs.filter(l => theirLangs.includes(l));
+  const langScore = sharedLangs.length > 0 ? Math.min(20, sharedLangs.length * 10) : 0;
+  breakdown.push({ label: 'Language', score: langScore, max: 20,
+    mine: me.languages || [], theirs: other.languages || [], shared: sharedLangs });
+  total += langScore;
+
+  const myRel = me.lifestyle?.religion;
+  const theirRel = other.lifestyle?.religion;
+  const relScore = myRel && theirRel && myRel === theirRel ? 20 : 0;
+  breakdown.push({ label: 'Religion', score: relScore, max: 20,
+    mine: myRel || null, theirs: theirRel || null });
+  total += relScore;
+
+  const myGen = me.diasporaGeneration;
+  const theirGen = other.diasporaGeneration;
+  const genScore = myGen && theirGen && myGen === theirGen ? 15 : (myGen && theirGen ? 5 : 0);
+  breakdown.push({ label: 'Diaspora Generation', score: genScore, max: 15,
+    mine: myGen || null, theirs: theirGen || null });
+  total += genScore;
+
+  return { totalScore: total, maxScore: 100, breakdown };
+}
+
 function calculateDistance(coords1, coords2) {
   const [lon1, lat1] = coords1;
   const [lon2, lat2] = coords2;

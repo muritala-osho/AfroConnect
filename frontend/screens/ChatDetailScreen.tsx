@@ -93,6 +93,8 @@ interface Message {
   deletedForEveryone?: boolean;
   deletedFor?: string[];
   reactions?: MessageReaction[];
+  viewOnce?: boolean;
+  viewOnceOpenedBy?: string[];
 }
 
 const EMOJI_LIST = [
@@ -364,6 +366,8 @@ export default function ChatDetailScreen({
   const [translating, setTranslating] = useState(false);
   const [translateTargetLang, setTranslateTargetLang] = useState("");
   const [screenshotProtection, setScreenshotProtection] = useState(false);
+  const [viewOnceMode, setViewOnceMode] = useState(false);
+  const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
 
   // Load draft on mount
   useEffect(() => {
@@ -880,6 +884,19 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
+  const handleMarkViewOnce = async (messageId: string) => {
+    if (!token || openedViewOnceIds.has(messageId)) return;
+    try {
+      await fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
+    } catch (e) {
+      console.error("View once mark error:", e);
+    }
+  };
+
   const handleTypingIndicator = useCallback(() => {
     if (matchId && token) {
       socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: true });
@@ -907,8 +924,10 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
-        else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
+        if (uploadData.success && uploadData.url) {
+          await sendMessage("ð· Photo", "image", { imageUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
+          if (viewOnceMode) setViewOnceMode(false);
+        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
         Alert.alert("Error", "Failed to upload image. Check your connection.");
@@ -933,8 +952,10 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸŽ¬ Video", "video", { videoUrl: uploadData.url });
-        else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
+        if (uploadData.success && uploadData.url) {
+          await sendMessage("ð¬ Video", "video", { videoUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
+          if (viewOnceMode) setViewOnceMode(false);
+        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
         Alert.alert("Error", "Failed to upload video. Check your connection.");
@@ -957,7 +978,10 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
+        if (uploadData.success && uploadData.url) {
+          await sendMessage("ð· Photo", "image", { imageUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
+          if (viewOnceMode) setViewOnceMode(false);
+        }
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");
       }
@@ -1405,39 +1429,90 @@ export default function ChatDetailScreen({
                       </View>
                     )}
 
-                    {item.type === "image" && item.imageUrl && (
-                      <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
-                        <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                        <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                          <Ionicons name="download-outline" size={16} color="#FFF" />
-                        </Pressable>
-                      </Pressable>
-                    )}
-
-                    {item.type === "video" && (item.videoUrl || item.imageUrl) && (
-                      <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) setViewingVideo(url); }} style={styles.videoContainer}>
-                        {failedThumbnails.has(item._id) ? (
-                          <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
-                            <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
-                            <ThemedText style={{ color: "#FFF", fontSize: 12, marginTop: 4 }}>Tap to play</ThemedText>
+                    {item.type === "image" && item.imageUrl && (() => {
+                      const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
+                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && !isSender && isViewedByMe) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
+                            <Ionicons name="eye-off-outline" size={20} color="rgba(128,128,128,0.6)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.textSecondary }]}>Photo opened</ThemedText>
                           </View>
-                        ) : (
-                          <Image
-                            source={{ uri: (() => { const url = item.videoUrl || item.imageUrl || ""; if (url.includes("cloudinary.com")) return url.replace("/upload/", "/upload/so_0,w_400,h_300,c_fill/").replace(/\.(mp4|mov|avi|webm)$/i, ".jpg"); return url.replace(/\.[^.]+$/, ".jpg"); })() }}
-                            style={styles.videoThumbnail} contentFit="cover"
-                            onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
-                          />
-                        )}
-                        <View style={styles.videoOverlay}>
-                          <View style={styles.videoPlayButton}>
-                            <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
-                          </View>
-                        </View>
-                        <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
-                          <Ionicons name="download-outline" size={16} color="#FFF" />
+                        );
+                      }
+                      if (item.viewOnce && !isSender && !isViewedByMe) {
+                        return (
+                          <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
+                            onPress={() => { handleMarkViewOnce(item._id); setViewingImage(item.imageUrl!); }}>
+                            <Ionicons name="eye-outline" size={22} color={theme.primary} />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
+                          {item.viewOnce && isSender && (
+                            <View style={styles.viewOnceSenderBadge}>
+                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          )}
+                          <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                            <Ionicons name="download-outline" size={16} color="#FFF" />
+                          </Pressable>
                         </Pressable>
-                      </Pressable>
-                    )}
+                      );
+                    })()}
+                    {item.type === "video" && (item.videoUrl || item.imageUrl) && (() => {
+                      const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
+                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && !isSender && isViewedByMe) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
+                            <Ionicons name="eye-off-outline" size={20} color="rgba(128,128,128,0.6)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.textSecondary }]}>Video opened</ThemedText>
+                          </View>
+                        );
+                      }
+                      if (item.viewOnce && !isSender && !isViewedByMe) {
+                        return (
+                          <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
+                            onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { handleMarkViewOnce(item._id); setViewingVideo(url); } }}>
+                            <Ionicons name="eye-outline" size={22} color={theme.primary} />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) setViewingVideo(url); }} style={styles.videoContainer}>
+                          {item.viewOnce && isSender && (
+                            <View style={styles.viewOnceSenderBadge}>
+                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          )}
+                          {failedThumbnails.has(item._id) ? (
+                            <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
+                              <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
+                              <ThemedText style={{ color: "#FFF", fontSize: 12, marginTop: 4 }}>Tap to play</ThemedText>
+                            </View>
+                          ) : (
+                            <Image
+                              source={{ uri: (() => { const url = item.videoUrl || item.imageUrl || ""; if (url.includes("cloudinary.com")) return url.replace("/upload/", "/upload/so_0,w_400,h_300,c_fill/").replace(/.(mp4|mov|avi|webm)$/i, ".jpg"); return url.replace(/.[^.]+$/, ".jpg"); })() }}
+                              style={styles.videoThumbnail} contentFit="cover"
+                              onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
+                            />
+                          )}
+                          <View style={styles.videoOverlay}>
+                            <View style={styles.videoPlayButton}>
+                              <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          </View>
+                          <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
+                            <Ionicons name="download-outline" size={16} color="#FFF" />
+                          </Pressable>
+                        </Pressable>
+                      );
+                    })()}
 
                     {item.type === "audio" && item.audioUrl && (
                       <Pressable
@@ -1789,6 +1864,19 @@ export default function ChatDetailScreen({
         <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>
           <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.attachmentTitle, { color: theme.text }]}>Send Attachment</ThemedText>
+            <Pressable style={[styles.viewOnceToggleRow, viewOnceMode && { backgroundColor: '#FF6B6B12', borderColor: '#FF6B6B40' }]}
+              onPress={() => setViewOnceMode(v => !v)}>
+              <View style={styles.viewOnceToggleLeft}>
+                <Ionicons name="eye-outline" size={18} color={viewOnceMode ? '#FF6B6B' : theme.textSecondary} />
+                <View>
+                  <ThemedText style={[styles.viewOnceToggleTitle, { color: viewOnceMode ? '#FF6B6B' : theme.text }]}>View Once</ThemedText>
+                  <ThemedText style={[styles.viewOnceToggleDesc, { color: theme.textSecondary }]}>Photo/video disappears after being opened</ThemedText>
+                </View>
+              </View>
+              <View style={[styles.viewOnceTogglePill, { backgroundColor: viewOnceMode ? '#FF6B6B' : theme.border }]}>
+                <ThemedText style={styles.viewOnceTogglePillText}>{viewOnceMode ? 'ON' : 'OFF'}</ThemedText>
+              </View>
+            </Pressable>
             <View style={styles.attachmentOptions}>
               <Pressable style={styles.attachmentOption} onPress={handleTakePhoto}>
                 <View style={[styles.attachmentIcon, { backgroundColor: "#FF6B6B20" }]}><Feather name="camera" size={24} color="#FF6B6B" /></View>
@@ -2181,4 +2269,15 @@ const styles = StyleSheet.create<any>({
   locationAddress: { fontSize: 13, fontWeight: "600", flex: 1, lineHeight: 17 },
   locationTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   locationTapText: { fontSize: 10 },
+
+  viewOncePlaceholder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, minWidth: 140 },
+  viewOnceTap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, minWidth: 160 },
+  viewOnceLabel: { fontSize: 13, fontWeight: '600' },
+  viewOnceSenderBadge: { position: 'absolute', top: 6, right: 6, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3 },
+  viewOnceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', marginBottom: 12 },
+  viewOnceToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  viewOnceToggleTitle: { fontSize: 13, fontWeight: '700' },
+  viewOnceToggleDesc: { fontSize: 11, marginTop: 1 },
+  viewOnceTogglePill: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  viewOnceTogglePillText: { fontSize: 10, fontWeight: '800', color: '#fff' },
 });

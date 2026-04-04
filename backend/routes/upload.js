@@ -395,4 +395,69 @@ router.post('/video', protect, multiUpload, async (req, res) => {
   }
 });
 
+router.post('/voice-bio', protect, audioUpload.single('audio'), async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No audio file uploaded' });
+    }
+
+    const MAX_VOICE_BIO_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_VOICE_BIO_SIZE) {
+      return res.status(400).json({ success: false, message: 'Voice bio must be under 5MB (30 seconds)' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.voiceBio?.publicId) {
+      try {
+        await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
+      } catch (e) {
+        console.log('Could not delete old voice bio from cloudinary:', e.message);
+      }
+    }
+
+    const result = await uploadBufferToCloudinary(file.buffer, {
+      folder: 'afroconnect/voice-bios',
+      resource_type: 'video',
+      format: 'mp3',
+    });
+
+    const duration = req.body.duration ? parseFloat(req.body.duration) : 0;
+
+    user.voiceBio = { url: result.secure_url, publicId: result.public_id, duration };
+    await user.save();
+
+    res.json({ success: true, url: result.secure_url, publicId: result.public_id, duration });
+  } catch (error) {
+    console.error('Voice bio upload error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
+
+router.delete('/voice-bio', protect, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.voiceBio?.publicId) {
+      try {
+        await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
+      } catch (e) {
+        console.log('Could not delete voice bio from cloudinary:', e.message);
+      }
+    }
+
+    user.voiceBio = { url: null, publicId: null, duration: 0 };
+    await user.save();
+    res.json({ success: true, message: 'Voice bio removed' });
+  } catch (error) {
+    console.error('Voice bio delete error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Delete failed' });
+  }
+});
+
 module.exports = router;

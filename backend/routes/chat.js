@@ -874,5 +874,34 @@ router.get('/:matchId/messages/:messageId/reactions', protect, matchParticipant,
   }
 });
 
+router.post('/messages/:messageId/view-once', protect, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+
+    if (!message.viewOnce) {
+      return res.status(400).json({ success: false, message: 'This is not a view-once message' });
+    }
+
+    if (message.sender.toString() === userId.toString()) {
+      return res.json({ success: true, alreadyViewed: false });
+    }
+
+    const alreadyViewed = message.viewOnceOpenedBy.some(id => id.toString() === userId.toString());
+    if (!alreadyViewed) {
+      message.viewOnceOpenedBy.push(userId);
+      await message.save();
+    }
+
+    res.json({ success: true, alreadyViewed, openedAt: new Date() });
+  } catch (error) {
+    console.error('View once error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
 

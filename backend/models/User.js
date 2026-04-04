@@ -469,6 +469,42 @@ const userSchema = new mongoose.Schema({
       unsendLimit: { type: Number, default: 15 } 
     }
   },
+  // ── Cultural Identity ────────────────────────────────────────────────────────
+  countryOfOrigin: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  tribe: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  languages: [{
+    type: String,
+    trim: true
+  }],
+  diasporaGeneration: {
+    type: String,
+    enum: ['1st_gen', '2nd_gen', '3rd_gen_plus', 'born_in_africa', 'not_applicable'],
+    default: null
+  },
+
+  // ── Voice Bio ────────────────────────────────────────────────────────────────
+  voiceBio: {
+    url: { type: String, default: null },
+    publicId: { type: String, default: null },
+    duration: { type: Number, default: 0 }
+  },
+
+  // ── Daily Curated Match ──────────────────────────────────────────────────────
+  dailyMatch: {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    date: { type: String, default: null }
+  },
+
   storyPrivacy: {
     blockedUsers: [{
       type: mongoose.Schema.Types.ObjectId,
