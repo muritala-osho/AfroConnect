@@ -298,6 +298,41 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: 'Location',
       value: `${(user as any).location?.city || (user as any).location?.address || ''}${(user as any).location?.country ? `, ${(user as any).location.country}` : ''}`,
     },
+    (user as any)?.height && {
+      icon: 'trending-up' as const,
+      label: 'Height',
+      value: `${(user as any).height} cm`,
+    },
+    (user as any)?.countryOfOrigin && {
+      icon: 'globe' as const,
+      label: 'Country of Origin',
+      value: (user as any).countryOfOrigin,
+    },
+    (user as any)?.tribe && {
+      icon: 'users' as const,
+      label: 'Tribe / Ethnicity',
+      value: (user as any).tribe,
+    },
+    (user as any)?.languages?.length > 0 && {
+      icon: 'message-square' as const,
+      label: 'Languages',
+      value: Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages,
+    },
+    (user as any)?.diasporaGeneration && {
+      icon: 'git-branch' as const,
+      label: 'Diaspora Generation',
+      value: (user as any).diasporaGeneration,
+    },
+    (user as any)?.lifestyle?.hasKids !== undefined && {
+      icon: 'users' as const,
+      label: 'Has Kids',
+      value: (user as any).lifestyle.hasKids ? 'Yes' : 'No',
+    },
+    (user as any)?.lifestyle?.wantsKids !== undefined && {
+      icon: 'smile' as const,
+      label: 'Wants Kids',
+      value: (user as any).lifestyle.wantsKids ? 'Yes' : 'No',
+    },
   ].filter(Boolean);
 
   const renderPhotoItem = ({ item, index }: { item: any; index: number }) => {

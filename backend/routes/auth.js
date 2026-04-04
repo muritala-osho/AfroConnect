@@ -31,7 +31,7 @@ router.post(
   validate(schemas.auth.signup),
   async (req, res) => {
     try {
-      const { email, password, confirmPassword } = req.body;
+      const { email, password } = req.body;
 
       // Validation
       if (!email || !password) {
@@ -39,17 +39,6 @@ router.post(
           success: false,
           message: "Please provide email and password",
         });
-      }
-
-      // Check if username is taken
-      if (username) {
-        const usernameExists = await User.findOne({ username });
-        if (usernameExists) {
-          return res.status(400).json({
-            success: false,
-            message: "Username is already taken",
-          });
-        }
       }
 
       // Check if user exists
@@ -74,16 +63,16 @@ router.post(
       const otpCode = generateOTP();
 
       // Create user with minimal data - not verified yet
+      // Name/age/gender/etc. will be filled in during profile setup after OTP verification
       const user = await User.create({
-        name: name || "User",
-        username,
+        name: "User",
         email,
         password,
-        age: age || 18,
-        gender: gender || "other",
+        age: 18,
+        gender: "other",
         location: {
           type: "Point",
-          coordinates: [0, 0], // Temporary location
+          coordinates: [0, 0],
         },
         verified: false,
         verificationOTP: otpCode,

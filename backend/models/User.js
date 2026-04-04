@@ -45,6 +45,12 @@ const userSchema = new mongoose.Schema({
     enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'],
     default: null
   },
+  height: {
+    type: Number,
+    min: 100,
+    max: 250,
+    default: null
+  },
   jobTitle: {
     type: String,
     maxlength: 100,

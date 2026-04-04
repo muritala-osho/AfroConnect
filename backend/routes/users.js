@@ -44,7 +44,8 @@ router.put('/me', protect, async (req, res) => {
       'preferences', 'location', 'favoriteSong', 'zodiacSign', 'relationshipGoal',
       'jobTitle', 'education', 'livingIn', 'lifestyle', 'ethnicity', 
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
-      'pets', 'relationshipStatus'
+      'pets', 'relationshipStatus',
+      'height', 'countryOfOrigin', 'tribe', 'languages', 'diasporaGeneration', 'language',
     ];
 
     const user = await User.findById(req.user._id);

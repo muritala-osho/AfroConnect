@@ -3,11 +3,13 @@ const Joi = require('joi');
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 const signup = Joi.object({
-  name: Joi.string().trim().min(2).max(60).required(),
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
-  password: Joi.string().min(8).max(128).required(),
-  age: Joi.number().integer().min(18).max(100).required(),
-  gender: Joi.string().valid('male', 'female', 'non-binary', 'other').required(),
+  password: Joi.string().min(6).max(128).required(),
+  confirmPassword: Joi.string().optional().allow(''),
+  name: Joi.string().trim().min(2).max(60).optional(),
+  username: Joi.string().trim().min(2).max(40).optional().allow(''),
+  age: Joi.number().integer().min(18).max(100).optional(),
+  gender: Joi.string().valid('male', 'female', 'non-binary', 'other', 'man', 'woman', 'prefer_not_to_say').optional(),
   interestedIn: Joi.array().items(Joi.string().valid('male', 'female', 'everyone', 'non-binary', 'all')).default(['everyone']),
   location: Joi.object().optional(),
   referralCode: Joi.string().max(20).optional().allow(''),

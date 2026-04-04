@@ -374,7 +374,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 
   const handleVoiceBioDelete = async () => {
     try {
-      await del('/api/upload/voice-bio');
+      await del('/upload/voice-bio', token ?? undefined);
       setVoiceBioUrl('');
       setVoiceBioDuration(0);
       if (fetchUser) await fetchUser();
@@ -997,6 +997,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 14,
     gap: 12,
+  },
+  container: {
+    flex: 1,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   headerIconBtn: {
     width: 40,
