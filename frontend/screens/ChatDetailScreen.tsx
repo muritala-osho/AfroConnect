@@ -414,6 +414,7 @@ export default function ChatDetailScreen({
   const [translateTargetLang, setTranslateTargetLang] = useState("");
   const [screenshotProtection, setScreenshotProtection] = useState(false);
   const [viewOnceMode, setViewOnceMode] = useState(false);
+  const viewOnceModeRef = React.useRef(false);
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
   const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
   const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -933,6 +934,9 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
+  // Keep ref in sync so async image/video handlers always read the latest value
+  useEffect(() => { viewOnceModeRef.current = viewOnceMode; }, [viewOnceMode]);
+
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
     // Optimistic update — mark as viewed immediately so placeholder shows right away
@@ -972,8 +976,9 @@ export default function ChatDetailScreen({
         });
         const uploadData = await uploadResponse.json();
         if (uploadData.success && uploadData.url) {
-          await sendMessage("ð· Photo", "image", { imageUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
-          if (viewOnceMode) setViewOnceMode(false);
+          const isVOImg = viewOnceModeRef.current;
+          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
+          if (isVOImg) setViewOnceMode(false);
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
@@ -1000,8 +1005,9 @@ export default function ChatDetailScreen({
         });
         const uploadData = await uploadResponse.json();
         if (uploadData.success && uploadData.url) {
-          await sendMessage("ð¬ Video", "video", { videoUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
-          if (viewOnceMode) setViewOnceMode(false);
+          const isVOVid = viewOnceModeRef.current;
+          await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
+          if (isVOVid) setViewOnceMode(false);
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
@@ -1026,8 +1032,9 @@ export default function ChatDetailScreen({
         });
         const uploadData = await uploadResponse.json();
         if (uploadData.success && uploadData.url) {
-          await sendMessage("ð· Photo", "image", { imageUrl: uploadData.url, ...(viewOnceMode ? { viewOnce: true } : {}) });
-          if (viewOnceMode) setViewOnceMode(false);
+          const isVOImg = viewOnceModeRef.current;
+          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
+          if (isVOImg) setViewOnceMode(false);
         }
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");

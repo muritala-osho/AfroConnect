@@ -1,771 +1,28 @@
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  StyleSheet,
-  TextInput,
-  Pressable,
-  ScrollView,
-  Modal,
-  Alert,
-  FlatList,
-  ActivityIndicator,
-  Switch,
-  Platform,
-} from "react-native";
-import { SafeImage } from "@/components/SafeImage";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useThemedAlert } from "@/components/ThemedAlert";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "@/navigation/RootNavigator";
-import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
-import { ThemedText } from "@/components/ThemedText";
-import { useTheme } from "@/hooks/useTheme";
-import { useAuth } from "@/hooks/useAuth";
-import { useApi } from "@/hooks/useApi";
-import { Feather, Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import VoiceBio from "@/components/VoiceBio";
-import { getApiBaseUrl } from "@/constants/config";
+const fs = require('fs');
+const content = fs.readFileSync('frontend/screens/EditProfileScreen.tsx', 'utf8');
 
-type EditProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "EditProfile">;
-
-interface EditProfileScreenProps {
-  navigation: EditProfileScreenNavigationProp;
+// Find the main component return: it's the one followed by <View style={[styles.container
+// Find all occurrences and pick the FIRST one that has the container view
+let idx = 0;
+let mainReturnPos = -1;
+while ((idx = content.indexOf('  return (', idx)) !== -1) {
+  const after = content.substring(idx, idx + 120);
+  if (after.includes('<View style={[styles.container')) {
+    mainReturnPos = idx;
+    break; // take the first one (original main component)
+  }
+  idx++;
 }
 
-const EDIT_PROFILE_STORAGE_KEY = "afroconnect_edit_profile_draft";
+if (mainReturnPos === -1) {
+  console.error('Could not find main component return!');
+  process.exit(1);
+}
 
-const ZODIAC_OPTIONS = [
-  { value: 'aries', label: 'Aries â™ˆ' },
-  { value: 'taurus', label: 'Taurus â™‰' },
-  { value: 'gemini', label: 'Gemini â™Š' },
-  { value: 'cancer', label: 'Cancer â™‹' },
-  { value: 'leo', label: 'Leo â™Œ' },
-  { value: 'virgo', label: 'Virgo â™' },
-  { value: 'libra', label: 'Libra â™Ž' },
-  { value: 'scorpio', label: 'Scorpio â™' },
-  { value: 'sagittarius', label: 'Sagittarius â™' },
-  { value: 'capricorn', label: 'Capricorn â™‘' },
-  { value: 'aquarius', label: 'Aquarius â™’' },
-  { value: 'pisces', label: 'Pisces â™“' },
-];
+console.log('Main component return found at position:', mainReturnPos);
+const before = content.substring(0, mainReturnPos);
 
-const EDUCATION_OPTIONS = [
-  { value: 'high_school', label: 'High School' },
-  { value: 'some_college', label: 'Some College' },
-  { value: 'bachelors', label: "Bachelor's Degree" },
-  { value: 'masters', label: "Master's Degree" },
-  { value: 'doctorate', label: 'Doctorate' },
-  { value: 'trade_school', label: 'Trade School' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const LOOKING_FOR_OPTIONS = [
-  { value: 'relationship', label: 'Relationship' },
-  { value: 'friendship', label: 'Friendship' },
-  { value: 'casual', label: 'Casual' },
-  { value: 'networking', label: 'Networking' },
-];
-
-const SMOKING_OPTIONS = [
-  { value: 'never', label: 'Never' },
-  { value: 'socially', label: 'Socially' },
-  { value: 'regularly', label: 'Regularly' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const DRINKING_OPTIONS = [
-  { value: 'never', label: 'Never' },
-  { value: 'socially', label: 'Socially' },
-  { value: 'regularly', label: 'Regularly' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const WORKOUT_OPTIONS = [
-  { value: 'never', label: 'Never' },
-  { value: 'rarely', label: 'Rarely' },
-  { value: 'sometimes', label: 'Sometimes' },
-  { value: 'often', label: 'Often' },
-  { value: 'daily', label: 'Daily' },
-];
-
-const RELIGION_OPTIONS = [
-  { value: 'christian', label: 'Christian' },
-  { value: 'muslim', label: 'Muslim' },
-  { value: 'traditional', label: 'Traditional' },
-  { value: 'atheist', label: 'Atheist' },
-  { value: 'agnostic', label: 'Agnostic' },
-  { value: 'spiritual', label: 'Spiritual' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const ETHNICITY_OPTIONS = [
-  { value: 'african', label: 'African' },
-  { value: 'african_american', label: 'African American' },
-  { value: 'caribbean', label: 'Caribbean' },
-  { value: 'mixed', label: 'Mixed' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const PETS_OPTIONS = [
-  { value: 'none', label: 'No pets' },
-  { value: 'dog', label: 'Dog' },
-  { value: 'cat', label: 'Cat' },
-  { value: 'parrot', label: 'Parrot' },
-  { value: 'other', label: 'Other' },
-  { value: 'allergic', label: 'Allergic to pets' },
-];
-
-const RELATIONSHIP_STATUS_OPTIONS = [
-  { value: 'single', label: 'Single' },
-  { value: 'married', label: 'Married' },
-  { value: 'single_parent', label: 'Single Parent' },
-  { value: 'divorced', label: 'Divorced' },
-  { value: 'widowed', label: 'Widowed' },
-];
-
-const RELATIONSHIP_GOAL_OPTIONS = [
-  { value: 'short_term', label: 'Short-term relationship' },
-  { value: 'long_term', label: 'Long-term relationship' },
-  { value: 'friendship', label: 'Friendship' },
-  { value: 'networking', label: 'Networking' },
-  { value: 'casual', label: 'Casual dating' },
-  { value: 'marriage', label: 'Marriage' },
-  { value: 'open_to_everything', label: 'Open to everything' },
-  { value: 'not_sure_yet', label: 'Not sure yet' },
-];
-
-const COMMUNICATION_STYLE_OPTIONS = [
-  { value: 'introverted', label: 'Introverted' },
-  { value: 'extroverted', label: 'Extroverted' },
-  { value: 'ambivert', label: 'Ambivert' },
-  { value: 'big_talker', label: 'Big Talker' },
-  { value: 'listener', label: 'Better Listener' },
-  { value: 'texter', label: 'Prefer Texting' },
-  { value: 'caller', label: 'Prefer Calling' },
-];
-
-const LOVE_STYLE_OPTIONS = [
-  { value: 'romantic', label: 'Romantic' },
-  { value: 'playful', label: 'Playful' },
-  { value: 'practical', label: 'Practical' },
-  { value: 'selfless', label: 'Selfless' },
-  { value: 'physical', label: 'Physical Touch' },
-  { value: 'acts_of_service', label: 'Acts of Service' },
-  { value: 'words_of_affirmation', label: 'Words of Affirmation' },
-  { value: 'quality_time', label: 'Quality Time' },
-  { value: 'gift_giving', label: 'Gift Giving' },
-];
-
-const GENDER_OPTIONS = [
-  { value: 'man', label: 'Man' },
-  { value: 'woman', label: 'Woman' },
-  { value: 'non-binary', label: 'Non-binary' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
-
-const HEIGHT_OPTIONS = Array.from({ length: 81 }, (_, i) => {
-  const cm = 140 + i;
-  const totalInches = Math.round(cm / 2.54);
-  const ft = Math.floor(totalInches / 12);
-  const inches = totalInches % 12;
-  return { value: `${cm}`, label: `${cm} cm (${ft}'${inches}")` };
-});
-
-const INTEREST_OPTIONS = [
-  { id: 'music', label: 'Music', icon: 'musical-notes' },
-  { id: 'travel', label: 'Travel', icon: 'airplane' },
-  { id: 'cooking', label: 'Cooking', icon: 'restaurant' },
-  { id: 'fitness', label: 'Fitness', icon: 'fitness' },
-  { id: 'art', label: 'Art', icon: 'color-palette' },
-  { id: 'gaming', label: 'Gaming', icon: 'game-controller' },
-  { id: 'movies', label: 'Movies', icon: 'film' },
-  { id: 'reading', label: 'Reading', icon: 'book' },
-  { id: 'photography', label: 'Photography', icon: 'camera' },
-  { id: 'dancing', label: 'Dancing', icon: 'footsteps' },
-  { id: 'coding', label: 'Coding', icon: 'code-slash' },
-  { id: 'sports', label: 'Sports', icon: 'basketball' },
-  { id: 'fashion', label: 'Fashion', icon: 'shirt' },
-  { id: 'nature', label: 'Nature', icon: 'leaf' },
-  { id: 'technology', label: 'Technology', icon: 'hardware-chip' },
-  { id: 'business', label: 'Business', icon: 'briefcase' },
-  { id: 'outdoors', label: 'Outdoors', icon: 'trail-sign' },
-  { id: 'socializing', label: 'Socializing', icon: 'people' },
-  { id: 'wellness', label: 'Wellness', icon: 'heart-half' },
-  { id: 'creativity', label: 'Creativity', icon: 'brush' },
-  { id: 'values', label: 'Values', icon: 'diamond' },
-  { id: 'food', label: 'Food', icon: 'fast-food' },
-];
-
-const DIASPORA_GENERATION_OPTIONS = [
-  { value: 'born_in_africa', label: '1st Generation (Born in Africa)' },
-  { value: '1st_gen', label: '2nd Generation (Parents born in Africa)' },
-  { value: '2nd_gen', label: '3rd Generation (Grandparents born in Africa)' },
-  { value: '3rd_gen_plus', label: '4th Generation or beyond' },
-  { value: 'not_applicable', label: 'Not Applicable' },
-];
-
-export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
-  const { theme, isDark } = useTheme();
-  const { user, updateProfile, fetchUser, token } = useAuth();
-  const { del } = useApi();
-  const { showAlert, AlertComponent } = useThemedAlert();
-  const insets = useSafeAreaInsets();
-
-  const [name, setName] = useState(user?.name || "");
-  const [bio, setBio] = useState(user?.bio || "");
-  const [jobTitle, setJobTitle] = useState(user?.jobTitle || "");
-  const [livingIn, setLivingIn] = useState(user?.livingIn || "");
-  const [zodiacSign, setZodiacSign] = useState(user?.zodiacSign || "");
-  const [education, setEducation] = useState(user?.education || "");
-  const [lookingFor, setLookingFor] = useState(user?.lookingFor || "relationship");
-  const [songTitle, setSongTitle] = useState(user?.favoriteSong?.title || "");
-  const [songArtist, setSongArtist] = useState(user?.favoriteSong?.artist || "");
-
-  const [smoking, setSmoking] = useState(user?.lifestyle?.smoking || "");
-  const [drinking, setDrinking] = useState(user?.lifestyle?.drinking || "");
-  const [workout, setWorkout] = useState(user?.lifestyle?.workout || "");
-  const [religion, setReligion] = useState(user?.lifestyle?.religion || "");
-  const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || "");
-  const [pets, setPets] = useState(user?.lifestyle?.pets || "");
-  const [relationshipStatus, setRelationshipStatus] = useState(user?.lifestyle?.relationshipStatus || "");
-  const [personalityType, setPersonalityType] = useState(user?.lifestyle?.personalityType || "");
-  const [communicationStyle, setCommunicationStyle] = useState(user?.lifestyle?.communicationStyle || "");
-  const [loveStyle, setLoveStyle] = useState(user?.lifestyle?.loveStyle || "");
-  const [hasKids, setHasKids] = useState<boolean>(user?.lifestyle?.hasKids ?? false);
-  const [wantsKids, setWantsKids] = useState<boolean>(user?.lifestyle?.wantsKids ?? false);
-  const [relationshipGoal, setRelationshipGoal] = useState((user as any)?.relationshipGoal || "");
-  const [gender, setGender] = useState(user?.gender || "");
-  const [height, setHeight] = useState(user?.height?.toString() || "");
-  const [interests, setInterests] = useState<string[]>(user?.interests || []);
-  const [saving, setSaving] = useState(false);
-
-  const [countryOfOrigin, setCountryOfOrigin] = useState((user as any)?.countryOfOrigin || "");
-  const [tribe, setTribe] = useState((user as any)?.tribe || "");
-  const [languagesSpoken, setLanguagesSpoken] = useState((user as any)?.languages?.join(", ") || "");
-  const [diasporaGeneration, setDiasporaGeneration] = useState((user as any)?.diasporaGeneration || "");
-  const [voiceBioUrl, setVoiceBioUrl] = useState((user as any)?.voiceBio?.url || "");
-  const [voiceBioDuration, setVoiceBioDuration] = useState((user as any)?.voiceBio?.duration || 0);
-
-  const [activeModal, setActiveModal] = useState<string | null>(null);
-  const [interestsModalVisible, setInterestsModalVisible] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'vibes' | 'roots' | 'more'>('profile');
-
-  useEffect(() => {
-    const loadDraft = async () => {
-      try {
-        const draft = await AsyncStorage.getItem(EDIT_PROFILE_STORAGE_KEY);
-        if (draft) {
-          const d = JSON.parse(draft);
-          if (d.name) setName(d.name);
-          if (d.bio) setBio(d.bio);
-          if (d.jobTitle) setJobTitle(d.jobTitle);
-          if (d.livingIn) setLivingIn(d.livingIn);
-          if (d.zodiacSign) setZodiacSign(d.zodiacSign);
-          if (d.education) setEducation(d.education);
-          if (d.lookingFor) setLookingFor(d.lookingFor);
-          if (d.songTitle) setSongTitle(d.songTitle);
-          if (d.songArtist) setSongArtist(d.songArtist);
-          if (d.smoking) setSmoking(d.smoking);
-          if (d.drinking) setDrinking(d.drinking);
-          if (d.workout) setWorkout(d.workout);
-          if (d.religion) setReligion(d.religion);
-          if (d.ethnicity) setEthnicity(d.ethnicity);
-          if (d.pets) setPets(d.pets);
-          if (d.relationshipStatus) setRelationshipStatus(d.relationshipStatus);
-          if (d.personalityType) setPersonalityType(d.personalityType);
-          if (d.communicationStyle) setCommunicationStyle(d.communicationStyle);
-          if (d.loveStyle) setLoveStyle(d.loveStyle);
-          if (d.hasKids != null) setHasKids(d.hasKids);
-          if (d.wantsKids != null) setWantsKids(d.wantsKids);
-          if (d.relationshipGoal) setRelationshipGoal(d.relationshipGoal);
-          if (d.interests) setInterests(d.interests);
-        }
-      } catch (e) {
-        console.error("Failed to load edit profile draft:", e);
-      }
-    };
-    loadDraft();
-  }, []);
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      showAlert("Error", "Name is required", [{ text: "OK", style: "default" }], "alert-circle");
-      return;
-    }
-    setSaving(true);
-    try {
-      await updateProfile({
-        name: name.trim(),
-        bio: bio.trim(),
-        jobTitle: jobTitle.trim(),
-        livingIn: livingIn.trim(),
-        zodiacSign: zodiacSign || undefined,
-        education: education || undefined,
-        lookingFor: lookingFor as any,
-        relationshipGoal: relationshipGoal || undefined,
-        gender: gender || undefined,
-        height: height ? parseInt(height) : undefined,
-        favoriteSong: (songTitle.trim() || songArtist.trim()) ? {
-          title: songTitle.trim(),
-          artist: songArtist.trim(),
-        } : undefined,
-        lifestyle: {
-          smoking: smoking || undefined,
-          drinking: drinking || undefined,
-          workout: workout || undefined,
-          religion: religion || undefined,
-          ethnicity: ethnicity || undefined,
-          pets: pets || undefined,
-          relationshipStatus: relationshipStatus || undefined,
-          personalityType: personalityType.trim() || undefined,
-          communicationStyle: communicationStyle || undefined,
-          loveStyle: loveStyle || undefined,
-          hasKids,
-          wantsKids,
-        },
-        interests,
-        language: user?.language || 'en',
-        countryOfOrigin: countryOfOrigin.trim() || undefined,
-        tribe: tribe.trim() || undefined,
-        languages: languagesSpoken.trim() ? languagesSpoken.split(",").map((l: string) => l.trim()).filter(Boolean) : undefined,
-        diasporaGeneration: diasporaGeneration || undefined,
-      } as any);
-
-      await AsyncStorage.removeItem(EDIT_PROFILE_STORAGE_KEY);
-      if (fetchUser) await fetchUser();
-      Alert.alert("Success", "Profile updated successfully", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
-    } catch (error: any) {
-      showAlert("Error", error.message || "Failed to update profile", [{ text: "OK", style: "default" }], "alert-circle");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleInterest = (id: string) => {
-    setInterests(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleVoiceBioRecord = async (uri: string, duration: number) => {
-    try {
-      const formData = new FormData();
-      formData.append('audio', { uri, name: 'voice_bio.m4a', type: 'audio/mp4' } as any);
-      const res = await fetch(`${getApiBaseUrl()}/api/upload/voice-bio`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      let data: any;
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        throw new Error(text.startsWith('<') ? 'Server error. Please try again.' : text || 'Upload failed');
-      }
-
-      if (!res.ok) throw new Error(data?.message || 'Upload failed');
-      setVoiceBioUrl(data.url);
-      setVoiceBioDuration(duration);
-      if (fetchUser) await fetchUser();
-    } catch (err: any) {
-      showAlert('Error', err.message || 'Failed to upload voice bio', [{ text: 'OK', style: 'default' }], 'alert-circle');
-    }
-  };
-
-  const handleVoiceBioDelete = async () => {
-    try {
-      await del('/upload/voice-bio', token ?? undefined);
-      setVoiceBioUrl('');
-      setVoiceBioDuration(0);
-      if (fetchUser) await fetchUser();
-    } catch (err: any) {
-      showAlert('Error', err.message || 'Failed to delete voice bio', [{ text: 'OK', style: 'default' }], 'alert-circle');
-    }
-  };
-
-  const InterestModal = ({ visible, onClose }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
-              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                {interests.length} selected
-              </ThemedText>
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={INTEREST_OPTIONS}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-            renderItem={({ item }) => {
-              const isSelected = interests.includes(item.id);
-              return (
-                <Pressable
-                  style={[
-                    styles.interestOptionItem,
-                    {
-                      borderColor: isSelected ? theme.primary : theme.border,
-                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
-                    },
-                  ]}
-                  onPress={() => toggleInterest(item.id)}
-                >
-                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
-                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
-                  </View>
-                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={10} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
-            <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
-              <ThemedText style={styles.doneButtonText}>Done  Â·  {interests.length} selected</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
-              {subtitle && (
-                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
-              )}
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={options}
-            keyExtractor={(item: any) => item.value}
-            contentContainerStyle={{ paddingVertical: 8 }}
-            renderItem={({ item }: any) => {
-              const isSelected = selectedValue === item.value;
-              return (
-                <Pressable
-                  style={[
-                    styles.optionItem,
-                    { borderBottomColor: theme.border },
-                    isSelected && { backgroundColor: theme.primary + '0C' },
-                  ]}
-                  onPress={() => { onSelect(item.value); onClose(); }}
-                >
-                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={12} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
-    const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
-    const hasValue = !!value;
-    return (
-      <Pressable
-        style={[
-          styles.selectButton,
-          {
-            backgroundColor: hasValue
-              ? (accent ? accent + '10' : theme.primary + '0D')
-              : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
-            borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
-          },
-        ]}
-        onPress={onPress}
-      >
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
-          {displayLabel || label}
-        </ThemedText>
-        <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-      </Pressable>
-    );
-  };
-
-  const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => (
-    <View style={styles.fieldContainer}>
-      <View style={styles.fieldLabelRow}>
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
-        {value?.length > 0 && (
-          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
-        )}
-      </View>
-      <View style={[
-        styles.inputRow,
-        {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
-          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
-        },
-      ]}>
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <TextInput
-          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={theme.textSecondary}
-          multiline={multiline}
-        />
-      </View>
-    </View>
-  );
-
-  const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => (
-    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
-      <View style={styles.toggleLeft}>
-        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
-          <Feather name={icon} size={16} color={accent || theme.primary} />
-        </View>
-        <View style={styles.toggleTextGroup}>
-          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
-          {description && (
-            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-          )}
-        </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
-        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
-      />
-    </View>
-  );
-
-  const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => (
-    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
-      <LinearGradient
-        colors={[color + '25', color + '10']}
-        style={styles.sectionIconWrap}
-      >
-        <Feather name={icon} size={17} color={color} />
-      </LinearGradient>
-      <View style={styles.sectionHeaderText}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
-        {description && (
-          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-        )}
-      </View>
-    </View>
-  );
-
-  const filledFields = [
-    name, bio, jobTitle, livingIn, zodiacSign, education, lookingFor,
-    songTitle, smoking, drinking, workout, religion, ethnicity, pets,
-    relationshipStatus, communicationStyle, loveStyle, gender, height,
-    personalityType, countryOfOrigin, tribe,
-  ].filter(Boolean).length + (interests.length > 0 ? 1 : 0);
-  const totalFields = 23;
-  const completionPct = Math.round((filledFields / totalFields) * 100);
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* HEADER */}
-      <LinearGradient
-        colors={isDark
-          ? [theme.primary + '22', theme.primary + '08', 'transparent']
-          : [theme.primary + '18', theme.primary + '06', 'transparent']}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
-      >
-        <Pressable onPress={() => navigation.goBack()} style={[styles.headerIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
-          <Feather name="arrow-left" size={20} color={theme.text} />
-        </Pressable>
-
-        <View style={styles.headerCenter}>
-          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Edit Profile</ThemedText>
-          <ThemedText style={[styles.headerTagline, { color: theme.primary }]}>
-            {completionPct}% complete
-          </ThemedText>
-        </View>
-
-        <Pressable
-          onPress={handleSave}
-          disabled={saving}
-          style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <>
-              <Feather name="check" size={15} color="#FFF" />
-              <ThemedText style={styles.saveBtnText}>Save</ThemedText>
-            </>
-          )}
-        </Pressable>
-      </LinearGradient>
-
-      {/* COMPLETION BAR */}
-      <View style={[styles.completionBarWrap, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <View style={[styles.completionBarTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF' }]}>
-          <LinearGradient
-            colors={[theme.primary, theme.primary + 'BB']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.completionBarFill, { width: `${completionPct}%` as any }]}
-          />
-        </View>
-        <ThemedText style={[styles.completionBarLabel, { color: theme.textSecondary }]}>
-          {totalFields - filledFields > 0 ? `${totalFields - filledFields} fields left to fill` : 'Profile complete!'}
-        </ThemedText>
-      </View>
-
-      <ScreenKeyboardAwareScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* PHOTO CARD */}
-        <Pressable
-          style={[styles.photoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          onPress={() => navigation.navigate('ChangeProfilePicture')}
-        >
-          <LinearGradient
-            colors={[theme.primary + '18', theme.primary + '06']}
-            style={styles.photoCardGradient}
-          >
-            <View style={styles.photoCardLeft}>
-              <View style={[styles.photoAvatarRing, { borderColor: theme.primary + '50' }]}>
-                {user?.photos?.[0] ? (
-                  <SafeImage
-                    source={typeof user.photos[0] === 'string' ? user.photos[0] : user.photos[0].url}
-                    style={styles.photoImage}
-                  />
-                ) : (
-                  <View style={[styles.photoPlaceholder, { backgroundColor: theme.primary + '15' }]}>
-                    <Ionicons name="camera" size={32} color={theme.primary} />
-                  </View>
-                )}
-                <View style={[styles.photoEditBadge, { backgroundColor: theme.primary, borderColor: theme.surface }]}>
-                  <Feather name="camera" size={11} color="#FFF" />
-                </View>
-              </View>
-            </View>
-            <View style={styles.photoCardBody}>
-              <ThemedText style={[styles.photoCardTitle, { color: theme.text }]}>
-                {user?.name || 'Your Photos'}
-              </ThemedText>
-              <ThemedText style={[styles.photoCardSub, { color: theme.textSecondary }]}>
-                {user?.photos?.length
-                  ? `${user.photos.length} photo${user.photos.length !== 1 ? 's' : ''} Â· Tap to edit`
-                  : 'Add up to 6 photos'}
-              </ThemedText>
-              <View style={styles.photoDotsRow}>
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.photoDot,
-                      {
-                        backgroundColor: i < (user?.photos?.length || 0)
-                          ? theme.primary
-                          : isDark ? 'rgba(255,255,255,0.15)' : '#DDD',
-                        width: i < (user?.photos?.length || 0) ? 16 : 8,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-            </View>
-            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-          </LinearGradient>
-        </Pressable>
-
-        <View style={styles.content}>
-
-          {/* BASIC INFO */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SectionHeader icon="user" label="Basic Info" color={theme.primary} description="How others see you" />
-            <View style={styles.sectionBody}>
-              <InputField label="Full Name *" value={name} onChangeText={setName} placeholder="Your name" icon="user" />
-              <InputField label="Bio" value={bio} onChangeText={setBio} placeholder="Tell others about yourself..." multiline icon="edit-3" />
-              <View style={styles.row2}>
-                <View style={styles.halfField}>
-                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Gender</ThemedText>
-                  <SelectButton label="Gender" value={gender} options={GENDER_OPTIONS} onPress={() => setActiveModal('gender')} icon="users" />
-                </View>
-                <View style={styles.halfField}>
-                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Height</ThemedText>
-                  <SelectButton label="Height" value={height} options={HEIGHT_OPTIONS} onPress={() => setActiveModal('height')} icon="trending-up" />
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* INTERESTS */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SectionHeader icon="heart" label="Interests" color="#FF6B9D" description="What makes you, you" />
-            <View style={styles.sectionBody}>
-              <Pressable
-                style={[styles.interestsTrigger, { borderColor: interests.length > 0 ? '#FF6B9D40' : theme.border, backgroundColor: interests.length > 0 ? '#FF6B9D08' : isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA' }]}
-                onPress={() => setInterestsModalVisible(true)}
-              >
-                <View style={[styles.selectIconWrap, { backgroundColor: interests.length > 0 ? '#FF6B9D20' : theme.border + '50' }]}>
-                  <Feather name="plus-circle" size={15} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
-                </View>
-                <ThemedText style={[styles.selectButtonText, { color: interests.length > 0 ? theme.text : theme.textSecondary, flex: 1 }]}>
-                  {interests.length > 0 ? `${interests.length} interests selected` : 'Choose your interests'}
-                </ThemedText>
-                <Feather name="chevron-right" size={16} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
-              </Pressable>
-
-              {interests.length > 0 && (
-                <View style={styles.interestsGrid}>
-                  {interests.map((interest) => {
-                    const opt = INTEREST_OPTIONS.find(o => o.id === interest);
-                    return (
+const newJSX = `  return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* HEADER */}
       <LinearGradient
@@ -846,7 +103,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         showsVerticalScrollIndicator={false}
       >
 
-        {/* PROFILE TAB */}
+        {/* ── PROFILE TAB ── */}
         {activeTab === 'profile' && (
           <>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -945,7 +202,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           </>
         )}
 
-        {/* VIBES TAB */}
+        {/* ── VIBES TAB ── */}
         {activeTab === 'vibes' && (
           <>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -1016,7 +273,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           </>
         )}
 
-        {/* ROOTS TAB */}
+        {/* ── ROOTS TAB ── */}
         {activeTab === 'roots' && (
           <>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -1081,7 +338,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           </>
         )}
 
-        {/* MORE TAB */}
+        {/* ── MORE TAB ── */}
         {activeTab === 'more' && (
           <>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -1243,7 +500,7 @@ const styles = StyleSheet.create({
   row2: { flexDirection: 'row' as const, gap: 10 },
   half: { flex: 1, gap: 6 },
 
-  // INPUT FIELD sub-component styles
+  // InputField sub-component uses these
   fieldContainer: {},
   fieldLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 7, gap: 6 },
   fieldLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.6 },
@@ -1252,12 +509,12 @@ const styles = StyleSheet.create({
   textInput: { flex: 1, fontSize: 15, paddingVertical: 12 },
   multilineInput: { minHeight: 90, textAlignVertical: 'top' as const },
 
-  // SELECT BUTTON sub-component styles
+  // SelectButton sub-component uses these
   selectButton: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   selectIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   selectButtonText: { fontSize: 14, flex: 1 },
 
-  // INTERESTS TRIGGER
+  // INTERESTS
   triggerRow: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   triggerIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   triggerText: { flex: 1, fontSize: 14 },
@@ -1312,3 +569,8 @@ const styles = StyleSheet.create({
   optionLabel: { fontSize: 16 },
   optionCheckCircle: { width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
 });
+`;
+
+fs.writeFileSync('frontend/screens/EditProfileScreen.tsx', before + newJSX);
+console.log('Done. Total lines:', (before + newJSX).split('\n').length);
+console.log('Main return pos was:', mainReturnPos);
