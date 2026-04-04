@@ -1,6 +1,18 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Centralized Support System** — full implementation across all three layers:
+  - `backend/models/SupportTicket.js`: Extended model — added `assignedTo`, `unreadByUser`, `unreadByAgent` fields; `pending` status; `agent` role in messages; `senderName`/`senderId` fields.
+  - `backend/models/User.js`: Added `isSupportAgent` boolean field for support agent role.
+  - `backend/middleware/supportAccess.js`: New middleware — `isAdmin`, `isAgent`, `isAdminOrAgent` guards.
+  - `backend/routes/support.js`: Fully rewritten. New endpoints: `POST /ticket`, `GET /user`, `GET /ticket/:id`, `GET /unread`, `POST /reply`, `GET /all`, `PATCH /status`, `PATCH /assign`, `GET /agents`. All legacy routes preserved.
+  - `admin-dashboard/services/adminApi.ts`: New methods: `getAllSupportTickets`, `getSupportTicket`, `replySupportUnified`, `updateSupportStatus`, `assignSupportTicket`, `getSupportAgents`.
+  - `admin-dashboard/types.ts`: Extended `SupportTicket` type with full fields; added `TicketMessage`, `SupportAgent` interfaces.
+  - `admin-dashboard/views/SupportDesk.tsx`: Fully rewritten — real API (no mocks), 15-second polling, assign-to-agent dropdown, all 4 statuses, unread badges, optimistic updates.
+  - `admin-dashboard/views/AgentDashboard.tsx`: NEW — agent-only interface showing assigned tickets only, with chat thread and status controls.
+  - `admin-dashboard/App.tsx`: Added `agent` tab + `AgentDashboard` import.
+  - `admin-dashboard/constants.tsx`: Added "My Tickets" nav item for Support role.
+  - `frontend/screens/SupportMessagesScreen.tsx`: Complete rewrite — ticket list with unread badges, create ticket form with category chips, chat thread with polling every 10 s, reply sending with optimistic update.
 - **Auth signup fix** (`backend/routes/auth.js`): Removed Joi `validate(schemas.auth.signup)` middleware from the signup route — replaced with inline email/password validation only. Eliminates spurious "name is required" error caused by stale cached Joi schema.
 - **Voice bio MIME fix** (`backend/routes/upload.js`): Added `video/mp4` and `video/quicktime` to `ALLOWED_AUDIO_TYPES` (React Native sends m4a files with these MIME types on some Android devices).
 - **Voice bio parse fix** (`frontend/screens/EditProfileScreen.tsx`): Changed audio upload MIME type to `audio/mp4`, added content-type check before calling `res.json()` to handle HTML error responses without crashing.

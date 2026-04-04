@@ -84,16 +84,42 @@ export interface PushTemplate {
   body: string;
 }
 
-export interface SupportTicket {
-  id: string;
-  userId: string;
-  userName: string;
-  subject: string;
-  category: 'billing' | 'account' | 'technical' | 'report' | 'other';
-  status: 'open' | 'in-progress' | 'closed';
-  priority: 'low' | 'medium' | 'high';
+// ─── Support System Types ──────────────────────────────────────────────────
+
+export interface TicketMessage {
+  _id?: string;
+  role: 'user' | 'admin' | 'agent';
+  content: string;
+  senderName?: string;
+  adminName?: string; // legacy compat
+  senderId?: string;
   timestamp: string;
-  message: string;
+}
+
+export interface SupportTicket {
+  _id: string;
+  id?: string; // legacy alias
+  userId?: string;
+  userName: string;
+  userEmail: string;
+  subject: string;
+  category: 'billing' | 'account' | 'technical' | 'safety' | 'other';
+  priority: 'low' | 'medium' | 'high';
+  status: 'open' | 'pending' | 'in-progress' | 'closed';
+  messages: TicketMessage[];
+  assignedTo?: { _id: string; name: string; email: string } | null;
+  unreadByUser?: number;
+  unreadByAgent?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupportAgent {
+  _id: string;
+  name: string;
+  email: string;
+  isSupportAgent: boolean;
+  isAdmin: boolean;
 }
 
 export interface FlaggedContent {

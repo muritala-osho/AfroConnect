@@ -365,6 +365,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  // Support agent role — can view assigned tickets and reply, not full admin
+  isSupportAgent: {
+    type: Boolean,
+    default: false
+  },
   banned: {
     type: Boolean,
     default: false
