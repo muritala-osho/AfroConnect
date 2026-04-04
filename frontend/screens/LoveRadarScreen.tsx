@@ -720,9 +720,6 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
 
             {/* Distance ring labels */}
             <View style={styles.ringLabels}>
-              {[
-                { label: "0km", left: "50%", top: "50%" },
-              ]}
               <View style={styles.distMarkersRow}>
                 <ThemedText style={styles.distMark}>0</ThemedText>
                 <ThemedText style={styles.distMark}>{Math.round(filters.radius / 2)}km</ThemedText>
