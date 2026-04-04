@@ -344,14 +344,25 @@ router.get('/daily-match', protect, async (req, res) => {
       ? {}
       : { gender: genderPref === 'male' ? { $in: ['male', 'man'] } : { $in: ['female', 'woman'] } };
 
-    const candidates = await User.find({
+    let candidates = await User.find({
       _id: { $nin: alreadySwiped },
       banned: { $ne: true },
       emailVerified: true,
       'photos.0': { $exists: true },
       age: { $gte: me.preferences?.ageRange?.min || 18, $lte: me.preferences?.ageRange?.max || 60 },
       ...genderFilter
-    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(30);
+    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(60);
+
+    // Filter by distance if user has location and a maxDistance preference
+    const maxDist = me.preferences?.maxDistance;
+    if (maxDist && me.location?.coordinates?.length === 2) {
+      const myCoords = me.location.coordinates;
+      candidates = candidates.filter(c => {
+        if (!c.location?.coordinates?.length) return true; // include users without location
+        const dist = calculateDistance(myCoords, c.location.coordinates);
+        return dist <= maxDist;
+      });
+    }
 
     if (!candidates.length) {
       return res.json({ success: true, match: null, message: 'No match available today. Check back tomorrow!' });

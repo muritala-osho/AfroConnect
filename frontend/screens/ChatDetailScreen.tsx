@@ -415,6 +415,8 @@ export default function ChatDetailScreen({
   const [screenshotProtection, setScreenshotProtection] = useState(false);
   const [viewOnceMode, setViewOnceMode] = useState(false);
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
+  const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
+  const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
   // Load draft on mount
   useEffect(() => {
@@ -1490,23 +1492,34 @@ export default function ChatDetailScreen({
                       if (item.viewOnce && !isSender && !isViewedByMe) {
                         return (
                           <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
-                            onPress={() => { handleMarkViewOnce(item._id); setViewingImage(item.imageUrl!); }}>
+                            onPress={() => {
+                              handleMarkViewOnce(item._id);
+                              setViewOnceViewerActive(true);
+                              setViewingImage(item.imageUrl!);
+                              if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+                              viewOnceTimerRef.current = setTimeout(() => {
+                                setViewingImage(null);
+                                setViewOnceViewerActive(false);
+                              }, 10000);
+                            }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
                             <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
                           </Pressable>
                         );
                       }
                       return (
-                        <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
+                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={!item.viewOnce ? () => saveImage(item.imageUrl!) : undefined}>
                           {item.viewOnce && isSender && (
                             <View style={styles.viewOnceSenderBadge}>
                               <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
                             </View>
                           )}
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                            <Ionicons name="download-outline" size={16} color="#FFF" />
-                          </Pressable>
+                          {!item.viewOnce && (
+                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -1524,14 +1537,26 @@ export default function ChatDetailScreen({
                       if (item.viewOnce && !isSender && !isViewedByMe) {
                         return (
                           <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
-                            onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { handleMarkViewOnce(item._id); setViewingVideo(url); } }}>
+                            onPress={() => {
+                              const url = item.videoUrl || item.imageUrl;
+                              if (url) {
+                                handleMarkViewOnce(item._id);
+                                setViewOnceViewerActive(true);
+                                setViewingVideo(url);
+                                if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+                                viewOnceTimerRef.current = setTimeout(() => {
+                                  setViewingVideo(null);
+                                  setViewOnceViewerActive(false);
+                                }, 10000);
+                              }
+                            }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
                             <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
                           </Pressable>
                         );
                       }
                       return (
-                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) setViewingVideo(url); }} style={styles.videoContainer}>
+                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
                           {item.viewOnce && isSender && (
                             <View style={styles.viewOnceSenderBadge}>
                               <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
@@ -1554,9 +1579,11 @@ export default function ChatDetailScreen({
                               <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
                             </View>
                           </View>
-                          <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
-                            <Ionicons name="download-outline" size={16} color="#FFF" />
-                          </Pressable>
+                          {!item.viewOnce && (
+                            <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -2045,24 +2072,42 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => setViewingImage(null)}>
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => setViewingImage(null)}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          <View style={styles.imageViewerActions}>
-            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-          </View>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          {viewOnceViewerActive ? (
+            <View style={styles.imageViewerActions}>
+              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
+                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.imageViewerActions}>
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+            </View>
+          )}
           {viewingImage && <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />}
         </View>
       </Modal>
 
       {/* Video viewer */}
-      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => setViewingVideo(null)}>
+      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => setViewingVideo(null)}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          <View style={styles.imageViewerActions}>
-            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-          </View>
-          {viewingVideo && <Video source={{ uri: viewingVideo }} style={{ width: "100%", height: "80%" }} useNativeControls resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} />}
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          {viewOnceViewerActive ? (
+            <View style={styles.imageViewerActions}>
+              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
+                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.imageViewerActions}>
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+            </View>
+          )}
+          {viewingVideo && <Video source={{ uri: viewingVideo }} style={{ width: "100%", height: "80%" }} useNativeControls={!viewOnceViewerActive} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} />}
         </View>
       </Modal>
 

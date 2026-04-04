@@ -26,7 +26,6 @@ import ProfilePrompts from "@/components/ProfilePrompts";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
-import CulturalCompatibilityScore from "@/components/CulturalCompatibilityScore";
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
@@ -623,8 +622,6 @@ export default function ProfileDetailScreen() {
                 />
               </View>
             )}
-
-            <CulturalCompatibilityScore userId={user._id} />
 
             <ProfilePrompts userId={user._id} isOwnProfile={false} />
 
