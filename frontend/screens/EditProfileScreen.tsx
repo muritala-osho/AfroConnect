@@ -202,11 +202,11 @@ const INTEREST_OPTIONS = [
 ];
 
 const DIASPORA_GENERATION_OPTIONS = [
-  { value: '1st', label: '1st Generation (Born in Africa)' },
-  { value: '2nd', label: '2nd Generation (Parents born in Africa)' },
-  { value: '3rd', label: '3rd Generation (Grandparents born in Africa)' },
-  { value: 'returnee', label: 'Returnee (Moved back to Africa)' },
-  { value: 'other', label: 'Other' },
+  { value: 'born_in_africa', label: '1st Generation (Born in Africa)' },
+  { value: '1st_gen', label: '2nd Generation (Parents born in Africa)' },
+  { value: '2nd_gen', label: '3rd Generation (Grandparents born in Africa)' },
+  { value: '3rd_gen_plus', label: '4th Generation or beyond' },
+  { value: 'not_applicable', label: 'Not Applicable' },
 ];
 
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {

@@ -933,17 +933,15 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
-  const handleMarkViewOnce = async (messageId: string) => {
+  const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
-    try {
-      await fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      });
-      setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
-    } catch (e) {
-      console.error("View once mark error:", e);
-    }
+    // Optimistic update — mark as viewed immediately so placeholder shows right away
+    setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
+    // Fire-and-forget API call in background
+    fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    }).catch(e => console.error("View once mark error:", e));
   };
 
   const handleTypingIndicator = useCallback(() => {
