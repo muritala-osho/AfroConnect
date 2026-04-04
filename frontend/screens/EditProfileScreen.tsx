@@ -932,18 +932,13 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           </View>
 
           {/* VOICE BIO */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SectionHeader icon="mic" label="Voice Bio" color="#EC4899" description="Record a 30-second intro" />
-            <View style={styles.sectionBody}>
-              <VoiceBio
-                voiceBioUrl={voiceBioUrl}
-                duration={voiceBioDuration}
-                isOwn={true}
-                onRecord={handleVoiceBioRecord}
-                onDelete={handleVoiceBioDelete}
-              />
-            </View>
-          </View>
+          <VoiceBio
+            voiceBioUrl={voiceBioUrl}
+            duration={voiceBioDuration}
+            isOwn={true}
+            onRecord={handleVoiceBioRecord}
+            onDelete={handleVoiceBioDelete}
+          />
 
           {/* BOTTOM SAVE BUTTON */}
           <Pressable

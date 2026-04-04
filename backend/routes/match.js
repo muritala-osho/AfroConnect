@@ -318,7 +318,7 @@ router.get('/daily-match', protect, async (req, res) => {
 
     if (me.dailyMatch?.date === today && me.dailyMatch?.userId) {
       const cached = await User.findById(me.dailyMatch.userId)
-        .select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus');
+        .select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio');
       if (cached) {
         const score = calculateCulturalScore(me, cached);
         return res.json({ success: true, match: { ...cached.toObject(), culturalScore: score.totalScore, culturalBreakdown: score.breakdown } });
@@ -343,7 +343,7 @@ router.get('/daily-match', protect, async (req, res) => {
       'photos.0': { $exists: true },
       age: { $gte: me.preferences?.ageRange?.min || 18, $lte: me.preferences?.ageRange?.max || 60 },
       ...genderFilter
-    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus').limit(100);
+    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(100);
 
     if (!candidates.length) {
       return res.json({ success: true, match: null, message: 'No match available today. Check back tomorrow!' });

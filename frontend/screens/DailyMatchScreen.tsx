@@ -113,6 +113,7 @@ export default function DailyMatchScreen() {
   const [match, setMatch] = useState<DailyMatch | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
   const [liked, setLiked] = useState(false);
   const [passed, setPassed] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -126,15 +127,23 @@ export default function DailyMatchScreen() {
   const fetchDailyMatch = async () => {
     if (!token) return;
     setLoading(true);
+    setHasError(false);
     try {
-      const res = await get<{ match: DailyMatch | null; message?: string }>("/match/daily-match", token);
-      if (res.success && res.data) {
-        setMatch(res.data.match);
-        setMessage(res.data.message || null);
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      const res = await get<any>("/match/daily-match", token);
+      if (res.success !== false && res.data) {
+        const matchData = res.data.match ?? res.data;
+        const msg = res.data.message ?? null;
+        setMatch(matchData?._id ? matchData : null);
+        setMessage(msg);
+        if (matchData?._id) {
+          Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        }
+      } else {
+        setHasError(true);
       }
     } catch (e) {
       console.error("Daily match error:", e);
+      setHasError(true);
     } finally {
       setLoading(false);
     }
@@ -196,6 +205,26 @@ export default function DailyMatchScreen() {
         <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
           Finding your best match today...
         </ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (hasError) {
+    return (
+      <ThemedView style={styles.centered}>
+        <Ionicons name="cloud-offline-outline" size={56} color={theme.textSecondary} />
+        <ThemedText style={[styles.noMatchTitle, { color: theme.text }]}>
+          Could Not Load
+        </ThemedText>
+        <ThemedText style={[styles.noMatchSub, { color: theme.textSecondary }]}>
+          Something went wrong fetching your match. Please try again.
+        </ThemedText>
+        <Pressable
+          style={[styles.retryBtn, { backgroundColor: theme.primary }]}
+          onPress={fetchDailyMatch}
+        >
+          <ThemedText style={styles.retryText}>Try Again</ThemedText>
+        </Pressable>
       </ThemedView>
     );
   }
@@ -436,6 +465,8 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 15, textAlign: "center", marginTop: 8 },
   noMatchTitle: { fontSize: 22, fontWeight: "700", textAlign: "center" },
   noMatchSub: { fontSize: 15, textAlign: "center", lineHeight: 22 },
+  retryBtn: { marginTop: 8, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 24 },
+  retryText: { fontSize: 15, fontWeight: "700", color: "#fff" },
   navbar: {
     flexDirection: "row",
     alignItems: "center",
