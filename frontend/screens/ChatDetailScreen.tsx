@@ -1924,7 +1924,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "padding"} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} enabled={Platform.OS !== "web"}>
+      <KeyboardAvoidingView style={{ flex: 1, paddingBottom: Platform.OS === "android" ? keyboardHeight : 0 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} enabled={Platform.OS === "ios"}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
@@ -1975,7 +1975,7 @@ export default function ChatDetailScreen({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: keyboardHeight > 0 ? 5 : Math.max(insets.bottom, 15), marginBottom: 0, minHeight: 60 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: Platform.OS === "android" ? (keyboardHeight > 0 ? 8 : Math.max(insets.bottom, 8)) : Math.max(insets.bottom, 8), marginBottom: 0, minHeight: 60 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
@@ -2442,7 +2442,7 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1, borderTopColor: "#1c1f26", backgroundColor: "#0a0d14" },
+  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
