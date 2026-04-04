@@ -47,26 +47,60 @@ type PhotoSlot = PhotoItem | null;
 
 const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
-const INTERESTS_OPTIONS = [
-  { label: "🎵 Music", value: "Music", color: "#FF6B6B" },
-  { label: "✈️ Travel", value: "Travel", color: "#4ECDC4" },
-  { label: "🍕 Food", value: "Food", color: "#FFE66D" },
-  { label: "⚽ Sports", value: "Sports", color: "#A8E6CF" },
-  { label: "🎨 Art", value: "Art", color: "#DDA0DD" },
-  { label: "🎬 Movies", value: "Movies", color: "#FFA07A" },
-  { label: "📚 Reading", value: "Reading", color: "#87CEEB" },
-  { label: "🎮 Gaming", value: "Gaming", color: "#98FB98" },
-  { label: "💪 Fitness", value: "Fitness", color: "#F0A500" },
-  { label: "📸 Photography", value: "Photography", color: "#B19CD9" },
-  { label: "💃 Dancing", value: "Dancing", color: "#FF9A9E" },
-  { label: "👨‍🍳 Cooking", value: "Cooking", color: "#FFEAA7" },
-  { label: "👗 Fashion", value: "Fashion", color: "#FD79A8" },
-  { label: "💻 Technology", value: "Technology", color: "#74B9FF" },
-  { label: "🌿 Nature", value: "Nature", color: "#55EFC4" },
-  { label: "🎭 Theatre", value: "Theatre", color: "#E17055" },
-  { label: "🏄 Surfing", value: "Surfing", color: "#00CEC9" },
-  { label: "🎸 Guitar", value: "Guitar", color: "#FDCB6E" },
+const INTEREST_CATEGORIES = [
+  {
+    category: "🎵 Music & Arts",
+    color: "#FF6B6B",
+    items: [
+      { label: "🎵 Music", value: "Music" },
+      { label: "🎸 Guitar", value: "Guitar" },
+      { label: "💃 Dancing", value: "Dancing" },
+      { label: "🎨 Art", value: "Art" },
+      { label: "🎭 Theatre", value: "Theatre" },
+      { label: "🎬 Movies", value: "Movies" },
+    ],
+  },
+  {
+    category: "⚽ Sports & Fitness",
+    color: "#4ECDC4",
+    items: [
+      { label: "⚽ Sports", value: "Sports" },
+      { label: "💪 Fitness", value: "Fitness" },
+      { label: "🏄 Surfing", value: "Surfing" },
+      { label: "🏊 Swimming", value: "Swimming" },
+      { label: "🧘 Yoga", value: "Yoga" },
+      { label: "🏃 Running", value: "Running" },
+    ],
+  },
+  {
+    category: "✈️ Lifestyle & Social",
+    color: "#F59E0B",
+    items: [
+      { label: "✈️ Travel", value: "Travel" },
+      { label: "🍕 Food", value: "Food" },
+      { label: "👨‍🍳 Cooking", value: "Cooking" },
+      { label: "👗 Fashion", value: "Fashion" },
+      { label: "🌿 Nature", value: "Nature" },
+      { label: "🐾 Pets", value: "Pets" },
+    ],
+  },
+  {
+    category: "💻 Creative & Tech",
+    color: "#74B9FF",
+    items: [
+      { label: "💻 Technology", value: "Technology" },
+      { label: "📸 Photography", value: "Photography" },
+      { label: "📚 Reading", value: "Reading" },
+      { label: "🎮 Gaming", value: "Gaming" },
+      { label: "🎙️ Podcasts", value: "Podcasts" },
+      { label: "✍️ Writing", value: "Writing" },
+    ],
+  },
 ];
+
+const INTERESTS_OPTIONS = INTEREST_CATEGORIES.flatMap((cat) =>
+  cat.items.map((item) => ({ ...item, color: cat.color }))
+);
 
 const ZODIAC_SIGNS = [
   { value: "aries", label: "♈ Aries" },
