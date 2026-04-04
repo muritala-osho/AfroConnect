@@ -241,7 +241,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [relationshipGoal, setRelationshipGoal] = useState((user as any)?.relationshipGoal || "");
   const [gender, setGender] = useState(user?.gender || "");
   const [height, setHeight] = useState(user?.height?.toString() || "");
-  const [username, setUsername] = useState(user?.username || "");
   const [interests, setInterests] = useState<string[]>(user?.interests || []);
   const [saving, setSaving] = useState(false);
 
@@ -310,7 +309,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         relationshipGoal: relationshipGoal || undefined,
         gender: gender || undefined,
         height: height ? parseInt(height) : undefined,
-        username: username.trim() || undefined,
         favoriteSong: (songTitle.trim() || songArtist.trim()) ? {
           title: songTitle.trim(),
           artist: songArtist.trim(),
@@ -721,7 +719,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
             <SectionHeader icon="user" label="Basic Info" color={theme.primary} description="How others see you" />
             <View style={styles.sectionBody}>
               <InputField label="Full Name *" value={name} onChangeText={setName} placeholder="Your name" icon="user" />
-              <InputField label="Username" value={username} onChangeText={setUsername} placeholder="@username" icon="at-sign" />
               <InputField label="Bio" value={bio} onChangeText={setBio} placeholder="Tell others about yourself..." multiline icon="edit-3" />
               <View style={styles.row2}>
                 <View style={styles.halfField}>
