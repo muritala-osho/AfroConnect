@@ -245,12 +245,14 @@ export default function SignUpScreen({ navigation }: SignUpScreenProps) {
           <Animated.View
             style={[styles.headerContent, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
           >
-            <View style={styles.logoRing}>
-              <Image
-                source={require("@/assets/afroconnect-logo.png")}
-                style={styles.logo}
-                contentFit="contain"
-              />
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCard}>
+                <Image
+                  source={require("@/assets/afroconnect-logo.png")}
+                  style={styles.logo}
+                  contentFit="contain"
+                />
+              </View>
             </View>
             <ThemedText style={styles.headerTitle}>Create Account</ThemedText>
             <ThemedText style={styles.headerSubtitle}>
@@ -462,24 +464,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: Spacing.lg,
   },
-  logoRing: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: "rgba(255,255,255,0.25)",
+  logoContainer: {
+    marginBottom: Spacing.lg,
+  },
+  logoCard: {
+    width: 110,
+    height: 110,
+    borderRadius: 28,
+    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.md,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
   logo: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 88,
+    height: 88,
   },
   headerTitle: {
     fontSize: 26,
