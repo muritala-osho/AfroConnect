@@ -206,7 +206,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             <View style={styles.logoContainer}>
               <View style={styles.logoCard}>
                 <Image
-                  source={require("@/assets/afroconnect-logo.png")}
+                  source={require("@/assets/logo-new.png")}
                   style={styles.logo}
                   contentFit="contain"
                 />
