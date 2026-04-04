@@ -73,25 +73,93 @@ const EDUCATION_LABELS: { [key: string]: string } = {
 
 
 const LIFESTYLE_LABELS: { [key: string]: string } = {
+  // Drinking / Smoking / Workout frequency
   never: 'Never',
   socially: 'Socially',
   regularly: 'Regularly',
+  rarely: 'Rarely',
+  often: 'Often',
+  daily: 'Daily',
+  sometimes: 'Sometimes',
   prefer_not_to_say: 'Prefer not to say',
+
+  // Personality type
   introverted: 'Introverted',
   ambiverted: 'Ambiverted',
+  ambivert: 'Ambivert',
   extroverted: 'Extroverted',
+
+  // Love style
   romantic: 'Romantic',
   playful: 'Playful',
   passionate: 'Passionate',
   intellectual: 'Intellectual',
   caring: 'Caring',
   adventurous: 'Adventurous',
+  practical: 'Practical',
+  selfless: 'Selfless',
+  physical: 'Physical Touch',
+  acts_of_service: 'Acts of Service',
+  words_of_affirmation: 'Words of Affirmation',
+  quality_time: 'Quality Time',
+  gift_giving: 'Gift Giving',
+
+  // Communication style
+  big_talker: 'Big Talker',
+  listener: 'Good Listener',
+  texter: 'Texter',
+  caller: 'Phone Caller',
+
+  // Religion
   christian: 'Christian',
   muslim: 'Muslim',
   traditional: 'Traditional',
   atheist: 'Atheist',
   spiritual: 'Spiritual',
-  
+  hindu: 'Hindu',
+  buddhist: 'Buddhist',
+  jewish: 'Jewish',
+  agnostic: 'Agnostic',
+  other: 'Other',
+
+  // Kids
+  yes: 'Yes',
+  no: 'No',
+  open_to_it: 'Open to it',
+  not_sure: 'Not sure',
+
+  // Pets
+  none: 'No pets',
+  dog: 'Dog lover',
+  cat: 'Cat lover',
+  parrot: 'Parrot',
+  allergic: 'Allergic to pets',
+
+  // Ethnicity
+  african: 'African',
+  african_american: 'African American',
+  caribbean: 'Caribbean',
+  mixed: 'Mixed',
+
+  // Relationship goal
+  short_term: 'Short-term Dating',
+  long_term: 'Long-term Relationship',
+  friendship: 'Friendship',
+  networking: 'Networking',
+  casual: 'Casual',
+  marriage: 'Marriage',
+  open_to_everything: 'Open to Everything',
+  not_sure_yet: 'Not Sure Yet',
+
+  // Looking for
+  relationship: 'Relationship',
+  hookup: 'Hookup',
+  both: 'Both',
+
+  // Diaspora generation
+  first: '1st Generation',
+  second: '2nd Generation',
+  third: '3rd+ Generation',
 };
 
 const { width, height } = Dimensions.get('window');
@@ -498,7 +566,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="search" size={15} color="#8B5CF6" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Looking For</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lookingFor}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lookingFor] || (user as any).lookingFor}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.relationshipGoal && (
@@ -507,7 +577,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="heart" size={15} color="#8B5CF6" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Relationship Goal</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).relationshipGoal}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).relationshipGoal] || (user as any).relationshipGoal}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.relationshipStatus && (
@@ -516,7 +588,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#8B5CF615' }]}><Feather name="info" size={15} color="#8B5CF6" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Status</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.relationshipStatus}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.relationshipStatus] || (user as any).lifestyle.relationshipStatus}
+                  </ThemedText>
                 </View>
               )}
             </View>
@@ -539,7 +613,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="star" size={15} color="#F59E0B" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Personality</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.personalityType}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.personalityType] || (user as any).lifestyle.personalityType}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.communicationStyle && (
@@ -548,7 +624,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="message-circle" size={15} color="#F59E0B" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Communication</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.communicationStyle}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.communicationStyle] || (user as any).lifestyle.communicationStyle}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.loveStyle && (
@@ -557,7 +635,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#F59E0B15' }]}><Feather name="heart" size={15} color="#F59E0B" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Love Language</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.loveStyle}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.loveStyle] || (user as any).lifestyle.loveStyle}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.zodiacSign && (
@@ -618,7 +698,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="heart" size={15} color="#10B981" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.pets}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.pets] || (user as any).lifestyle.pets}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.hasKids !== undefined && (
@@ -644,56 +726,91 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         )}
 
         {/* CULTURAL IDENTITY SECTION */}
-        {((user as any)?.countryOfOrigin || (user as any)?.tribe || (user as any)?.languages?.length > 0 || (user as any)?.diasporaGeneration) && (
-          <View style={styles.section}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
-              <View style={[styles.sectionIconBubble, { backgroundColor: '#F9731620' }]}>
-                <Feather name="globe" size={15} color="#F97316" />
-              </View>
-              <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Cultural Identity</ThemedText>
+        <View style={styles.section}>
+          <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
+            <View style={[styles.sectionIconBubble, { backgroundColor: '#F9731620' }]}>
+              <Feather name="globe" size={15} color="#F97316" />
             </View>
-            <View style={[styles.card, { backgroundColor: theme.surface }]}>
-              {(user as any)?.countryOfOrigin && (
-                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-                  <View style={styles.detailLeft}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="map-pin" size={15} color="#F97316" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Country of Origin</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).countryOfOrigin}</ThemedText>
-                </View>
-              )}
-              {(user as any)?.tribe && (
-                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-                  <View style={styles.detailLeft}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="users" size={15} color="#F97316" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Tribe / Ethnicity</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).tribe}</ThemedText>
-                </View>
-              )}
-              {(user as any)?.languages?.length > 0 && (
-                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
-                  <View style={styles.detailLeft}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="message-square" size={15} color="#F97316" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Languages</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
-                    {Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages}
-                  </ThemedText>
-                </View>
-              )}
-              {(user as any)?.diasporaGeneration && (
-                <View style={styles.detailRow}>
-                  <View style={styles.detailLeft}>
-                    <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="git-branch" size={15} color="#F97316" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Diaspora Generation</ThemedText>
-                  </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).diasporaGeneration}</ThemedText>
-                </View>
-              )}
-            </View>
+            <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Cultural Identity</ThemedText>
+            <Pressable
+              onPress={() => navigation.navigate('EditProfile')}
+              style={{ marginLeft: 'auto', padding: 4 }}
+            >
+              <Feather name="edit-2" size={14} color={theme.textSecondary} />
+            </Pressable>
           </View>
-        )}
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            {(user as any)?.countryOfOrigin ? (
+              <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                <View style={styles.detailLeft}>
+                  <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="map-pin" size={15} color="#F97316" /></View>
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Country of Origin</ThemedText>
+                </View>
+                <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).countryOfOrigin}</ThemedText>
+              </View>
+            ) : null}
+            {(user as any)?.tribe ? (
+              <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                <View style={styles.detailLeft}>
+                  <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="users" size={15} color="#F97316" /></View>
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Tribe / Ethnicity</ThemedText>
+                </View>
+                <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).tribe}</ThemedText>
+              </View>
+            ) : null}
+            {(user as any)?.languages?.length > 0 ? (
+              <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                <View style={styles.detailLeft}>
+                  <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="message-square" size={15} color="#F97316" /></View>
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Languages</ThemedText>
+                </View>
+                <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                  {Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages}
+                </ThemedText>
+              </View>
+            ) : null}
+            {(user as any)?.diasporaGeneration ? (
+              <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                <View style={styles.detailLeft}>
+                  <View style={[styles.detailIconContainer, { backgroundColor: '#F9731615' }]}><Feather name="git-branch" size={15} color="#F97316" /></View>
+                  <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Diaspora Generation</ThemedText>
+                </View>
+                <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                  {LIFESTYLE_LABELS[(user as any).diasporaGeneration] || (user as any).diasporaGeneration}
+                </ThemedText>
+              </View>
+            ) : null}
+            {/* Cultural Compatibility Quiz CTA */}
+            <Pressable
+              onPress={() => navigation.navigate('CompatibilityQuiz')}
+              style={({ pressed }) => [
+                styles.culturalQuizBtn,
+                {
+                  backgroundColor: pressed ? '#F97316' : '#F9731614',
+                  borderColor: '#F9731640',
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={['#F9731618', '#FB923C14']}
+                style={styles.culturalQuizGradient}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F9731622', alignItems: 'center', justifyContent: 'center' }}>
+                    <Feather name="heart" size={17} color="#F97316" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={{ fontSize: 14, fontWeight: '700', color: '#F97316' }}>Cultural Compatibility Quiz</ThemedText>
+                    <ThemedText style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>
+                      Answer questions to boost your match score
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#F97316" />
+                </View>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
 
         {/* BACKGROUND SECTION */}
         {((user as any)?.lifestyle?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.education || user?.gender || (user as any)?.height) && (
@@ -729,7 +846,9 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="globe" size={15} color="#0EA5E9" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.ethnicity}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>
+                    {LIFESTYLE_LABELS[(user as any).lifestyle.ethnicity] || (user as any).lifestyle.ethnicity}
+                  </ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.religion && (
@@ -1392,5 +1511,16 @@ const styles = StyleSheet.create({
   songArtist: {
     fontSize: 13,
     marginTop: 2,
+  },
+  culturalQuizBtn: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginTop: 6,
+  },
+  culturalQuizGradient: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
   },
 });

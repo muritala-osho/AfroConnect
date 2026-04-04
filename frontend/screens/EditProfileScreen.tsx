@@ -605,8 +605,9 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     name, bio, jobTitle, livingIn, zodiacSign, education, lookingFor,
     songTitle, smoking, drinking, workout, religion, ethnicity, pets,
     relationshipStatus, communicationStyle, loveStyle, gender, height,
+    personalityType, countryOfOrigin, tribe,
   ].filter(Boolean).length + (interests.length > 0 ? 1 : 0);
-  const totalFields = 20;
+  const totalFields = 23;
   const completionPct = Math.round((filledFields / totalFields) * 100);
 
   return (
@@ -937,6 +938,30 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
                 <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Diaspora Generation</ThemedText>
                 <SelectButton label="Which generation?" value={diasporaGeneration} options={DIASPORA_GENERATION_OPTIONS} onPress={() => setActiveModal('diasporaGeneration')} icon="git-branch" accent="#F97316" />
               </View>
+              {/* Cultural Compatibility Quiz CTA */}
+              <Pressable
+                onPress={() => navigation.navigate('CompatibilityQuiz')}
+                style={({ pressed }) => [{
+                  marginTop: 8,
+                  borderRadius: 14,
+                  overflow: 'hidden' as const,
+                  opacity: pressed ? 0.85 : 1,
+                }]}
+              >
+                <LinearGradient
+                  colors={['#F97316', '#FB923C']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{ borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                >
+                  <Ionicons name="heart-circle" size={22} color="#FFF" />
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>Take Cultural Compatibility Quiz</ThemedText>
+                    <ThemedText style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 1 }}>Boost your cultural match score with other users</ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.8)" />
+                </LinearGradient>
+              </Pressable>
             </View>
           </View>
 

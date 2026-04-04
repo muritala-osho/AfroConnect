@@ -226,76 +226,123 @@ const SwipeableMessage = React.memo(
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // WavyWaveform â€” FIX: removed duplicate recordingPulse that was here before
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Predefined waveform heights that look like a real audio waveform
+const WAVEFORM_HEIGHTS = [
+  0.3, 0.5, 0.8, 0.6, 1.0, 0.7, 0.4, 0.9, 0.5, 0.7,
+  1.0, 0.6, 0.4, 0.8, 0.5, 0.9, 0.6, 0.3, 0.7, 0.5,
+  0.8, 1.0, 0.4, 0.6, 0.9, 0.5, 0.7, 0.3, 0.8, 0.6,
+];
+
 const WavyWaveform = ({
   isPlaying,
   progress,
   isMe,
   theme,
+  duration,
 }: {
   isPlaying: boolean;
   progress: number;
   isMe: boolean;
   theme: any;
+  duration?: number;
 }) => {
+  const BAR_COUNT = 30;
   const [animations] = useState(() =>
-    Array.from({ length: 20 }).map(() => new Animated.Value(1)),
+    WAVEFORM_HEIGHTS.slice(0, BAR_COUNT).map((h) => new Animated.Value(h)),
   );
+  const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
 
   useEffect(() => {
     if (isPlaying) {
-      const loops = animations.map((anim) => {
-        return Animated.loop(
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = animations.map((anim, i) => {
+        const baseH = WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length];
+        const loop = Animated.loop(
           Animated.sequence([
             Animated.timing(anim, {
-              toValue: Math.random() * 1.5 + 0.5,
-              duration: 300 + Math.random() * 200,
+              toValue: baseH * (0.3 + Math.random() * 0.7) + 0.4,
+              duration: 200 + (i % 5) * 60,
               useNativeDriver: false,
             }),
             Animated.timing(anim, {
-              toValue: 1,
-              duration: 300 + Math.random() * 200,
+              toValue: baseH * 0.6,
+              duration: 180 + (i % 4) * 50,
               useNativeDriver: false,
             }),
           ]),
         );
+        loop.start();
+        return loop;
       });
-      loops.forEach((l) => l.start());
-      return () => loops.forEach((l) => l.stop());
     } else {
-      animations.forEach((anim) =>
-        Animated.spring(anim, { toValue: 1, useNativeDriver: false }).start(),
-      );
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = [];
+      animations.forEach((anim, i) => {
+        Animated.spring(anim, {
+          toValue: WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length],
+          useNativeDriver: false,
+          tension: 60,
+          friction: 8,
+        }).start();
+      });
     }
+    return () => {
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = [];
+    };
   }, [isPlaying]);
 
+  const formatDuration = (secs?: number) => {
+    if (!secs) return "";
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 24,
-        gap: 2,
-        flex: 1,
-        overflow: "hidden",
-      }}
-    >
-      {animations.map((anim, i) => {
-        const isActive = i / 20 <= progress;
-        return (
-          <Animated.View
-            key={i}
-            style={{
-              width: 3,
-              height: 12,
-              transform: [{ scaleY: anim }],
-              backgroundColor: isActive
-                ? isMe ? "#FFF" : theme.primary
-                : isMe ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)",
-              borderRadius: 2,
-            }}
-          />
-        );
-      })}
+    <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 28,
+          gap: 2,
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        {animations.map((anim, i) => {
+          const barProgress = i / BAR_COUNT;
+          const isActive = barProgress <= progress;
+          const isPast = progress > 0 && barProgress < progress;
+          return (
+            <Animated.View
+              key={i}
+              style={{
+                width: 3,
+                borderRadius: 2,
+                height: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [3, 22],
+                }),
+                backgroundColor: isPast || isActive
+                  ? isMe ? "rgba(255,255,255,0.95)" : theme.primary
+                  : isMe ? "rgba(255,255,255,0.35)" : theme.border + "AA",
+              }}
+            />
+          );
+        })}
+      </View>
+      {duration !== undefined && duration > 0 && (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
+          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
+            {progress > 0 ? formatDuration(progress * duration) : "0:00"}
+          </ThemedText>
+          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
+            {formatDuration(duration)}
+          </ThemedText>
+        </View>
+      )}
     </View>
   );
 };
@@ -1516,22 +1563,31 @@ export default function ChatDetailScreen({
 
                     {item.type === "audio" && item.audioUrl && (
                       <Pressable
-                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}
+                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
                         onPress={() => playAudio(item.audioUrl!, item._id)}
                       >
-                        <Ionicons
-                          name={playingAudioId === item._id ? "pause" : "play"}
-                          size={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? 26 : 22}
-                          color={isMe ? "#FFF" : theme.primary}
-                        />
+                        <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
+                          <Ionicons
+                            name={
+                              playingAudioId === item._id
+                                ? "pause"
+                                : playingAudioId === "paused:" + item._id
+                                ? "play"
+                                : "play"
+                            }
+                            size={18}
+                            color={isMe ? "#FFF" : theme.primary}
+                          />
+                        </View>
                         <View style={styles.audioWaveform}>
                           <WavyWaveform
                             isPlaying={playingAudioId === item._id}
                             progress={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? audioProgress : 0}
-                            isMe={isMe} theme={theme}
+                            isMe={isMe}
+                            theme={theme}
+                            duration={(item as any).audioDuration}
                           />
                         </View>
-                        <Ionicons name="mic" size={14} color={isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary} />
                       </Pressable>
                     )}
 
@@ -2204,6 +2260,7 @@ const styles = StyleSheet.create<any>({
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
+  audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 2 },
   reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3 },
   reactionEmoji: { fontSize: 14 },
