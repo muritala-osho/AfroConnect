@@ -932,13 +932,32 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           </View>
 
           {/* VOICE BIO */}
-          <VoiceBio
-            voiceBioUrl={voiceBioUrl}
-            duration={voiceBioDuration}
-            isOwn={true}
-            onRecord={handleVoiceBioRecord}
-            onDelete={handleVoiceBioDelete}
-          />
+          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
+              <LinearGradient colors={['#EC489925', '#EC489910']} style={styles.sectionIconWrap}>
+                <Feather name="mic" size={17} color="#EC4899" />
+              </LinearGradient>
+              <View style={styles.sectionHeaderText}>
+                <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Voice Bio</ThemedText>
+                <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>Record a 30-second intro</ThemedText>
+              </View>
+              {voiceBioUrl ? (
+                <Pressable onPress={handleVoiceBioDelete} hitSlop={8} style={{ padding: 4 }}>
+                  <Feather name="trash-2" size={16} color={theme.textSecondary} />
+                </Pressable>
+              ) : null}
+            </View>
+            <View style={styles.sectionBody}>
+              <VoiceBio
+                voiceBioUrl={voiceBioUrl}
+                duration={voiceBioDuration}
+                isOwn={true}
+                hideHeader={true}
+                onRecord={handleVoiceBioRecord}
+                onDelete={handleVoiceBioDelete}
+              />
+            </View>
+          </View>
 
           {/* BOTTOM SAVE BUTTON */}
           <Pressable
@@ -1059,7 +1078,7 @@ const styles = StyleSheet.create({
   },
 
   scrollView: { flex: 1 },
-  content: { paddingHorizontal: 14, paddingTop: 14, gap: 14 },
+  content: { paddingHorizontal: 14, paddingTop: 16, gap: 16 },
 
   // PHOTO CARD
   photoCard: {
@@ -1132,7 +1151,7 @@ const styles = StyleSheet.create({
   sectionHeaderText: { flex: 1 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   sectionDescription: { fontSize: 12, marginTop: 1 },
-  sectionBody: { padding: 16, gap: 0 },
+  sectionBody: { padding: 16, gap: 4 },
 
   // FIELDS
   fieldContainer: { marginBottom: 14 },

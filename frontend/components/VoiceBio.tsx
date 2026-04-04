@@ -17,6 +17,7 @@ interface Props {
   voiceBioUrl?: string | null;
   duration?: number;
   isOwn?: boolean;
+  hideHeader?: boolean;
   onRecord?: (uri: string, duration: number) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
@@ -29,7 +30,7 @@ function formatTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, onRecord, onDelete }: Props) {
+export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hideHeader = false, onRecord, onDelete }: Props) {
   const { theme } = useTheme();
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -199,25 +200,32 @@ export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, onR
   const accentColor = recording ? "#FF3B30" : theme.primary;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.iconWrap, { backgroundColor: accentColor + "18" }]}>
-            <Ionicons name="mic" size={16} color={accentColor} />
-          </View>
-          <ThemedText style={[styles.title, { color: theme.text }]}>Voice Bio</ThemedText>
-          {recording && (
-            <View style={[styles.liveBadge, { backgroundColor: "#FF3B30" }]}>
-              <ThemedText style={styles.liveText}>REC</ThemedText>
+    <View style={hideHeader ? styles.compactContainer : [styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+      {!hideHeader && (
+        <View style={styles.header}>
+          <View style={styles.headerLeft}>
+            <View style={[styles.iconWrap, { backgroundColor: accentColor + "18" }]}>
+              <Ionicons name="mic" size={16} color={accentColor} />
             </View>
+            <ThemedText style={[styles.title, { color: theme.text }]}>Voice Bio</ThemedText>
+            {recording && (
+              <View style={[styles.liveBadge, { backgroundColor: "#FF3B30" }]}>
+                <ThemedText style={styles.liveText}>REC</ThemedText>
+              </View>
+            )}
+          </View>
+          {isOwn && hasVoiceBio && !recording && (
+            <Pressable onPress={handleDelete} hitSlop={8}>
+              <Feather name="trash-2" size={16} color={theme.textSecondary} />
+            </Pressable>
           )}
         </View>
-        {isOwn && hasVoiceBio && !recording && (
-          <Pressable onPress={handleDelete} hitSlop={8}>
-            <Feather name="trash-2" size={16} color={theme.textSecondary} />
-          </Pressable>
-        )}
-      </View>
+      )}
+      {hideHeader && recording && (
+        <View style={[styles.liveBadge, { backgroundColor: "#FF3B30", alignSelf: "flex-start" }]}>
+          <ThemedText style={styles.liveText}>● REC</ThemedText>
+        </View>
+      )}
 
       <View style={styles.waveRow}>
         <Pressable
@@ -292,6 +300,10 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.md,
     gap: Spacing.sm,
+  },
+  compactContainer: {
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
   },
   header: {
     flexDirection: "row",

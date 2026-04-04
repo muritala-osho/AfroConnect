@@ -130,16 +130,26 @@ export default function DailyMatchScreen() {
     setHasError(false);
     try {
       const res = await get<any>("/match/daily-match", token);
-      if (res.success !== false && res.data) {
-        const matchData = res.data.match ?? res.data;
-        const msg = res.data.message ?? null;
-        setMatch(matchData?._id ? matchData : null);
-        setMessage(msg);
-        if (matchData?._id) {
-          Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-        }
-      } else {
+      if (!res) {
         setHasError(true);
+        return;
+      }
+      // Handle both { data: { match } } and { match } and { success: false } shapes
+      if (res.success === false) {
+        // Not an error – just no match today
+        setMatch(null);
+        setMessage(res.message || "Check back tomorrow for a new match!");
+      } else {
+        const matchData = res.data?.match ?? res.data ?? res.match ?? (res._id ? res : null);
+        const msg = res.data?.message ?? res.message ?? null;
+        if (matchData?._id) {
+          setMatch(matchData);
+          setMessage(msg);
+          Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+        } else {
+          setMatch(null);
+          setMessage(msg);
+        }
       }
     } catch (e) {
       console.error("Daily match error:", e);
