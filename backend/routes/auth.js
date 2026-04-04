@@ -162,6 +162,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
         age: user.age,
         gender: user.gender,
         isAdmin: user.isAdmin || false,
+        isSupportAgent: user.isSupportAgent || false,
       },
     });
   } catch (error) {
@@ -298,6 +299,7 @@ router.post(
           photos: user.photos,
           verified: user.verified,
           isAdmin: user.isAdmin || false,
+          isSupportAgent: user.isSupportAgent || false,
           location: user.location,
           lookingFor: user.lookingFor,
           preferences: user.preferences,
