@@ -53,6 +53,8 @@ export default function VoiceCallScreen() {
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim2 = useRef(new Animated.Value(1)).current;
+  const pulseAnim3 = useRef(new Animated.Value(1)).current;
   const ringtoneRef = useRef<Audio.Sound | null>(null);
   const shouldRingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -355,19 +357,28 @@ export default function VoiceCallScreen() {
     else stopRingtoneSound();
   }, [callStatus]);
 
-  // Pulse animation
+  // Pulse animation - 3 staggered rings
   useEffect(() => {
     if (callStatus === "ringing" || callStatus === "connecting") {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.2, duration: 900, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        ])
-      );
-      loop.start();
-      return () => loop.stop();
+      const makeLoop = (anim: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: 1.25, duration: 900, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
+          ])
+        );
+      const l1 = makeLoop(pulseAnim, 0);
+      const l2 = makeLoop(pulseAnim2, 300);
+      const l3 = makeLoop(pulseAnim3, 600);
+      l1.start();
+      l2.start();
+      l3.start();
+      return () => { l1.stop(); l2.stop(); l3.stop(); };
     } else {
       pulseAnim.setValue(1);
+      pulseAnim2.setValue(1);
+      pulseAnim3.setValue(1);
     }
   }, [callStatus]);
 
@@ -399,7 +410,16 @@ export default function VoiceCallScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <LinearGradient colors={["#0f0c29", "#302b63", "#24243e"]} style={StyleSheet.absoluteFill} />
+      <LinearGradient
+        colors={["#1a0533", "#2d1b69", "#0f2027"]}
+        start={{ x: 0.2, y: 0 }}
+        end={{ x: 0.8, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Decorative blobs */}
+      <View style={styles.blobTop} />
+      <View style={styles.blobBottom} />
 
       {/* Hidden WebView for native Agora audio */}
       {Platform.OS !== "web" && (
@@ -412,12 +432,8 @@ export default function VoiceCallScreen() {
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
-          onPermissionRequest={(request) => {
-            request.grant(request.resources);
-          }}
-          onLoad={() => {
-            setWebviewReady(true);
-          }}
+          onPermissionRequest={(request) => { request.grant(request.resources); }}
+          onLoad={() => { setWebviewReady(true); }}
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
@@ -428,92 +444,105 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      <Animated.View style={[styles.centerSection, { opacity: fadeAnim, paddingTop: insets.top + 20 }]}>
-        <Animated.View style={[styles.avatarRing, { transform: [{ scale: pulseAnim }] }]}>
-          <View style={styles.avatarWrapper}>
-            <SafeImage
-              source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
-              style={styles.avatar}
-            />
+      <Animated.View style={[styles.centerSection, { opacity: fadeAnim, paddingTop: insets.top + 40 }]}>
+
+        {/* Call type pill at top */}
+        <View style={styles.callTypePill}>
+          <Ionicons name="call" size={13} color="#a78bfa" />
+          <ThemedText style={styles.callTypePillText}>
+            {callStatus === "connected" ? "Voice Call" : isIncoming ? "Incoming Voice Call" : "Voice Call"}
+          </ThemedText>
+        </View>
+
+        {/* Staggered pulse rings + avatar */}
+        <View style={styles.avatarContainer}>
+          {/* Outer ring 3 */}
+          <Animated.View style={[styles.pulseRing, styles.pulseRing3, { transform: [{ scale: pulseAnim3 }] }]} />
+          {/* Outer ring 2 */}
+          <Animated.View style={[styles.pulseRing, styles.pulseRing2, { transform: [{ scale: pulseAnim2 }] }]} />
+          {/* Inner ring 1 */}
+          <Animated.View style={[styles.pulseRing, styles.pulseRing1, { transform: [{ scale: pulseAnim }] }]} />
+
+          {/* Avatar frame */}
+          <View style={styles.avatarFrame}>
+            <View style={styles.avatarInner}>
+              <SafeImage
+                source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
+                style={styles.avatar}
+              />
+            </View>
           </View>
-        </Animated.View>
+        </View>
+
         <ThemedText style={styles.userName}>{userName || "Unknown"}</ThemedText>
         <ThemedText style={styles.statusText}>{getStatusText()}</ThemedText>
 
         {callStatus === "connected" && (
-          <View style={styles.callBadge}>
+          <View style={styles.liveBadge}>
             <View style={styles.liveDot} />
-            <ThemedText style={styles.callBadgeText}>Voice Call</ThemedText>
+            <ThemedText style={styles.liveBadgeText}>Connected</ThemedText>
+          </View>
+        )}
+
+        {(callStatus === "ringing" || callStatus === "connecting") && (
+          <View style={styles.encryptedBadge}>
+            <Ionicons name="lock-closed" size={11} color="rgba(167,139,250,0.8)" />
+            <ThemedText style={styles.encryptedText}>End-to-end encrypted</ThemedText>
           </View>
         )}
       </Animated.View>
 
-      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 40 }]}>
+      {/* Bottom controls */}
+      <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 36 }]}>
         {isIncoming && callStatus === "ringing" ? (
           <View style={styles.incomingRow}>
             <View style={styles.incomingBtnWrap}>
               <Pressable style={[styles.circleBtn, styles.declineBtn]} onPress={handleDecline}>
-                <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
               </Pressable>
               <ThemedText style={styles.btnLabel}>Decline</ThemedText>
             </View>
             <View style={styles.incomingBtnWrap}>
               <Pressable style={[styles.circleBtn, styles.acceptBtn]} onPress={handleAccept}>
-                <Ionicons name="call" size={32} color="#FFF" />
+                <Ionicons name="call" size={30} color="#FFF" />
               </Pressable>
               <ThemedText style={styles.btnLabel}>Accept</ThemedText>
             </View>
           </View>
         ) : callStatus === "connected" ? (
-          <>
+          <View style={styles.glassPanel}>
             <View style={styles.secondaryRow}>
               <View style={styles.controlWrap}>
-                <Pressable
-                  style={[styles.secondaryBtn, isMuted && styles.secondaryBtnActive]}
-                  onPress={toggleMute}
-                >
-                  <Ionicons
-                    name={isMuted ? "mic-off" : "mic"}
-                    size={24}
-                    color={isMuted ? "#000" : "#FFF"}
-                  />
+                <Pressable style={[styles.secondaryBtn, isMuted && styles.secondaryBtnActive]} onPress={toggleMute}>
+                  <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#1a0533" : "#FFF"} />
                 </Pressable>
                 <ThemedText style={styles.btnLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
               </View>
 
               <View style={styles.controlWrap}>
-                <Pressable
-                  style={[styles.secondaryBtn, isSpeakerOn && styles.secondaryBtnActive]}
-                  onPress={toggleSpeaker}
-                >
-                  <Ionicons
-                    name={isSpeakerOn ? "volume-high" : "ear"}
-                    size={24}
-                    color={isSpeakerOn ? "#000" : "#FFF"}
-                  />
+                <Pressable style={[styles.secondaryBtn, isSpeakerOn && styles.secondaryBtnActive]} onPress={toggleSpeaker}>
+                  <Ionicons name={isSpeakerOn ? "volume-high" : "ear"} size={22} color={isSpeakerOn ? "#1a0533" : "#FFF"} />
                 </Pressable>
                 <ThemedText style={styles.btnLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
               </View>
 
               <View style={styles.controlWrap}>
                 <Pressable style={styles.secondaryBtn} onPress={navigateToChat}>
-                  <MaterialCommunityIcons name="message-text" size={24} color="#FFF" />
+                  <MaterialCommunityIcons name="message-text" size={22} color="#FFF" />
                 </Pressable>
                 <ThemedText style={styles.btnLabel}>Message</ThemedText>
               </View>
             </View>
 
-            <View style={styles.hangupRow}>
-              <Pressable style={[styles.circleBtn, styles.declineBtn, styles.hangupBtn]} onPress={handleEndCall}>
-                <Ionicons name="call" size={34} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
-              </Pressable>
-              <ThemedText style={styles.btnLabel}>Hang Up</ThemedText>
-            </View>
-          </>
+            <Pressable style={styles.hangupBtn} onPress={handleEndCall}>
+              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+            </Pressable>
+            <ThemedText style={[styles.btnLabel, { marginTop: -4 }]}>Hang Up</ThemedText>
+          </View>
         ) : callStatus === "connecting" || (!isIncoming && callStatus === "ringing") ? (
-          <View style={styles.hangupRow}>
-            <Pressable style={[styles.circleBtn, styles.declineBtn, styles.hangupBtn]} onPress={handleEndCall}>
-              <Ionicons name="call" size={34} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+          <View style={styles.cancelWrap}>
+            <Pressable style={[styles.circleBtn, styles.declineBtn]} onPress={handleEndCall}>
+              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
             </Pressable>
             <ThemedText style={styles.btnLabel}>Cancel</ThemedText>
           </View>
@@ -525,92 +554,230 @@ export default function VoiceCallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  blobTop: {
+    position: "absolute",
+    top: -80,
+    left: -60,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: "rgba(139,92,246,0.18)",
+  },
+  blobBottom: {
+    position: "absolute",
+    bottom: -60,
+    right: -40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "rgba(59,130,246,0.14)",
+  },
+
   centerSection: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
-  avatarRing: {
+
+  callTypePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.3)",
+    marginBottom: 36,
+  },
+  callTypePillText: {
+    fontSize: 13,
+    color: "#a78bfa",
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+
+  avatarContainer: {
+    width: 200,
+    height: 200,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 32,
+  },
+  pulseRing: {
+    position: "absolute",
+    borderRadius: 999,
+  },
+  pulseRing1: {
     width: 180,
     height: 180,
-    borderRadius: 90,
-    padding: 6,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.2)",
-    marginBottom: 28,
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(139,92,246,0.15)",
+    borderWidth: 1.5,
+    borderColor: "rgba(139,92,246,0.35)",
   },
-  avatarWrapper: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+  pulseRing2: {
+    width: 200,
+    height: 200,
+    backgroundColor: "rgba(139,92,246,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.2)",
+  },
+  pulseRing3: {
+    width: 220,
+    height: 220,
+    backgroundColor: "rgba(139,92,246,0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(139,92,246,0.1)",
+  },
+  avatarFrame: {
+    width: 156,
+    height: 156,
+    borderRadius: 78,
+    padding: 4,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.18)",
+    shadowColor: "#8b5cf6",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 74,
     overflow: "hidden",
   },
   avatar: { width: "100%", height: "100%" },
-  userName: { fontSize: 32, fontWeight: "700", color: "#FFF", letterSpacing: 0.3 },
-  statusText: {
-    fontSize: 17,
-    color: "rgba(255,255,255,0.65)",
-    marginTop: 10,
-    letterSpacing: 1.5,
+
+  userName: {
+    fontSize: 30,
+    fontWeight: "700",
+    color: "#FFF",
+    letterSpacing: 0.3,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
   },
-  callBadge: {
+  statusText: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.6)",
+    marginTop: 8,
+    fontWeight: "500",
+    letterSpacing: 0.5,
+  },
+
+  liveBadge: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 16,
+    marginTop: 18,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: "rgba(16,185,129,0.15)",
+    backgroundColor: "rgba(16,185,129,0.12)",
     borderWidth: 1,
     borderColor: "rgba(16,185,129,0.3)",
     gap: 8,
   },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
-  callBadgeText: { fontSize: 13, color: "#10B981", fontWeight: "600" },
+  liveBadgeText: { fontSize: 13, color: "#10B981", fontWeight: "600" },
+
+  encryptedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 18,
+    gap: 5,
+  },
+  encryptedText: {
+    fontSize: 12,
+    color: "rgba(167,139,250,0.7)",
+    fontWeight: "500",
+  },
+
   bottomContainer: {
     width: "100%",
     alignItems: "center",
     paddingHorizontal: 24,
-    gap: 24,
+    gap: 0,
   },
+
+  glassPanel: {
+    width: "100%",
+    alignItems: "center",
+    gap: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    backgroundColor: "rgba(15,10,30,0.7)",
+    borderRadius: 32,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+
   incomingRow: {
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
     paddingHorizontal: 30,
+    marginBottom: 8,
   },
-  incomingBtnWrap: { alignItems: "center", gap: 10 },
+  incomingBtnWrap: { alignItems: "center", gap: 12 },
+
   secondaryRow: {
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
   },
   controlWrap: { alignItems: "center", gap: 8 },
-  hangupRow: { alignItems: "center", gap: 10 },
+
+  cancelWrap: { alignItems: "center", gap: 12 },
+
   circleBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     justifyContent: "center",
     alignItems: "center",
-    elevation: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  hangupBtn: { width: 72, height: 72, borderRadius: 36 },
-  acceptBtn: { backgroundColor: "#10B981" },
-  declineBtn: { backgroundColor: "#E74C3C" },
+  hangupBtn: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#EF4444",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#EF4444",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  acceptBtn: {
+    backgroundColor: "#10B981",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
+  declineBtn: {
+    backgroundColor: "#EF4444",
+    shadowColor: "#EF4444",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+  },
   secondaryBtn: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "rgba(255,255,255,0.1)",
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1,
@@ -621,8 +788,8 @@ const styles = StyleSheet.create({
   },
   btnLabel: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.65)",
     fontWeight: "500",
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
 });

@@ -568,9 +568,6 @@ export default function VideoCallScreen() {
         </View>
       );
     }
-    if (Platform.OS !== 'web' && callStatus === 'connected') {
-      return null;
-    }
     if (isCameraOff) {
       return (
         <View style={styles.cameraOffPlaceholder}>
@@ -633,7 +630,7 @@ export default function VideoCallScreen() {
         </View>
       </Animated.View>
 
-      {(Platform.OS === 'web' || callStatus !== 'connected') && callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'failed' && (
+      {callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'failed' && callStatus !== 'missed' && (
         <View style={[styles.selfVideoContainer, { top: insets.top + 100 }]}>
           {renderLocalVideo()}
           <Pressable style={styles.flipButton} onPress={flipCamera}>
