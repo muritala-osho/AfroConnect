@@ -339,7 +339,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
   const renderCreate = () => (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.createForm} keyboardShouldPersistTaps="handled">
         <Text style={[styles.formLabel, { color: theme.text }]}>Subject</Text>
@@ -416,8 +416,8 @@ export default function SupportMessagesScreen({ navigation }: any) {
     return (
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={90}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         {/* Status/category info bar */}
         <View style={[styles.threadInfoBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
