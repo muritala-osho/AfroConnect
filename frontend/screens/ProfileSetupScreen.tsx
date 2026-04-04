@@ -25,7 +25,7 @@ import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareS
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
 
@@ -48,20 +48,24 @@ type PhotoSlot = PhotoItem | null;
 const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
 const INTERESTS_OPTIONS = [
-  { label: "🎵 Music", value: "Music" },
-  { label: "✈️ Travel", value: "Travel" },
-  { label: "🍕 Food", value: "Food" },
-  { label: "⚽ Sports", value: "Sports" },
-  { label: "🎨 Art", value: "Art" },
-  { label: "🎬 Movies", value: "Movies" },
-  { label: "📚 Reading", value: "Reading" },
-  { label: "🎮 Gaming", value: "Gaming" },
-  { label: "💪 Fitness", value: "Fitness" },
-  { label: "📸 Photography", value: "Photography" },
-  { label: "💃 Dancing", value: "Dancing" },
-  { label: "👨‍🍳 Cooking", value: "Cooking" },
-  { label: "👗 Fashion", value: "Fashion" },
-  { label: "💻 Technology", value: "Technology" },
+  { label: "🎵 Music", value: "Music", color: "#FF6B6B" },
+  { label: "✈️ Travel", value: "Travel", color: "#4ECDC4" },
+  { label: "🍕 Food", value: "Food", color: "#FFE66D" },
+  { label: "⚽ Sports", value: "Sports", color: "#A8E6CF" },
+  { label: "🎨 Art", value: "Art", color: "#DDA0DD" },
+  { label: "🎬 Movies", value: "Movies", color: "#FFA07A" },
+  { label: "📚 Reading", value: "Reading", color: "#87CEEB" },
+  { label: "🎮 Gaming", value: "Gaming", color: "#98FB98" },
+  { label: "💪 Fitness", value: "Fitness", color: "#F0A500" },
+  { label: "📸 Photography", value: "Photography", color: "#B19CD9" },
+  { label: "💃 Dancing", value: "Dancing", color: "#FF9A9E" },
+  { label: "👨‍🍳 Cooking", value: "Cooking", color: "#FFEAA7" },
+  { label: "👗 Fashion", value: "Fashion", color: "#FD79A8" },
+  { label: "💻 Technology", value: "Technology", color: "#74B9FF" },
+  { label: "🌿 Nature", value: "Nature", color: "#55EFC4" },
+  { label: "🎭 Theatre", value: "Theatre", color: "#E17055" },
+  { label: "🏄 Surfing", value: "Surfing", color: "#00CEC9" },
+  { label: "🎸 Guitar", value: "Guitar", color: "#FDCB6E" },
 ];
 
 const ZODIAC_SIGNS = [
@@ -97,39 +101,35 @@ const PRIVACY_OPTIONS: { value: PhotoPrivacy; label: string; icon: string; descr
 ];
 
 const LOOKING_FOR_OPTIONS = [
-  { label: "💍 Relationship", value: "Relationship", desc: "Serious & long-term" },
-  { label: "👯 Friendship", value: "Friendship", desc: "Platonic connection" },
-  { label: "😊 Casual", value: "Casual", desc: "Keeping it light" },
-  { label: "🤷 Not sure", value: "Not sure", desc: "Open to anything" },
+  { label: "💍 Relationship", value: "Relationship", desc: "Serious & long-term", color: "#FF6B6B" },
+  { label: "👯 Friendship", value: "Friendship", desc: "Platonic connection", color: "#4ECDC4" },
+  { label: "😊 Casual", value: "Casual", desc: "Keeping it light", color: "#FFE66D" },
+  { label: "🤷 Not sure", value: "Not sure", desc: "Open to anything", color: "#A8E6CF" },
 ];
 
+// Step order: Photos → Basic Info → Interests → Bio → Preferences
 const STEP_META = [
-  { icon: "user", title: "About You", subtitle: "Tell us a little about yourself", color: "#10B981" },
-  { icon: "edit-3", title: "Your Bio", subtitle: "Write something that shows your personality", color: "#059669" },
-  { icon: "camera", title: "Add Photos", subtitle: "Add at least 4 photos to continue", color: "#0D9488" },
-  { icon: "heart", title: "Interests", subtitle: "Select 3–5 things you love", color: "#10B981" },
-  { icon: "sliders", title: "Preferences", subtitle: "Who would you like to meet?", color: "#059669" },
+  { icon: "camera", title: "Your Photos", subtitle: "Add at least 4 great photos", color: "#10B981", step: 1 },
+  { icon: "user", title: "About You", subtitle: "Let's get to know you", color: "#059669", step: 2 },
+  { icon: "heart", title: "Your Vibe", subtitle: "What are you into?", color: "#0D9488", step: 3 },
+  { icon: "edit-3", title: "Your Story", subtitle: "Write something that shows your personality", color: "#10B981", step: 4 },
+  { icon: "sliders", title: "Preferences", subtitle: "Who would you like to meet?", color: "#059669", step: 5 },
 ];
 
-function StepCard({ children, theme }: { children: React.ReactNode; theme: any }) {
-  const slideAnim = useRef(new Animated.Value(24)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+const RELIGION_OPTIONS = [
+  { value: "christian", label: "Christian" },
+  { value: "muslim", label: "Muslim" },
+  { value: "traditional", label: "Traditional" },
+  { value: "atheist", label: "Atheist" },
+  { value: "agnostic", label: "Agnostic" },
+  { value: "spiritual", label: "Spiritual" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
 
-  useEffect(() => {
-    slideAnim.setValue(24);
-    fadeAnim.setValue(0);
-    Animated.parallel([
-      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
-      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start();
-  }, []);
-
-  return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      {children}
-    </Animated.View>
-  );
-}
+const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
+const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
+const BIG_SLOT_HEIGHT = BIG_SLOT_WIDTH * 1.1;
 
 export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenProps) {
   const { theme } = useTheme();
@@ -173,23 +173,15 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
   const [photoPickerSlotIndex, setPhotoPickerSlotIndex] = useState<number>(0);
 
-  const RELIGION_OPTIONS = [
-    { value: "christian", label: "Christian" },
-    { value: "muslim", label: "Muslim" },
-    { value: "traditional", label: "Traditional" },
-    { value: "atheist", label: "Atheist" },
-    { value: "agnostic", label: "Agnostic" },
-    { value: "spiritual", label: "Spiritual" },
-    { value: "other", label: "Other" },
-    { value: "prefer_not_to_say", label: "Prefer not to say" },
-  ];
-
   const progressAnim = useRef(new Animated.Value(1 / 5)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.timing(progressAnim, {
       toValue: step / 5,
-      duration: 350,
+      duration: 400,
       useNativeDriver: false,
     }).start();
   }, [step]);
@@ -237,17 +229,39 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     saveDraft();
   }, [name, age, gender, zodiacSign, jobTitle, education, livingIn, religion, ethnicity, bio, lookingFor, interests, photos, minAge, maxAge, maxDistance, preferredGenders, step]);
 
+  const animateToStep = (newStep: number, direction: "forward" | "back") => {
+    const startX = direction === "forward" ? 60 : -60;
+    slideAnim.setValue(startX);
+    fadeAnim.setValue(0);
+    scaleAnim.setValue(0.96);
+    setStep(newStep);
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 65, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 9, tension: 65, useNativeDriver: true }),
+    ]).start();
+  };
+
   const toggleInterest = (interest: string) => {
     if (interests.includes(interest)) {
       setInterests(interests.filter((i) => i !== interest));
     } else if (interests.length < 5) {
       Haptics.selectionAsync();
       setInterests([...interests, interest]);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
   };
 
+  // Step 1 = Photos, Step 2 = Basic Info, Step 3 = Interests, Step 4 = Bio, Step 5 = Preferences
   const handleNext = () => {
     if (step === 1) {
+      const photoCount = photos.filter((p) => p !== null).length;
+      if (photoCount < 4) {
+        Alert.alert("More Photos Needed", "Please add at least 4 photos to continue");
+        return;
+      }
+    } else if (step === 2) {
       const trimmedName = name.trim();
       const trimmedAge = age.trim();
       if (!trimmedName || !trimmedAge || !gender || !jobTitle.trim() || !education || !livingIn.trim() || !ethnicity) {
@@ -265,19 +279,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       }
       setName(trimmedName);
       setAge(trimmedAge);
-    } else if (step === 2) {
-      if (!bio.trim()) {
-        Alert.alert("Bio Required", "Please add a short bio");
-        return;
-      }
-      setBio(bio.trim());
     } else if (step === 3) {
-      const photoCount = photos.filter((p) => p !== null).length;
-      if (photoCount < 4) {
-        Alert.alert("More Photos Needed", "Please add at least 4 photos to continue");
-        return;
-      }
-    } else if (step === 4) {
       if (interests.length < 3) {
         Alert.alert("More Interests Needed", "Please select at least 3 interests");
         return;
@@ -286,9 +288,20 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         Alert.alert("Looking For?", "Please select what you're looking for");
         return;
       }
+    } else if (step === 4) {
+      if (!bio.trim()) {
+        Alert.alert("Bio Required", "Please add a short bio");
+        return;
+      }
+      setBio(bio.trim());
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setStep(step + 1);
+    animateToStep(step + 1, "forward");
+  };
+
+  const handleBack = () => {
+    Haptics.selectionAsync();
+    animateToStep(step - 1, "back");
   };
 
   const togglePreferredGender = (g: string) => {
@@ -339,6 +352,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         const existingPhoto = newPhotos[slotIndex];
         newPhotos[slotIndex] = { ...uploaded, privacy: existingPhoto?.privacy || "public" };
         setPhotos(newPhotos);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Alert.alert("Upload Failed", "Could not upload photo. Please try again.");
       }
@@ -479,35 +493,40 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     inputRange: [0, 1],
     outputRange: ["0%", "100%"],
   });
+  const photoCount = photos.filter((p) => p !== null).length;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <StatusBar barStyle="light-content" />
 
-      {/* Gradient Header */}
+      {/* ── Gradient Header ── */}
       <LinearGradient
         colors={["#10B981", "#059669"]}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.gradientHeader}
       >
-        {/* Step counter */}
+        {/* Top row */}
         <View style={styles.stepCounterRow}>
-          <ThemedText style={styles.stepCounter}>Step {step} of 5</ThemedText>
+          <View style={styles.stepBadge}>
+            <ThemedText style={styles.stepBadgeText}>{step} / 5</ThemedText>
+          </View>
           <View style={styles.stepIconBubble}>
-            <Feather name={stepMeta.icon as any} size={16} color="#fff" />
+            <Feather name={stepMeta.icon as any} size={15} color="#fff" />
           </View>
         </View>
 
-        {/* Progress bar */}
+        {/* Animated Progress Bar */}
         <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: progressWidth }]} />
+          <Animated.View style={[styles.progressFill, { width: progressWidth }]}>
+            <View style={styles.progressGlow} />
+          </Animated.View>
         </View>
 
         {/* Step dots */}
         <View style={styles.stepDots}>
           {[1, 2, 3, 4, 5].map((s) => (
-            <View
+            <Animated.View
               key={s}
               style={[
                 styles.stepDot,
@@ -515,28 +534,199 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 s < step && styles.stepDotDone,
               ]}
             >
-              {s < step && <Feather name="check" size={8} color="#fff" />}
-            </View>
+              {s < step && <Feather name="check" size={7} color="#fff" />}
+            </Animated.View>
           ))}
         </View>
 
-        {/* Title */}
+        {/* Title & subtitle */}
         <ThemedText style={styles.headerTitle}>{stepMeta.title}</ThemedText>
         <ThemedText style={styles.headerSubtitle}>{stepMeta.subtitle}</ThemedText>
       </LinearGradient>
 
-      {/* Scrollable content */}
+      {/* ── Scrollable Content ── */}
       <ScreenKeyboardAwareScrollView contentContainerStyle={{ paddingTop: 0 }}>
-        <View style={styles.content}>
-          <StepCard theme={theme}>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
+            },
+          ]}
+        >
 
-            {/* ── STEP 1: Basic Info ── */}
-            {step === 1 && (
-              <View style={styles.form}>
+          {/* ════════════════════════════════════════════
+              STEP 1 — Photos
+          ════════════════════════════════════════════ */}
+          {step === 1 && (
+            <View style={styles.form}>
+              {/* Hero photo slot */}
+              <View style={styles.heroPhotoContainer}>
+                <Pressable
+                  style={[
+                    styles.heroPhotoSlot,
+                    { borderColor: photos[0] ? theme.primary : theme.border, backgroundColor: theme.surface },
+                  ]}
+                  onPress={() => showPhotoOptions(0)}
+                  disabled={uploadingPhoto === 0}
+                >
+                  {photos[0] ? (
+                    <>
+                      <Image source={{ uri: photos[0].url }} style={styles.heroPhotoImage} contentFit="cover" />
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.55)"]}
+                        style={styles.heroGradientOverlay}
+                      />
+                      <Pressable
+                        style={[styles.heroRemoveBtn, { backgroundColor: theme.error }]}
+                        onPress={() => removePhoto(0)}
+                      >
+                        <Feather name="x" size={13} color="#fff" />
+                      </Pressable>
+                      <View style={styles.heroBadge}>
+                        <Feather name="star" size={11} color="#FFD700" />
+                        <ThemedText style={styles.heroBadgeText}>Main Photo</ThemedText>
+                      </View>
+                      <Pressable
+                        style={styles.heroPrivacyBtn}
+                        onPress={() => openPrivacyModal(0)}
+                      >
+                        <Feather
+                          name={getPrivacyIcon(photos[0].privacy) as any}
+                          size={13}
+                          color={photos[0].privacy === "private" ? "#FF6B6B" : photos[0].privacy === "friends" ? "#FFC629" : "#10B981"}
+                        />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <View style={styles.heroEmptyState}>
+                      {uploadingPhoto === 0 ? (
+                        <ActivityIndicator color={theme.primary} size="large" />
+                      ) : (
+                        <>
+                          <LinearGradient
+                            colors={["#10B981", "#059669"]}
+                            style={styles.heroAddIcon}
+                          >
+                            <Feather name="camera" size={28} color="#fff" />
+                          </LinearGradient>
+                          <ThemedText style={[styles.heroEmptyTitle, { color: theme.text }]}>Add your best photo</ThemedText>
+                          <ThemedText style={[styles.heroEmptySubtitle, { color: theme.textSecondary }]}>
+                            This will be your main profile photo
+                          </ThemedText>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
+              </View>
+
+              {/* Additional photos grid */}
+              <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary }]}>Add more photos</ThemedText>
+              <View style={styles.smallPhotoGrid}>
+                {[1, 2, 3, 4, 5].map((slotIndex) => {
+                  const photo = photos[slotIndex];
+                  const isUploading = uploadingPhoto === slotIndex;
+                  return (
+                    <Pressable
+                      key={slotIndex}
+                      style={[
+                        styles.smallPhotoSlot,
+                        { borderColor: photo ? theme.primary : theme.border, backgroundColor: theme.surface },
+                      ]}
+                      onPress={() => showPhotoOptions(slotIndex)}
+                      disabled={isUploading}
+                    >
+                      {photo ? (
+                        <>
+                          <Image source={{ uri: photo.url }} style={styles.smallPhotoImage} contentFit="cover" />
+                          <Pressable
+                            style={[styles.smallRemoveBtn, { backgroundColor: theme.error }]}
+                            onPress={() => removePhoto(slotIndex)}
+                          >
+                            <Feather name="x" size={9} color="#fff" />
+                          </Pressable>
+                          <Pressable
+                            style={styles.smallPrivacyBtn}
+                            onPress={() => openPrivacyModal(slotIndex)}
+                          >
+                            <Feather
+                              name={getPrivacyIcon(photo.privacy) as any}
+                              size={10}
+                              color={photo.privacy === "private" ? "#FF6B6B" : photo.privacy === "friends" ? "#FFC629" : "#10B981"}
+                            />
+                          </Pressable>
+                        </>
+                      ) : isUploading ? (
+                        <ActivityIndicator color={theme.primary} size="small" />
+                      ) : (
+                        <View style={[styles.smallAddIcon, { backgroundColor: `${theme.primary}15` }]}>
+                          <Feather name="plus" size={18} color={theme.primary} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Photo progress indicator */}
+              <View style={[styles.photoProgressCard, {
+                backgroundColor: photoCount >= 4 ? `${theme.primary}12` : theme.surface,
+                borderColor: photoCount >= 4 ? theme.primary : theme.border,
+              }]}>
+                <View style={styles.photoProgressDots}>
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.photoProgressDot,
+                        { backgroundColor: i <= photoCount ? theme.primary : theme.border },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <ThemedText style={[styles.photoProgressText, { color: photoCount >= 4 ? theme.primary : theme.textSecondary }]}>
+                  {photoCount >= 4
+                    ? `${photoCount} photos added ✓ Ready to continue`
+                    : `${photoCount}/4 photos — need ${4 - photoCount} more`}
+                </ThemedText>
+              </View>
+
+              {/* Privacy legend */}
+              <View style={styles.privacyLegend}>
+                {[
+                  { icon: "globe", color: theme.primary, label: "Public" },
+                  { icon: "users", color: "#FFC629", label: "Friends" },
+                  { icon: "lock", color: "#FF6B6B", label: "Private" },
+                ].map((item) => (
+                  <View key={item.label} style={styles.legendItem}>
+                    <Feather name={item.icon as any} size={12} color={item.color} />
+                    <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>{item.label}</ThemedText>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* ════════════════════════════════════════════
+              STEP 2 — Basic Info
+          ════════════════════════════════════════════ */}
+          {step === 2 && (
+            <View style={styles.form}>
+              {/* Name & Age row */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#10B98120" }]}>
+                    <Feather name="user" size={14} color={theme.primary} />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Identity</ThemedText>
+                </View>
+
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Full Name *</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                     placeholder="Your name"
                     placeholderTextColor={theme.textSecondary}
                     value={name}
@@ -544,17 +734,31 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   />
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Age *</ThemedText>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="18"
-                    placeholderTextColor={theme.textSecondary}
-                    value={age}
-                    onChangeText={setAge}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
+                <View style={styles.rowInputs}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Age *</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="18"
+                      placeholderTextColor={theme.textSecondary}
+                      value={age}
+                      onChangeText={setAge}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Personality</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="INFJ, ENFP..."
+                      placeholderTextColor={theme.textSecondary}
+                      value={personalityType}
+                      onChangeText={setPersonalityType}
+                      maxLength={4}
+                      autoCapitalize="characters"
+                    />
+                  </View>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -565,7 +769,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                         key={g}
                         style={[
                           styles.pill,
-                          { borderColor: theme.border, backgroundColor: theme.surface },
+                          { borderColor: theme.border, backgroundColor: theme.background },
                           gender.toLowerCase() === g.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
                         ]}
                         onPress={() => { Haptics.selectionAsync(); setGender(g); }}
@@ -577,49 +781,32 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                     ))}
                   </View>
                 </View>
+              </View>
 
-                <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Zodiac Sign</ThemedText>
-                  <Pressable
-                    style={[styles.dropdownButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                    onPress={() => setZodiacModalVisible(true)}
-                  >
-                    <ThemedText style={{ color: zodiacSign ? theme.text : theme.textSecondary, fontSize: 15 }}>
-                      {zodiacSign ? ZODIAC_SIGNS.find((z) => z.value === zodiacSign)?.label : "Select your sign"}
-                    </ThemedText>
-                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
-                  </Pressable>
+              {/* Background card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#4ECDC420" }]}>
+                    <Feather name="map-pin" size={14} color="#4ECDC4" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Background</ThemedText>
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Job Title *</ThemedText>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Ethnicity *</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. Software Engineer"
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. Yoruba, Igbo, Ashanti"
                     placeholderTextColor={theme.textSecondary}
-                    value={jobTitle}
-                    onChangeText={setJobTitle}
-                    maxLength={100}
+                    value={ethnicity}
+                    onChangeText={setEthnicity}
                   />
-                </View>
-
-                <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Education *</ThemedText>
-                  <Pressable
-                    style={[styles.dropdownButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                    onPress={() => setEducationModalVisible(true)}
-                  >
-                    <ThemedText style={{ color: education ? theme.text : theme.textSecondary, fontSize: 15 }}>
-                      {education ? EDUCATION_OPTIONS.find((e) => e.value === education)?.label : "Select education level"}
-                    </ThemedText>
-                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
-                  </Pressable>
                 </View>
 
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Living In *</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                     placeholder="e.g. Lagos, Nigeria"
                     placeholderTextColor={theme.textSecondary}
                     value={livingIn}
@@ -631,7 +818,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Religion</ThemedText>
                   <Pressable
-                    style={[styles.dropdownButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
                     onPress={() => setReligionModalVisible(true)}
                   >
                     <ThemedText style={{ color: religion ? theme.text : theme.textSecondary, fontSize: 15 }}>
@@ -642,27 +829,61 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Ethnicity *</ThemedText>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Zodiac Sign</ThemedText>
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setZodiacModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: zodiacSign ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {zodiacSign ? ZODIAC_SIGNS.find((z) => z.value === zodiacSign)?.label : "Select your sign"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Career card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#FFE66D30" }]}>
+                    <Feather name="briefcase" size={14} color="#F0A500" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Career</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Job Title *</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. Yoruba, Igbo, Ashanti"
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. Software Engineer"
                     placeholderTextColor={theme.textSecondary}
-                    value={ethnicity}
-                    onChangeText={setEthnicity}
+                    value={jobTitle}
+                    onChangeText={setJobTitle}
+                    maxLength={100}
                   />
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Personality Type</ThemedText>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. INFJ, ENFP"
-                    placeholderTextColor={theme.textSecondary}
-                    value={personalityType}
-                    onChangeText={setPersonalityType}
-                    maxLength={4}
-                    autoCapitalize="characters"
-                  />
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Education *</ThemedText>
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setEducationModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: education ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {education ? EDUCATION_OPTIONS.find((e) => e.value === education)?.label : "Select education level"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Lifestyle card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#DDA0DD30" }]}>
+                    <Feather name="coffee" size={14} color="#DDA0DD" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Lifestyle</ThemedText>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -673,7 +894,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                         key={s}
                         style={[
                           styles.pill,
-                          { borderColor: theme.border, backgroundColor: theme.surface },
+                          { borderColor: theme.border, backgroundColor: theme.background },
                           smoking === s.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
                         ]}
                         onPress={() => setSmoking(s.toLowerCase())}
@@ -692,7 +913,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                         key={d}
                         style={[
                           styles.pill,
-                          { borderColor: theme.border, backgroundColor: theme.surface },
+                          { borderColor: theme.border, backgroundColor: theme.background },
                           drinking === d.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
                         ]}
                         onPress={() => setDrinking(d.toLowerCase())}
@@ -712,7 +933,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                           key={item.l}
                           style={[
                             styles.pill,
-                            { flex: 1, borderColor: theme.border, backgroundColor: theme.surface },
+                            { flex: 1, borderColor: theme.border, backgroundColor: theme.background },
                             hasKids === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
                           ]}
                           onPress={() => setHasKids(item.v)}
@@ -731,7 +952,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                           key={item.l}
                           style={[
                             styles.pill,
-                            { flex: 1, borderColor: theme.border, backgroundColor: theme.surface },
+                            { flex: 1, borderColor: theme.border, backgroundColor: theme.background },
                             hasPets === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
                           ]}
                           onPress={() => setHasPets(item.v)}
@@ -743,208 +964,243 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   </View>
                 </View>
               </View>
-            )}
+            </View>
+          )}
 
-            {/* ── STEP 2: Bio ── */}
-            {step === 2 && (
-              <View style={styles.form}>
-                <View style={[styles.bioCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <TextInput
-                    style={[styles.bioInput, { color: theme.text }]}
-                    placeholder="Tell people about yourself, your culture, your passions, and what makes you unique..."
-                    placeholderTextColor={theme.textSecondary}
-                    value={bio}
-                    onChangeText={setBio}
-                    multiline
-                    maxLength={300}
-                    textAlignVertical="top"
-                  />
-                  <View style={styles.bioFooter}>
-                    <ThemedText style={[styles.charCount, { color: bio.length > 250 ? theme.primary : theme.textSecondary }]}>
-                      {bio.length}/300
-                    </ThemedText>
-                  </View>
-                </View>
-
-                <View style={[styles.bioTipsCard, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}25` }]}>
-                  <ThemedText style={[styles.bioTipsTitle, { color: theme.primary }]}>✨ Tips for a great bio</ThemedText>
-                  {["Share your cultural background", "Mention what makes you laugh", "Talk about your passions", "Keep it authentic and genuine"].map((tip) => (
-                    <View key={tip} style={styles.bioTipRow}>
-                      <Feather name="check-circle" size={13} color={theme.primary} />
-                      <ThemedText style={[styles.bioTipText, { color: theme.text }]}>{tip}</ThemedText>
-                    </View>
-                  ))}
+          {/* ════════════════════════════════════════════
+              STEP 3 — Interests & Looking For
+          ════════════════════════════════════════════ */}
+          {step === 3 && (
+            <View style={styles.form}>
+              {/* Selection counter badge */}
+              <View style={styles.interestHeader}>
+                <ThemedText style={[styles.interestTitle, { color: theme.text }]}>Pick your interests</ThemedText>
+                <View style={[styles.selectionBadge, {
+                  backgroundColor: interests.length >= 3 ? theme.primary : theme.surface,
+                  borderColor: interests.length >= 3 ? theme.primary : theme.border,
+                }]}>
+                  <ThemedText style={[styles.selectionBadgeText, {
+                    color: interests.length >= 3 ? "#fff" : theme.textSecondary,
+                  }]}>
+                    {interests.length} / 5
+                  </ThemedText>
                 </View>
               </View>
-            )}
 
-            {/* ── STEP 3: Photos ── */}
-            {step === 3 && (
-              <View style={styles.form}>
-                <View style={styles.photoGrid}>
-                  {[[0, 1], [2, 3], [4, 5]].map((rowIndices, rowIndex) => (
-                    <View key={rowIndex} style={styles.photoRow}>
-                      {rowIndices.map((slotIndex) => {
-                        const photo = photos[slotIndex];
-                        const isUploading = uploadingPhoto === slotIndex;
-                        const isProfilePhoto = slotIndex === 0;
-                        return (
-                          <View
-                            key={slotIndex}
-                            style={[
-                              styles.photoSlot,
-                              isProfilePhoto && { borderColor: theme.primary, borderWidth: 2.5 },
-                              !isProfilePhoto && { borderColor: theme.border },
-                            ]}
-                          >
-                            {photo ? (
-                              <>
-                                <Image source={{ uri: photo.url }} style={styles.photoImage} contentFit="cover" />
-                                <Pressable
-                                  style={[styles.removePhotoBtn, { backgroundColor: theme.error }]}
-                                  onPress={() => removePhoto(slotIndex)}
-                                >
-                                  <Feather name="x" size={12} color="#fff" />
-                                </Pressable>
-                                <View style={[styles.photoBadge, { backgroundColor: isProfilePhoto ? theme.primary : "rgba(0,0,0,0.45)" }]}>
-                                  <ThemedText style={styles.photoBadgeText}>
-                                    {isProfilePhoto ? "Main" : `${slotIndex + 1}`}
-                                  </ThemedText>
-                                </View>
-                                <Pressable
-                                  style={[styles.privacyBtn, { backgroundColor: "rgba(0,0,0,0.5)" }]}
-                                  onPress={() => openPrivacyModal(slotIndex)}
-                                >
-                                  <Feather
-                                    name={getPrivacyIcon(photo.privacy) as any}
-                                    size={13}
-                                    color={photo.privacy === "private" ? "#FF6B6B" : photo.privacy === "friends" ? "#FFC629" : "#10B981"}
-                                  />
-                                </Pressable>
-                              </>
-                            ) : (
-                              <Pressable
-                                style={[styles.emptyPhotoSlot, { backgroundColor: theme.surface }]}
-                                onPress={() => showPhotoOptions(slotIndex)}
-                                disabled={isUploading}
-                              >
-                                {isUploading ? (
-                                  <ActivityIndicator color={theme.primary} />
-                                ) : (
-                                  <>
-                                    <View style={[styles.addPhotoIcon, { backgroundColor: `${theme.primary}15` }]}>
-                                      <Feather name={isProfilePhoto ? "user" : "plus"} size={22} color={theme.primary} />
-                                    </View>
-                                    <ThemedText style={[styles.slotLabel, { color: isProfilePhoto ? theme.primary : theme.textSecondary }]}>
-                                      {isProfilePhoto ? "Profile Photo" : `Photo ${slotIndex + 1}`}
-                                    </ThemedText>
-                                  </>
-                                )}
-                              </Pressable>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                </View>
+              <ThemedText style={[styles.interestSubtitle, { color: theme.textSecondary }]}>
+                Select 3–5 things you love
+              </ThemedText>
 
-                <View style={[styles.photoInfoRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                  <ThemedText style={[styles.photoCount, { color: theme.primary }]}>
-                    {photos.filter((p) => p !== null).length}/6
-                  </ThemedText>
-                  <ThemedText style={[styles.photoInfoText, { color: theme.textSecondary }]}>
-                    photos added · 4 minimum required
-                  </ThemedText>
-                </View>
-
-                <View style={styles.privacyLegend}>
-                  {[
-                    { icon: "globe", color: theme.primary, label: "Public" },
-                    { icon: "users", color: "#FFC629", label: "Friends only" },
-                    { icon: "lock", color: "#FF6B6B", label: "Private" },
-                  ].map((item) => (
-                    <View key={item.label} style={styles.legendItem}>
-                      <Feather name={item.icon as any} size={13} color={item.color} />
-                      <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>{item.label}</ThemedText>
-                    </View>
-                  ))}
-                </View>
+              <View style={styles.chipsWrap}>
+                {INTERESTS_OPTIONS.map((item) => {
+                  const selected = interests.includes(item.value);
+                  return (
+                    <Pressable
+                      key={item.value}
+                      onPress={() => toggleInterest(item.value)}
+                      style={[
+                        styles.chip,
+                        selected
+                          ? { backgroundColor: item.color, borderColor: item.color }
+                          : { backgroundColor: theme.surface, borderColor: theme.border },
+                      ]}
+                    >
+                      <ThemedText style={[styles.chipText, { color: selected ? "#fff" : theme.text }]}>
+                        {item.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
               </View>
-            )}
 
-            {/* ── STEP 4: Interests ── */}
-            {step === 4 && (
-              <View style={styles.form}>
-                <View style={[styles.selectionHint, { backgroundColor: `${theme.primary}10` }]}>
-                  <ThemedText style={[styles.selectionHintText, { color: theme.primary }]}>
-                    {interests.length}/5 selected · min 3
-                  </ThemedText>
-                </View>
+              {/* Looking For section */}
+              <View style={styles.lookingForSection}>
+                <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Looking for</ThemedText>
+                <ThemedText style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>What kind of connection?</ThemedText>
 
-                <View style={styles.chipsWrap}>
-                  {INTERESTS_OPTIONS.map((item) => {
-                    const selected = interests.includes(item.value);
+                <View style={styles.lookingForGrid}>
+                  {LOOKING_FOR_OPTIONS.map((opt) => {
+                    const selected = lookingFor === opt.value;
                     return (
                       <Pressable
-                        key={item.value}
-                        onPress={() => toggleInterest(item.value)}
+                        key={opt.value}
                         style={[
-                          styles.chip,
-                          selected
-                            ? { backgroundColor: theme.primary, borderColor: theme.primary }
-                            : { backgroundColor: theme.surface, borderColor: theme.border },
+                          styles.lookingForCard,
+                          {
+                            borderColor: selected ? opt.color : theme.border,
+                            backgroundColor: selected ? `${opt.color}18` : theme.surface,
+                          },
                         ]}
+                        onPress={() => { Haptics.selectionAsync(); setLookingFor(opt.value); }}
                       >
-                        <ThemedText style={[styles.chipText, { color: selected ? "#fff" : theme.text }]}>
-                          {item.label}
+                        <ThemedText style={styles.lookingForEmoji}>{opt.label.split(" ")[0]}</ThemedText>
+                        <ThemedText style={[styles.lookingForLabel, { color: selected ? opt.color : theme.text }]}>
+                          {opt.label.split(" ").slice(1).join(" ")}
                         </ThemedText>
-                        {selected && <Feather name="check" size={12} color="#fff" style={{ marginLeft: 4 }} />}
+                        <ThemedText style={[styles.lookingForDesc, { color: theme.textSecondary }]}>{opt.desc}</ThemedText>
+                        {selected && (
+                          <View style={[styles.lookingForCheck, { backgroundColor: opt.color }]}>
+                            <Feather name="check" size={9} color="#fff" />
+                          </View>
+                        )}
                       </Pressable>
                     );
                   })}
                 </View>
+              </View>
+            </View>
+          )}
 
-                <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Looking For</ThemedText>
-                  <View style={styles.lookingForGrid}>
-                    {LOOKING_FOR_OPTIONS.map((opt) => {
-                      const selected = lookingFor === opt.value;
-                      return (
-                        <Pressable
-                          key={opt.value}
-                          style={[
-                            styles.lookingForCard,
-                            { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? `${theme.primary}12` : theme.surface },
-                          ]}
-                          onPress={() => { Haptics.selectionAsync(); setLookingFor(opt.value); }}
-                        >
-                          <ThemedText style={[styles.lookingForEmoji]}>{opt.label.split(" ")[0]}</ThemedText>
-                          <ThemedText style={[styles.lookingForLabel, { color: selected ? theme.primary : theme.text }]}>
-                            {opt.label.split(" ").slice(1).join(" ")}
-                          </ThemedText>
-                          <ThemedText style={[styles.lookingForDesc, { color: theme.textSecondary }]}>{opt.desc}</ThemedText>
-                          {selected && (
-                            <View style={[styles.lookingForCheck, { backgroundColor: theme.primary }]}>
-                              <Feather name="check" size={10} color="#fff" />
-                            </View>
-                          )}
-                        </Pressable>
-                      );
-                    })}
+          {/* ════════════════════════════════════════════
+              STEP 4 — Bio
+          ════════════════════════════════════════════ */}
+          {step === 4 && (
+            <View style={styles.form}>
+              {/* Bio prompt cards */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.promptsScroll}
+                contentContainerStyle={styles.promptsScrollContent}
+              >
+                {[
+                  { emoji: "🌍", text: "Share your culture" },
+                  { emoji: "😂", text: "What makes you laugh?" },
+                  { emoji: "🔥", text: "Your passion project" },
+                  { emoji: "✨", text: "Something unique" },
+                ].map((prompt) => (
+                  <Pressable
+                    key={prompt.text}
+                    style={[styles.promptChip, { backgroundColor: `${theme.primary}12`, borderColor: `${theme.primary}30` }]}
+                    onPress={() => setBio(bio ? bio + " " + prompt.text : prompt.text)}
+                  >
+                    <ThemedText style={styles.promptEmoji}>{prompt.emoji}</ThemedText>
+                    <ThemedText style={[styles.promptText, { color: theme.primary }]}>{prompt.text}</ThemedText>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Bio text area */}
+              <View style={[styles.bioCard, { backgroundColor: theme.surface, borderColor: bio.length > 0 ? theme.primary : theme.border }]}>
+                <TextInput
+                  style={[styles.bioInput, { color: theme.text }]}
+                  placeholder="Tell people about yourself, your culture, your passions, and what makes you unique..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  maxLength={300}
+                  textAlignVertical="top"
+                />
+                <View style={styles.bioFooter}>
+                  <View style={[styles.bioMeter, { backgroundColor: theme.border }]}>
+                    <View style={[
+                      styles.bioMeterFill,
+                      {
+                        width: `${(bio.length / 300) * 100}%` as any,
+                        backgroundColor: bio.length < 50 ? theme.error : bio.length < 150 ? "#FFC629" : theme.primary,
+                      },
+                    ]} />
+                  </View>
+                  <ThemedText style={[styles.charCount, { color: bio.length > 250 ? theme.primary : theme.textSecondary }]}>
+                    {bio.length}/300
+                  </ThemedText>
+                </View>
+              </View>
+
+              {/* Tips */}
+              <View style={[styles.bioTipsCard, { backgroundColor: `${theme.primary}08`, borderColor: `${theme.primary}20` }]}>
+                <ThemedText style={[styles.bioTipsTitle, { color: theme.primary }]}>✨ Great bios mention...</ThemedText>
+                {[
+                  "Your cultural background & roots",
+                  "Something that makes you laugh",
+                  "A passion or side project",
+                  "What you're looking for here",
+                ].map((tip) => (
+                  <View key={tip} style={styles.bioTipRow}>
+                    <View style={[styles.bioTipDot, { backgroundColor: theme.primary }]} />
+                    <ThemedText style={[styles.bioTipText, { color: theme.text }]}>{tip}</ThemedText>
+                  </View>
+                ))}
+              </View>
+
+              {/* Favorite Song (optional) */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#FF6B6B20" }]}>
+                    <ThemedText style={{ fontSize: 13 }}>🎵</ThemedText>
+                  </View>
+                  <View>
+                    <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Anthem</ThemedText>
+                    <ThemedText style={[styles.cardSectionSubtitle, { color: theme.textSecondary }]}>Optional</ThemedText>
+                  </View>
+                </View>
+                <View style={styles.rowInputs}>
+                  <View style={[styles.inputGroup, { flex: 1.4 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Song Title</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Song name"
+                      placeholderTextColor={theme.textSecondary}
+                      value={favoriteSongTitle}
+                      onChangeText={setFavoriteSongTitle}
+                      maxLength={100}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Artist</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Artist"
+                      placeholderTextColor={theme.textSecondary}
+                      value={favoriteSongArtist}
+                      onChangeText={setFavoriteSongArtist}
+                      maxLength={100}
+                    />
                   </View>
                 </View>
               </View>
-            )}
+            </View>
+          )}
 
-            {/* ── STEP 5: Preferences ── */}
-            {step === 5 && (
-              <View style={styles.form}>
+          {/* ════════════════════════════════════════════
+              STEP 5 — Preferences
+          ════════════════════════════════════════════ */}
+          {step === 5 && (
+            <View style={styles.form}>
+              {/* Discovery Preferences */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#10B98120" }]}>
+                    <Feather name="search" size={14} color={theme.primary} />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Discovery Settings</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Show Me</ThemedText>
+                  <View style={styles.pillRow}>
+                    {["Male", "Female", "Other"].map((g) => (
+                      <Pressable
+                        key={g}
+                        style={[
+                          styles.pill,
+                          { borderColor: theme.border, backgroundColor: theme.background },
+                          preferredGenders.includes(g) && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        ]}
+                        onPress={() => { Haptics.selectionAsync(); togglePreferredGender(g); }}
+                      >
+                        <ThemedText style={[styles.pillText, { color: preferredGenders.includes(g) ? "#fff" : theme.text }]}>{g}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Age Range</ThemedText>
                   <View style={styles.ageRangeRow}>
                     <TextInput
-                      style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      style={[styles.ageInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                       placeholder="18"
                       placeholderTextColor={theme.textSecondary}
                       value={minAge}
@@ -952,9 +1208,11 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                       keyboardType="number-pad"
                       maxLength={2}
                     />
-                    <ThemedText style={[styles.rangeSep, { color: theme.textSecondary }]}>to</ThemedText>
+                    <View style={styles.ageRangeSepContainer}>
+                      <ThemedText style={[styles.rangeSep, { color: theme.textSecondary }]}>—</ThemedText>
+                    </View>
                     <TextInput
-                      style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                      style={[styles.ageInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                       placeholder="50"
                       placeholderTextColor={theme.textSecondary}
                       value={maxAge}
@@ -968,7 +1226,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Max Distance (km)</ThemedText>
                   <TextInput
-                    style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                     placeholder="50"
                     placeholderTextColor={theme.textSecondary}
                     value={maxDistance}
@@ -977,53 +1235,53 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                     maxLength={3}
                   />
                 </View>
+              </View>
 
-                <View style={styles.inputGroup}>
-                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Show Me</ThemedText>
-                  <View style={styles.pillRow}>
-                    {["Male", "Female", "Other"].map((g) => (
-                      <Pressable
-                        key={g}
-                        style={[
-                          styles.pill,
-                          { borderColor: theme.border, backgroundColor: theme.surface },
-                          preferredGenders.includes(g) && { backgroundColor: theme.primary, borderColor: theme.primary },
-                        ]}
-                        onPress={() => { Haptics.selectionAsync(); togglePreferredGender(g); }}
-                      >
-                        <ThemedText style={[styles.pillText, { color: preferredGenders.includes(g) ? "#fff" : theme.text }]}>
-                          {g}
-                        </ThemedText>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={[styles.completeCard, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}25` }]}>
-                  <ThemedText style={{ fontSize: 32, textAlign: "center" }}>🎉</ThemedText>
-                  <ThemedText style={[styles.completeTitle, { color: theme.text }]}>You're almost done!</ThemedText>
-                  <ThemedText style={[styles.completeDesc, { color: theme.textSecondary }]}>
-                    Hit Complete Profile to start discovering amazing connections.
-                  </ThemedText>
+              {/* Completion celebration card */}
+              <View style={[styles.celebrationCard, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}25` }]}>
+                <ThemedText style={styles.celebrationEmoji}>🎉</ThemedText>
+                <ThemedText style={[styles.celebrationTitle, { color: theme.text }]}>You're almost there!</ThemedText>
+                <ThemedText style={[styles.celebrationDesc, { color: theme.textSecondary }]}>
+                  Hit Complete Profile to start discovering amazing connections.
+                </ThemedText>
+                <View style={styles.completeChecklist}>
+                  {[
+                    { label: "Photos added", done: photoCount >= 4 },
+                    { label: "Basic info filled", done: !!name && !!age && !!gender },
+                    { label: "Interests selected", done: interests.length >= 3 },
+                    { label: "Bio written", done: bio.length > 0 },
+                  ].map((item) => (
+                    <View key={item.label} style={styles.checklistRow}>
+                      <View style={[styles.checklistDot, {
+                        backgroundColor: item.done ? theme.primary : theme.border,
+                      }]}>
+                        {item.done && <Feather name="check" size={9} color="#fff" />}
+                      </View>
+                      <ThemedText style={[styles.checklistText, {
+                        color: item.done ? theme.text : theme.textSecondary,
+                        textDecorationLine: item.done ? "none" : "none",
+                      }]}>
+                        {item.label}
+                      </ThemedText>
+                    </View>
+                  ))}
                 </View>
               </View>
-            )}
+            </View>
+          )}
 
-          </StepCard>
-
-          {/* Navigation Buttons */}
+          {/* ── Navigation Buttons ── */}
           <View style={styles.navRow}>
             {step > 1 && (
               <Pressable
-                style={[styles.backBtn, { borderColor: theme.border }]}
-                onPress={() => { Haptics.selectionAsync(); setStep(step - 1); }}
+                style={[styles.backBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={handleBack}
               >
                 <Feather name="arrow-left" size={18} color={theme.text} />
-                <ThemedText style={[styles.backBtnText, { color: theme.text }]}>Back</ThemedText>
               </Pressable>
             )}
             <Pressable
-              style={[styles.nextBtn, { flex: step > 1 ? 1.6 : 1 }]}
+              style={[styles.nextBtn, { flex: 1 }]}
               onPress={step < 5 ? handleNext : handleComplete}
               disabled={loading}
             >
@@ -1037,17 +1295,19 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <>
-                    <ThemedText style={styles.nextBtnText}>{step < 5 ? "Continue" : "Complete Profile"}</ThemedText>
-                    <Feather name={step < 5 ? "arrow-right" : "check"} size={18} color="#fff" style={{ marginLeft: 6 }} />
+                    <ThemedText style={styles.nextBtnText}>
+                      {step < 5 ? "Continue" : "Complete Profile"}
+                    </ThemedText>
+                    <Feather name={step < 5 ? "arrow-right" : "check"} size={18} color="#fff" style={{ marginLeft: 8 }} />
                   </>
                 )}
               </LinearGradient>
             </Pressable>
           </View>
-        </View>
+        </Animated.View>
       </ScreenKeyboardAwareScrollView>
 
-      {/* Privacy Modal */}
+      {/* ── Privacy Modal ── */}
       <Modal visible={privacyModalVisible} transparent animationType="fade" onRequestClose={() => setPrivacyModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPrivacyModalVisible(false)}>
           <View style={[styles.sheetModal, { backgroundColor: theme.background }]}>
@@ -1078,7 +1338,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         </Pressable>
       </Modal>
 
-      {/* Zodiac Modal */}
+      {/* ── Zodiac Modal ── */}
       <Modal visible={zodiacModalVisible} transparent animationType="slide" onRequestClose={() => setZodiacModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.listModal, { backgroundColor: theme.background }]}>
@@ -1108,7 +1368,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         </View>
       </Modal>
 
-      {/* Education Modal */}
+      {/* ── Education Modal ── */}
       <Modal visible={educationModalVisible} transparent animationType="slide" onRequestClose={() => setEducationModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.listModal, { backgroundColor: theme.background }]}>
@@ -1137,7 +1397,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         </View>
       </Modal>
 
-      {/* Religion Modal */}
+      {/* ── Religion Modal ── */}
       <Modal visible={religionModalVisible} transparent animationType="slide" onRequestClose={() => setReligionModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.listModal, { backgroundColor: theme.background }]}>
@@ -1166,7 +1426,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         </View>
       </Modal>
 
-      {/* Photo Picker Modal (Android) */}
+      {/* ── Photo Picker Modal (Android) ── */}
       <Modal visible={photoPickerModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoPickerModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPhotoPickerModalVisible(false)}>
           <View style={[styles.sheetModal, { backgroundColor: theme.background }]}>
@@ -1189,7 +1449,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
               style={[styles.photoPickerRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
               onPress={() => { setPhotoPickerModalVisible(false); pickImage(false, photoPickerSlotIndex); }}
             >
-              <View style={[styles.photoPickerRowIcon, { backgroundColor: `${"#00B2FF"}15` }]}>
+              <View style={[styles.photoPickerRowIcon, { backgroundColor: "#00B2FF15" }]}>
                 <Feather name="image" size={22} color="#00B2FF" />
               </View>
               <View style={{ flex: 1 }}>
@@ -1205,12 +1465,10 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   );
 }
 
-const PHOTO_SLOT_WIDTH = (width - Spacing.xl * 2 - Spacing.md) / 2;
-
 const styles = StyleSheet.create({
   gradientHeader: {
     paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.lg,
+    paddingTop: Spacing.md,
     paddingBottom: Spacing.xl,
   },
   stepCounterRow: {
@@ -1219,10 +1477,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: Spacing.md,
   },
-  stepCounter: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.85)",
+  stepBadge: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.5,
   },
   stepIconBubble: {
     width: 30,
@@ -1233,8 +1498,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   progressTrack: {
-    height: 5,
-    backgroundColor: "rgba(255,255,255,0.25)",
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
     borderRadius: 3,
     overflow: "hidden",
     marginBottom: Spacing.md,
@@ -1242,6 +1507,15 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     backgroundColor: "#fff",
+    borderRadius: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  progressGlow: {
+    width: 8,
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.6)",
     borderRadius: 3,
   },
   stepDots: {
@@ -1258,22 +1532,22 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepDotActive: {
-    width: 24,
+    width: 28,
     backgroundColor: "#fff",
   },
   stepDotDone: {
     backgroundColor: "rgba(255,255,255,0.7)",
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
     color: "#fff",
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
     marginBottom: 3,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: "rgba(255,255,255,0.8)",
+    color: "rgba(255,255,255,0.82)",
     fontWeight: "500",
   },
   content: {
@@ -1284,18 +1558,234 @@ const styles = StyleSheet.create({
   form: {
     gap: Spacing.lg,
   },
+
+  // ── Hero Photo ──
+  heroPhotoContainer: {
+    alignItems: "center",
+  },
+  heroPhotoSlot: {
+    width: BIG_SLOT_WIDTH,
+    height: BIG_SLOT_HEIGHT,
+    borderRadius: BorderRadius.xxl,
+    overflow: "hidden",
+    borderWidth: 2,
+    ...Shadow.medium,
+  },
+  heroPhotoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  heroGradientOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
+  },
+  heroRemoveBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadow.small,
+  },
+  heroBadge: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  heroBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  heroPrivacyBtn: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroEmptyState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    padding: Spacing.xl,
+  },
+  heroAddIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadow.medium,
+  },
+  heroEmptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  heroEmptySubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    textAlign: "center",
+  },
+
+  // ── Small photos grid ──
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 4,
+  },
+  smallPhotoGrid: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  smallPhotoSlot: {
+    width: SMALL_SLOT,
+    aspectRatio: 3 / 4,
+    borderRadius: BorderRadius.lg,
+    overflow: "hidden",
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallPhotoImage: {
+    width: "100%",
+    height: "100%",
+  },
+  smallRemoveBtn: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallPrivacyBtn: {
+    position: "absolute",
+    bottom: 5,
+    right: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  smallAddIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // ── Photo progress ──
+  photoProgressCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+    alignItems: "center",
+  },
+  photoProgressDots: {
+    flexDirection: "row",
+    gap: 5,
+  },
+  photoProgressDot: {
+    width: 20,
+    height: 6,
+    borderRadius: 3,
+  },
+  photoProgressText: {
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  privacyLegend: {
+    flexDirection: "row",
+    gap: Spacing.xl,
+    justifyContent: "center",
+  },
+  legendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  legendText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+
+  // ── Info Cards ──
+  infoCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+    ...Shadow.small,
+  },
+  cardSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: -Spacing.xs,
+  },
+  cardSectionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  cardSectionSubtitle: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+
+  // ── Form inputs ──
   inputGroup: {
-    gap: Spacing.xs + 2,
+    gap: 7,
+  },
+  rowInputs: {
+    flexDirection: "row",
+    gap: Spacing.md,
   },
   binaryRow: {
     flexDirection: "row",
     gap: Spacing.md,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 0.7,
+    letterSpacing: 0.8,
     marginLeft: 2,
   },
   input: {
@@ -1331,11 +1821,131 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  bioCard: {
+
+  // ── Interests ──
+  interestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  interestTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  selectionBadge: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  selectionBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  interestSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    marginTop: -Spacing.sm,
+  },
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  lookingForSection: {
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    marginTop: -4,
+  },
+  lookingForGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  lookingForCard: {
+    width: (width - Spacing.xl * 2 - Spacing.sm) / 2,
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
+    padding: Spacing.md,
+    position: "relative",
+    ...Shadow.small,
+  },
+  lookingForEmoji: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  lookingForLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  lookingForDesc: {
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 16,
+  },
+  lookingForCheck: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // ── Bio ──
+  promptsScroll: {
+    marginHorizontal: -Spacing.xl,
+  },
+  promptsScrollContent: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  promptChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  promptEmoji: {
+    fontSize: 14,
+  },
+  promptText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  bioCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 2,
     padding: Spacing.lg,
-    minHeight: 160,
+    minHeight: 170,
+    ...Shadow.small,
   },
   bioInput: {
     fontSize: 15,
@@ -1344,12 +1954,25 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   bioFooter: {
-    alignItems: "flex-end",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginTop: Spacing.sm,
+  },
+  bioMeter: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    marginRight: Spacing.sm,
+    overflow: "hidden",
+  },
+  bioMeterFill: {
+    height: "100%",
+    borderRadius: 2,
   },
   charCount: {
     fontSize: 12,
-    fontWeight: "500",
+    fontWeight: "600",
   },
   bioTipsCard: {
     borderRadius: BorderRadius.xl,
@@ -1367,179 +1990,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
   },
+  bioTipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
+  },
   bioTipText: {
     fontSize: 13,
     fontWeight: "400",
+    flex: 1,
   },
-  photoGrid: {
-    gap: 0,
-  },
-  photoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
-  },
-  photoSlot: {
-    width: PHOTO_SLOT_WIDTH,
-    aspectRatio: 3 / 4,
-    borderRadius: BorderRadius.xl,
-    overflow: "hidden",
-    borderWidth: 1.5,
-    position: "relative",
-  },
-  photoImage: {
-    width: "100%",
-    height: "100%",
-  },
-  removePhotoBtn: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  photoBadge: {
-    position: "absolute",
-    bottom: 6,
-    left: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  photoBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  privacyBtn: {
-    position: "absolute",
-    bottom: 6,
-    right: 6,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyPhotoSlot: {
-    width: "100%",
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  addPhotoIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  slotLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    textAlign: "center",
-  },
-  photoInfoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  photoCount: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  photoInfoText: {
-    fontSize: 13,
-    fontWeight: "400",
-  },
-  privacyLegend: {
-    flexDirection: "row",
-    gap: Spacing.lg,
-    justifyContent: "center",
-  },
-  legendItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  legendText: {
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  selectionHint: {
-    borderRadius: BorderRadius.full,
-    paddingVertical: 6,
-    paddingHorizontal: Spacing.md,
-    alignSelf: "flex-start",
-  },
-  selectionHintText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  chipsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1.5,
-  },
-  chipText: {
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  lookingForGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-  },
-  lookingForCard: {
-    width: (width - Spacing.xl * 2 - Spacing.sm) / 2,
-    borderRadius: BorderRadius.xl,
-    borderWidth: 1.5,
-    padding: Spacing.md,
-    position: "relative",
-  },
-  lookingForEmoji: {
-    fontSize: 22,
-    marginBottom: 4,
-  },
-  lookingForLabel: {
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 2,
-  },
-  lookingForDesc: {
-    fontSize: 11,
-    fontWeight: "400",
-  },
-  lookingForCheck: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
+  // ── Preferences ──
   ageRangeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.md,
+    gap: Spacing.sm,
+  },
+  ageRangeSepContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 4,
   },
   ageInput: {
     flex: 1,
@@ -1552,55 +2024,79 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   rangeSep: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "500",
   },
-  completeCard: {
+
+  // ── Celebration ──
+  celebrationCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
     padding: Spacing.xl,
     alignItems: "center",
     gap: Spacing.sm,
-    marginTop: Spacing.md,
   },
-  completeTitle: {
-    fontSize: 18,
+  celebrationEmoji: {
+    fontSize: 40,
+  },
+  celebrationTitle: {
+    fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
+    letterSpacing: -0.3,
   },
-  completeDesc: {
+  celebrationDesc: {
     fontSize: 14,
     fontWeight: "400",
     textAlign: "center",
     lineHeight: 20,
+    marginBottom: Spacing.sm,
   },
+  completeChecklist: {
+    width: "100%",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  checklistDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checklistText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+
+  // ── Navigation ──
   navRow: {
     flexDirection: "row",
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginTop: Spacing.xxl,
   },
   backBtn: {
+    width: 56,
     height: 56,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
-    gap: 6,
-  },
-  backBtnText: {
-    fontSize: 16,
-    fontWeight: "600",
+    alignItems: "center",
+    justifyContent: "center",
   },
   nextBtn: {
     borderRadius: BorderRadius.full,
     overflow: "hidden",
     shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 5,
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
   },
   nextBtnGradient: {
     height: 56,
@@ -1614,6 +2110,8 @@ const styles = StyleSheet.create({
     color: "#fff",
     letterSpacing: 0.2,
   },
+
+  // ── Modals ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
