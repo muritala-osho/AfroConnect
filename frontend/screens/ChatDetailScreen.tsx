@@ -419,6 +419,14 @@ export default function ChatDetailScreen({
   const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
   const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  // Sync-safe setter: updates both state and ref atomically so async callbacks
+  // always read the correct value even before effects run
+  const setViewOnceModeSync = (val: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof val === 'function' ? val(viewOnceModeRef.current) : val;
+    viewOnceModeRef.current = next;
+    setViewOnceMode(next);
+  };
+
   // Load draft on mount
   useEffect(() => {
     const loadDraft = async () => {
@@ -934,9 +942,6 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
-  // Keep ref in sync so async image/video handlers always read the latest value
-  useEffect(() => { viewOnceModeRef.current = viewOnceMode; }, [viewOnceMode]);
-
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
     // Optimistic update — mark as viewed immediately so placeholder shows right away
@@ -978,7 +983,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOImg = viewOnceModeRef.current;
           await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) setViewOnceMode(false);
+          if (isVOImg) setViewOnceModeSync(false);
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
@@ -1007,7 +1012,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOVid = viewOnceModeRef.current;
           await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
-          if (isVOVid) setViewOnceMode(false);
+          if (isVOVid) setViewOnceModeSync(false);
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
@@ -1034,7 +1039,7 @@ export default function ChatDetailScreen({
         if (uploadData.success && uploadData.url) {
           const isVOImg = viewOnceModeRef.current;
           await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) setViewOnceMode(false);
+          if (isVOImg) setViewOnceModeSync(false);
         }
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");
@@ -1953,7 +1958,7 @@ export default function ChatDetailScreen({
           <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.attachmentTitle, { color: theme.text }]}>Send Attachment</ThemedText>
             <Pressable style={[styles.viewOnceToggleRow, viewOnceMode && { backgroundColor: '#FF6B6B12', borderColor: '#FF6B6B40' }]}
-              onPress={() => setViewOnceMode(v => !v)}>
+              onPress={() => setViewOnceModeSync(v => !v)}>
               <View style={styles.viewOnceToggleLeft}>
                 <Ionicons name="eye-outline" size={18} color={viewOnceMode ? '#FF6B6B' : theme.textSecondary} />
                 <View>

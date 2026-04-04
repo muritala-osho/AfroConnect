@@ -568,6 +568,11 @@ export default function VideoCallScreen() {
         </View>
       );
     }
+    // On native, when connected the WebView (Agora HTML) already renders both
+    // local and remote video streams — showing CameraView here would duplicate the feed
+    if (callStatus === 'connected' && Platform.OS !== 'web') {
+      return null;
+    }
     if (isCameraOff) {
       return (
         <View style={styles.cameraOffPlaceholder}>

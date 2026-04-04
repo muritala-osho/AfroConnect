@@ -611,161 +611,18 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const totalFields = 23;
   const completionPct = Math.round((filledFields / totalFields) * 100);
 
+  // Auto-save diaspora selection immediately to the database when user picks an option
+  const handleDiasporaSelect = async (value: string) => {
+    setDiasporaGeneration(value);
+    try {
+      await updateProfile({ diasporaGeneration: value } as any);
+      if (fetchUser) await fetchUser();
+    } catch (err: any) {
+      showAlert('Error', err.message || 'Failed to save diaspora selection', [{ text: 'OK', style: 'default' }], 'alert-circle');
+    }
+  };
+
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* HEADER */}
-      <LinearGradient
-        colors={isDark
-          ? [theme.primary + '22', theme.primary + '08', 'transparent']
-          : [theme.primary + '18', theme.primary + '06', 'transparent']}
-        style={[styles.header, { paddingTop: insets.top + 10 }]}
-      >
-        <Pressable onPress={() => navigation.goBack()} style={[styles.headerIconBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)' }]}>
-          <Feather name="arrow-left" size={20} color={theme.text} />
-        </Pressable>
-
-        <View style={styles.headerCenter}>
-          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Edit Profile</ThemedText>
-          <ThemedText style={[styles.headerTagline, { color: theme.primary }]}>
-            {completionPct}% complete
-          </ThemedText>
-        </View>
-
-        <Pressable
-          onPress={handleSave}
-          disabled={saving}
-          style={[styles.saveBtn, { backgroundColor: theme.primary, opacity: saving ? 0.7 : 1 }]}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <>
-              <Feather name="check" size={15} color="#FFF" />
-              <ThemedText style={styles.saveBtnText}>Save</ThemedText>
-            </>
-          )}
-        </Pressable>
-      </LinearGradient>
-
-      {/* COMPLETION BAR */}
-      <View style={[styles.completionBarWrap, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
-        <View style={[styles.completionBarTrack, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#EFEFEF' }]}>
-          <LinearGradient
-            colors={[theme.primary, theme.primary + 'BB']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.completionBarFill, { width: `${completionPct}%` as any }]}
-          />
-        </View>
-        <ThemedText style={[styles.completionBarLabel, { color: theme.textSecondary }]}>
-          {totalFields - filledFields > 0 ? `${totalFields - filledFields} fields left to fill` : 'Profile complete!'}
-        </ThemedText>
-      </View>
-
-      <ScreenKeyboardAwareScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* PHOTO CARD */}
-        <Pressable
-          style={[styles.photoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          onPress={() => navigation.navigate('ChangeProfilePicture')}
-        >
-          <LinearGradient
-            colors={[theme.primary + '18', theme.primary + '06']}
-            style={styles.photoCardGradient}
-          >
-            <View style={styles.photoCardLeft}>
-              <View style={[styles.photoAvatarRing, { borderColor: theme.primary + '50' }]}>
-                {user?.photos?.[0] ? (
-                  <SafeImage
-                    source={typeof user.photos[0] === 'string' ? user.photos[0] : user.photos[0].url}
-                    style={styles.photoImage}
-                  />
-                ) : (
-                  <View style={[styles.photoPlaceholder, { backgroundColor: theme.primary + '15' }]}>
-                    <Ionicons name="camera" size={32} color={theme.primary} />
-                  </View>
-                )}
-                <View style={[styles.photoEditBadge, { backgroundColor: theme.primary, borderColor: theme.surface }]}>
-                  <Feather name="camera" size={11} color="#FFF" />
-                </View>
-              </View>
-            </View>
-            <View style={styles.photoCardBody}>
-              <ThemedText style={[styles.photoCardTitle, { color: theme.text }]}>
-                {user?.name || 'Your Photos'}
-              </ThemedText>
-              <ThemedText style={[styles.photoCardSub, { color: theme.textSecondary }]}>
-                {user?.photos?.length
-                  ? `${user.photos.length} photo${user.photos.length !== 1 ? 's' : ''} Â· Tap to edit`
-                  : 'Add up to 6 photos'}
-              </ThemedText>
-              <View style={styles.photoDotsRow}>
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.photoDot,
-                      {
-                        backgroundColor: i < (user?.photos?.length || 0)
-                          ? theme.primary
-                          : isDark ? 'rgba(255,255,255,0.15)' : '#DDD',
-                        width: i < (user?.photos?.length || 0) ? 16 : 8,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-            </View>
-            <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-          </LinearGradient>
-        </Pressable>
-
-        <View style={styles.content}>
-
-          {/* BASIC INFO */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SectionHeader icon="user" label="Basic Info" color={theme.primary} description="How others see you" />
-            <View style={styles.sectionBody}>
-              <InputField label="Full Name *" value={name} onChangeText={setName} placeholder="Your name" icon="user" />
-              <InputField label="Bio" value={bio} onChangeText={setBio} placeholder="Tell others about yourself..." multiline icon="edit-3" />
-              <View style={styles.row2}>
-                <View style={styles.halfField}>
-                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Gender</ThemedText>
-                  <SelectButton label="Gender" value={gender} options={GENDER_OPTIONS} onPress={() => setActiveModal('gender')} icon="users" />
-                </View>
-                <View style={styles.halfField}>
-                  <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>Height</ThemedText>
-                  <SelectButton label="Height" value={height} options={HEIGHT_OPTIONS} onPress={() => setActiveModal('height')} icon="trending-up" />
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* INTERESTS */}
-          <View style={[styles.section, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <SectionHeader icon="heart" label="Interests" color="#FF6B9D" description="What makes you, you" />
-            <View style={styles.sectionBody}>
-              <Pressable
-                style={[styles.interestsTrigger, { borderColor: interests.length > 0 ? '#FF6B9D40' : theme.border, backgroundColor: interests.length > 0 ? '#FF6B9D08' : isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA' }]}
-                onPress={() => setInterestsModalVisible(true)}
-              >
-                <View style={[styles.selectIconWrap, { backgroundColor: interests.length > 0 ? '#FF6B9D20' : theme.border + '50' }]}>
-                  <Feather name="plus-circle" size={15} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
-                </View>
-                <ThemedText style={[styles.selectButtonText, { color: interests.length > 0 ? theme.text : theme.textSecondary, flex: 1 }]}>
-                  {interests.length > 0 ? `${interests.length} interests selected` : 'Choose your interests'}
-                </ThemedText>
-                <Feather name="chevron-right" size={16} color={interests.length > 0 ? '#FF6B9D' : theme.textSecondary} />
-              </Pressable>
-
-              {interests.length > 0 && (
-                <View style={styles.interestsGrid}>
-                  {interests.map((interest) => {
-                    const opt = INTEREST_OPTIONS.find(o => o.id === interest);
-                    return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* HEADER */}
       <LinearGradient
@@ -1189,7 +1046,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
       <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
-      <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={setDiasporaGeneration} />
+      <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={handleDiasporaSelect} />
       <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
       <AlertComponent />
     </View>
