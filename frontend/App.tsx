@@ -13,6 +13,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
+import { UnreadProvider } from "@/context/UnreadContext";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
 import {
   registerForPushNotificationsAsync,
@@ -135,8 +136,10 @@ export default function App() {
         <ThemeProvider>
           <LanguageProvider>
             <AuthProvider>
-              <LanguageSync />
-              <AppContent />
+              <UnreadProvider>
+                <LanguageSync />
+                <AppContent />
+              </UnreadProvider>
             </AuthProvider>
           </LanguageProvider>
         </ThemeProvider>

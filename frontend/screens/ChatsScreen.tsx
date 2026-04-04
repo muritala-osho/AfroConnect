@@ -28,6 +28,7 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useUnread } from "@/context/UnreadContext";
 import { MainTabParamList } from "@/navigation/MainTabNavigator";
 import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";
@@ -497,6 +498,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const { user, token } = useAuth();
   const { get, put, del, post } = useApi();
   const insets = useSafeAreaInsets();
+  const { resetUnread } = useUnread();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [archivedChats, setArchivedChats] = useState<Set<string>>(new Set());
@@ -779,6 +781,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   }
   useFocusEffect(
     useCallback(() => {
+      // Clear the unread badge whenever the user opens the Chats tab
+      resetUnread();
+
       const checkAndLoad = async () => {
         const [refreshNeeded, storyPosted] = await Promise.all([
           AsyncStorage.getItem("@chats_refresh_needed"),

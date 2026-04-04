@@ -51,6 +51,7 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
+import { setChatScreenOpen } from "@/context/UnreadContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -98,15 +99,15 @@ interface Message {
 }
 
 const EMOJI_LIST = [
-  "ðŸ˜€","ðŸ˜‚","ðŸ˜","ðŸ¥°","ðŸ˜˜","ðŸ¤—","ðŸ˜Š","ðŸ™‚","ðŸ˜‰","ðŸ˜Ž","ðŸ¤©","ðŸ¥³","ðŸ˜‹","ðŸ¤¤",
-  "ðŸ˜œ","ðŸ¤ª","ðŸ˜","ðŸ¤‘","ðŸ¤”","ðŸ¤­","ðŸ¤«","ðŸ¤","ðŸ˜","ðŸ˜Œ","ðŸ˜”","ðŸ˜ª","ðŸ¤’","ðŸ˜·",
-  "ðŸ¤•","ðŸ¤¢","ðŸ¤®","ðŸ¥µ","ðŸ¥¶","ðŸ˜±","ðŸ˜¨","ðŸ˜°","ðŸ˜¥","ðŸ˜¢","ðŸ˜­","ðŸ˜¤","ðŸ˜ ","ðŸ¤¬",
-  "ðŸ˜ˆ","ðŸ‘¿","ðŸ’€","â˜ ï¸","ðŸ’©","ðŸ¤¡","ðŸ‘¹","ðŸ‘º","ðŸ‘»","ðŸ‘½","ðŸ‘¾","ðŸ¤–","ðŸŽƒ","ðŸ˜º",
-  "ðŸ˜¸","ðŸ˜¹","ðŸ˜»","ðŸ˜¼","ðŸ˜½","ðŸ™€","ðŸ˜¿","ðŸ˜¾","â¤ï¸","ðŸ§¡","ðŸ’›","ðŸ’š","ðŸ’™","ðŸ’œ",
-  "ðŸ–¤","ðŸ¤","ðŸ¤Ž","ðŸ’”","â£ï¸","ðŸ’•","ðŸ’ž","ðŸ’“","ðŸ’—","ðŸ’–","ðŸ’˜","ðŸ’","ðŸ‘","ðŸ‘Ž",
-  "ðŸ‘","ðŸ™Œ","ðŸ¤","ðŸ¤²","ðŸ™","âœŒï¸","ðŸ¤Ÿ","ðŸ¤˜","ðŸ¤™","ðŸ‘‹","ðŸ–ï¸","âœ‹","ðŸ‘Œ","ðŸ¤Œ",
-  "ðŸ”¥","âœ¨","â­","ðŸŒŸ","ðŸ’«","ðŸ’¥","ðŸ’¢","ðŸ’¦","ðŸ’¨","ðŸŽ‰","ðŸŽŠ","ðŸŽ","ðŸŽˆ","ðŸŽ€",
-  "ðŸ†","ðŸ¥‡","ðŸ¥ˆ","ðŸ¥‰",
+  "😀","😂","😍","🥰","😘","🤗","😊","🙂","😉","😎","🤩","🥳","😋","🤤",
+  "😜","🤪","😏","😌","😓","😪","🤒","😷",
+  "🤕","🤢","🤮","🥵","🥶","😱","😨","😰","😥","😢","😭","😤","😠","🤬",
+  "😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖","🎃","😺",
+  "😸","😹","😻","😼","😽","🙀","😿","😾","❤️","🧡","💛","💚","💙","💜",
+  "🖤","🤍","🤎","💓","💕","💕","💞","💓","💗","💖","💘","💑","💎",
+  "👍","🙌","🤝","✌️","🤟","🤘","🤙","👋","🖖","✋","👌","🤌",
+  "🔥","✨","⭐","🎈","🎀",
+  "🏆","🥇","🥈","🥉",
 ];
 
 const REPORT_REASONS = [
@@ -138,12 +139,12 @@ const CHAT_THEMES = [
 ];
 
 const AI_SUGGESTIONS = [
-  "Hey! How's your day going? ðŸ˜Š",
+  "Hey! How's your day going? 😊",
   "I love your profile! What are your hobbies?",
   "What's your favorite thing to do on weekends?",
   "I noticed we have similar interests! Tell me more about yourself",
   "You seem really interesting! What do you do for fun?",
-  "Hi there! What made you swipe right on me? ðŸ˜„",
+  "Hi there! What made you swipe right on me? 😄",
   "I'd love to get to know you better!",
   "What's the best trip you've ever taken?",
 ];
@@ -461,10 +462,16 @@ export default function ChatDetailScreen({
 
   useFocusEffect(
     useCallback(() => {
+      // Tell the UnreadContext that the user is viewing a chat — suppress badge counting
+      setChatScreenOpen(true);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // User left the chat screen — badge counting can resume
+        setChatScreenOpen(false);
+      };
     }, [])
   );
 
@@ -549,7 +556,7 @@ export default function ChatDetailScreen({
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
-                content: "ðŸ“¸ A screenshot was taken!",
+                content: "📸 A screenshot was taken!",
                 type: "system",
                 sender: myId,
                 matchId: matchIdRef.current,
@@ -557,7 +564,7 @@ export default function ChatDetailScreen({
                 status: "sent",
               };
               setMessages((prev) => [...prev, systemMsg as any]);
-              post(`/chat/${matchIdRef.current}/message`, { content: "ðŸ“¸ A screenshot was taken!", type: "system" }, token).catch(() => {});
+              post(`/chat/${matchIdRef.current}/message`, { content: "📸 A screenshot was taken!", type: "system" }, token).catch(() => {});
             }
           });
           if (screenshotProtection) {
@@ -1059,7 +1066,7 @@ export default function ChatDetailScreen({
         const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (geocode) address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(", ");
       } catch (e) {}
-      await sendMessage(`ðŸ“ ${address}`, "location", { latitude, longitude, address });
+      await sendMessage(`📍 ${address}`, "location", { latitude, longitude, address });
     } catch (error) {
       Alert.alert("Error", "Could not get your location");
     }
@@ -1125,7 +1132,7 @@ export default function ChatDetailScreen({
             body: formData,
           });
           const uploadData = await uploadResponse.json();
-          if (uploadData.success && uploadData.url) await sendMessage(`ðŸŽ¤ Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
+          if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
           else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
         } catch (error) {
           console.error("Voice upload error:", error);
@@ -1483,7 +1490,7 @@ export default function ChatDetailScreen({
                       <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary }]}>
                         <ThemedText style={[styles.replyPreviewName, { color: isMe ? "rgba(255,255,255,0.9)" : theme.primary }]} numberOfLines={1}>{item.replyTo.senderName}</ThemedText>
                         <ThemedText style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]} numberOfLines={2}>
-                          {item.replyTo.type === "image" ? "ðŸ“· Photo" : item.replyTo.type === "video" ? "ðŸŽ¬ Video" : item.replyTo.type === "audio" ? "ðŸŽ¤ Voice message" : item.replyTo.content}
+                          {item.replyTo.type === "image" ? "📷 Photo" : item.replyTo.type === "video" ? "🎬 Video" : item.replyTo.type === "audio" ? "🎤 Voice message" : item.replyTo.content}
                         </ThemedText>
                       </View>
                     )}
@@ -1892,7 +1899,7 @@ export default function ChatDetailScreen({
                 {(() => { const sid = typeof replyingTo.sender === "string" ? replyingTo.sender : replyingTo.sender?._id; return String(sid) === String(myId) ? "You" : userName; })()}
               </ThemedText>
               <ThemedText style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {replyingTo.type === "image" ? "ðŸ“· Photo" : replyingTo.type === "video" ? "ðŸŽ¬ Video" : replyingTo.type === "audio" ? "ðŸŽ¤ Voice message" : replyingTo.content || replyingTo.text || ""}
+                {replyingTo.type === "image" ? "📷 Photo" : replyingTo.type === "video" ? "🎬 Video" : replyingTo.type === "audio" ? "🎤 Voice message" : replyingTo.content || replyingTo.text || ""}
               </ThemedText>
             </View>
             <Pressable onPress={() => setReplyingTo(null)} style={styles.replyBarClose}><Feather name="x" size={20} color={theme.textSecondary} /></Pressable>
@@ -1912,6 +1919,20 @@ export default function ChatDetailScreen({
             </View>
           ) : (
             <>
+              {/* View-once active indicator — visible in the input bar when toggle is ON.
+                  Persists after the attachment menu closes so the user always knows
+                  the next media will be sent as view-once. Tap it to cancel. */}
+              {viewOnceMode && (
+                <Pressable
+                  style={styles.viewOnceChip}
+                  onPress={() => setViewOnceModeSync(false)}
+                  accessibilityLabel="View Once active — tap to disable"
+                >
+                  <Ionicons name="eye-outline" size={13} color="#FF6B6B" />
+                  <ThemedText style={styles.viewOnceChipText}>View Once</ThemedText>
+                  <Feather name="x" size={11} color="#FF6B6B" />
+                </Pressable>
+              )}
               <Pressable style={styles.attachButton} onPress={() => setShowAttachmentMenu(true)}><Feather name="plus-circle" size={26} color={theme.primary} /></Pressable>
               <View style={[styles.inputWrapper, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
                 <TextInput
@@ -2128,13 +2149,13 @@ export default function ChatDetailScreen({
             {selectedMessage && (
               <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
                 <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
-                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "ðŸ“· Photo" : selectedMessage.type === "video" ? "ðŸŽ¬ Video" : "ðŸŽ¤ Voice")}
+                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "📷 Photo" : selectedMessage.type === "video" ? "🎬 Video" : "🎤 Voice")}
                 </ThemedText>
               </View>
             )}
 
             <View style={styles.quickReactionBar}>
-              {["â¤ï¸","ðŸ˜‚","ðŸ˜","ðŸ˜®","ðŸ˜¢","ðŸ”¥","ðŸ‘","ðŸ’¯"].map(emoji => (
+              {["❤️","😂","😍","😮","😢","🔥","👍","💯"].map(emoji => (
                 <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
                   <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
                 </Pressable>
@@ -2387,6 +2408,9 @@ const styles = StyleSheet.create<any>({
   viewOnceLabel: { fontSize: 13, fontWeight: '600' },
   viewOnceSenderBadge: { position: 'absolute', top: 6, right: 6, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3 },
   viewOnceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', marginBottom: 12 },
+  // Persistent chip shown in the input bar while view-once mode is active
+  viewOnceChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,107,107,0.12)', borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)', marginRight: 4 },
+  viewOnceChipText: { fontSize: 11, color: '#FF6B6B', fontWeight: '600' },
   viewOnceToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   viewOnceToggleTitle: { fontSize: 13, fontWeight: '700' },
   viewOnceToggleDesc: { fontSize: 11, marginTop: 1 },
