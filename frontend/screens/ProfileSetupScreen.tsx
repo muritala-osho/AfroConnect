@@ -185,8 +185,8 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       const trimmedJob = jobTitle.trim();
       const trimmedLiving = livingIn.trim();
 
-      if (!trimmedAge || !gender || !education) {
-        Alert.alert("Error", "Please fill in Age, Gender, and Education to continue");
+      if (!trimmedName || !trimmedAge || !gender || !trimmedJob || !education || !trimmedLiving || !ethnicity) {
+        Alert.alert("Error", "All fields are required (Name, Age, Gender, Job Title, Education, Living In, Ethnicity)");
         return;
       }
 

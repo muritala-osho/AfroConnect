@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import VoiceBio from "@/components/VoiceBio";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MyProfileScreenNavigationProp = CompositeNavigationProp<
@@ -463,6 +464,19 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                 {user.bio}
               </ThemedText>
             </View>
+          </View>
+        )}
+
+        {(user as any)?.voiceBio?.url && (
+          <View style={styles.section}>
+            <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>
+              Voice Bio
+            </ThemedText>
+            <VoiceBio
+              voiceBioUrl={(user as any).voiceBio.url}
+              duration={(user as any).voiceBio.duration || 0}
+              isOwn={true}
+            />
           </View>
         )}
 
