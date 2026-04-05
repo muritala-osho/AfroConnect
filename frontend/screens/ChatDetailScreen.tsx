@@ -76,7 +76,7 @@ interface Message {
   sender: string | { _id: string };
   content?: string;
   text?: string;
-  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call";
+  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply";
   imageUrl?: string;
   videoUrl?: string;
   audioUrl?: string;
@@ -98,6 +98,12 @@ interface Message {
   viewOnceOpenedBy?: string[];
   edited?: boolean;
   editedAt?: string;
+  storyReaction?: {
+    storyId: string;
+    emoji?: string;
+    storyType?: string;
+    storyPreview?: string;
+  };
 }
 
 const EMOJI_LIST = [
@@ -1576,6 +1582,50 @@ export default function ChatDetailScreen({
                       </Pressable>
                     )}
 
+                    {/* ── Story reaction / reply bubble ── */}
+                    {(item.type === "story_reaction" || item.type === "story_reply") && (
+                      <View style={[
+                        styles.storyContextCard,
+                        { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)",
+                          borderColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.08)" }
+                      ]}>
+                        {/* Story icon + label */}
+                        <View style={styles.storyContextHeader}>
+                          <Ionicons
+                            name={item.type === "story_reaction" ? "heart" : "chatbubble-ellipses"}
+                            size={12}
+                            color={isMe ? "rgba(255,255,255,0.8)" : theme.primary}
+                          />
+                          <ThemedText style={[styles.storyContextLabel, { color: isMe ? "rgba(255,255,255,0.75)" : theme.textSecondary }]}>
+                            {item.type === "story_reaction" ? "Reacted to your story" : "Replied to your story"}
+                          </ThemedText>
+                        </View>
+
+                        {/* Story preview snippet */}
+                        {item.storyReaction?.storyPreview ? (
+                          <View style={styles.storyPreviewRow}>
+                            {/* If it's an image/video URL, show a thumbnail */}
+                            {item.storyReaction.storyPreview.startsWith("http") ? (
+                              <View style={[styles.storyThumbnail, { backgroundColor: "rgba(0,0,0,0.2)" }]}>
+                                <Ionicons name="images-outline" size={18} color="rgba(255,255,255,0.6)" />
+                              </View>
+                            ) : (
+                              <ThemedText
+                                style={[styles.storyPreviewText, { color: isMe ? "rgba(255,255,255,0.65)" : theme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {item.storyReaction.storyPreview}
+                              </ThemedText>
+                            )}
+                            {/* Emoji for reactions */}
+                            {item.type === "story_reaction" && item.storyReaction.emoji && (
+                              <ThemedText style={styles.storyEmoji}>{item.storyReaction.emoji}</ThemedText>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
+                    )}
+
                     {item.type === "image" && item.imageUrl && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
                       const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
@@ -2590,4 +2640,41 @@ const styles = StyleSheet.create<any>({
   viewOnceToggleDesc: { fontSize: 11, marginTop: 1 },
   viewOnceTogglePill: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   viewOnceTogglePillText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+
+  storyContextCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 8,
+    marginBottom: 6,
+  },
+  storyContextHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 5,
+  },
+  storyContextLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  storyPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  storyThumbnail: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyPreviewText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  storyEmoji: {
+    fontSize: 22,
+  },
 });

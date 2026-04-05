@@ -64,8 +64,8 @@ export type RootStackParamList = {
   UserDistanceMap: { otherUser: any };
   ProfileDetail: { userId: string; isFromLikes?: boolean; likeUserId?: string };
   ChatDetail: { userId: string; userName: string; userPhoto?: string };
-  VoiceCall: { userId: string; userName: string; userPhoto?: string };
-  VideoCall: { userId: string; userName: string; userPhoto?: string };
+  VoiceCall: { userId?: string; userName: string; userPhoto?: string; isIncoming?: boolean; callData?: any; callerId?: string; matchId?: string; callAccepted?: boolean; returnToCall?: boolean };
+  VideoCall: { userId?: string; userName: string; userPhoto?: string; isIncoming?: boolean; callData?: any; callerId?: string; matchId?: string };
   EditProfile: undefined;
   Settings: undefined;
   FriendRequests: undefined;
