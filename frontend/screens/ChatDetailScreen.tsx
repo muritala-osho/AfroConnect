@@ -379,6 +379,7 @@ export default function ChatDetailScreen({
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
@@ -524,14 +525,18 @@ export default function ChatDetailScreen({
     }
   }, [isRecording]);
 
-  // Android keyboard — scroll to latest message when keyboard appears
+  // Track keyboard visibility — removes bottom-inset gap and scrolls to latest message
   useEffect(() => {
-    if (Platform.OS === "android") {
-      const showSub = Keyboard.addListener("keyboardDidShow", () => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      if (Platform.OS === "android") {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      });
-      return () => { showSub.remove(); };
-    }
+      }
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   // Web keyboard
@@ -1998,7 +2003,7 @@ export default function ChatDetailScreen({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: Math.max(insets.bottom, 8), minHeight: 60 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
@@ -2465,7 +2470,7 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8, borderTopWidth: 1 },
+  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
