@@ -1295,7 +1295,6 @@ import {
   Platform,
   Alert,
   Dimensions,
->>>>>>> 5c7aed9 (gg)
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { ThemedText } from "@/components/ThemedText";
