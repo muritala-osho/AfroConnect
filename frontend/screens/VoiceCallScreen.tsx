@@ -779,6 +779,13 @@ export default function VoiceCallScreen() {
                 <CtrlBtn
                   icon="bluetooth"
                   label="Bluetooth"
+                  onPress={() =>
+                    Alert.alert(
+                      "Bluetooth Audio",
+                      "Connect a Bluetooth headset and audio will automatically route to it. Manage devices in your phone's Bluetooth settings.",
+                      [{ text: "OK" }],
+                    )
+                  }
                 />
               </View>
             )}
