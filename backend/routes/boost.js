@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Boost = require('../models/Boost');
 const User = require('../models/User');
+const redis = require('../utils/redis');
 
 // Boost duration configurations (in minutes)
 const BOOST_CONFIGS = {
@@ -14,22 +15,23 @@ const BOOST_CONFIGS = {
 // Get current boost status
 router.get('/status', protect, async (req, res) => {
   try {
+    const cacheKey = `boost:status:${req.user._id}`;
+    const cachedBoost = await redis.get(cacheKey);
+    if (cachedBoost) return res.json({ success: true, ...cachedBoost, fromCache: true });
+
     const activeBoost = await Boost.getActiveBoost(req.user._id);
     
     if (!activeBoost) {
-      return res.json({
-        success: true,
-        hasActiveBoost: false,
-        boost: null
-      });
+      const noBoostPayload = { hasActiveBoost: false, boost: null };
+      await redis.set(cacheKey, noBoostPayload, 30);
+      return res.json({ success: true, ...noBoostPayload });
     }
 
     const now = new Date();
     const remainingMs = activeBoost.expiresAt - now;
     const remainingMinutes = Math.max(0, Math.ceil(remainingMs / 60000));
 
-    res.json({
-      success: true,
+    const boostPayload = {
       hasActiveBoost: true,
       boost: {
         id: activeBoost._id,
@@ -42,7 +44,9 @@ router.get('/status', protect, async (req, res) => {
         likesGained: activeBoost.likesGained,
         matchesGained: activeBoost.matchesGained
       }
-    });
+    };
+    await redis.set(cacheKey, boostPayload, 30);
+    res.json({ success: true, ...boostPayload });
   } catch (error) {
     console.error('Get boost status error:', error);
     res.status(500).json({ success: false, message: 'Failed to get boost status' });
@@ -88,6 +92,8 @@ router.post('/activate', protect, async (req, res) => {
       source
     });
 
+    await redis.del(`boost:status:${req.user._id}`);
+    await redis.del(`boost:history:${req.user._id}`);
     res.json({
       success: true,
       message: `${config.name} activated!`,
@@ -125,6 +131,7 @@ router.post('/extend', protect, async (req, res) => {
     
     activeBoost.expiresAt = new Date(activeBoost.expiresAt.getTime() + extension * 60000);
     await activeBoost.save();
+    await redis.del(`boost:status:${req.user._id}`);
 
     res.json({
       success: true,
@@ -150,6 +157,8 @@ router.delete('/cancel', protect, async (req, res) => {
 
     activeBoost.isActive = false;
     await activeBoost.save();
+    await redis.del(`boost:status:${req.user._id}`);
+    await redis.del(`boost:history:${req.user._id}`);
 
     res.json({
       success: true,
@@ -170,7 +179,10 @@ router.delete('/cancel', protect, async (req, res) => {
 router.get('/history', protect, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
-    
+    const cacheKey = `boost:history:${req.user._id}`;
+    const cachedHistory = await redis.get(cacheKey);
+    if (cachedHistory) return res.json({ success: true, ...cachedHistory, fromCache: true });
+
     const boosts = await Boost.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit));
@@ -188,8 +200,7 @@ router.get('/history', protect, async (req, res) => {
       }
     ]);
 
-    res.json({
-      success: true,
+    const historyPayload = {
       boosts: boosts.map(b => ({
         id: b._id,
         type: b.type,
@@ -207,7 +218,9 @@ router.get('/history', protect, async (req, res) => {
         totalLikes: 0,
         totalMatches: 0
       }
-    });
+    };
+    await redis.set(cacheKey, historyPayload, 120);
+    res.json({ success: true, ...historyPayload });
   } catch (error) {
     console.error('Get boost history error:', error);
     res.status(500).json({ success: false, message: 'Failed to get boost history' });
@@ -217,6 +230,9 @@ router.get('/history', protect, async (req, res) => {
 // Get available boost packages (for UI)
 router.get('/packages', protect, async (req, res) => {
   try {
+    const cached = await redis.get('boost:packages');
+    if (cached) return res.json({ success: true, packages: cached, fromCache: true });
+
     const packages = Object.entries(BOOST_CONFIGS).map(([key, config]) => ({
       id: key,
       name: config.name,
@@ -225,6 +241,7 @@ router.get('/packages', protect, async (req, res) => {
       description: `Boost your profile ${config.multiplier}x for ${config.duration} minutes`
     }));
 
+    await redis.set('boost:packages', packages, 3600);
     res.json({
       success: true,
       packages

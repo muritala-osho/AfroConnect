@@ -8,6 +8,7 @@ const auth = protect;
 const validate = require('../middleware/validate');
 const { swipeLimiter } = require('../middleware/rateLimiter');
 const schemas = require('../validators/schemas');
+const redis = require('../utils/redis');
 
 // @route   GET /api/match/who-likes-me
 // @desc    Get list of users who liked current user (pending friend requests)
@@ -16,7 +17,10 @@ router.get('/who-likes-me', protect, async (req, res) => {
   try {
     const FriendRequest = require('../models/FriendRequest');
     const isPremium = req.user.premium?.isActive;
-    
+    const cacheKey = `wholikesme:${req.user._id}:${isPremium ? 'premium' : 'free'}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, users: cached, fromCache: true });
+
     // Find pending friend requests where this user is the receiver
     const pendingRequests = await FriendRequest.find({
       receiver: req.user._id,
@@ -74,6 +78,7 @@ router.get('/who-likes-me', protect, async (req, res) => {
       });
     }
 
+    await redis.set(cacheKey, processedUsers, 60);
     res.json({ success: true, users: processedUsers });
   } catch (error) {
     console.error('Who likes me error:', error);
@@ -196,6 +201,14 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     }
 
     await currentUser.save();
+    // Invalidate who-likes-me cache for target user and my-matches for both
+    await Promise.all([
+      redis.del(`wholikesme:${targetUserId}:premium`),
+      redis.del(`wholikesme:${targetUserId}:free`),
+      redis.del(`matches:${req.user._id}`),
+      redis.del(`matches:${targetUserId}`),
+      redis.del(`secondchance:${req.user._id}`),
+    ]);
     res.json({ success: true, isMatch: false, message: 'Swipe recorded' });
   } catch (error) {
     console.error('Swipe error:', error);
@@ -205,6 +218,10 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
 router.get('/my-matches', protect, async (req, res) => {
   try {
+    const cacheKey = `matches:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, matches: cached, fromCache: true });
+
     const currentUser = await User.findById(req.user._id);
     const matches = await Match.find({ users: req.user._id, status: 'active' })
       .populate('users', 'name age bio photos location onlineStatus lastActive interests lookingFor gender lifestyle verified')
@@ -240,6 +257,7 @@ router.get('/my-matches', protect, async (req, res) => {
       };
     });
 
+    await redis.set(cacheKey, enriched, 45);
     res.json({ success: true, matches: enriched });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
@@ -248,6 +266,10 @@ router.get('/my-matches', protect, async (req, res) => {
 
 router.get('/second-chance', protect, async (req, res) => {
   try {
+    const cacheKey = `secondchance:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, profiles: cached, fromCache: true });
+
     const user = await User.findById(req.user._id).select('swipedLeft secondChancePasses');
     const passedIds = (user.secondChancePasses || []).map(p => p.targetUserId.toString());
     const eligibleIds = (user.swipedLeft || [])
@@ -268,6 +290,7 @@ router.get('/second-chance', protect, async (req, res) => {
       return { ...pObj, sharedInterests };
     });
 
+    await redis.set(cacheKey, processedProfiles, 120);
     res.json({ success: true, profiles: processedProfiles });
   } catch (error) {
     console.error('Second chance error:', error);
@@ -334,6 +357,10 @@ router.post('/rewind', protect, async (req, res) => {
 // @access  Private
 router.get('/cultural-score/:userId', protect, async (req, res) => {
   try {
+    const cacheKey = `culturalscore:${req.user._id}:${req.params.userId}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, ...cached, fromCache: true });
+
     const me = await User.findById(req.user._id);
     const other = await User.findById(req.params.userId)
       .select('countryOfOrigin tribe languages diasporaGeneration lifestyle interests');
@@ -341,6 +368,7 @@ router.get('/cultural-score/:userId', protect, async (req, res) => {
     if (!other) return res.status(404).json({ success: false, message: 'User not found' });
 
     const breakdown = calculateCulturalScore(me, other);
+    await redis.set(cacheKey, breakdown, 300);
     res.json({ success: true, ...breakdown });
   } catch (error) {
     console.error('Cultural score error:', error);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const redis = require('../utils/redis');
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -61,6 +62,9 @@ router.get('/nearby-users', protect, async (req, res) => {
 
     const latitude = parseFloat(lat);
     const longitude = parseFloat(lng);
+    const cacheKey = `radar:${req.user._id}:${Math.round(latitude * 100)}:${Math.round(longitude * 100)}:${radius}:${gender || 'any'}:${ageMin || ''}:${ageMax || ''}`;
+    const cachedRadar = await redis.get(cacheKey);
+    if (cachedRadar) return res.json({ success: true, ...cachedRadar, fromCache: true });
     let searchRadius = parseInt(radius);
 
     if (isNaN(latitude) || isNaN(longitude)) {
@@ -183,13 +187,14 @@ router.get('/nearby-users', protect, async (req, res) => {
     if (nearbyUsers.length > 0) {
       console.log(`[RADAR] First result has photo: ${nearbyUsers[0].profilePhoto ? 'YES' : 'NO'}`);
     }
-    res.json({
-      success: true,
+    const radarPayload = {
       users: nearbyUsers,
       count: nearbyUsers.length,
       radius: searchRadius,
       center: { lat: latitude, lng: longitude }
-    });
+    };
+    await redis.set(cacheKey, radarPayload, 90);
+    res.json({ success: true, ...radarPayload });
 
   } catch (error) {
     console.error('Radar nearby users error:', error);
