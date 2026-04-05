@@ -603,7 +603,7 @@ export default function VoiceCallScreen() {
         </View>
 
         {/* ── NAME + STATUS ── */}
-        <View style={[styles.nameSection, { marginTop: insets.top + 52 }]}>
+        <View style={[styles.nameSection, { marginTop: 16 }]}>
           <ThemedText style={styles.userName} numberOfLines={1}>{userName || "Unknown"}</ThemedText>
           <ThemedText style={[styles.statusText, isTerminal && { color: "#f87171" }]}>
             {getStatusText()}
