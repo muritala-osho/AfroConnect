@@ -823,7 +823,7 @@ export default function VoiceCallScreen() {
 ────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  screen: { flex: 1, flexDirection: "column", justifyContent: "space-between" },
+  screen: { flex: 1, flexDirection: "column" },
 
   /* blobs */
   blobTop:    { position: "absolute", top: -100, left: -70,  width: 320, height: 320, borderRadius: 160, backgroundColor: "rgba(124,58,237,0.20)" },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView } from "react-native";
+import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView, Keyboard } from "react-native";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -76,6 +76,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(STORY_DURATION);
   const [showViewers, setShowViewers] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const isOwnStory = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id);
 
@@ -124,6 +125,19 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
 
     fetchStories();
   }, [userId, token, user?.id]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   useEffect(() => {
     videoDurationSet.current = false;
@@ -611,7 +625,13 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
 
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.6)"]}
-        style={[styles.bottomGradient, { paddingBottom: insets.bottom + 16 }]}
+        style={[
+          styles.bottomGradient,
+          {
+            paddingBottom: showReplyInput ? 16 : insets.bottom + 16,
+            bottom: showReplyInput ? keyboardHeight : 0,
+          },
+        ]}
       >
         {showReplyInput ? (
           <View style={styles.replyInputContainer}>
