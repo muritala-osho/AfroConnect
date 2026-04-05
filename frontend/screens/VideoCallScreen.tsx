@@ -869,8 +869,9 @@ const styles = StyleSheet.create({
   cameraOffText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8, fontWeight: '500' },
   centerContent: {
     position: 'absolute',
-    top: '38%', left: 0, right: 0,
+    top: 0, bottom: 0, left: 0, right: 0,
     alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 5,
   },
   connectingIndicator: {
