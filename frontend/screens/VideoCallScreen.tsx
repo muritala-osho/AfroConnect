@@ -320,7 +320,7 @@ export default function VideoCallScreen() {
       await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setStatus('busy');
-      setErrorMessage('They're on another call');
+      setErrorMessage("They're on another call");
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
     });
