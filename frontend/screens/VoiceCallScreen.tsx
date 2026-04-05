@@ -159,6 +159,7 @@ export default function VoiceCallScreen() {
     shouldRingRef.current = true;
     try {
       await stopRingtone();
+      shouldRingRef.current = true; // re-assert after stopRingtone clears it
       if (!shouldRingRef.current) return;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -541,7 +542,8 @@ export default function VoiceCallScreen() {
   const showCancelBtn      = callStatus === "connecting" || isWaiting;
   const agoraCallUrl       = `${getApiBaseUrl()}/public/agora-call.html`;
 
-  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
+  /* ─────────────────────────────────────────────────────── Render ─── */
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -552,7 +554,7 @@ export default function VoiceCallScreen() {
         style={StyleSheet.absoluteFillObject as any}
         blurRadius={Platform.OS === "ios" ? 60 : 18}
       />
-      {/* Dark purple overlay â€” gives the whole screen a cohesive tint */}
+      {/* Dark purple gradient overlay */}
       <LinearGradient
         colors={["rgba(10,4,30,0.90)", "rgba(30,8,60,0.78)", "rgba(10,4,30,0.96)"]}
         style={StyleSheet.absoluteFill}
@@ -583,74 +585,74 @@ export default function VoiceCallScreen() {
 
       <Animated.View style={[s.screen, { opacity: fadeAnim }]}>
 
-        {/* â”€â”€ TOP BAR â”€â”€ */}
-        <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
-          {/* Minimize button â€” only shown when connected */}
-          {isConnected ? (
-            <Pressable style={s.topIconBtn} onPress={handleMinimize} hitSlop={12}>
-              <Ionicons name="chevron-down" size={22} color="rgba(255,255,255,0.85)" />
-            </Pressable>
-          ) : (
-            <View style={s.topIconPlaceholder} />
-          )}
+        {/* TOP BAR: back/minimize | name + status + encrypted | spacer */}
+        <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
+          <Pressable
+            style={s.topIconBtn}
+            onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
+            hitSlop={12}
+          >
+            <Ionicons
+              name={isConnected ? "chevron-down" : "arrow-back"}
+              size={22}
+              color="rgba(255,255,255,0.9)"
+            />
+          </Pressable>
 
-          {/* Call type label */}
-          <View style={s.callTypePill}>
-            <Ionicons name="call" size={11} color="#c4b5fd" />
-            <ThemedText style={s.callTypePillText}>Voice Call</ThemedText>
+          <View style={s.topCenter}>
+            <ThemedText style={s.topName} numberOfLines={1}>
+              {userName || "Unknown"}
+            </ThemedText>
+            <ThemedText style={[s.topStatus, isTerminal && s.topStatusError]}>
+              {getStatusText()}
+            </ThemedText>
+            {(callStatus === "ringing" || callStatus === "connecting") && (
+              <View style={s.encryptRow}>
+                <Ionicons name="lock-closed" size={10} color="rgba(196,181,253,0.75)" />
+                <ThemedText style={s.encryptText}>End-to-end encrypted</ThemedText>
+              </View>
+            )}
           </View>
 
           <View style={s.topIconPlaceholder} />
         </View>
 
-        {/* â”€â”€ CALLER INFO SECTION â”€â”€ */}
-        <View style={s.callerSection}>
-          {/* Avatar with animated pulse rings */}
-          <View style={s.avatarArea}>
-            {(callStatus === "ringing" || callStatus === "connecting") && (
-              <>
-                <Animated.View style={[s.ring3, { transform: [{ scale: pulseAnim3 }] }]} />
-                <Animated.View style={[s.ring2, { transform: [{ scale: pulseAnim2 }] }]} />
-                <Animated.View style={[s.ring1, { transform: [{ scale: pulseAnim  }] }]} />
-              </>
-            )}
+        {/* AVATAR SECTION — fills middle space */}
+        <View style={s.avatarSection}>
+          {/* Animated pulse rings during ringing/connecting */}
+          {(callStatus === "ringing" || callStatus === "connecting") && (
+            <>
+              <Animated.View style={[s.ring3, { transform: [{ scale: pulseAnim3 }] }]} />
+              <Animated.View style={[s.ring2, { transform: [{ scale: pulseAnim2 }] }]} />
+              <Animated.View style={[s.ring1, { transform: [{ scale: pulseAnim  }] }]} />
+            </>
+          )}
 
-            {/* Muted indicator ring */}
-            {isConnected && isMuted && <View style={s.mutedRing} />}
+          {/* Muted red ring */}
+          {isConnected && isMuted && <View style={s.mutedRing} />}
 
-            {/* Avatar frame â€” border changes color with call state */}
-            <View style={[
-              s.avatarFrame,
-              isConnected  && s.avatarFrameConnected,
-              isConnected && isMuted && s.avatarFrameMuted,
-              isTerminal   && s.avatarFrameTerminal,
-            ]}>
-              <SafeImage
-                source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
-                style={s.avatar}
-              />
-            </View>
-
-            {/* Muted badge below avatar */}
-            {isConnected && isMuted && (
-              <View style={s.mutedBadge}>
-                <Ionicons name="mic-off" size={12} color="#fff" />
-                <ThemedText style={s.mutedBadgeText}>Muted</ThemedText>
-              </View>
-            )}
+          {/* Avatar circle */}
+          <View style={[
+            s.avatarFrame,
+            isConnected && s.avatarFrameConnected,
+            isConnected && isMuted && s.avatarFrameMuted,
+            isTerminal && s.avatarFrameTerminal,
+          ]}>
+            <SafeImage
+              source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
+              style={s.avatar}
+            />
           </View>
 
-          {/* Name */}
-          <ThemedText style={s.callerName} numberOfLines={1}>
-            {userName || "Unknown"}
-          </ThemedText>
+          {/* Muted badge below avatar */}
+          {isConnected && isMuted && (
+            <View style={s.mutedBadge}>
+              <Ionicons name="mic-off" size={12} color="#fff" />
+              <ThemedText style={s.mutedBadgeText}>Muted</ThemedText>
+            </View>
+          )}
 
-          {/* Status / timer */}
-          <ThemedText style={[s.statusText, isTerminal && s.statusTextError]}>
-            {getStatusText()}
-          </ThemedText>
-
-          {/* Audio wave + "Connected" indicator */}
+          {/* Connected indicator + wave bars */}
           {isConnected && (
             <View style={s.connectedRow}>
               <View style={s.liveGreenDot} />
@@ -659,15 +661,7 @@ export default function VoiceCallScreen() {
             </View>
           )}
 
-          {/* Encryption badge â€” shown while waiting */}
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <View style={s.encryptBadge}>
-              <Ionicons name="lock-closed" size={10} color="rgba(196,181,253,0.75)" />
-              <ThemedText style={s.encryptText}>End-to-end encrypted</ThemedText>
-            </View>
-          )}
-
-          {/* Error pill â€” terminal states */}
+          {/* Error pill for terminal states */}
           {isTerminal && callStatus !== "ended" && (
             <View style={s.errorPill}>
               <Ionicons name="close-circle" size={14} color="#f87171" />
@@ -681,211 +675,216 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* â”€â”€ BOTTOM CONTROLS â”€â”€ */}
-        <View style={[s.bottomArea, { paddingBottom: insets.bottom + 36 }]}>
+        {/* BOTTOM CONTROLS */}
+        <View style={[s.bottomBar, { paddingBottom: insets.bottom + 24 }]}>
+          <View style={s.bottomPill}>
 
-          {/* â”€ INCOMING CALL: Accept / Decline â”€ */}
-          {showIncoming && (
-            <View style={s.incomingRow}>
-              <View style={s.incomingAction}>
-                <Pressable
-                  style={[s.callActionBtn, s.declineBtn]}
-                  onPress={handleDecline}
-                  android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 38 }}
-                >
-                  <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
-                </Pressable>
-                <ThemedText style={s.actionLabel}>Decline</ThemedText>
-              </View>
+            {/* INCOMING: Decline + Accept */}
+            {showIncoming && (
+              <>
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, s.declineBtn]} onPress={handleDecline}>
+                    <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  </Pressable>
+                  <ThemedText style={s.pillLabel}>Decline</ThemedText>
+                </View>
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, s.acceptBtn]} onPress={handleAccept}>
+                    <Ionicons name="call" size={28} color="#FFF" />
+                  </Pressable>
+                  <ThemedText style={s.pillLabel}>Accept</ThemedText>
+                </View>
+              </>
+            )}
 
-              <View style={s.incomingAction}>
-                <Pressable
-                  style={[s.callActionBtn, s.acceptBtn]}
-                  onPress={handleAccept}
-                  android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 38 }}
-                >
-                  <Ionicons name="call" size={30} color="#FFF" />
-                </Pressable>
-                <ThemedText style={s.actionLabel}>Accept</ThemedText>
-              </View>
-            </View>
-          )}
-
-          {/* â”€ CONNECTED: Mute / Speaker / End â”€ */}
-          {isConnected && (
-            <View style={s.connectedPanel}>
-              {/* Secondary controls row */}
-              <View style={s.controlsRow}>
-                {/* Mute */}
-                <View style={s.controlItem}>
-                  <Pressable
-                    style={[s.controlBtn, isMuted && s.controlBtnActive]}
-                    onPress={toggleMute}
-                  >
+            {/* CONNECTED: Mute + Speaker + End Call */}
+            {isConnected && (
+              <>
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, isMuted && s.pillBtnActive]} onPress={toggleMute}>
                     <Ionicons
                       name={isMuted ? "mic-off" : "mic"}
-                      size={22}
+                      size={24}
                       color={isMuted ? "#0f0a2e" : "#FFF"}
                     />
                   </Pressable>
-                  <ThemedText style={s.controlLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
+                  <ThemedText style={s.pillLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
                 </View>
-
-                {/* Speaker */}
-                <View style={s.controlItem}>
-                  <Pressable
-                    style={[s.controlBtn, isSpeakerOn && s.controlBtnActive]}
-                    onPress={toggleSpeaker}
-                  >
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, isSpeakerOn && s.pillBtnActive]} onPress={toggleSpeaker}>
                     <Ionicons
                       name={isSpeakerOn ? "volume-high" : "ear"}
-                      size={22}
+                      size={24}
                       color={isSpeakerOn ? "#0f0a2e" : "#FFF"}
                     />
                   </Pressable>
-                  <ThemedText style={s.controlLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
+                  <ThemedText style={s.pillLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
                 </View>
-
-                {/* Keypad (disabled placeholder) */}
-                <View style={[s.controlItem, { opacity: 0.3 }]}>
-                  <View style={s.controlBtn}>
-                    <Ionicons name="keypad" size={22} color="#FFF" />
-                  </View>
-                  <ThemedText style={s.controlLabel}>Keypad</ThemedText>
+                <View style={s.pillItem}>
+                  <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
+                    <Pressable
+                      style={[s.pillBtn, s.declineBtn]}
+                      onPress={handleEndCall}
+                      onPressIn={() =>
+                        Animated.spring(endBtnScale, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                      }
+                      onPressOut={() =>
+                        Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                      }
+                    >
+                      <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                    </Pressable>
+                  </Animated.View>
+                  <ThemedText style={s.pillLabel}>End Call</ThemedText>
                 </View>
-              </View>
+              </>
+            )}
 
-              {/* End Call button */}
-              <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
+            {/* OUTGOING RINGING / CONNECTING: Speaker + Cancel */}
+            {showCancelBtn && (
+              <>
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, isSpeakerOn && s.pillBtnActive]} onPress={toggleSpeaker}>
+                    <Ionicons
+                      name={isSpeakerOn ? "volume-high" : "volume-medium"}
+                      size={24}
+                      color={isSpeakerOn ? "#0f0a2e" : "#FFF"}
+                    />
+                  </Pressable>
+                  <ThemedText style={s.pillLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
+                </View>
+                <View style={s.pillItem}>
+                  <Pressable style={[s.pillBtn, s.declineBtn]} onPress={handleEndCall}>
+                    <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  </Pressable>
+                  <ThemedText style={s.pillLabel}>Cancel</ThemedText>
+                </View>
+              </>
+            )}
+
+            {/* TERMINAL: Close */}
+            {isTerminal && (
+              <View style={s.pillItem}>
                 <Pressable
-                  style={s.endCallBtn}
-                  onPress={handleEndCall}
-                  onPressIn={() =>
-                    Animated.spring(endBtnScale, { toValue: 0.9, useNativeDriver: true, tension: 220, friction: 8 }).start()
-                  }
-                  onPressOut={() =>
-                    Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()
-                  }
-                  android_ripple={{ color: "rgba(255,255,255,0.2)", borderless: true, radius: 40 }}
+                  style={[s.pillBtn, s.closeBtn]}
+                  onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}
                 >
-                  <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  <Ionicons name="close" size={28} color="#FFF" />
                 </Pressable>
-              </Animated.View>
-              <ThemedText style={s.actionLabel}>End Call</ThemedText>
-            </View>
-          )}
+                <ThemedText style={s.pillLabel}>Close</ThemedText>
+              </View>
+            )}
 
-          {/* â”€ OUTGOING RINGING / CONNECTING: Cancel â”€ */}
-          {showCancelBtn && (
-            <View style={s.cancelArea}>
-              <Pressable style={[s.callActionBtn, s.declineBtn]} onPress={handleEndCall}>
-                <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
-              </Pressable>
-              <ThemedText style={s.actionLabel}>Cancel</ThemedText>
-            </View>
-          )}
-
-          {/* â”€ TERMINAL: Close â”€ */}
-          {isTerminal && (
-            <View style={s.cancelArea}>
-              <Pressable
-                style={[s.callActionBtn, s.closeBtn]}
-                onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}
-              >
-                <Ionicons name="close" size={30} color="#FFF" />
-              </Pressable>
-              <ThemedText style={s.actionLabel}>Close</ThemedText>
-            </View>
-          )}
+          </View>
         </View>
+
       </Animated.View>
     </View>
   );
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   Styles
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-const AVATAR_SIZE = Math.min(SW * 0.44, 186);
+/* ─────────────────────────────────────────────────────── Styles ─── */
+const AVATAR_SIZE = Math.min(SW * 0.52, 220);
 
 const s = StyleSheet.create({
   root:   { flex: 1 },
   screen: { flex: 1 },
 
-  /* Top bar */
+  /* ── Top bar ── */
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingBottom: 4,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   topIconBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.10)",
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center", justifyContent: "center",
   },
-  topIconPlaceholder: { width: 42 },
-  callTypePill: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 18, paddingVertical: 9,
-    borderRadius: 24,
-    backgroundColor: "rgba(109,40,217,0.22)",
-    borderWidth: 1, borderColor: "rgba(196,181,253,0.3)",
+  topIconPlaceholder: { width: 44 },
+  topCenter: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 8,
+    gap: 2,
   },
-  callTypePillText: {
-    fontSize: 12, color: "#c4b5fd", fontWeight: "700", letterSpacing: 0.4,
+  topName: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  topStatus: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.6)",
+    fontWeight: "500",
+    letterSpacing: 0.4,
+    textAlign: "center",
+  },
+  topStatusError: { color: "#f87171" },
+  encryptRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 1,
+  },
+  encryptText: {
+    fontSize: 11,
+    color: "rgba(196,181,253,0.7)",
+    fontWeight: "500",
   },
 
-  /* Caller section â€” fills the flex space */
-  callerSection: {
+  /* ── Avatar section (middle) ── */
+  avatarSection: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 28,
-    gap: 12,
   },
 
-  /* Avatar + pulse rings */
-  avatarArea: {
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
+  /* Pulse rings */
   ring3: {
     position: "absolute",
-    width: AVATAR_SIZE + 110, height: AVATAR_SIZE + 110,
-    borderRadius: (AVATAR_SIZE + 110) / 2,
-    backgroundColor: "rgba(109,40,217,0.06)",
-    borderWidth: 1, borderColor: "rgba(196,181,253,0.08)",
+    width: AVATAR_SIZE + 120, height: AVATAR_SIZE + 120,
+    borderRadius: (AVATAR_SIZE + 120) / 2,
+    backgroundColor: "rgba(109,40,217,0.05)",
+    borderWidth: 1, borderColor: "rgba(196,181,253,0.07)",
   },
   ring2: {
     position: "absolute",
-    width: AVATAR_SIZE + 70, height: AVATAR_SIZE + 70,
-    borderRadius: (AVATAR_SIZE + 70) / 2,
-    backgroundColor: "rgba(109,40,217,0.10)",
-    borderWidth: 1, borderColor: "rgba(196,181,253,0.16)",
+    width: AVATAR_SIZE + 74, height: AVATAR_SIZE + 74,
+    borderRadius: (AVATAR_SIZE + 74) / 2,
+    backgroundColor: "rgba(109,40,217,0.09)",
+    borderWidth: 1, borderColor: "rgba(196,181,253,0.15)",
   },
   ring1: {
     position: "absolute",
     width: AVATAR_SIZE + 36, height: AVATAR_SIZE + 36,
     borderRadius: (AVATAR_SIZE + 36) / 2,
-    backgroundColor: "rgba(109,40,217,0.16)",
+    backgroundColor: "rgba(109,40,217,0.15)",
     borderWidth: 1.5, borderColor: "rgba(196,181,253,0.28)",
   },
   mutedRing: {
     position: "absolute",
-    width: AVATAR_SIZE + 12, height: AVATAR_SIZE + 12,
-    borderRadius: (AVATAR_SIZE + 12) / 2,
+    width: AVATAR_SIZE + 14, height: AVATAR_SIZE + 14,
+    borderRadius: (AVATAR_SIZE + 14) / 2,
     borderWidth: 2.5, borderColor: "rgba(239,68,68,0.6)",
   },
+
+  /* Avatar frame */
   avatarFrame: {
     width: AVATAR_SIZE, height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     overflow: "hidden",
-    borderWidth: 3, borderColor: "rgba(196,181,253,0.5)",
-    shadowColor: "#7c3aed", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7, shadowRadius: 28, elevation: 18,
+    borderWidth: 3.5, borderColor: "rgba(196,181,253,0.5)",
+    shadowColor: "#7c3aed",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7, shadowRadius: 32, elevation: 20,
   },
   avatarFrameConnected: {
     borderColor: "rgba(16,185,129,0.7)",
@@ -896,139 +895,100 @@ const s = StyleSheet.create({
     shadowColor: "#ef4444",
   },
   avatarFrameTerminal: {
-    borderColor: "rgba(255,255,255,0.18)",
-    shadowOpacity: 0.2,
+    borderColor: "rgba(255,255,255,0.15)",
+    shadowOpacity: 0.15,
   },
   avatar: { width: "100%", height: "100%" },
+
+  /* Muted badge */
   mutedBadge: {
-    position: "absolute",
-    bottom: -4,
+    marginTop: 14,
     backgroundColor: "#ef4444",
     borderRadius: 16,
     paddingHorizontal: 12, paddingVertical: 5,
     flexDirection: "row", alignItems: "center", gap: 5,
-    borderWidth: 2, borderColor: "rgba(255,255,255,0.25)",
-    shadowColor: "#ef4444", shadowOpacity: 0.5, shadowRadius: 8, elevation: 6,
+    borderWidth: 2, borderColor: "rgba(255,255,255,0.2)",
+    shadowColor: "#ef4444", shadowOpacity: 0.45, shadowRadius: 8, elevation: 6,
   },
   mutedBadgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
 
-  /* Caller text */
-  callerName: {
-    fontSize: 34,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 0.2,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.55)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
-  },
-  statusText: {
-    fontSize: 16,
-    color: "rgba(255,255,255,0.52)",
-    fontWeight: "500",
-    letterSpacing: 0.6,
-    textAlign: "center",
-  },
-  statusTextError: { color: "#f87171" },
-
+  /* Connected row */
   connectedRow: {
     flexDirection: "row", alignItems: "center", gap: 8,
+    marginTop: 18,
   },
   liveGreenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
-  liveText: { fontSize: 13, color: "#10B981", fontWeight: "700" },
+  liveText:     { fontSize: 13, color: "#10B981", fontWeight: "700" },
 
-  encryptBadge: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-  },
-  encryptText: {
-    fontSize: 11, color: "rgba(196,181,253,0.65)", fontWeight: "500",
-  },
-
+  /* Error pill */
   errorPill: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8,
+    marginTop: 16,
+    paddingHorizontal: 14, paddingVertical: 9,
     borderRadius: 14,
     backgroundColor: "rgba(248,113,113,0.12)",
     borderWidth: 1, borderColor: "rgba(248,113,113,0.28)",
   },
   errorPillText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  /* Bottom area */
-  bottomArea: {
+  /* ── Bottom bar ── */
+  bottomBar: {
     width: "100%",
     alignItems: "center",
-    paddingHorizontal: 24,
-    gap: 0,
+    paddingHorizontal: 20,
   },
-
-  /* Incoming call buttons */
-  incomingRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+  bottomPill: {
     width: "100%",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  incomingAction: { alignItems: "center", gap: 12 },
-  callActionBtn: {
-    width: 78, height: 78, borderRadius: 39,
-    alignItems: "center", justifyContent: "center",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45, shadowRadius: 14, elevation: 10,
-  },
-  declineBtn: { backgroundColor: "#dc2626", shadowColor: "#dc2626" },
-  acceptBtn:  { backgroundColor: "#16a34a", shadowColor: "#16a34a" },
-  closeBtn:   {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
-    shadowColor: "#000",
-  },
-  actionLabel: {
-    fontSize: 13, color: "rgba(255,255,255,0.72)", fontWeight: "600", letterSpacing: 0.3,
-  },
-
-  /* Connected panel */
-  connectedPanel: {
-    width: "100%",
-    alignItems: "center",
-    gap: 18,
-    paddingHorizontal: 18,
-    paddingTop: 26,
-    paddingBottom: 20,
-    backgroundColor: "rgba(8,4,24,0.78)",
-    borderRadius: 36,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.5, shadowRadius: 28, elevation: 16,
-  },
-  controlsRow: {
     flexDirection: "row",
     justifyContent: "space-evenly",
-    width: "100%",
+    alignItems: "flex-start",
+    backgroundColor: "rgba(8,4,24,0.82)",
+    borderRadius: 32,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5, shadowRadius: 24, elevation: 16,
   },
-  controlItem: { alignItems: "center", gap: 8, flex: 1 },
-  controlBtn: {
-    width: 62, height: 62, borderRadius: 31,
-    backgroundColor: "rgba(255,255,255,0.10)",
+  pillItem: {
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  pillBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.10)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
-  controlBtnActive: {
+  pillBtnActive: {
     backgroundColor: "#c4b5fd",
-    borderColor: "rgba(196,181,253,0.5)",
+    borderColor: "rgba(196,181,253,0.4)",
+    shadowColor: "#c4b5fd",
   },
-  controlLabel: {
-    fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: "500", letterSpacing: 0.2,
-  },
-  endCallBtn: {
-    width: 80, height: 80, borderRadius: 40,
+  declineBtn: {
     backgroundColor: "#dc2626",
-    alignItems: "center", justifyContent: "center",
-    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.65, shadowRadius: 18, elevation: 14,
+    borderColor: "rgba(220,38,38,0.4)",
+    shadowColor: "#dc2626",
   },
-
-  /* Cancel / close area */
-  cancelArea: { alignItems: "center", gap: 12 },
+  acceptBtn: {
+    backgroundColor: "#16a34a",
+    borderColor: "rgba(22,163,74,0.4)",
+    shadowColor: "#16a34a",
+  },
+  closeBtn: {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.18)",
+    shadowColor: "#000",
+  },
+  pillLabel: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.7)",
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    textAlign: "center",
+  },
 });
