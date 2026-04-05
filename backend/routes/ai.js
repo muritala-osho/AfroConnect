@@ -2,17 +2,6 @@
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
-const OpenAI = require("openai");
-
-let openai;
-if (process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY) {
-  openai = new OpenAI({
-    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  });
-} else {
-  console.log('⚠️ OpenAI API Key not found - AI features will be limited to templates');
-}
 
 // Language code mapping for MyMemory API
 const LANG_NAME_TO_CODE = {
@@ -43,9 +32,7 @@ const LANG_NAME_TO_CODE = {
 function getLanguageCode(langName) {
   const normalized = langName.toLowerCase().trim();
   if (LANG_NAME_TO_CODE[normalized]) return LANG_NAME_TO_CODE[normalized];
-  // If it's already a 2-letter code, use it directly
   if (normalized.length === 2) return normalized;
-  // Try partial match
   const partial = Object.keys(LANG_NAME_TO_CODE).find(k => k.includes(normalized) || normalized.includes(k));
   if (partial) return LANG_NAME_TO_CODE[partial];
   return null;
@@ -59,12 +46,12 @@ router.post('/translate', protect, async (req, res) => {
     const { text, targetLanguage, sourceLanguage } = req.body;
 
     if (!text || !targetLanguage) {
-      return res.status(400).json({ success: false, message: "Text and targetLanguage are required" });
+      return res.status(400).json({ success: false, message: 'Text and targetLanguage are required' });
     }
 
     const targetCode = getLanguageCode(targetLanguage);
     if (!targetCode) {
-      return res.status(400).json({ success: false, message: `Language "${targetLanguage}" not recognized. Try using a common language name or 2-letter code.` });
+      return res.status(400).json({ success: false, message: `Language "${targetLanguage}" not recognized.` });
     }
 
     let sourceCode = 'en';
@@ -79,8 +66,8 @@ router.post('/translate', protect, async (req, res) => {
       const response = await fetch(url);
       data = await response.json();
     } catch (fetchErr) {
-      console.error("MyMemory fetch error:", fetchErr);
-      return res.status(502).json({ success: false, message: "Translation service is temporarily unavailable. Please try again later." });
+      console.error('MyMemory fetch error:', fetchErr);
+      return res.status(502).json({ success: false, message: 'Translation service is temporarily unavailable.' });
     }
 
     if (data.responseData?.translatedText) {
@@ -94,12 +81,12 @@ router.post('/translate', protect, async (req, res) => {
       res.status(400).json({ success: false, message: data.responseDetails || 'Translation failed' });
     }
   } catch (error) {
-    console.error("Translation error:", error);
-    res.status(500).json({ success: false, message: "Translation failed" });
+    console.error('Translation error:', error);
+    res.status(500).json({ success: false, message: 'Translation failed' });
   }
 });
 
-// Predefined romantic message templates
+// Romantic message templates
 const romanticTemplates = [
   "Hey! Your smile caught my attention. How's your day going? 😊",
   "I couldn't help but notice we share a love for {interest}. What's your favorite thing about it?",
@@ -107,9 +94,9 @@ const romanticTemplates = [
   "Hi there! I saw you're into {interest} - me too! What got you interested in it?",
   "Hey! Your energy seems amazing. Tell me something interesting about yourself 💫",
   "I love your vibe! What's something you're passionate about?",
-  "Your photos are stunning! Where was that {location} picture taken?",
+  "Your photos are stunning! Where was that picture taken?",
   "Hi! We matched! What's been the highlight of your week? 🌟",
-  "Hey beautiful! What's your idea of a perfect date?",
+  "Hey! What's your idea of a perfect date?",
   "I noticed we both love {interest}. Any recommendations?",
 ];
 
@@ -127,7 +114,7 @@ const iceBreakers = [
 ];
 
 // @route   POST /api/ai/suggest-message
-// @desc    Get AI-generated romantic message suggestions
+// @desc    Get template-based message suggestions
 // @access  Private
 router.post('/suggest-message', protect, async (req, res) => {
   try {
@@ -143,37 +130,32 @@ router.post('/suggest-message', protect, async (req, res) => {
     let suggestions = [];
 
     if (messageType === 'icebreaker') {
-      // Return random ice breakers
       suggestions = iceBreakers
         .sort(() => Math.random() - 0.5)
         .slice(0, 3);
     } else {
-      // Return personalized romantic messages
       suggestions = romanticTemplates
         .sort(() => Math.random() - 0.5)
         .slice(0, 3)
         .map(template => {
           let message = template;
-          
-          // Replace {interest} with random shared interest
-          if (template.includes('{interest}') && targetUser.interests.length > 0) {
-            const randomInterest = targetUser.interests[
-              Math.floor(Math.random() * targetUser.interests.length)
-            ];
+          if (template.includes('{interest}') && targetUser.interests && targetUser.interests.length > 0) {
+            const randomInterest = targetUser.interests[Math.floor(Math.random() * targetUser.interests.length)];
             message = message.replace('{interest}', randomInterest.toLowerCase());
+          } else if (template.includes('{interest}')) {
+            message = message.replace(' for {interest}', '').replace(' {interest}', '');
           }
-          
           return message;
         });
     }
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       suggestions,
-      tip: "Remember to be genuine and authentic! These are just conversation starters."
+      tip: "Remember to be genuine and authentic! These are just conversation starters.",
     });
   } catch (error) {
-    console.error('AI suggestion error:', error);
+    console.error('Suggest-message error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -193,43 +175,14 @@ const chatSuggestionTemplates = [
   "Tell me something that made you smile today! 😊",
 ];
 
+// @route   POST /api/ai/chat-suggestions
+// @desc    Get chat conversation starters (template-based)
+// @access  Private
 router.post('/chat-suggestions', protect, async (req, res) => {
   try {
-    const { recipientName, context } = req.body;
-    
-    if (openai) {
-      try {
-        const response = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            {
-              role: "system",
-              content: `You are a friendly dating assistant. Generate 5 short, casual, flirty but respectful conversation starters for someone named ${recipientName || 'this person'}. Keep each message under 100 characters. Be warm and genuine. Return as JSON array of strings.`
-            },
-            {
-              role: "user",
-              content: context ? `Previous conversation context: ${context}` : "Generate opening messages for a new match."
-            }
-          ],
-          max_completion_tokens: 500,
-        });
-        
-        try {
-          const content = response.choices[0].message.content.trim();
-          const suggestions = JSON.parse(content);
-          return res.json({ success: true, suggestions });
-        } catch (parseError) {
-          console.log('AI response parse error, using templates');
-        }
-      } catch (aiError) {
-        console.log('AI error, using templates');
-      }
-    }
-    
     const suggestions = chatSuggestionTemplates
       .sort(() => Math.random() - 0.5)
       .slice(0, 5);
-    
     res.json({ success: true, suggestions });
   } catch (error) {
     console.error('Chat suggestions error:', error);

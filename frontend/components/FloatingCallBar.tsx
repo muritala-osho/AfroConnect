@@ -4,7 +4,6 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
@@ -53,7 +52,8 @@ export default function FloatingCallBar() {
 
   const handleTap = () => {
     maximizeCall();
-    navigation.navigate("VoiceCall", {
+    const screen = activeCall.callType === "video" ? "VideoCall" : "VoiceCall";
+    navigation.navigate(screen, {
       userId: activeCall.userId,
       userName: activeCall.userName,
       userPhoto: activeCall.userPhoto,
@@ -61,6 +61,8 @@ export default function FloatingCallBar() {
       returnToCall: true,
     });
   };
+
+  const isVideo = activeCall.callType === "video";
 
   return (
     <Animated.View
@@ -70,16 +72,13 @@ export default function FloatingCallBar() {
       ]}
     >
       <Pressable style={styles.inner} onPress={handleTap}>
-        {/* Pulsing green dot */}
         <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
 
-        {/* Avatar */}
         <SafeImage
           source={{ uri: activeCall.userPhoto || "https://via.placeholder.com/36" }}
           style={styles.avatar}
         />
 
-        {/* Info */}
         <View style={styles.info}>
           <ThemedText style={styles.name} numberOfLines={1}>
             {activeCall.userName}
@@ -89,9 +88,8 @@ export default function FloatingCallBar() {
           </ThemedText>
         </View>
 
-        {/* Return icon */}
         <View style={styles.returnBtn}>
-          <Ionicons name="call" size={18} color="#fff" />
+          <Ionicons name={isVideo ? "videocam" : "call"} size={18} color="#fff" />
         </View>
       </Pressable>
     </Animated.View>

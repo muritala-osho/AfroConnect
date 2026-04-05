@@ -1310,18 +1310,11 @@ export default function ChatDetailScreen({
   };
 
   // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const fetchAISuggestions = async () => {
-    if (!token) return;
+  const fetchAISuggestions = useCallback(() => {
     setShowAISuggestions(true);
-    try {
-      const response = await post<{ suggestions: string[] }>(
-        "/ai/chat-suggestions",
-        { recipientName: userName, context: messages.slice(-5).map((m) => m.content).join(" ") },
-        token,
-      );
-      if (response.success && response.data?.suggestions) setAiSuggestions(response.data.suggestions);
-    } catch (error) { setAiSuggestions(AI_SUGGESTIONS); }
-  };
+    const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
+    setAiSuggestions(shuffled);
+  }, []);
 
   // â”€â”€â”€ Block / Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBlockUser = async () => {
@@ -1499,6 +1492,17 @@ export default function ChatDetailScreen({
     return new Date(currentMsg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
   };
 
+  type EnrichedMessage = Message & { _showDateHeader: boolean };
+
+  const enrichedMessages = useMemo<EnrichedMessage[]>(
+    () =>
+      messages.map((msg, index) => ({
+        ...msg,
+        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
+      })),
+    [messages],
+  );
+
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -1522,11 +1526,10 @@ export default function ChatDetailScreen({
 
   // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
-    ({ item, index }: { item: Message; index: number }) => {
+    ({ item }: { item: EnrichedMessage }) => {
       const senderId = typeof item.sender === "string" ? item.sender : item.sender?._id;
       const isMe = String(senderId) === String(myId);
-      const prevMessage = index > 0 ? messages[index - 1] : null;
-      const showDateHeader = shouldShowDateHeader(item, prevMessage);
+      const showDateHeader = item._showDateHeader;
       const messageText = item.deletedForEveryone ? "This message was deleted" : item.content || item.text || "";
 
       return (
@@ -1875,10 +1878,10 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
   );
 
-  const keyExtractor = useCallback((item: Message) => item._id, []);
+  const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);
   const currentTheme = CHAT_THEMES.find((t) => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
 
@@ -1892,16 +1895,18 @@ export default function ChatDetailScreen({
       ) : (
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={enrichedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
           extraData={[playingAudioId, audioProgress, highlightedMessageId]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          maxToRenderPerBatch={20}
-          windowSize={15}
-          removeClippedSubviews={false}
+          initialNumToRender={20}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          windowSize={10}
+          removeClippedSubviews={Platform.OS !== 'web'}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });

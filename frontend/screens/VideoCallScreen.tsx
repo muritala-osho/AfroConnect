@@ -15,6 +15,7 @@ import { useApi } from '@/hooks/useApi';
 import socketService from '@/services/socket';
 import agoraService from '@/services/agoraService';
 import { getApiBaseUrl } from '@/constants/config';
+import { useCallContext, CallStatus } from '@/contexts/CallContext';
 import WebView from 'react-native-webview';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -32,274 +33,141 @@ interface CallData {
 export default function VideoCallScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { userId, userName, userPhoto, isIncoming, callData: incomingCallData, callerId, callAccepted } = route.params || {};
+  const {
+    userId,
+    userName,
+    userPhoto,
+    isIncoming,
+    callData: incomingCallData,
+    callerId,
+    callAccepted,
+    returnToCall,
+  } = route.params || {};
   const { token: authToken, user } = useAuth();
   const { post, get } = useApi();
- 
-  const [callStatus, setCallStatus] = useState<'idle' | 'initializing' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed' | 'declined' | 'busy' | 'missed'>('initializing');
-  const [callDuration, setCallDuration] = useState(0);
+  const {
+    setActiveCall,
+    updateCallStatus,
+    startGlobalTimer,
+    stopGlobalTimer,
+    minimizeCall,
+    clearCall,
+    activeCall,
+  } = useCallContext();
+
+  const [callStatus, setCallStatus] = useState<CallStatus>(
+    callAccepted ? 'connected' : 'connecting'
+  );
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [callData, setCallData] = useState<CallData | null>(incomingCallData || null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  
-  const durationInterval = useRef<NodeJS.Timeout | null>(null);
+  const [showControls, setShowControls] = useState(true);
+  const [remoteUserJoined, setRemoteUserJoined] = useState(false);
+  const [webviewReady, setWebviewReady] = useState(false);
+
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  
-  const [showControls, setShowControls] = useState(true);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const agoraJoined = useRef(false);
   const remoteVideoRef = useRef<HTMLDivElement | null>(null);
-  const [remoteUserJoined, setRemoteUserJoined] = useState(false);
   const localVideoRef = useRef<HTMLDivElement | null>(null);
   const webViewRef = useRef<WebView | null>(null);
-  const [webviewReady, setWebviewReady] = useState(false);
   const ringtoneRef = useRef<Audio.Sound | null>(null);
+  const shouldRingRef = useRef(false);
+  const callStatusRef = useRef<CallStatus>(callAccepted ? 'connected' : 'connecting');
+  const pendingJoinRef = useRef<CallData | null>(null);
+
+  /* ── helpers ── */
+  const setStatus = useCallback((s: CallStatus) => {
+    callStatusRef.current = s;
+    setCallStatus(s);
+    updateCallStatus(s);
+  }, [updateCallStatus]);
+
+  const stopRingtone = useCallback(async () => {
+    shouldRingRef.current = false;
+    try {
+      if (ringtoneRef.current) {
+        const s = ringtoneRef.current;
+        ringtoneRef.current = null;
+        await s.stopAsync().catch(() => {});
+        await s.unloadAsync().catch(() => {});
+      }
+    } catch {}
+  }, []);
 
   const playRingtone = useCallback(async () => {
+    shouldRingRef.current = true;
     try {
+      await stopRingtone();
+      if (!shouldRingRef.current) return;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
       });
-
+      if (!shouldRingRef.current) return;
       const source = isIncoming
         ? require('../assets/sounds/mixkit-waiting-ringtone-1354.wav')
         : require('../assets/sounds/phone-calling-1b.mp3');
-
-      const { sound } = await Audio.Sound.createAsync(
-        source,
-        { shouldPlay: true, isLooping: true, volume: 0.7 }
-      );
+      const { sound } = await Audio.Sound.createAsync(source, {
+        shouldPlay: true,
+        isLooping: true,
+        volume: 1.0,
+      });
+      if (!shouldRingRef.current) { await sound.unloadAsync().catch(() => {}); return; }
       ringtoneRef.current = sound;
     } catch (err) {
       console.log('Ringtone error:', err);
     }
-  }, [isIncoming]);
+  }, [isIncoming, stopRingtone]);
 
-  const stopRingtone = useCallback(async () => {
-    try {
-      if (ringtoneRef.current) {
-        await ringtoneRef.current.stopAsync();
-        await ringtoneRef.current.unloadAsync();
-        ringtoneRef.current = null;
-      }
-    } catch (err) {
-      console.log('Stop ringtone error:', err);
-    }
-  }, []);
-
-  const initiateCall = useCallback(async () => {
-    if (!authToken || !userId) {
-      setCallStatus('failed');
-      setErrorMessage('Authentication required');
-      return;
-    }
-
-    const isConnected = await socketService.ensureConnected(authToken || undefined);
-    if (!isConnected) {
-      setCallStatus('failed');
-      setErrorMessage('Connection issue. Please check your internet and try again.');
-      return;
-    }
-
-    try {
-      setCallStatus('connecting');
-     
-      const response = await post<{ callData: CallData }>('/agora/call/initiate', {
-        targetUserId: userId,
-        callType: 'video',
-      }, authToken);
-
-      if (response.success && response.data?.callData) {
-        const newCallData = response.data.callData;
-        setCallData(newCallData);
-        setCallStatus('ringing');
-       
-        const userPhotoVal = user?.photos?.[0];
-        const photoUrl = typeof userPhotoVal === 'string' ? userPhotoVal : userPhotoVal?.url || '';
-        socketService.initiateCall({
-          targetUserId: userId,
-          callData: newCallData,
-          callerInfo: {
-            name: user?.name || 'Unknown',
-            photo: photoUrl,
-            id: user?.id || ''
-          }
-        });
-       
-        ringingTimeout.current = setTimeout(() => {
-          setCallStatus('missed');
-          setErrorMessage('No answer');
-          socketService.missedCall({ targetUserId: userId, callType: 'video' });
-          setTimeout(() => navigation.goBack(), 2000);
-        }, 30000);
-      } else {
-        setCallStatus('failed');
-        setErrorMessage(response.error || 'Failed to initiate call');
-      }
-    } catch (error: any) {
-      console.error('Call initiation error:', error);
-      setCallStatus('failed');
-      setErrorMessage(error.message || 'Failed to connect');
-    }
-  }, [authToken, userId, post, user]);
-
-  useEffect(() => {
-    requestCameraPermission();
-
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
-    }).start();
-
-    if (isIncoming && incomingCallData) {
-      if (callAccepted) {
-        setCallStatus('connected');
-        durationInterval.current = setInterval(() => {
-          setCallDuration(prev => prev + 1);
-        }, 1000);
-      } else {
-        setCallStatus('ringing');
-      }
-    } else {
-      initiateCall();
-    }
-
-    socketService.onCallAccepted((data) => {
-      if (ringingTimeout.current) {
-        clearTimeout(ringingTimeout.current);
-      }
-      stopRingtone();
-      setCallStatus('connected');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      durationInterval.current = setInterval(() => {
-        setCallDuration(prev => prev + 1);
-      }, 1000);
-    });
-
-    socketService.onCallDeclined((data) => {
-      if (ringingTimeout.current) {
-        clearTimeout(ringingTimeout.current);
-      }
-      setCallStatus('declined');
-      setErrorMessage('Call declined');
-      setTimeout(() => {
-        navigation.goBack();
-      }, 2000);
-    });
-
-    socketService.onCallEnded((data) => {
-      stopRingtone();
-      setCallStatus('ended');
-      if (durationInterval.current) {
-        clearInterval(durationInterval.current);
-      }
-      setTimeout(() => {
-        navigation.goBack();
-      }, 1000);
-    });
-
-    socketService.onCallBusy(() => {
-      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
-      setCallStatus('busy');
-      setErrorMessage('User is busy');
-      setTimeout(() => navigation.goBack(), 2500);
-    });
-
-    return () => {
-      if (durationInterval.current) {
-        clearInterval(durationInterval.current);
-      }
-      if (ringingTimeout.current) {
-        clearTimeout(ringingTimeout.current);
-      }
-      if (Platform.OS === 'web') {
-        agoraService.leave();
-      } else {
-        sendToWebView({ action: 'leave' });
-      }
-      socketService.off('call:accepted');
-      socketService.off('call:declined');
-      socketService.off('call:ended');
-      socketService.off('call:busy');
-    };
-  }, []);
-
-  // Ringing tone effect
-  useEffect(() => {
-    if (callStatus === 'ringing' && !isIncoming) {
-      playRingtone();
-    } else {
-      stopRingtone();
-    }
-    return () => { stopRingtone(); };
-  }, [callStatus]);
-
-  // Pulse animation for connecting/ringing states
-  useEffect(() => {
-    let loop: Animated.CompositeAnimation | null = null;
-    if (callStatus === 'ringing' || callStatus === 'connecting') {
-      loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 1200, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true })
-        ])
-      );
-      loop.start();
-    } else {
-      pulseAnim.stopAnimation();
-      pulseAnim.setValue(1);
-    }
-    return () => { if (loop) loop.stop(); };
-  }, [callStatus, pulseAnim]);
-
+  /* ── WebView bridge ── */
   const sendToWebView = useCallback((msg: any) => {
-    if (webViewRef.current) {
-      webViewRef.current.postMessage(JSON.stringify(msg));
-    }
+    webViewRef.current?.postMessage(JSON.stringify(msg));
   }, []);
 
-  const pendingJoinRef = useRef<CallData | null>(null);
-
+  /* ── Agora join ── */
   const doJoinAgora = useCallback(async (data: CallData) => {
+    if (agoraJoined.current) return;
+    agoraJoined.current = true;
+
     let joinToken = data.token;
     let joinUid = data.uid || 0;
+
     if (isIncoming && authToken) {
       try {
-        const res = await get<{ token: string; uid: number }>(`/agora/token`, { channelName: data.channelName, uid: 0, role: 'publisher' }, authToken);
+        const res = await get<{ token: string; uid: number }>(
+          `/agora/token`,
+          { channelName: data.channelName, uid: 0, role: 'publisher' },
+          authToken
+        );
         if (res.success && res.data?.token) {
           joinToken = res.data.token;
           joinUid = 0;
         }
-      } catch (e) {
-        console.log('Failed to get receiver token, using shared token');
+      } catch {
+        console.log('Receiver token fetch failed, using shared token');
       }
     }
 
     if (Platform.OS === 'web') {
       if (agoraService.isSupported()) {
         agoraService.setRemoteUserHandlers(
-          (user) => {
+          (u: any) => {
             setRemoteUserJoined(true);
-            if (user.videoTrack && remoteVideoRef.current) {
-              user.videoTrack.play(remoteVideoRef.current);
-            }
+            if (u.videoTrack && remoteVideoRef.current) u.videoTrack.play(remoteVideoRef.current);
           },
-          () => { setRemoteUserJoined(false); }
+          () => setRemoteUserJoined(false)
         );
         const { videoTrack } = await agoraService.joinVideoCall(data.appId, data.channelName, joinToken, joinUid);
-        if (videoTrack && localVideoRef.current) {
-          videoTrack.play(localVideoRef.current);
-        }
+        if (videoTrack && localVideoRef.current) videoTrack.play(localVideoRef.current);
       }
     } else {
       sendToWebView({
@@ -313,9 +181,206 @@ export default function VideoCallScreen() {
     }
   }, [isIncoming, authToken, get, sendToWebView]);
 
+  /* ── Initiate outgoing call ── */
+  const initiateCall = useCallback(async () => {
+    if (!authToken || !userId) {
+      setStatus('failed');
+      setErrorMessage('Authentication required');
+      return;
+    }
+
+    const isConnected = await socketService.ensureConnected(authToken || undefined);
+    if (!isConnected) {
+      setStatus('failed');
+      setErrorMessage('Connection issue. Please check your internet and try again.');
+      return;
+    }
+
+    try {
+      setStatus('connecting');
+      const response = await post<{ callData: CallData }>('/agora/call/initiate', {
+        targetUserId: userId,
+        callType: 'video',
+      }, authToken);
+
+      if (response.success && response.data?.callData) {
+        const newCallData = response.data.callData;
+        setCallData(newCallData);
+        setStatus('ringing');
+
+        const userPhotoVal = user?.photos?.[0];
+        const photoUrl = typeof userPhotoVal === 'string' ? userPhotoVal : userPhotoVal?.url || '';
+        socketService.initiateCall({
+          targetUserId: userId,
+          callData: newCallData,
+          callerInfo: { name: user?.name || 'Unknown', photo: photoUrl, id: user?.id || '' },
+        });
+
+        ringingTimeout.current = setTimeout(() => {
+          if (callStatusRef.current === 'ringing') {
+            setStatus('missed');
+            setErrorMessage('No answer');
+            socketService.missedCall?.({ targetUserId: userId, callType: 'video' });
+            clearCall();
+            setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
+          }
+        }, 30000);
+      } else {
+        setStatus('failed');
+        setErrorMessage(response.error || 'Failed to initiate call');
+      }
+    } catch (error: any) {
+      setStatus('failed');
+      setErrorMessage(error.message || 'Failed to connect');
+    }
+  }, [authToken, userId, post, user, navigation, setStatus, clearCall]);
+
+  /* ── End call ── */
+  const handleEndCall = useCallback(async (skipGoBack = false) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const wasConnected = callStatusRef.current === 'connected';
+    const currentDuration = activeCall?.duration || 0;
+    setStatus('ended');
+    await stopRingtone();
+    stopGlobalTimer();
+    if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+
+    if (Platform.OS === 'web') agoraService.leave();
+    else sendToWebView({ action: 'leave' });
+
+    socketService.endCall({
+      targetUserId: isIncoming ? callerId : userId,
+      callType: 'video',
+      duration: currentDuration,
+      wasAnswered: wasConnected,
+    });
+
+    clearCall();
+    if (!skipGoBack) {
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 500);
+    }
+  }, [callerId, userId, isIncoming, stopRingtone, stopGlobalTimer, clearCall, activeCall, navigation, sendToWebView, setStatus]);
+
+  /* ── Minimize ── */
+  const handleMinimize = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    minimizeCall();
+    navigation.canGoBack() && navigation.goBack();
+  }, [minimizeCall, navigation]);
+
+  /* ── Main setup effect ── */
+  useEffect(() => {
+    requestCameraPermission();
+
+    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+
+    setActiveCall({
+      userId: userId || callerId || '',
+      userName: userName || 'Unknown',
+      userPhoto,
+      isIncoming: !!isIncoming,
+      callStatus: callAccepted ? 'connected' : 'connecting',
+      callType: 'video',
+      duration: 0,
+    });
+
+    if (callAccepted) {
+      setStatus('connected');
+      startGlobalTimer();
+      if (incomingCallData) {
+        if (Platform.OS === 'web') doJoinAgora(incomingCallData);
+        else pendingJoinRef.current = incomingCallData;
+      }
+    } else if (returnToCall) {
+      setStatus('connected');
+    } else if (isIncoming && incomingCallData) {
+      setStatus('ringing');
+    } else {
+      initiateCall();
+    }
+
+    socketService.onCallAccepted(async () => {
+      await stopRingtone();
+      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      setStatus('connected');
+      startGlobalTimer();
+      if (callData) doJoinAgora(callData);
+    });
+
+    socketService.onCallDeclined(async () => {
+      await stopRingtone();
+      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      setStatus('declined');
+      setErrorMessage('They declined the call');
+      clearCall();
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
+    });
+
+    socketService.onCallBusy(async () => {
+      await stopRingtone();
+      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      setStatus('busy');
+      setErrorMessage('They're on another call');
+      clearCall();
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
+    });
+
+    socketService.onCallEnded(async () => {
+      await stopRingtone();
+      if (Platform.OS === 'web') agoraService.leave();
+      else sendToWebView({ action: 'leave' });
+      setStatus('ended');
+      stopGlobalTimer();
+      clearCall();
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1200);
+    });
+
+    return () => {
+      stopRingtone();
+      if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+      socketService.off('call:accepted');
+      socketService.off('call:declined');
+      socketService.off('call:busy');
+      socketService.off('call:ended');
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* ── Ringtone ── */
+  useEffect(() => {
+    if (callStatus === 'ringing' && !isIncoming) playRingtone();
+    else stopRingtone();
+  }, [callStatus]);
+
+  /* ── Pulse animation ── */
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    if (callStatus === 'ringing' || callStatus === 'connecting') {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 1200, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+    } else {
+      pulseAnim.stopAnimation();
+      pulseAnim.setValue(1);
+    }
+    return () => { if (loop) loop.stop(); };
+  }, [callStatus]);
+
+  /* ── Auto-hide controls ── */
+  useEffect(() => {
+    if (callStatus === 'connected') {
+      const t = setTimeout(() => setShowControls(false), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [callStatus, showControls]);
+
+  /* ── Join Agora when connected ── */
   useEffect(() => {
     if (callStatus === 'connected' && callData && !agoraJoined.current) {
-      agoraJoined.current = true;
       if (Platform.OS === 'web' || webviewReady) {
         doJoinAgora(callData);
       } else {
@@ -324,6 +389,7 @@ export default function VideoCallScreen() {
     }
   }, [callStatus, callData, webviewReady]);
 
+  /* ── WebView ready ── */
   useEffect(() => {
     if (webviewReady && pendingJoinRef.current) {
       doJoinAgora(pendingJoinRef.current);
@@ -331,124 +397,89 @@ export default function VideoCallScreen() {
     }
   }, [webviewReady]);
 
+  /* ── Mute sync ── */
   useEffect(() => {
-    if (agoraJoined.current) {
-      if (Platform.OS === 'web') {
-        agoraService.toggleMute(isMuted);
-      } else {
-        sendToWebView({ action: 'mute', muted: isMuted });
-      }
-    }
+    if (!agoraJoined.current) return;
+    if (Platform.OS === 'web') agoraService.toggleMute(isMuted);
+    else sendToWebView({ action: 'mute', muted: isMuted });
   }, [isMuted]);
 
+  /* ── Camera sync ── */
   useEffect(() => {
-    if (agoraJoined.current) {
-      if (Platform.OS === 'web') {
-        agoraService.toggleCamera(isCameraOff);
-      } else {
-        sendToWebView({ action: 'camera', off: isCameraOff });
-      }
-    }
+    if (!agoraJoined.current) return;
+    if (Platform.OS === 'web') agoraService.toggleCamera(isCameraOff);
+    else sendToWebView({ action: 'camera', off: isCameraOff });
   }, [isCameraOff]);
 
+  /* ── Free-tier 5-min limit ── */
   useEffect(() => {
-    if (callStatus === 'connected') {
-      const hideTimeout = setTimeout(() => {
-        setShowControls(false);
-      }, 5000);
-      return () => clearTimeout(hideTimeout);
-    }
-  }, [callStatus, showControls]);
-
-  const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleEndCall = (skipGoBack = false) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const wasConnected = callStatus === 'connected';
-    setCallStatus('ended');
-    stopRingtone();
-    if (durationInterval.current) {
-      clearInterval(durationInterval.current);
-    }
-    if (ringingTimeout.current) {
-      clearTimeout(ringingTimeout.current);
-    }
-    if (Platform.OS === 'web') {
-      agoraService.leave();
-    } else {
-      sendToWebView({ action: 'leave' });
-    }
-    socketService.endCall({
-      targetUserId: isIncoming ? callerId : userId,
-      callType: 'video',
-      duration: callDuration,
-      wasAnswered: wasConnected
-    });
-
-    if (!skipGoBack) {
-      setTimeout(() => {
-        navigation.goBack();
-      }, 500);
-    }
-  };
-
-  useEffect(() => {
+    const duration = activeCall?.duration || 0;
     const isPremium = user?.premium?.isActive;
     if (isPremium || callStatus !== 'connected') return;
-    if (callDuration === 240) {
+    if (duration === 240) {
       Alert.alert(
         '1 Minute Remaining',
         'Free video calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.',
         [{ text: 'OK' }]
       );
     }
-    if (callDuration >= 300) {
-      handleEndCall();
+    if (duration >= 300) handleEndCall();
+  }, [activeCall?.duration, callStatus, user]);
+
+  const duration = activeCall?.duration || 0;
+
+  const formatDuration = (s: number) => {
+    const m = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  };
+
+  const getStatusText = () => {
+    switch (callStatus) {
+      case 'idle':
+      case 'initializing':  return 'Initializing…';
+      case 'connecting':    return 'Connecting…';
+      case 'ringing':       return isIncoming ? 'Incoming video call…' : 'Ringing…';
+      case 'connected':     return formatDuration(duration);
+      case 'ended':         return 'Call ended';
+      case 'declined':      return errorMessage || 'Call declined';
+      case 'busy':          return errorMessage || 'Line busy';
+      case 'missed':        return errorMessage || 'No answer';
+      case 'failed':        return errorMessage || 'Call failed';
+      default:              return '';
     }
-  }, [callDuration, callStatus, user]);
+  };
 
   const handleAcceptCall = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     stopRingtone();
     socketService.acceptCall({ callerId, callData: incomingCallData });
-    setCallStatus('connected');
-    durationInterval.current = setInterval(() => {
-      setCallDuration(prev => prev + 1);
-    }, 1000);
+    setStatus('connected');
+    startGlobalTimer();
   };
 
   const handleDeclineCall = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setCallStatus('declined');
-    stopRingtone();
+    setStatus('declined');
+    await stopRingtone();
     try {
       if (authToken && isIncoming) {
-        await post('/call/decline', {
-          callerId,
-          type: 'video'
-        }, authToken);
+        await post('/call/decline', { callerId, type: 'video' }, authToken);
       }
-    } catch (error) {
-      console.error('Error recording declined call:', error);
-    }
+    } catch {}
     socketService.declineCall({ callerId, callType: 'video' });
-    setTimeout(() => {
-      navigation.goBack();
-    }, 1500);
-  }, [callerId, navigation]);
+    clearCall();
+    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
+  }, [callerId, navigation, stopRingtone, clearCall, authToken, isIncoming, post, setStatus]);
 
   const toggleMute = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsMuted(!isMuted);
+    setIsMuted(p => !p);
   };
 
   const toggleCamera = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsCameraOff(!isCameraOff);
+    setIsCameraOff(p => !p);
   };
 
   const toggleSpeaker = useCallback(async () => {
@@ -462,36 +493,15 @@ export default function VideoCallScreen() {
         staysActiveInBackground: true,
         playThroughEarpieceAndroid: !next,
       });
-    } catch (e) {
-      console.log('Speaker toggle error:', e);
-    }
+    } catch {}
   }, [isSpeakerOn]);
 
   const flipCamera = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setIsFrontCamera(!isFrontCamera);
+    setIsFrontCamera(p => !p);
     if (agoraJoined.current) {
-      if (Platform.OS === 'web') {
-        agoraService.switchCamera();
-      } else {
-        sendToWebView({ action: 'switch-camera' });
-      }
-    }
-  };
-
-  const getStatusText = () => {
-    switch (callStatus) {
-      case 'idle': return '';
-      case 'initializing': return 'Initializing...';
-      case 'connecting': return 'Connecting...';
-      case 'ringing': return isIncoming ? 'Incoming video call...' : 'Ringing...';
-      case 'connected': return formatDuration(callDuration);
-      case 'ended': return 'Call ended';
-      case 'declined': return 'Call declined';
-      case 'busy': return 'User is busy';
-      case 'missed': return 'No answer';
-      case 'failed': return errorMessage || 'Call failed';
-      default: return '';
+      if (Platform.OS === 'web') agoraService.switchCamera?.();
+      else sendToWebView({ action: 'switch-camera' });
     }
   };
 
@@ -502,46 +512,36 @@ export default function VideoCallScreen() {
         setRemoteUserJoined(true);
       } else if (data.type === 'remote-user-left' || data.type === 'remote-video-stopped') {
         setRemoteUserJoined(false);
-      } else if (data.type === 'joined') {
-        console.log('WebView Agora joined:', data.uid);
-      } else if (data.type === 'error') {
-        console.log('WebView Agora error:', data.message);
       }
-    } catch (e) {}
+    } catch {}
   }, []);
 
   const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
 
-  const renderNativeCallView = () => {
-    return (
-      <>
-        <SafeImage
-          source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
-          style={styles.remoteVideo}
-          contentFit="cover"
+  const renderNativeCallView = () => (
+    <>
+      <SafeImage
+        source={{ uri: userPhoto || 'https://via.placeholder.com/400' }}
+        style={styles.remoteVideo}
+        contentFit="cover"
+      />
+      {callStatus === 'connected' && (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: agoraCallUrl }}
+          style={StyleSheet.absoluteFillObject}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          mediaCapturePermissionGrantType="grant"
+          javaScriptEnabled
+          domStorageEnabled
+          onMessage={handleWebViewMessage}
+          onPermissionRequest={(request) => request.grant(request.resources)}
+          onLoad={() => setWebviewReady(true)}
         />
-        {callStatus === 'connected' && (
-          <WebView
-            ref={webViewRef}
-            source={{ uri: agoraCallUrl }}
-            style={StyleSheet.absoluteFillObject}
-            allowsInlineMediaPlayback={true}
-            mediaPlaybackRequiresUserAction={false}
-            mediaCapturePermissionGrantType="grant"
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            onMessage={handleWebViewMessage}
-            onPermissionRequest={(request) => {
-              request.grant(request.resources);
-            }}
-            onLoad={() => {
-              setWebviewReady(true);
-            }}
-          />
-        )}
-      </>
-    );
-  };
+      )}
+    </>
+  );
 
   const renderWebCallView = () => {
     if (remoteUserJoined) {
@@ -568,11 +568,7 @@ export default function VideoCallScreen() {
         </View>
       );
     }
-    // On native, when connected the WebView (Agora HTML) already renders both
-    // local and remote video streams — showing CameraView here would duplicate the feed
-    if (callStatus === 'connected' && Platform.OS !== 'web') {
-      return null;
-    }
+    if (callStatus === 'connected' && Platform.OS !== 'web') return null;
     if (isCameraOff) {
       return (
         <View style={styles.cameraOffPlaceholder}>
@@ -594,42 +590,41 @@ export default function VideoCallScreen() {
     );
   };
 
+  const isTerminal = callStatus === 'busy' || callStatus === 'missed' || callStatus === 'declined' || callStatus === 'ended' || callStatus === 'failed';
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-     
+
       {Platform.OS === 'web' ? renderWebCallView() : renderNativeCallView()}
-     
+
       <LinearGradient
         colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
         style={styles.overlay}
         pointerEvents="none"
       />
 
-      <Pressable
-        style={StyleSheet.absoluteFill}
-        onPress={() => setShowControls(!showControls)}
-      />
+      <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowControls(v => !v)} />
 
+      {/* ── Top bar ── */}
       <Animated.View
         pointerEvents={showControls ? 'auto' : 'none'}
-        style={[
-          styles.topBar,
-          {
-            paddingTop: insets.top + 16,
-            opacity: showControls ? 1 : 0,
-          }
-        ]}
+        style={[styles.topBar, { paddingTop: insets.top + 16, opacity: showControls ? 1 : 0 }]}
       >
         <View style={styles.headerGlass}>
+          {/* Minimize button — only when connected */}
+          {callStatus === 'connected' && (
+            <Pressable style={styles.minimizeBtn} onPress={handleMinimize}>
+              <Ionicons name="chevron-down" size={22} color="#fff" />
+            </Pressable>
+          )}
           <View style={styles.callInfo}>
             <ThemedText style={styles.userName}>{userName || 'Unknown'}</ThemedText>
-            <ThemedText style={[styles.callStatusText, callStatus === 'failed' && styles.errorStatus]}>
+            <ThemedText style={[styles.callStatusText, (callStatus === 'failed' || callStatus === 'busy') && styles.errorStatus]}>
               {getStatusText()}
             </ThemedText>
           </View>
-         
-          {callStatus === 'connected' && callData && (
+          {callStatus === 'connected' && (
             <View style={styles.qualityBadge}>
               <Ionicons name="lock-closed" size={12} color="#10B981" />
               <ThemedText style={styles.qualityText}>Secure</ThemedText>
@@ -638,7 +633,8 @@ export default function VideoCallScreen() {
         </View>
       </Animated.View>
 
-      {callStatus !== 'ended' && callStatus !== 'declined' && callStatus !== 'failed' && callStatus !== 'missed' && (
+      {/* ── Self video pip ── */}
+      {!isTerminal && (
         <View style={[styles.selfVideoContainer, { top: insets.top + 90 }]}>
           {renderLocalVideo()}
           <View style={styles.selfVideoLabel}>
@@ -650,37 +646,44 @@ export default function VideoCallScreen() {
         </View>
       )}
 
+      {/* ── Center pre-connect state ── */}
       {callStatus !== 'connected' && (
         <View style={styles.centerContent}>
-          {callStatus === 'failed' || callStatus === 'busy' ? (
+          {callStatus === 'failed' ? (
             <View style={styles.errorIndicator}>
-              <Ionicons name={callStatus === 'busy' ? 'call' : 'alert-circle'} size={44} color="#FF3B30" />
+              <Ionicons name="alert-circle" size={44} color="#FF3B30" />
+            </View>
+          ) : callStatus === 'busy' ? (
+            <View style={styles.errorIndicator}>
+              <MaterialCommunityIcons name="phone-off" size={44} color="#FF3B30" />
             </View>
           ) : callStatus === 'missed' ? (
             <View style={styles.errorIndicator}>
               <Ionicons name="call" size={44} color="#FF9500" style={{ transform: [{ rotate: '135deg' }] }} />
             </View>
+          ) : callStatus === 'declined' ? (
+            <View style={styles.errorIndicator}>
+              <MaterialCommunityIcons name="phone-cancel" size={44} color="#FF3B30" />
+            </View>
           ) : (
             <Animated.View style={[styles.connectingIndicator, { transform: [{ scale: pulseAnim }] }]}>
               {callStatus === 'ringing' && !isIncoming ? (
-                <>
-                  <MaterialCommunityIcons name="phone-ring" size={44} color="#FFF" />
-                </>
+                <MaterialCommunityIcons name="phone-ring" size={44} color="#FFF" />
               ) : (
-                <Ionicons
-                  name={callStatus === 'connecting' || callStatus === 'initializing' ? 'sync' : 'videocam'}
-                  size={44}
-                  color="#FFF"
-                />
+                <Ionicons name="videocam" size={44} color="#FFF" />
               )}
             </Animated.View>
           )}
-          <ThemedText style={[styles.centerStatus, (callStatus === 'failed' || callStatus === 'busy') && styles.errorStatus]}>
+          <ThemedText style={[
+            styles.centerStatus,
+            (callStatus === 'failed' || callStatus === 'busy' || callStatus === 'declined') && styles.errorStatus,
+          ]}>
             {getStatusText()}
           </ThemedText>
         </View>
       )}
 
+      {/* ── Bottom controls ── */}
       {isIncoming && callStatus === 'ringing' ? (
         <View style={[styles.incomingCallControls, { paddingBottom: insets.bottom + 40 }]}>
           <Pressable style={styles.incomingButtonWrapper} onPress={handleDeclineCall}>
@@ -689,7 +692,6 @@ export default function VideoCallScreen() {
             </View>
             <ThemedText style={styles.callActionLabel}>Decline</ThemedText>
           </Pressable>
-
           <Pressable style={styles.incomingButtonWrapper} onPress={handleAcceptCall}>
             <View style={styles.acceptButtonInner}>
               <Ionicons name="videocam" size={32} color="#FFF" />
@@ -697,7 +699,7 @@ export default function VideoCallScreen() {
             <ThemedText style={styles.callActionLabel}>Accept</ThemedText>
           </Pressable>
         </View>
-      ) : callStatus === 'busy' || callStatus === 'missed' || callStatus === 'declined' || callStatus === 'ended' ? (
+      ) : isTerminal ? (
         <View style={[styles.terminalControls, { paddingBottom: insets.bottom + 40 }]}>
           <Pressable style={styles.closeButton} onPress={() => navigation.goBack()}>
             <Ionicons name="close" size={32} color="#FFF" />
@@ -708,52 +710,28 @@ export default function VideoCallScreen() {
           pointerEvents={showControls ? 'auto' : 'none'}
           style={[
             styles.controls,
-            {
-              paddingBottom: insets.bottom + 30,
-              opacity: showControls ? 1 : 0,
-            }
+            { paddingBottom: insets.bottom + 30, opacity: showControls ? 1 : 0 },
           ]}
         >
           <View style={styles.glassControlsContainer}>
             <View style={styles.glassControlsRow}>
               <View style={styles.controlItem}>
-                <Pressable
-                  style={[styles.controlButton, isCameraOff && styles.controlButtonActive]}
-                  onPress={toggleCamera}
-                >
-                  <Ionicons
-                    name={isCameraOff ? "videocam-off" : "videocam"}
-                    size={22}
-                    color={isCameraOff ? "#000" : "#FFF"}
-                  />
+                <Pressable style={[styles.controlButton, isCameraOff && styles.controlButtonActive]} onPress={toggleCamera}>
+                  <Ionicons name={isCameraOff ? 'videocam-off' : 'videocam'} size={22} color={isCameraOff ? '#000' : '#FFF'} />
                 </Pressable>
                 <ThemedText style={styles.controlLabel}>{isCameraOff ? 'Show' : 'Camera'}</ThemedText>
               </View>
 
               <View style={styles.controlItem}>
-                <Pressable
-                  style={[styles.controlButton, isMuted && styles.controlButtonActive]}
-                  onPress={toggleMute}
-                >
-                  <Ionicons
-                    name={isMuted ? "mic-off" : "mic"}
-                    size={22}
-                    color={isMuted ? "#000" : "#FFF"}
-                  />
+                <Pressable style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
+                  <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#000' : '#FFF'} />
                 </Pressable>
                 <ThemedText style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
               </View>
 
               <View style={styles.controlItem}>
-                <Pressable
-                  style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]}
-                  onPress={toggleSpeaker}
-                >
-                  <Ionicons
-                    name={isSpeakerOn ? "volume-high" : "ear"}
-                    size={22}
-                    color={isSpeakerOn ? "#000" : "#FFF"}
-                  />
+                <Pressable style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
+                  <Ionicons name={isSpeakerOn ? 'volume-high' : 'ear'} size={22} color={isSpeakerOn ? '#000' : '#FFF'} />
                 </Pressable>
                 <ThemedText style={styles.controlLabel}>{isSpeakerOn ? 'Earpiece' : 'Speaker'}</ThemedText>
               </View>
@@ -764,10 +742,9 @@ export default function VideoCallScreen() {
                 </Pressable>
                 <ThemedText style={styles.controlLabel}>Flip</ThemedText>
               </View>
-
             </View>
 
-            <Pressable style={styles.endCallButton} onPress={handleEndCall}>
+            <Pressable style={styles.endCallButton} onPress={() => handleEndCall()}>
               <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </Pressable>
           </View>
@@ -778,70 +755,60 @@ export default function VideoCallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-  },
-  remoteVideo: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  container: { flex: 1, backgroundColor: '#000' },
+  remoteVideo: { ...StyleSheet.absoluteFillObject },
+  overlay: { ...StyleSheet.absoluteFillObject },
   topBar: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
+    top: 0, left: 0, right: 0,
     zIndex: 20,
   },
   headerGlass: {
     marginHorizontal: 16,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical: 14,
     borderRadius: 24,
-    backgroundColor: 'rgba(20, 20, 20, 0.65)',
+    backgroundColor: 'rgba(20,20,20,0.65)',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  callInfo: {
-    flex: 1,
+  minimizeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
+  callInfo: { flex: 1 },
   userName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#FFF',
     letterSpacing: 0.3,
   },
   callStatusText: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(255,255,255,0.75)',
-    marginTop: 3,
+    marginTop: 2,
     fontWeight: '500',
   },
-  errorStatus: {
-    color: '#FF3B30',
-  },
+  errorStatus: { color: '#FF3B30' },
   qualityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(16,185,129,0.3)',
   },
-  qualityText: {
-    color: '#10B981',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
+  qualityText: { color: '#10B981', fontSize: 12, fontWeight: '600' },
   selfVideoContainer: {
     position: 'absolute',
     right: 16,
@@ -868,25 +835,17 @@ const styles = StyleSheet.create({
   },
   selfVideoLabel: {
     position: 'absolute',
-    top: 8,
-    left: 8,
+    top: 8, left: 8,
     backgroundColor: 'rgba(0,0,0,0.5)',
     borderRadius: 8,
     paddingHorizontal: 7,
     paddingVertical: 3,
   },
-  selfVideoLabelText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
+  selfVideoLabelText: { color: '#FFF', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
   flipButton: {
     position: 'absolute',
-    bottom: 10,
-    right: 10,
-    width: 34,
-    height: 34,
+    bottom: 10, right: 10,
+    width: 34, height: 34,
     borderRadius: 17,
     backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
@@ -895,47 +854,36 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   cameraOffPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: '100%', height: '100%',
     backgroundColor: 'rgba(20,20,20,0.9)',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 20,
   },
   selfVideoPermissionPlaceholder: {
-    width: '100%',
-    height: '100%',
+    width: '100%', height: '100%',
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cameraOffText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 12,
-    marginTop: 8,
-    fontWeight: '500',
-  },
+  cameraOffText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8, fontWeight: '500' },
   centerContent: {
     position: 'absolute',
-    top: '38%',
-    left: 0,
-    right: 0,
+    top: '38%', left: 0, right: 0,
     alignItems: 'center',
     zIndex: 5,
   },
   connectingIndicator: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 90,
-    height: 90,
+    width: 90, height: 90,
     borderRadius: 45,
     backgroundColor: 'rgba(255,255,255,0.1)',
   },
   errorIndicator: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 90,
-    height: 90,
+    width: 90, height: 90,
     borderRadius: 45,
     backgroundColor: 'rgba(255,59,48,0.15)',
   },
@@ -951,20 +899,15 @@ const styles = StyleSheet.create({
   },
   incomingCallControls: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 60,
     zIndex: 20,
   },
-  incomingButtonWrapper: {
-    alignItems: 'center',
-  },
+  incomingButtonWrapper: { alignItems: 'center' },
   declineButtonInner: {
-    width: 72,
-    height: 72,
+    width: 72, height: 72,
     borderRadius: 36,
     backgroundColor: '#FF3B30',
     alignItems: 'center',
@@ -976,8 +919,7 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   acceptButtonInner: {
-    width: 72,
-    height: 72,
+    width: 72, height: 72,
     borderRadius: 36,
     backgroundColor: '#34C759',
     alignItems: 'center',
@@ -997,15 +939,12 @@ const styles = StyleSheet.create({
   },
   terminalControls: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     alignItems: 'center',
     zIndex: 20,
   },
   closeButton: {
-    width: 64,
-    height: 64,
+    width: 64, height: 64,
     borderRadius: 32,
     backgroundColor: 'rgba(50,50,50,0.9)',
     alignItems: 'center',
@@ -1015,9 +954,7 @@ const styles = StyleSheet.create({
   },
   controls: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 0, left: 0, right: 0,
     alignItems: 'center',
     zIndex: 20,
   },
@@ -1026,7 +963,7 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingHorizontal: 20,
     paddingVertical: 20,
-    backgroundColor: 'rgba(15, 15, 15, 0.82)',
+    backgroundColor: 'rgba(15,15,15,0.82)',
     borderRadius: 32,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -1044,11 +981,7 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 8,
   },
-  controlItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-  },
+  controlItem: { flex: 1, alignItems: 'center', gap: 6 },
   controlLabel: {
     fontSize: 10,
     color: 'rgba(255,255,255,0.65)',
@@ -1057,19 +990,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   controlButton: {
-    width: 50,
-    height: 50,
+    width: 50, height: 50,
     borderRadius: 25,
     backgroundColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  controlButtonActive: {
-    backgroundColor: '#FFF',
-  },
+  controlButtonActive: { backgroundColor: '#FFF' },
   endCallButton: {
-    width: 68,
-    height: 68,
+    width: 68, height: 68,
     borderRadius: 34,
     backgroundColor: '#FF3B30',
     alignItems: 'center',

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
 
 export type CallStatus = "connecting" | "ringing" | "connected" | "ended" | "failed" | "busy" | "declined" | "missed";
+export type CallType = "voice" | "video";
 
 export interface ActiveCallInfo {
   userId: string;
@@ -8,6 +9,7 @@ export interface ActiveCallInfo {
   userPhoto?: string;
   isIncoming: boolean;
   callStatus: CallStatus;
+  callType: CallType;
   duration: number;
 }
 

@@ -407,6 +407,7 @@ export default function VoiceCallScreen() {
       userPhoto,
       isIncoming: !!isIncoming,
       callStatus: callAccepted ? "connected" : "connecting",
+      callType: "voice",
       duration: 0,
     });
 
