@@ -543,24 +543,23 @@ export default function VoiceCallScreen() {
   const agoraCallUrl       = `${getApiBaseUrl()}/public/agora-call.html`;
 
 
-  /* ─────────────────────────────────────────────────────── Render ─── */
+  /* ──────────────────────────────────── Render ──── */
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Full-screen blurred avatar background */}
+      {/* Blurred avatar as full-screen background */}
       <SafeImage
         source={{ uri: userPhoto || "https://via.placeholder.com/400" }}
         style={StyleSheet.absoluteFillObject as any}
         blurRadius={Platform.OS === "ios" ? 60 : 18}
       />
-      {/* Dark purple gradient overlay */}
       <LinearGradient
-        colors={["rgba(10,4,30,0.90)", "rgba(30,8,60,0.78)", "rgba(10,4,30,0.96)"]}
+        colors={["rgba(10,4,30,0.92)", "rgba(30,8,60,0.80)", "rgba(10,4,30,0.97)"]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Hidden WebView for Agora audio on native */}
+      {/* Hidden Agora WebView (native only) */}
       {Platform.OS !== "web" && (
         <WebView
           ref={webViewRef}
@@ -585,10 +584,10 @@ export default function VoiceCallScreen() {
 
       <Animated.View style={[s.screen, { opacity: fadeAnim }]}>
 
-        {/* TOP BAR: back/minimize | name + status + encrypted | spacer */}
-        <View style={[s.topBar, { paddingTop: insets.top + 10 }]}>
+        {/* ── Back / minimize button strip ── */}
+        <View style={[s.headerStrip, { paddingTop: insets.top + 8 }]}>
           <Pressable
-            style={s.topIconBtn}
+            style={s.backBtn}
             onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
             hitSlop={12}
           >
@@ -598,28 +597,10 @@ export default function VoiceCallScreen() {
               color="rgba(255,255,255,0.9)"
             />
           </Pressable>
-
-          <View style={s.topCenter}>
-            <ThemedText style={s.topName} numberOfLines={1}>
-              {userName || "Unknown"}
-            </ThemedText>
-            <ThemedText style={[s.topStatus, isTerminal && s.topStatusError]}>
-              {getStatusText()}
-            </ThemedText>
-            {(callStatus === "ringing" || callStatus === "connecting") && (
-              <View style={s.encryptRow}>
-                <Ionicons name="lock-closed" size={10} color="rgba(196,181,253,0.75)" />
-                <ThemedText style={s.encryptText}>End-to-end encrypted</ThemedText>
-              </View>
-            )}
-          </View>
-
-          <View style={s.topIconPlaceholder} />
         </View>
 
-        {/* AVATAR SECTION — fills middle space */}
+        {/* ── AVATAR — centered in the upper section ── */}
         <View style={s.avatarSection}>
-          {/* Animated pulse rings during ringing/connecting */}
           {(callStatus === "ringing" || callStatus === "connecting") && (
             <>
               <Animated.View style={[s.ring3, { transform: [{ scale: pulseAnim3 }] }]} />
@@ -627,11 +608,8 @@ export default function VoiceCallScreen() {
               <Animated.View style={[s.ring1, { transform: [{ scale: pulseAnim  }] }]} />
             </>
           )}
-
-          {/* Muted red ring */}
           {isConnected && isMuted && <View style={s.mutedRing} />}
 
-          {/* Avatar circle */}
           <View style={[
             s.avatarFrame,
             isConnected && s.avatarFrameConnected,
@@ -643,16 +621,25 @@ export default function VoiceCallScreen() {
               style={s.avatar}
             />
           </View>
+        </View>
 
-          {/* Muted badge below avatar */}
-          {isConnected && isMuted && (
-            <View style={s.mutedBadge}>
-              <Ionicons name="mic-off" size={12} color="#fff" />
-              <ThemedText style={s.mutedBadgeText}>Muted</ThemedText>
+        {/* ── INFO — name, status, badges all BELOW the avatar ── */}
+        <View style={s.infoSection}>
+          <ThemedText style={s.callerName} numberOfLines={1}>
+            {userName || "Unknown"}
+          </ThemedText>
+
+          <ThemedText style={[s.statusText, isTerminal && s.statusTextError]}>
+            {getStatusText()}
+          </ThemedText>
+
+          {(callStatus === "ringing" || callStatus === "connecting") && (
+            <View style={s.encryptRow}>
+              <Ionicons name="lock-closed" size={10} color="rgba(196,181,253,0.75)" />
+              <ThemedText style={s.encryptText}>End-to-end encrypted</ThemedText>
             </View>
           )}
 
-          {/* Connected indicator + wave bars */}
           {isConnected && (
             <View style={s.connectedRow}>
               <View style={s.liveGreenDot} />
@@ -661,7 +648,13 @@ export default function VoiceCallScreen() {
             </View>
           )}
 
-          {/* Error pill for terminal states */}
+          {isConnected && isMuted && (
+            <View style={s.mutedBadge}>
+              <Ionicons name="mic-off" size={12} color="#fff" />
+              <ThemedText style={s.mutedBadgeText}>Muted</ThemedText>
+            </View>
+          )}
+
           {isTerminal && callStatus !== "ended" && (
             <View style={s.errorPill}>
               <Ionicons name="close-circle" size={14} color="#f87171" />
@@ -675,11 +668,11 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* BOTTOM CONTROLS */}
+        {/* ── CONTROLS at bottom ── */}
         <View style={[s.bottomBar, { paddingBottom: insets.bottom + 24 }]}>
           <View style={s.bottomPill}>
 
-            {/* INCOMING: Decline + Accept */}
+            {/* INCOMING */}
             {showIncoming && (
               <>
                 <View style={s.pillItem}>
@@ -697,7 +690,7 @@ export default function VoiceCallScreen() {
               </>
             )}
 
-            {/* CONNECTED: Mute + Speaker + End Call */}
+            {/* CONNECTED */}
             {isConnected && (
               <>
                 <View style={s.pillItem}>
@@ -740,7 +733,7 @@ export default function VoiceCallScreen() {
               </>
             )}
 
-            {/* OUTGOING RINGING / CONNECTING: Speaker + Cancel */}
+            {/* OUTGOING RINGING / CONNECTING */}
             {showCancelBtn && (
               <>
                 <View style={s.pillItem}>
@@ -762,7 +755,7 @@ export default function VoiceCallScreen() {
               </>
             )}
 
-            {/* TERMINAL: Close */}
+            {/* TERMINAL */}
             {isTerminal && (
               <View style={s.pillItem}>
                 <Pressable
@@ -783,64 +776,26 @@ export default function VoiceCallScreen() {
   );
 }
 
-/* ─────────────────────────────────────────────────────── Styles ─── */
-const AVATAR_SIZE = Math.min(SW * 0.52, 220);
+/* ──────────────────────────────────── Styles ──── */
+const AVATAR_SIZE = Math.min(SW * 0.56, 230);
 
 const s = StyleSheet.create({
   root:   { flex: 1 },
   screen: { flex: 1 },
 
-  /* ── Top bar ── */
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+  /* Header strip — just the back button, no title */
+  headerStrip: {
     paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
-  topIconBtn: {
+  backBtn: {
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: "rgba(255,255,255,0.12)",
     alignItems: "center", justifyContent: "center",
-  },
-  topIconPlaceholder: { width: 44 },
-  topCenter: {
-    flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 8,
-    gap: 2,
-  },
-  topName: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    letterSpacing: 0.2,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.5)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
-  },
-  topStatus: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.6)",
-    fontWeight: "500",
-    letterSpacing: 0.4,
-    textAlign: "center",
-  },
-  topStatusError: { color: "#f87171" },
-  encryptRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 1,
-  },
-  encryptText: {
-    fontSize: 11,
-    color: "rgba(196,181,253,0.7)",
-    fontWeight: "500",
+    alignSelf: "flex-start",
   },
 
-  /* ── Avatar section (middle) ── */
+  /* Avatar — takes the upper space, centered */
   avatarSection: {
     flex: 1,
     alignItems: "center",
@@ -867,7 +822,7 @@ const s = StyleSheet.create({
     width: AVATAR_SIZE + 36, height: AVATAR_SIZE + 36,
     borderRadius: (AVATAR_SIZE + 36) / 2,
     backgroundColor: "rgba(109,40,217,0.15)",
-    borderWidth: 1.5, borderColor: "rgba(196,181,253,0.28)",
+    borderWidth: 1.5, borderColor: "rgba(196,181,253,0.30)",
   },
   mutedRing: {
     position: "absolute",
@@ -875,16 +830,14 @@ const s = StyleSheet.create({
     borderRadius: (AVATAR_SIZE + 14) / 2,
     borderWidth: 2.5, borderColor: "rgba(239,68,68,0.6)",
   },
-
-  /* Avatar frame */
   avatarFrame: {
     width: AVATAR_SIZE, height: AVATAR_SIZE,
     borderRadius: AVATAR_SIZE / 2,
     overflow: "hidden",
-    borderWidth: 3.5, borderColor: "rgba(196,181,253,0.5)",
+    borderWidth: 4, borderColor: "rgba(196,181,253,0.55)",
     shadowColor: "#7c3aed",
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7, shadowRadius: 32, elevation: 20,
+    shadowOpacity: 0.75, shadowRadius: 36, elevation: 22,
   },
   avatarFrameConnected: {
     borderColor: "rgba(16,185,129,0.7)",
@@ -900,30 +853,53 @@ const s = StyleSheet.create({
   },
   avatar: { width: "100%", height: "100%" },
 
-  /* Muted badge */
+  /* Info section — name, status, badges BELOW avatar */
+  infoSection: {
+    alignItems: "center",
+    paddingHorizontal: 28,
+    paddingTop: 20,
+    paddingBottom: 20,
+    gap: 8,
+  },
+  callerName: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
+  },
+  statusText: {
+    fontSize: 15,
+    color: "rgba(255,255,255,0.55)",
+    fontWeight: "500",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
+  statusTextError: { color: "#f87171" },
+  encryptRow: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+  },
+  encryptText: {
+    fontSize: 11, color: "rgba(196,181,253,0.7)", fontWeight: "500",
+  },
+  connectedRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+  },
+  liveGreenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
+  liveText:     { fontSize: 13, color: "#10B981", fontWeight: "700" },
   mutedBadge: {
-    marginTop: 14,
     backgroundColor: "#ef4444",
     borderRadius: 16,
     paddingHorizontal: 12, paddingVertical: 5,
     flexDirection: "row", alignItems: "center", gap: 5,
     borderWidth: 2, borderColor: "rgba(255,255,255,0.2)",
-    shadowColor: "#ef4444", shadowOpacity: 0.45, shadowRadius: 8, elevation: 6,
   },
   mutedBadgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
-
-  /* Connected row */
-  connectedRow: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    marginTop: 18,
-  },
-  liveGreenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
-  liveText:     { fontSize: 13, color: "#10B981", fontWeight: "700" },
-
-  /* Error pill */
   errorPill: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    marginTop: 16,
     paddingHorizontal: 14, paddingVertical: 9,
     borderRadius: 14,
     backgroundColor: "rgba(248,113,113,0.12)",
@@ -931,10 +907,9 @@ const s = StyleSheet.create({
   },
   errorPillText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  /* ── Bottom bar ── */
+  /* Bottom controls */
   bottomBar: {
     width: "100%",
-    alignItems: "center",
     paddingHorizontal: 20,
   },
   bottomPill: {
@@ -942,9 +917,9 @@ const s = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-evenly",
     alignItems: "flex-start",
-    backgroundColor: "rgba(8,4,24,0.82)",
+    backgroundColor: "rgba(8,4,24,0.85)",
     borderRadius: 32,
-    paddingVertical: 20,
+    paddingVertical: 22,
     paddingHorizontal: 16,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
     shadowColor: "#000",
@@ -958,35 +933,33 @@ const s = StyleSheet.create({
   },
   pillBtn: {
     width: 64, height: 64, borderRadius: 32,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.13)",
     alignItems: "center", justifyContent: "center",
     borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
   },
   pillBtnActive: {
     backgroundColor: "#c4b5fd",
     borderColor: "rgba(196,181,253,0.4)",
-    shadowColor: "#c4b5fd",
   },
   declineBtn: {
     backgroundColor: "#dc2626",
-    borderColor: "rgba(220,38,38,0.4)",
+    borderColor: "rgba(220,38,38,0.3)",
     shadowColor: "#dc2626",
+    shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
   },
   acceptBtn: {
     backgroundColor: "#16a34a",
-    borderColor: "rgba(22,163,74,0.4)",
+    borderColor: "rgba(22,163,74,0.3)",
     shadowColor: "#16a34a",
+    shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
   },
   closeBtn: {
     backgroundColor: "rgba(255,255,255,0.12)",
     borderColor: "rgba(255,255,255,0.18)",
-    shadowColor: "#000",
   },
   pillLabel: {
     fontSize: 12,
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.72)",
     fontWeight: "600",
     letterSpacing: 0.2,
     textAlign: "center",
