@@ -378,7 +378,6 @@ export default function ChatDetailScreen({
   const [sending, setSending] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
@@ -540,7 +539,6 @@ export default function ChatDetailScreen({
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      setKeyboardHeight(kbHeight > 50 ? kbHeight + 10 : 0);
       if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     };
     vv.addEventListener("resize", handleResize);
