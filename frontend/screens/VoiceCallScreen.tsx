@@ -666,18 +666,42 @@ export default function VoiceCallScreen() {
           <View style={s.topBtn} />
         </View>
 
-        {/* ── AVATAR AREA ── */}
+        {/* ── CALLER INFO (name + status) — always visible below top bar ── */}
+        <View style={s.callerInfoBlock}>
+          <Text style={s.callerName} numberOfLines={1}>
+            {userName || "Unknown"}
+          </Text>
+          <Text
+            style={[
+              s.statusText,
+              isConnected && s.statusConnected,
+              isTerminal && s.statusError,
+            ]}
+          >
+            {statusText()}
+          </Text>
+
+          {/* E2E badge while waiting */}
+          {(callStatus === "ringing" || callStatus === "connecting") && (
+            <View style={s.e2eBadge}>
+              <Ionicons name="lock-closed" size={10} color="#34d399" />
+              <Text style={s.e2eText}>End-to-end encrypted</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── AVATAR (centered in remaining space) ── */}
         <View style={s.avatarArea}>
           {/* Pulse rings */}
           {(callStatus === "ringing" || callStatus === "connecting") && (
             <>
-              <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 140} />
-              <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 90} />
-              <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 44} />
+              <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 120} />
+              <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 72} />
+              <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 30} />
             </>
           )}
 
-          {/* Avatar */}
+          {/* Avatar circle */}
           <View style={s.avatarRing}>
             {userPhoto ? (
               <SafeImage source={{ uri: userPhoto }} style={s.avatar} />
@@ -690,31 +714,7 @@ export default function VoiceCallScreen() {
             )}
           </View>
 
-          {/* Name */}
-          <Text style={s.callerName} numberOfLines={1}>
-            {userName || "Unknown"}
-          </Text>
-
-          {/* Status */}
-          <Text
-            style={[
-              s.statusText,
-              isConnected && s.statusConnected,
-              isTerminal && s.statusError,
-            ]}
-          >
-            {statusText()}
-          </Text>
-
-          {/* E2E badge — shown while waiting */}
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <View style={s.e2eBadge}>
-              <Ionicons name="lock-closed" size={10} color="#34d399" />
-              <Text style={s.e2eText}>End-to-end encrypted</Text>
-            </View>
-          )}
-
-          {/* Live indicator + wave bars — shown when connected */}
+          {/* Live dot + wave bars when connected */}
           {isConnected && (
             <View style={s.liveRow}>
               <View style={s.liveDot} />
@@ -870,7 +870,14 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Avatar area */
+  /* Caller info block — sits between top bar and avatar */
+  callerInfoBlock: {
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+  },
+
+  /* Avatar area — takes remaining space, centers avatar */
   avatarArea: {
     flex: 1,
     alignItems: "center",
@@ -898,7 +905,6 @@ const s = StyleSheet.create({
   },
 
   callerName: {
-    marginTop: 26,
     fontSize: 26,
     fontWeight: "700",
     color: "#ffffff",
@@ -906,7 +912,7 @@ const s = StyleSheet.create({
     textAlign: "center",
   },
   statusText: {
-    marginTop: 6,
+    marginTop: 5,
     fontSize: 15,
     color: "rgba(255,255,255,0.50)",
     fontWeight: "500",
