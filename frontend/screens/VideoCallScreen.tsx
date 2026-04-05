@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
+  Text,
   StyleSheet,
   Pressable,
   Animated,
@@ -11,7 +12,6 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
-import { ThemedText } from "@/components/ThemedText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -27,45 +27,132 @@ import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import WebView from "react-native-webview";
 
 const { width: SW, height: SH } = Dimensions.get("window");
-const AVATAR_FALLBACK = Math.min(SW * 0.38, 160);
+const AVATAR_SIZE = Math.min(SW * 0.38, 155);
 
-/* ─── Main Screen ─── */
+/* ─────────────────────────────────────────────────────────────────
+   Pulse ring
+───────────────────────────────────────────────────────────────── */
+function PulseRing({ anim, size }: { anim: Animated.Value; size: number }) {
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        borderWidth: 1.5,
+        borderColor: "#10b981",
+        transform: [{ scale: anim }],
+        opacity: anim.interpolate({ inputRange: [1, 1.3], outputRange: [0.55, 0] }),
+      }}
+    />
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Video control button
+───────────────────────────────────────────────────────────────── */
+function VidBtn({
+  icon,
+  label,
+  active = false,
+  danger = false,
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  active?: boolean;
+  danger?: boolean;
+  onPress?: () => void;
+}) {
+  const bg = danger ? "#dc2626" : active ? "rgba(255,255,255,0.90)" : "rgba(255,255,255,0.16)";
+  const iconColor = active && !danger ? "#111" : "#fff";
+
+  return (
+    <Pressable style={vb.wrap} onPress={onPress}>
+      <View
+        style={[
+          vb.btn,
+          {
+            backgroundColor: bg,
+            shadowColor: danger ? "#dc2626" : "transparent",
+            shadowOpacity: danger ? 0.5 : 0,
+            shadowRadius: 10,
+            elevation: danger ? 8 : 0,
+          },
+        ]}
+      >
+        <Ionicons name={icon} size={24} color={iconColor} />
+      </View>
+      <Text style={vb.label}>{label}</Text>
+    </Pressable>
+  );
+}
+const vb = StyleSheet.create({
+  wrap: { alignItems: "center", gap: 5 },
+  btn: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  label: { fontSize: 11, color: "rgba(255,255,255,0.60)", fontWeight: "500" },
+});
+
+/* ─────────────────────────────────────────────────────────────────
+   Main VideoCallScreen
+───────────────────────────────────────────────────────────────── */
 export default function VideoCallScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
   const {
-    userId, userName, userPhoto, isIncoming,
-    callData: incomingCallData, callerId,
-    callAccepted, returnToCall,
+    userId,
+    userName,
+    userPhoto,
+    isIncoming,
+    callData: incomingCallData,
+    callerId,
+    callAccepted,
+    returnToCall,
   } = route.params || {};
 
   const { token: authToken, user } = useAuth();
   const { post, get } = useApi();
   const {
-    setActiveCall, updateCallStatus, startGlobalTimer,
-    stopGlobalTimer, minimizeCall, clearCall, activeCall,
+    setActiveCall,
+    updateCallStatus,
+    startGlobalTimer,
+    stopGlobalTimer,
+    minimizeCall,
+    clearCall,
+    activeCall,
   } = useCallContext();
 
+  /* ── State ── */
   const [callStatus, setCallStatusState] = useState<CallStatus>(
-    callAccepted ? "connected" : "connecting"
+    callAccepted ? "connected" : "connecting",
   );
   const [activeCallData, setActiveCallData] = useState<any>(incomingCallData || null);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted]         = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
-  const [webviewReady, setWebviewReady] = useState(false);
+  const [webviewReady, setWebviewReady]     = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
 
+  /* ── Animated values ── */
   const fadeAnim      = useRef(new Animated.Value(0)).current;
   const controlsAnim  = useRef(new Animated.Value(1)).current;
-  const pulseAnim     = useRef(new Animated.Value(1)).current;
+  const pulseAnim1    = useRef(new Animated.Value(1)).current;
   const pulseAnim2    = useRef(new Animated.Value(1)).current;
   const pulseAnim3    = useRef(new Animated.Value(1)).current;
   const endBtnScale   = useRef(new Animated.Value(1)).current;
 
+  /* ── Refs ── */
   const ringtoneRef       = useRef<Audio.Sound | null>(null);
   const shouldRingRef     = useRef(false);
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -77,26 +164,30 @@ export default function VideoCallScreen() {
 
   const duration = activeCall?.duration || 0;
 
-  const setStatus = useCallback((s: CallStatus) => {
-    callStatusRef.current = s;
-    setCallStatusState(s);
-    updateCallStatus(s);
-  }, [updateCallStatus]);
+  /* ── setStatus helper ── */
+  const setStatus = useCallback(
+    (s: CallStatus) => {
+      callStatusRef.current = s;
+      setCallStatusState(s);
+      updateCallStatus(s);
+    },
+    [updateCallStatus],
+  );
 
   /* ── Auto-hide controls after 4s when connected ── */
-  const showControlsTemporarily = useCallback(() => {
+  const showControls = useCallback(() => {
     if (callStatusRef.current !== "connected") return;
     setControlsVisible(true);
-    Animated.timing(controlsAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+    Animated.timing(controlsAnim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
     controlsTimer.current = setTimeout(() => {
-      Animated.timing(controlsAnim, { toValue: 0, duration: 400, useNativeDriver: true }).start(() =>
-        setControlsVisible(false)
+      Animated.timing(controlsAnim, { toValue: 0, duration: 380, useNativeDriver: true }).start(
+        () => setControlsVisible(false),
       );
     }, 4000);
   }, [controlsAnim]);
 
-  /* ── Ringtone ── */
+  /* ── Stop ringtone ── */
   const stopRingtone = useCallback(async () => {
     shouldRingRef.current = false;
     Vibration.cancel();
@@ -110,31 +201,26 @@ export default function VideoCallScreen() {
     } catch {}
   }, []);
 
+  /* ── Play ringtone ── */
   const playRingtone = useCallback(async () => {
-    if (ringtoneRef.current) {
-      const snd = ringtoneRef.current;
-      ringtoneRef.current = null;
-      await snd.stopAsync().catch(() => {});
-      await snd.unloadAsync().catch(() => {});
-    }
-    Vibration.cancel();
+    await stopRingtone();
     shouldRingRef.current = true;
-
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false, playsInSilentModeIOS: true,
-        staysActiveInBackground: true, playThroughEarpieceAndroid: false,
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: false,
       });
       if (!shouldRingRef.current) return;
-
       const source = isIncoming
         ? require("../assets/sounds/mixkit-waiting-ringtone-1354.wav")
         : require("../assets/sounds/phone-calling-1b.mp3");
-
       const { sound } = await Audio.Sound.createAsync(source, {
-        shouldPlay: true, isLooping: true, volume: 1.0,
+        shouldPlay: true,
+        isLooping: true,
+        volume: 1.0,
       });
-
       if (!shouldRingRef.current) {
         await sound.unloadAsync().catch(() => {});
         return;
@@ -145,45 +231,53 @@ export default function VideoCallScreen() {
       console.error("Video ringtone error:", err);
       if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
-  }, [isIncoming]);
+  }, [isIncoming, stopRingtone]);
 
   /* ── WebView bridge ── */
-  const sendToWebView = useCallback((msg: any) => {
+  const sendToWebView = useCallback((msg: object) => {
     webViewRef.current?.postMessage(JSON.stringify(msg));
   }, []);
 
-  /* ── Agora join ── */
-  const joinAgoraVideo = useCallback(async (callDataObj: any) => {
-    if (agoraJoined.current) return;
-    agoraJoined.current = true;
+  /* ── Join Agora video ── */
+  const joinAgoraVideo = useCallback(
+    async (callDataObj: any) => {
+      if (agoraJoined.current) return;
+      agoraJoined.current = true;
 
-    let joinToken = callDataObj.token;
-    let joinUid = callDataObj.uid || 0;
+      let joinToken = callDataObj.token;
+      let joinUid = callDataObj.uid || 0;
 
-    if (isIncoming && authToken) {
-      try {
-        const res = await get<{ token: string; uid: number }>(
-          `/agora/token`,
-          { channelName: callDataObj.channelName, uid: 0, role: "publisher" },
-          authToken
-        );
-        if (res.success && res.data?.token) {
-          joinToken = res.data.token;
-          joinUid = 0;
+      if (isIncoming && authToken) {
+        try {
+          const res = await get<{ token: string; uid: number }>(
+            `/agora/token`,
+            { channelName: callDataObj.channelName, uid: 0, role: "publisher" },
+            authToken,
+          );
+          if (res.success && res.data?.token) {
+            joinToken = res.data.token;
+            joinUid = 0;
+          }
+        } catch {
+          console.log("Video token fallback");
         }
-      } catch { console.log("Video token fallback"); }
-    }
+      }
 
-    if (Platform.OS === "web") {
-      agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
-    } else {
-      sendToWebView({
-        action: "join", appId: callDataObj.appId,
-        channel: callDataObj.channelName, token: joinToken,
-        uid: joinUid, callType: "video",
-      });
-    }
-  }, [isIncoming, authToken, get, sendToWebView]);
+      if (Platform.OS === "web") {
+        agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
+      } else {
+        sendToWebView({
+          action: "join",
+          appId: callDataObj.appId,
+          channel: callDataObj.channelName,
+          token: joinToken,
+          uid: joinUid,
+          callType: "video",
+        });
+      }
+    },
+    [isIncoming, authToken, get, sendToWebView],
+  );
 
   /* ── End call ── */
   const handleEndCall = useCallback(async () => {
@@ -195,16 +289,16 @@ export default function VideoCallScreen() {
     stopGlobalTimer();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
-
     if (Platform.OS === "web") agoraService.leave();
     else sendToWebView({ action: "leave" });
-
     socketService.endCall({
       targetUserId: isIncoming ? callerId : userId,
-      callType: "video", duration: dur, wasAnswered: wasConnected,
+      callType: "video",
+      duration: dur,
+      wasAnswered: wasConnected,
     });
     clearCall();
-    setTimeout(() => { if (navigation.canGoBack()) navigation.goBack(); }, 600);
+    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 600);
   }, [callerId, userId, isIncoming, stopRingtone, sendToWebView, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
 
   /* ── Minimize ── */
@@ -222,9 +316,9 @@ export default function VideoCallScreen() {
     socketService.acceptCall({ callerId, callData: activeCallData });
     setStatus("connected");
     startGlobalTimer();
-    showControlsTemporarily();
+    showControls();
     if (activeCallData) joinAgoraVideo(activeCallData);
-  }, [callerId, activeCallData, stopRingtone, joinAgoraVideo, startGlobalTimer, setStatus, showControlsTemporarily]);
+  }, [callerId, activeCallData, stopRingtone, joinAgoraVideo, startGlobalTimer, setStatus, showControls]);
 
   /* ── Decline incoming ── */
   const handleDecline = useCallback(async () => {
@@ -232,7 +326,9 @@ export default function VideoCallScreen() {
     await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     socketService.declineCall({ callerId, callType: "video" });
-    if (authToken && isIncoming) post("/call/decline", { callerId, type: "video" }, authToken).catch(() => {});
+    if (authToken && isIncoming) {
+      post("/call/decline", { callerId, type: "video" }, authToken).catch(() => {});
+    }
     setStatus("declined");
     clearCall();
     setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
@@ -247,8 +343,8 @@ export default function VideoCallScreen() {
       else sendToWebView({ action: "mute", muted: next });
       return next;
     });
-    showControlsTemporarily();
-  }, [sendToWebView, showControlsTemporarily]);
+    showControls();
+  }, [sendToWebView, showControls]);
 
   /* ── Toggle camera ── */
   const toggleCamera = useCallback(() => {
@@ -259,39 +355,44 @@ export default function VideoCallScreen() {
       else sendToWebView({ action: "camera", off: next });
       return next;
     });
-    showControlsTemporarily();
-  }, [sendToWebView, showControlsTemporarily]);
+    showControls();
+  }, [sendToWebView, showControls]);
 
   /* ── Flip camera ── */
   const flipCamera = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (Platform.OS === "web") agoraService.switchCamera();
     else sendToWebView({ action: "switch-camera" });
-    showControlsTemporarily();
-  }, [sendToWebView, showControlsTemporarily]);
+    showControls();
+  }, [sendToWebView, showControls]);
 
-  /* ── Speaker ── */
+  /* ── Toggle speaker ── */
   const toggleSpeaker = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = !isSpeakerOn;
     setIsSpeakerOn(next);
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false, playsInSilentModeIOS: true,
-        staysActiveInBackground: true, playThroughEarpieceAndroid: !next,
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: !next,
       });
     } catch {}
-    showControlsTemporarily();
-  }, [isSpeakerOn, showControlsTemporarily]);
+    showControls();
+  }, [isSpeakerOn, showControls]);
 
-  /* ── Initiate outgoing ── */
+  /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setStatus("failed");
-
     try {
-      const res = await post<any>("/agora/call/initiate", { targetUserId: userId, callType: "video" }, authToken);
-      if (res.success && res.data?.callData) {
-        const cd = res.data.callData;
+      const response = await post<any>(
+        "/agora/call/initiate",
+        { targetUserId: userId, callType: "video" },
+        authToken,
+      );
+      if (response.success && response.data?.callData) {
+        const cd = response.data.callData;
         setActiveCallData(cd);
         activeCallDataRef.current = cd;
         setStatus("ringing");
@@ -299,7 +400,8 @@ export default function VideoCallScreen() {
         const photoVal = user?.photos?.[0];
         const photoUrl = typeof photoVal === "string" ? photoVal : (photoVal as any)?.url || "";
         socketService.initiateCall({
-          targetUserId: userId, callData: cd,
+          targetUserId: userId,
+          callData: cd,
           callerInfo: { name: user?.name || "User", photo: photoUrl, id: user?.id || "" },
         });
 
@@ -314,29 +416,34 @@ export default function VideoCallScreen() {
       } else {
         setStatus("failed");
       }
-    } catch { setStatus("failed"); }
+    } catch {
+      setStatus("failed");
+    }
   }, [authToken, userId, post, user, navigation, setStatus, clearCall]);
 
-  /* ── Setup ── */
+  /* ── Setup effect ── */
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
 
     setActiveCall({
       userId: userId || callerId || "",
       userName: userName || "Unknown",
-      userPhoto, isIncoming: !!isIncoming,
+      userPhoto,
+      isIncoming: !!isIncoming,
       callStatus: callAccepted ? "connected" : "connecting",
-      callType: "video", duration: 0,
+      callType: "video",
+      duration: 0,
     });
 
     if (callAccepted) {
       setStatus("connected");
       startGlobalTimer();
-      showControlsTemporarily();
-      if (activeCallDataRef.current && Platform.OS === "web") joinAgoraVideo(activeCallDataRef.current);
+      showControls();
+      if (activeCallDataRef.current && Platform.OS === "web")
+        joinAgoraVideo(activeCallDataRef.current);
     } else if (returnToCall) {
       setStatus("connected");
-      showControlsTemporarily();
+      showControls();
     } else if (isIncoming) {
       setStatus("ringing");
     } else {
@@ -348,10 +455,9 @@ export default function VideoCallScreen() {
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setStatus("connected");
       startGlobalTimer();
-      showControlsTemporarily();
+      showControls();
       if (activeCallDataRef.current) joinAgoraVideo(activeCallDataRef.current);
     });
-
     socketService.onCallDeclined(async () => {
       await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
@@ -359,7 +465,6 @@ export default function VideoCallScreen() {
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
     });
-
     socketService.onCallBusy(async () => {
       await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
@@ -367,7 +472,6 @@ export default function VideoCallScreen() {
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
     });
-
     socketService.onCallEnded(async () => {
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
@@ -387,59 +491,82 @@ export default function VideoCallScreen() {
       socketService.off("call:busy");
       socketService.off("call:ended");
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Ringtone ── */
+  /* ── Ringtone on status change ── */
   useEffect(() => {
     if (callStatus === "ringing") playRingtone();
     else stopRingtone();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
-  /* ── Pulse rings ── */
+  /* ── Pulse ring animation ── */
   useEffect(() => {
     if (callStatus === "ringing" || callStatus === "connecting") {
-      const makeLoop = (anim: Animated.Value, delay: number) =>
-        Animated.loop(Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(anim, { toValue: 1.3, duration: 900, useNativeDriver: true }),
-          Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        ]));
-      const l1 = makeLoop(pulseAnim, 0);
-      const l2 = makeLoop(pulseAnim2, 300);
-      const l3 = makeLoop(pulseAnim3, 600);
+      const loop = (anim: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(anim, { toValue: 1.3, duration: 950, useNativeDriver: true }),
+            Animated.timing(anim, { toValue: 1, duration: 950, useNativeDriver: true }),
+          ]),
+        );
+      const l1 = loop(pulseAnim1, 0);
+      const l2 = loop(pulseAnim2, 320);
+      const l3 = loop(pulseAnim3, 640);
       l1.start(); l2.start(); l3.start();
       return () => { l1.stop(); l2.stop(); l3.stop(); };
     } else {
-      pulseAnim.setValue(1); pulseAnim2.setValue(1); pulseAnim3.setValue(1);
+      pulseAnim1.setValue(1);
+      pulseAnim2.setValue(1);
+      pulseAnim3.setValue(1);
     }
   }, [callStatus]);
 
   /* ── WebView ready → join ── */
   useEffect(() => {
-    if (webviewReady && (callStatus === "connected" || callAccepted) && activeCallDataRef.current && !agoraJoined.current) {
+    if (
+      webviewReady &&
+      (callStatus === "connected" || callAccepted) &&
+      activeCallDataRef.current &&
+      !agoraJoined.current
+    ) {
       joinAgoraVideo(activeCallDataRef.current);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webviewReady]);
 
-  /* ── Free tier limit ── */
+  /* ── Free-tier 5-min limit ── */
   useEffect(() => {
-    if ((user as any)?.premium?.isActive || callStatus !== "connected") return;
-    if (duration === 240) Alert.alert("1 Minute Remaining", "Free calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.", [{ text: "OK" }]);
+    if (user?.premium?.isActive || callStatus !== "connected") return;
+    if (duration === 240) {
+      Alert.alert(
+        "1 Minute Remaining",
+        "Free video calls are limited to 5 minutes. Upgrade to Premium for unlimited calls.",
+        [{ text: "OK" }],
+      );
+    }
     if (duration >= 300) handleEndCall();
   }, [duration, callStatus, user, handleEndCall]);
 
-  /* ── Helpers ── */
-  const fmt = (s: number) =>
+  /* ── Derived state ── */
+  const isConnected  = callStatus === "connected";
+  const isTerminal   = ["ended", "declined", "missed", "failed", "busy"].includes(callStatus);
+  const isWaiting    = !isIncoming && callStatus === "ringing";
+  const showIncoming = isIncoming && callStatus === "ringing";
+  const showCancel   = callStatus === "connecting" || isWaiting;
+  const showVideo    = isConnected && Platform.OS !== "web";
+  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
+
+  const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
-  const getStatusText = (): string => {
+  const statusText = (): string => {
     switch (callStatus) {
-      case "connecting": return "Connecting...";
-      case "ringing":    return isIncoming ? "Incoming video call" : "Ringing...";
-      case "connected":  return fmt(duration);
+      case "connecting": return "Connecting…";
+      case "ringing":    return isIncoming ? "Incoming video call" : "Ringing…";
+      case "connected":  return formatDuration(duration);
       case "ended":      return "Call ended";
       case "declined":   return "Call declined";
       case "busy":       return "User is busy";
@@ -449,25 +576,23 @@ export default function VideoCallScreen() {
     }
   };
 
-  const isTerminal    = ["ended", "declined", "missed", "failed", "busy"].includes(callStatus);
-  const isWaiting     = !isIncoming && callStatus === "ringing";
-  const isConnected   = callStatus === "connected";
-  const showIncoming  = isIncoming && callStatus === "ringing";
-  const showCancelBtn = callStatus === "connecting" || isWaiting;
-  const showVideoView = isConnected && Platform.OS !== "web";
-  const agoraCallUrl  = `${getApiBaseUrl()}/public/agora-call.html`;
+  const terminalMsg = (): string => {
+    if (callStatus === "busy")     return "User is in another call";
+    if (callStatus === "declined") return "Call was declined";
+    if (callStatus === "missed")   return "No answer";
+    return "Unable to connect";
+  };
 
   /* ── Render ── */
   return (
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── VIDEO LAYER ── */}
-      {showVideoView ? (
-        /* Full-screen Agora WebView for native video */
+      {/* ── VIDEO LAYER (full-screen WebView when connected) ── */}
+      {showVideo ? (
         <WebView
           ref={webViewRef}
-          source={{ uri: agoraCallUrl }}
+          source={{ uri: agoraUrl }}
           style={StyleSheet.absoluteFillObject}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
@@ -477,336 +602,397 @@ export default function VideoCallScreen() {
           scrollEnabled={false}
           bounces={false}
           onLoad={() => setWebviewReady(true)}
-          onMessage={(event) => {
+          onMessage={(e) => {
             try {
-              const d = JSON.parse(event.nativeEvent.data);
-              if (d.type === "joined") console.log("Video WebView joined:", d.uid);
+              const d = JSON.parse(e.nativeEvent.data);
+              if (d.type === "joined")              console.log("Video joined:", d.uid);
               if (d.type === "remote-video-started") setHasRemoteVideo(true);
               if (d.type === "remote-video-stopped") setHasRemoteVideo(false);
-              if (d.type === "remote-user-left") setHasRemoteVideo(false);
-              if (d.type === "error") console.log("Video WebView error:", d.message);
+              if (d.type === "remote-user-left")     setHasRemoteVideo(false);
+              if (d.type === "error")               console.log("Video WebView error:", d.message);
             } catch {}
           }}
         />
       ) : (
-        /* Background: blurred photo for non-video states */
+        /* Background: blurred avatar + dark overlay for pre-call states */
         <>
           <SafeImage
             source={{ uri: userPhoto || "https://via.placeholder.com/400" }}
             style={StyleSheet.absoluteFillObject as any}
-            blurRadius={Platform.OS === "ios" ? 60 : 18}
+            blurRadius={Platform.OS === "ios" ? 65 : 20}
           />
           <LinearGradient
-            colors={["rgba(0,0,0,0.85)", "rgba(15,5,35,0.75)", "rgba(0,0,0,0.92)"]}
+            colors={["rgba(0,0,0,0.88)", "rgba(5,10,25,0.78)", "rgba(0,0,0,0.94)"]}
             style={StyleSheet.absoluteFill}
           />
         </>
       )}
 
-      {/* ── OVERLAY: controls & info ── */}
-      <Animated.View style={[s.overlay, { opacity: fadeAnim }]}>
+      {/* Hidden WebView for non-video states (native) — handles joining audio */}
+      {!showVideo && Platform.OS !== "web" && (
+        <WebView
+          ref={webViewRef}
+          source={{ uri: agoraUrl }}
+          style={{ width: 0, height: 0, position: "absolute" }}
+          allowsInlineMediaPlayback
+          mediaPlaybackRequiresUserAction={false}
+          mediaCapturePermissionGrantType="grant"
+          javaScriptEnabled
+          domStorageEnabled
+          onLoad={() => setWebviewReady(true)}
+          onMessage={(e) => {
+            try {
+              const d = JSON.parse(e.nativeEvent.data);
+              if (d.type === "joined") console.log("Video (pre) joined:", d.uid);
+            } catch {}
+          }}
+        />
+      )}
 
-        {/* Tap to show controls when connected */}
+      {/* ── UI OVERLAY ── */}
+      <Animated.View style={[s.overlay, { opacity: fadeAnim }]} pointerEvents="box-none">
+
+        {/* Tap anywhere to show controls when connected */}
         {isConnected && (
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={showControlsTemporarily} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={showControls} />
         )}
 
-        {/* ── TOP GRADIENT + Header ── */}
-        <Animated.View style={[s.topOverlay, { opacity: isConnected ? controlsAnim : 1 }]}>
+        {/* ── TOP GRADIENT + header ── */}
+        <Animated.View
+          style={[s.topOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
+          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
+        >
           <LinearGradient
-            colors={["rgba(0,0,0,0.75)", "transparent"]}
-            style={s.topGradient}
+            colors={["rgba(0,0,0,0.72)", "transparent"]}
+            style={s.topGrad}
           >
             <View style={[s.topRow, { paddingTop: insets.top + 10 }]}>
               <Pressable
-                style={s.iconBtn}
-                onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
+                style={s.topBtn}
                 hitSlop={12}
+                onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
               >
                 <Ionicons
                   name={isConnected ? "chevron-down" : "arrow-back"}
                   size={22}
-                  color="#FFF"
+                  color="#fff"
                 />
               </Pressable>
 
-              <View style={s.topCenter}>
-                <ThemedText style={s.topName} numberOfLines={1}>
-                  {userName || "Unknown"}
-                </ThemedText>
-                <ThemedText style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
-                  {getStatusText()}
-                </ThemedText>
+              <View style={s.topInfo}>
+                <Text style={s.topName} numberOfLines={1}>{userName || "Unknown"}</Text>
+                <Text style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
+                  {statusText()}
+                </Text>
               </View>
 
-              <View style={{ width: 44 }} />
+              {/* Camera off badge */}
+              {isConnected && isCameraOff && (
+                <View style={s.camOffBadge}>
+                  <Ionicons name="videocam-off" size={14} color="#fff" />
+                </View>
+              )}
+              {!isConnected && <View style={{ width: 38 }} />}
             </View>
           </LinearGradient>
         </Animated.View>
 
-        {/* ── AVATAR FALLBACK (when not connected / no remote video) ── */}
+        {/* ── AVATAR (when no remote video or not connected) ── */}
         {(!isConnected || !hasRemoteVideo) && (
           <View style={s.avatarCenter}>
             {(callStatus === "ringing" || callStatus === "connecting") && (
               <>
-                <Animated.View style={[s.ring3, { transform: [{ scale: pulseAnim3 }] }]} />
-                <Animated.View style={[s.ring2, { transform: [{ scale: pulseAnim2 }] }]} />
-                <Animated.View style={[s.ring1, { transform: [{ scale: pulseAnim }] }]} />
+                <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 130} />
+                <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 80} />
+                <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 36} />
               </>
             )}
-            <View style={[s.avatarFrame, isConnected && s.avatarFrameConnected, isTerminal && s.avatarFrameTerminal]}>
+            <View
+              style={[
+                s.avatarFrame,
+                isConnected && s.avatarFrameConnected,
+                isTerminal && s.avatarFrameTerminal,
+              ]}
+            >
               <SafeImage
-                source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
-                style={s.avatar}
+                source={{ uri: userPhoto || "https://via.placeholder.com/200" }}
+                style={s.avatarImg}
               />
             </View>
 
             {isTerminal && callStatus !== "ended" && (
               <View style={s.errorPill}>
                 <Ionicons name="close-circle" size={14} color="#f87171" />
-                <ThemedText style={s.errorPillText}>
-                  {callStatus === "busy" ? "User is in another call"
-                    : callStatus === "declined" ? "Call was declined"
-                    : callStatus === "missed" ? "No answer"
-                    : "Unable to connect"}
-                </ThemedText>
+                <Text style={s.errorText}>{terminalMsg()}</Text>
+              </View>
+            )}
+
+            {/* E2E badge while waiting */}
+            {(callStatus === "ringing" || callStatus === "connecting") && (
+              <View style={s.e2eBadge}>
+                <Ionicons name="lock-closed" size={10} color="#34d399" />
+                <Text style={s.e2eText}>End-to-end encrypted</Text>
               </View>
             )}
           </View>
         )}
 
-        {/* ── LOCAL CAMERA OFF indicator ── */}
-        {isConnected && isCameraOff && (
-          <View style={s.cameraOffBadge}>
-            <Ionicons name="videocam-off" size={16} color="#fff" />
-            <ThemedText style={s.cameraOffText}>Camera off</ThemedText>
-          </View>
-        )}
-
-        {/* ── BOTTOM GRADIENT + Controls ── */}
+        {/* ── BOTTOM GRADIENT + controls ── */}
         <Animated.View
-          style={[
-            s.bottomOverlay,
-            { opacity: isConnected ? controlsAnim : 1 },
-          ]}
-          pointerEvents={isConnected && !controlsVisible ? "none" : "auto"}
+          style={[s.bottomOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
+          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
         >
           <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.82)"]}
-            style={s.bottomGradient}
+            colors={["transparent", "rgba(0,0,0,0.85)"]}
+            style={s.bottomGrad}
           >
-
-            {/* Incoming: Decline + Accept */}
+            {/* INCOMING: Decline + Accept */}
             {showIncoming && (
-              <View style={[s.controlsRow, { paddingBottom: insets.bottom + 28 }]}>
+              <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, s.redBtn]} onPress={handleDecline}>
-                    <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  <Pressable style={[s.bigBtn, s.redBtn]} onPress={handleDecline}>
+                    <Ionicons
+                      name="call"
+                      size={30}
+                      color="#fff"
+                      style={{ transform: [{ rotate: "135deg" }] }}
+                    />
                   </Pressable>
-                  <ThemedText style={s.ctrlLabel}>Decline</ThemedText>
+                  <Text style={s.bigBtnLabel}>Decline</Text>
                 </View>
                 <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, s.greenBtn]} onPress={handleAccept}>
-                    <Ionicons name="videocam" size={28} color="#FFF" />
+                  <Pressable style={[s.bigBtn, s.greenBtn]} onPress={handleAccept}>
+                    <Ionicons name="videocam" size={30} color="#fff" />
                   </Pressable>
-                  <ThemedText style={s.ctrlLabel}>Accept</ThemedText>
+                  <Text style={s.bigBtnLabel}>Accept</Text>
                 </View>
               </View>
             )}
 
-            {/* Connected: full controls */}
+            {/* CONNECTED: full controls */}
             {isConnected && (
-              <View style={[s.controlsRow, { paddingBottom: insets.bottom + 28 }]}>
-                <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, isMuted && s.ctrlBtnActive]} onPress={toggleMute}>
-                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? "#0f0a2e" : "#FFF"} />
-                  </Pressable>
-                  <ThemedText style={s.ctrlLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
-                </View>
-                <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, isCameraOff && s.ctrlBtnActive]} onPress={toggleCamera}>
-                    <Ionicons name={isCameraOff ? "videocam-off" : "videocam"} size={24} color={isCameraOff ? "#0f0a2e" : "#FFF"} />
-                  </Pressable>
-                  <ThemedText style={s.ctrlLabel}>{isCameraOff ? "Cam On" : "Cam Off"}</ThemedText>
-                </View>
-                <View style={s.ctrlItem}>
-                  <Pressable style={s.ctrlBtn} onPress={flipCamera}>
-                    <Ionicons name="camera-reverse" size={24} color="#FFF" />
-                  </Pressable>
-                  <ThemedText style={s.ctrlLabel}>Flip</ThemedText>
-                </View>
-                <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, !isSpeakerOn && s.ctrlBtnActive]} onPress={toggleSpeaker}>
-                    <Ionicons name={isSpeakerOn ? "volume-high" : "ear"} size={24} color={!isSpeakerOn ? "#0f0a2e" : "#FFF"} />
-                  </Pressable>
-                  <ThemedText style={s.ctrlLabel}>{isSpeakerOn ? "Speaker" : "Earpiece"}</ThemedText>
-                </View>
-                <View style={s.ctrlItem}>
+              <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
+                <VidBtn
+                  icon={isMuted ? "mic-off" : "mic"}
+                  label={isMuted ? "Unmute" : "Mute"}
+                  active={isMuted}
+                  onPress={toggleMute}
+                />
+                <VidBtn
+                  icon={isCameraOff ? "videocam-off" : "videocam"}
+                  label={isCameraOff ? "Cam On" : "Cam Off"}
+                  active={isCameraOff}
+                  onPress={toggleCamera}
+                />
+                <VidBtn
+                  icon="camera-reverse"
+                  label="Flip"
+                  onPress={flipCamera}
+                />
+                <VidBtn
+                  icon={isSpeakerOn ? "volume-high" : "ear"}
+                  label={isSpeakerOn ? "Speaker" : "Earpiece"}
+                  active={!isSpeakerOn}
+                  onPress={toggleSpeaker}
+                />
+                {/* End call */}
+                <View style={vb.wrap}>
                   <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
                     <Pressable
-                      style={[s.ctrlBtn, s.redBtn]}
+                      style={[s.bigBtn, s.redBtn]}
                       onPress={handleEndCall}
-                      onPressIn={() => Animated.spring(endBtnScale, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()}
-                      onPressOut={() => Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()}
+                      onPressIn={() =>
+                        Animated.spring(endBtnScale, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                      }
+                      onPressOut={() =>
+                        Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                      }
                     >
-                      <Ionicons name="call" size={26} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                      <Ionicons
+                        name="call"
+                        size={26}
+                        color="#fff"
+                        style={{ transform: [{ rotate: "135deg" }] }}
+                      />
                     </Pressable>
                   </Animated.View>
-                  <ThemedText style={s.ctrlLabel}>End</ThemedText>
+                  <Text style={vb.label}>End</Text>
                 </View>
               </View>
             )}
 
-            {/* Outgoing ringing / connecting: Cancel */}
-            {showCancelBtn && (
-              <View style={[s.controlsRow, { paddingBottom: insets.bottom + 28 }]}>
+            {/* OUTGOING / CONNECTING: Cancel */}
+            {showCancel && (
+              <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
-                  <Pressable style={[s.ctrlBtn, s.redBtn]} onPress={handleEndCall}>
-                    <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  <Pressable style={[s.bigBtn, s.redBtn]} onPress={handleEndCall}>
+                    <Ionicons
+                      name="call"
+                      size={30}
+                      color="#fff"
+                      style={{ transform: [{ rotate: "135deg" }] }}
+                    />
                   </Pressable>
-                  <ThemedText style={s.ctrlLabel}>Cancel</ThemedText>
+                  <Text style={s.bigBtnLabel}>Cancel</Text>
                 </View>
               </View>
             )}
 
-            {/* Terminal */}
+            {/* TERMINAL: Close */}
             {isTerminal && (
-              <View style={[s.controlsRow, { paddingBottom: insets.bottom + 28 }]}>
+              <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
                   <Pressable
-                    style={[s.ctrlBtn, s.closeBtn]}
+                    style={s.bigBtn}
                     onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}
                   >
-                    <Ionicons name="close" size={28} color="#FFF" />
+                    <Ionicons name="close" size={28} color="#fff" />
                   </Pressable>
-                  <ThemedText style={s.ctrlLabel}>Close</ThemedText>
+                  <Text style={s.bigBtnLabel}>Close</Text>
                 </View>
               </View>
             )}
           </LinearGradient>
         </Animated.View>
-
       </Animated.View>
     </View>
   );
 }
 
-/* ─── Styles ─── */
-const AVATAR_SIZE = Math.min(SW * 0.42, 170);
-
+/* ─────────────────────────────────────────────────────────────────
+   Styles
+───────────────────────────────────────────────────────────────── */
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: "#000" },
-  overlay: { ...StyleSheet.absoluteFillObject as any, flexDirection: "column" },
+  overlay: { ...StyleSheet.absoluteFillObject },
 
-  /* Top */
+  /* Top overlay */
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
-  topGradient: { paddingBottom: 40 },
+  topGrad:    { paddingBottom: 40 },
   topRow: {
-    flexDirection: "row", alignItems: "center",
-    justifyContent: "space-between", paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 12,
   },
-  iconBtn: {
-    width: 44, height: 44, borderRadius: 22,
+  topBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center", justifyContent: "center",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  topCenter: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
-  topName: { fontSize: 18, fontWeight: "700", color: "#FFF", textAlign: "center" },
-  topStatus: { fontSize: 13, color: "rgba(255,255,255,0.65)", fontWeight: "500", marginTop: 2 },
+  topInfo: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
+  topName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  topStatus: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.65)",
+    marginTop: 2,
+    fontVariant: ["tabular-nums"],
+  },
+  camOffBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(220,38,38,0.70)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-  /* Avatar fallback */
+  /* Avatar center (fallback) */
   avatarCenter: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: "center", justifyContent: "center",
-    zIndex: 1,
-  },
-  ring3: {
-    position: "absolute",
-    width: AVATAR_SIZE + 100, height: AVATAR_SIZE + 100,
-    borderRadius: (AVATAR_SIZE + 100) / 2,
-    backgroundColor: "rgba(109,40,217,0.06)",
-    borderWidth: 1, borderColor: "rgba(196,181,253,0.08)",
-  },
-  ring2: {
-    position: "absolute",
-    width: AVATAR_SIZE + 60, height: AVATAR_SIZE + 60,
-    borderRadius: (AVATAR_SIZE + 60) / 2,
-    backgroundColor: "rgba(109,40,217,0.10)",
-    borderWidth: 1, borderColor: "rgba(196,181,253,0.16)",
-  },
-  ring1: {
-    position: "absolute",
-    width: AVATAR_SIZE + 28, height: AVATAR_SIZE + 28,
-    borderRadius: (AVATAR_SIZE + 28) / 2,
-    backgroundColor: "rgba(109,40,217,0.16)",
-    borderWidth: 1.5, borderColor: "rgba(196,181,253,0.28)",
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarFrame: {
-    width: AVATAR_SIZE, height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2, overflow: "hidden",
-    borderWidth: 3.5, borderColor: "rgba(196,181,253,0.5)",
-    shadowColor: "#7c3aed", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7, shadowRadius: 28, elevation: 18,
+    width: AVATAR_SIZE,
+    height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
+    overflow: "hidden",
+    borderWidth: 3,
+    borderColor: "rgba(52,211,153,0.50)",
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 16,
   },
-  avatarFrameConnected: { borderColor: "rgba(16,185,129,0.65)", shadowColor: "#10B981" },
-  avatarFrameTerminal:  { borderColor: "rgba(255,255,255,0.15)", shadowOpacity: 0.15 },
-  avatar: { width: "100%", height: "100%" },
+  avatarFrameConnected: { borderColor: "rgba(255,255,255,0.30)" },
+  avatarFrameTerminal:  { borderColor: "rgba(248,113,113,0.40)" },
+  avatarImg: { width: "100%", height: "100%" },
+
   errorPill: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    marginTop: 20, paddingHorizontal: 14, paddingVertical: 9,
-    borderRadius: 14, backgroundColor: "rgba(248,113,113,0.14)",
-    borderWidth: 1, borderColor: "rgba(248,113,113,0.3)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: "rgba(248,113,113,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.28)",
   },
-  errorPillText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
+  errorText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  /* Camera off badge */
-  cameraOffBadge: {
-    position: "absolute",
-    bottom: 140, alignSelf: "center",
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, zIndex: 5,
+  e2eBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: "rgba(52,211,153,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(52,211,153,0.25)",
   },
-  cameraOffText: { fontSize: 13, color: "#fff", fontWeight: "500" },
+  e2eText: { fontSize: 11, color: "rgba(52,211,153,0.80)", fontWeight: "500" },
 
-  /* Bottom */
-  bottomOverlay: {
-    position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10,
-  },
-  bottomGradient: { paddingTop: 60 },
-  controlsRow: {
+  /* Bottom overlay */
+  bottomOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10 },
+  bottomGrad:    { paddingTop: 60 },
+
+  ctrlRow: {
     flexDirection: "row",
     justifyContent: "space-evenly",
-    alignItems: "flex-start",
-    paddingHorizontal: 12,
-    paddingTop: 20,
+    alignItems: "flex-end",
+    paddingHorizontal: 16,
   },
-  ctrlItem: { alignItems: "center", gap: 7, flex: 1 },
-  ctrlBtn: {
-    width: 60, height: 60, borderRadius: 30,
+  ctrlItem: { alignItems: "center", gap: 6 },
+
+  bigBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center", justifyContent: "center",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  ctrlBtnActive: { backgroundColor: "#c4b5fd", borderColor: "rgba(196,181,253,0.4)" },
   redBtn: {
     backgroundColor: "#dc2626",
-    borderColor: "rgba(220,38,38,0.3)",
-    shadowColor: "#dc2626", shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
+    shadowColor: "#dc2626",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 10,
   },
   greenBtn: {
-    backgroundColor: "#16a34a",
-    borderColor: "rgba(22,163,74,0.3)",
-    shadowColor: "#16a34a", shadowOpacity: 0.5, shadowRadius: 10, elevation: 8,
+    backgroundColor: "#10b981",
+    shadowColor: "#10b981",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 10,
   },
-  closeBtn: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  ctrlLabel: {
-    fontSize: 11, color: "rgba(255,255,255,0.75)",
-    fontWeight: "600", textAlign: "center",
-  },
+  bigBtnLabel: { fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: "500" },
 });
