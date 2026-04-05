@@ -596,156 +596,168 @@ export default function VideoCallScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
+      {/* Remote video / placeholder */}
       {Platform.OS === 'web' ? renderWebCallView() : renderNativeCallView()}
 
+      {/* Top gradient fade */}
       <LinearGradient
-        colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']}
-        style={styles.overlay}
+        colors={['rgba(0,0,0,0.80)', 'rgba(0,0,0,0.25)', 'transparent']}
+        style={styles.topGradient}
+        pointerEvents="none"
+      />
+      {/* Bottom gradient fade */}
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.88)']}
+        style={styles.bottomGradient}
         pointerEvents="none"
       />
 
+      {/* Tap to toggle controls */}
       <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowControls(v => !v)} />
 
-      {/* ── Top bar ── */}
+      {/* ── TOP BAR ── */}
       <Animated.View
         pointerEvents={showControls ? 'auto' : 'none'}
-        style={[styles.topBar, { paddingTop: insets.top + 16, opacity: showControls ? 1 : 0 }]}
+        style={[styles.topBar, { paddingTop: insets.top + 14, opacity: showControls ? 1 : 0 }]}
       >
-        <View style={styles.headerGlass}>
-          {/* Minimize button — only when connected */}
+        <View style={styles.headerRow}>
           {callStatus === 'connected' && (
-            <Pressable style={styles.minimizeBtn} onPress={handleMinimize}>
-              <Ionicons name="chevron-down" size={22} color="#fff" />
+            <Pressable style={styles.minimizeBtn} onPress={handleMinimize} hitSlop={10}>
+              <Ionicons name="chevron-down" size={20} color="#fff" />
             </Pressable>
           )}
           <View style={styles.callInfo}>
-            <ThemedText style={styles.userName}>{userName || 'Unknown'}</ThemedText>
-            <ThemedText style={[styles.callStatusText, (callStatus === 'failed' || callStatus === 'busy') && styles.errorStatus]}>
+            <ThemedText style={styles.callerName} numberOfLines={1}>{userName || 'Unknown'}</ThemedText>
+            <ThemedText style={[styles.callStatusText, isTerminal && styles.errorText]}>
               {getStatusText()}
             </ThemedText>
           </View>
           {callStatus === 'connected' && (
-            <View style={styles.qualityBadge}>
-              <Ionicons name="lock-closed" size={12} color="#10B981" />
-              <ThemedText style={styles.qualityText}>Secure</ThemedText>
+            <View style={styles.secureBadge}>
+              <Ionicons name="lock-closed" size={11} color="#10B981" />
+              <ThemedText style={styles.secureText}>Secure</ThemedText>
             </View>
           )}
         </View>
       </Animated.View>
 
-      {/* ── Self video pip ── */}
+      {/* ── Self-video PIP ── */}
       {!isTerminal && (
-        <View style={[styles.selfVideoContainer, { top: insets.top + 90 }]}>
+        <View style={[styles.pip, { top: insets.top + 80 }]}>
           {renderLocalVideo()}
-          <View style={styles.selfVideoLabel}>
-            <ThemedText style={styles.selfVideoLabelText}>You</ThemedText>
+          <View style={styles.pipLabel}>
+            <ThemedText style={styles.pipLabelText}>You</ThemedText>
           </View>
-          <Pressable style={styles.flipButton} onPress={flipCamera}>
-            <Ionicons name="camera-reverse" size={16} color="#FFF" />
+          <Pressable style={styles.flipBtn} onPress={flipCamera} hitSlop={8}>
+            <Ionicons name="camera-reverse" size={15} color="#FFF" />
           </Pressable>
         </View>
       )}
 
-      {/* ── Center pre-connect state ── */}
+      {/* ── Pre-connect center state ── */}
       {callStatus !== 'connected' && (
-        <View style={styles.centerContent}>
-          {callStatus === 'failed' ? (
-            <View style={styles.errorIndicator}>
-              <Ionicons name="alert-circle" size={44} color="#FF3B30" />
-            </View>
-          ) : callStatus === 'busy' ? (
-            <View style={styles.errorIndicator}>
-              <MaterialCommunityIcons name="phone-off" size={44} color="#FF3B30" />
-            </View>
-          ) : callStatus === 'missed' ? (
-            <View style={styles.errorIndicator}>
-              <Ionicons name="call" size={44} color="#FF9500" style={{ transform: [{ rotate: '135deg' }] }} />
-            </View>
-          ) : callStatus === 'declined' ? (
-            <View style={styles.errorIndicator}>
-              <MaterialCommunityIcons name="phone-cancel" size={44} color="#FF3B30" />
+        <View style={styles.centerState}>
+          {isTerminal ? (
+            <View style={styles.terminalAvatar}>
+              <SafeImage
+                source={{ uri: userPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.terminalAvatarImg}
+              />
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.6)']}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <View style={styles.terminalIconOverlay}>
+                {callStatus === 'failed'   && <Ionicons name="alert-circle" size={40} color="#FF3B30" />}
+                {callStatus === 'busy'     && <MaterialCommunityIcons name="phone-off" size={40} color="#FF3B30" />}
+                {callStatus === 'missed'   && <Ionicons name="call" size={40} color="#FF9500" style={{ transform: [{ rotate: '135deg' }] }} />}
+                {callStatus === 'declined' && <MaterialCommunityIcons name="phone-cancel" size={40} color="#FF3B30" />}
+                {callStatus === 'ended'    && <Ionicons name="checkmark-circle" size={40} color="#10B981" />}
+              </View>
             </View>
           ) : (
-            <Animated.View style={[styles.connectingIndicator, { transform: [{ scale: pulseAnim }] }]}>
-              {callStatus === 'ringing' && !isIncoming ? (
-                <MaterialCommunityIcons name="phone-ring" size={44} color="#FFF" />
-              ) : (
-                <Ionicons name="videocam" size={44} color="#FFF" />
-              )}
-            </Animated.View>
+            <View style={styles.preConnectAvatar}>
+              <Animated.View style={[styles.preConnectRing, { transform: [{ scale: pulseAnim }] }]} />
+              <SafeImage
+                source={{ uri: userPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.preConnectAvatarImg}
+              />
+            </View>
           )}
-          <ThemedText style={[
-            styles.centerStatus,
-            (callStatus === 'failed' || callStatus === 'busy' || callStatus === 'declined') && styles.errorStatus,
-          ]}>
+          <ThemedText style={[styles.centerStatusText, isTerminal && styles.errorText]}>
             {getStatusText()}
           </ThemedText>
+          {(callStatus === 'ringing' || callStatus === 'connecting') && (
+            <View style={styles.encryptRow}>
+              <Ionicons name="lock-closed" size={10} color="rgba(255,255,255,0.5)" />
+              <ThemedText style={styles.encryptText}>End-to-end encrypted</ThemedText>
+            </View>
+          )}
         </View>
       )}
 
-      {/* ── Bottom controls ── */}
-      {isIncoming && callStatus === 'ringing' ? (
-        <View style={[styles.incomingCallControls, { paddingBottom: insets.bottom + 40 }]}>
-          <Pressable style={styles.incomingButtonWrapper} onPress={handleDeclineCall}>
-            <View style={styles.declineButtonInner}>
-              <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-            </View>
-            <ThemedText style={styles.callActionLabel}>Decline</ThemedText>
-          </Pressable>
-          <Pressable style={styles.incomingButtonWrapper} onPress={handleAcceptCall}>
-            <View style={styles.acceptButtonInner}>
-              <Ionicons name="videocam" size={32} color="#FFF" />
-            </View>
-            <ThemedText style={styles.callActionLabel}>Accept</ThemedText>
+      {/* ── INCOMING CALL BUTTONS ── */}
+      {isIncoming && callStatus === 'ringing' && (
+        <View style={[styles.incomingControls, { paddingBottom: insets.bottom + 44 }]}>
+          <View style={styles.incomingBtn}>
+            <Pressable style={styles.declineCircle} onPress={handleDeclineCall}>
+              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            </Pressable>
+            <ThemedText style={styles.callBtnLabel}>Decline</ThemedText>
+          </View>
+          <View style={styles.incomingBtn}>
+            <Pressable style={styles.acceptCircle} onPress={handleAcceptCall}>
+              <Ionicons name="videocam" size={30} color="#FFF" />
+            </Pressable>
+            <ThemedText style={styles.callBtnLabel}>Accept</ThemedText>
+          </View>
+        </View>
+      )}
+
+      {/* ── TERMINAL: close ── */}
+      {isTerminal && (
+        <View style={[styles.terminalFooter, { paddingBottom: insets.bottom + 44 }]}>
+          <Pressable style={styles.closeCircle} onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={30} color="#FFF" />
           </Pressable>
         </View>
-      ) : isTerminal ? (
-        <View style={[styles.terminalControls, { paddingBottom: insets.bottom + 40 }]}>
-          <Pressable style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={32} color="#FFF" />
-          </Pressable>
-        </View>
-      ) : (
+      )}
+
+      {/* ── ACTIVE CALL CONTROLS ── */}
+      {!isTerminal && !(isIncoming && callStatus === 'ringing') && (
         <Animated.View
           pointerEvents={showControls ? 'auto' : 'none'}
-          style={[
-            styles.controls,
-            { paddingBottom: insets.bottom + 30, opacity: showControls ? 1 : 0 },
-          ]}
+          style={[styles.controlsPanel, { paddingBottom: insets.bottom + 28, opacity: showControls ? 1 : 0 }]}
         >
-          <View style={styles.glassControlsContainer}>
-            <View style={styles.glassControlsRow}>
-              <View style={styles.controlItem}>
-                <Pressable style={[styles.controlButton, isCameraOff && styles.controlButtonActive]} onPress={toggleCamera}>
+          <View style={styles.glassCard}>
+            <View style={styles.controlsRow}>
+              <View style={styles.ctrlItem}>
+                <Pressable style={[styles.ctrlBtn, isCameraOff && styles.ctrlBtnOn]} onPress={toggleCamera}>
                   <Ionicons name={isCameraOff ? 'videocam-off' : 'videocam'} size={22} color={isCameraOff ? '#000' : '#FFF'} />
                 </Pressable>
-                <ThemedText style={styles.controlLabel}>{isCameraOff ? 'Show' : 'Camera'}</ThemedText>
+                <ThemedText style={styles.ctrlLabel}>{isCameraOff ? 'Show' : 'Camera'}</ThemedText>
               </View>
-
-              <View style={styles.controlItem}>
-                <Pressable style={[styles.controlButton, isMuted && styles.controlButtonActive]} onPress={toggleMute}>
+              <View style={styles.ctrlItem}>
+                <Pressable style={[styles.ctrlBtn, isMuted && styles.ctrlBtnOn]} onPress={toggleMute}>
                   <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#000' : '#FFF'} />
                 </Pressable>
-                <ThemedText style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
+                <ThemedText style={styles.ctrlLabel}>{isMuted ? 'Unmute' : 'Mute'}</ThemedText>
               </View>
-
-              <View style={styles.controlItem}>
-                <Pressable style={[styles.controlButton, isSpeakerOn && styles.controlButtonActive]} onPress={toggleSpeaker}>
+              <View style={styles.ctrlItem}>
+                <Pressable style={[styles.ctrlBtn, isSpeakerOn && styles.ctrlBtnOn]} onPress={toggleSpeaker}>
                   <Ionicons name={isSpeakerOn ? 'volume-high' : 'ear'} size={22} color={isSpeakerOn ? '#000' : '#FFF'} />
                 </Pressable>
-                <ThemedText style={styles.controlLabel}>{isSpeakerOn ? 'Earpiece' : 'Speaker'}</ThemedText>
+                <ThemedText style={styles.ctrlLabel}>{isSpeakerOn ? 'Earpiece' : 'Speaker'}</ThemedText>
               </View>
-
-              <View style={styles.controlItem}>
-                <Pressable style={styles.controlButton} onPress={flipCamera}>
+              <View style={styles.ctrlItem}>
+                <Pressable style={styles.ctrlBtn} onPress={flipCamera}>
                   <Ionicons name="camera-reverse" size={22} color="#FFF" />
                 </Pressable>
-                <ThemedText style={styles.controlLabel}>Flip</ThemedText>
+                <ThemedText style={styles.ctrlLabel}>Flip</ThemedText>
               </View>
             </View>
-
-            <Pressable style={styles.endCallButton} onPress={() => handleEndCall()}>
-              <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+            <Pressable style={styles.endCallBtn} onPress={() => handleEndCall()}>
+              <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
             </Pressable>
           </View>
         </Animated.View>
@@ -756,258 +768,164 @@ export default function VideoCallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  remoteVideo: { ...StyleSheet.absoluteFillObject },
-  overlay: { ...StyleSheet.absoluteFillObject },
-  topBar: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0,
-    zIndex: 20,
-  },
-  headerGlass: {
-    marginHorizontal: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 24,
-    backgroundColor: 'rgba(20,20,20,0.65)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+  remoteVideo: { ...StyleSheet.absoluteFillObject as any },
+  topGradient: { position: 'absolute', top: 0, left: 0, right: 0, height: 180, zIndex: 2 },
+  bottomGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 260, zIndex: 2 },
+
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: 16 },
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(12,12,12,0.6)',
+    borderRadius: 22, paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
   minimizeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   callInfo: { flex: 1 },
-  userName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFF',
-    letterSpacing: 0.3,
+  callerName: { fontSize: 18, fontWeight: '700', color: '#FFF', letterSpacing: 0.2 },
+  callStatusText: { fontSize: 13, color: 'rgba(255,255,255,0.65)', marginTop: 1, fontWeight: '500' },
+  errorText: { color: '#FF3B30' },
+  secureBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(16,185,129,0.15)', borderRadius: 12,
+    paddingHorizontal: 9, paddingVertical: 5,
+    borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)',
   },
-  callStatusText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.75)',
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  errorStatus: { color: '#FF3B30' },
-  qualityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(16,185,129,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(16,185,129,0.3)',
-  },
-  qualityText: { color: '#10B981', fontSize: 12, fontWeight: '600' },
-  selfVideoContainer: {
-    position: 'absolute',
-    right: 16,
-    width: 120,
-    height: 170,
-    borderRadius: 20,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: '#1C1C1E',
-    zIndex: 30,
-    elevation: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.55,
-    shadowRadius: 16,
+  secureText: { fontSize: 11, color: '#10B981', fontWeight: '600' },
+
+  pip: {
+    position: 'absolute', right: 14, zIndex: 30,
+    width: 114, height: 160, borderRadius: 18, overflow: 'hidden',
+    backgroundColor: '#111',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.6, shadowRadius: 18, elevation: 20,
   },
   selfVideo: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selfVideoLabel: {
-    position: 'absolute',
-    top: 8, left: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  selfVideoLabelText: { color: '#FFF', fontSize: 11, fontWeight: '700', letterSpacing: 0.3 },
-  flipButton: {
-    position: 'absolute',
-    bottom: 10, right: 10,
-    width: 34, height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  cameraOffPlaceholder: {
     width: '100%', height: '100%',
-    backgroundColor: 'rgba(20,20,20,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 20,
+    borderRadius: 18, alignItems: 'center', justifyContent: 'center',
   },
   selfVideoPermissionPlaceholder: {
-    width: '100%', height: '100%',
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%', height: '100%', borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cameraOffText: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8, fontWeight: '500' },
-  centerContent: {
+  cameraOffPlaceholder: {
+    width: '100%', height: '100%', borderRadius: 18,
+    backgroundColor: 'rgba(20,20,20,0.95)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cameraOffText: { color: 'rgba(255,255,255,0.55)', fontSize: 11, marginTop: 6, fontWeight: '500' },
+  pipLabel: {
+    position: 'absolute', top: 7, left: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 7,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  pipLabelText: { color: '#FFF', fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  flipBtn: {
+    position: 'absolute', bottom: 8, right: 8,
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+  },
+
+  centerState: {
+    position: 'absolute', top: 0, bottom: 0, left: 0, right: 0,
+    alignItems: 'center', justifyContent: 'center', zIndex: 5,
+  },
+  preConnectAvatar: { alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  preConnectRing: {
     position: 'absolute',
-    top: 0, bottom: 0, left: 0, right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 5,
+    width: 180, height: 180, borderRadius: 90,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  connectingIndicator: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 90, height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  preConnectAvatarImg: {
+    width: 144, height: 144, borderRadius: 72,
+    borderWidth: 3, borderColor: 'rgba(255,255,255,0.4)',
   },
-  errorIndicator: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 90, height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,59,48,0.15)',
+  terminalAvatar: {
+    width: 148, height: 148, borderRadius: 74, overflow: 'hidden',
+    marginBottom: 20, alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.2)',
   },
-  centerStatus: {
-    color: '#FFF',
-    fontSize: 18,
-    marginTop: 24,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+  terminalAvatarImg: { width: '100%', height: '100%' },
+  terminalIconOverlay: {
+    position: 'absolute', bottom: 0, right: 0,
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
   },
-  incomingCallControls: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 60,
-    zIndex: 20,
+  centerStatusText: {
+    fontSize: 20, color: '#FFF', fontWeight: '700', letterSpacing: 0.4,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
   },
-  incomingButtonWrapper: { alignItems: 'center' },
-  declineButtonInner: {
-    width: 72, height: 72,
-    borderRadius: 36,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+  encryptRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8 },
+  encryptText: { fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
+
+  incomingControls: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    flexDirection: 'row', justifyContent: 'center', gap: 64, zIndex: 20,
   },
-  acceptButtonInner: {
-    width: 72, height: 72,
-    borderRadius: 36,
-    backgroundColor: '#34C759',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#34C759',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
+  incomingBtn: { alignItems: 'center', gap: 12 },
+  declineCircle: {
+    width: 76, height: 76, borderRadius: 38,
+    backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
   },
-  callActionLabel: {
-    color: '#FFF',
-    fontSize: 15,
-    marginTop: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+  acceptCircle: {
+    width: 76, height: 76, borderRadius: 38,
+    backgroundColor: '#34C759', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#34C759', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 12, elevation: 8,
   },
-  terminalControls: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    alignItems: 'center',
-    zIndex: 20,
+  callBtnLabel: { color: '#FFF', fontSize: 15, fontWeight: '600', letterSpacing: 0.3 },
+
+  terminalFooter: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    alignItems: 'center', zIndex: 20,
   },
-  closeButton: {
-    width: 64, height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(50,50,50,0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+  closeCircle: {
+    width: 68, height: 68, borderRadius: 34,
+    backgroundColor: 'rgba(50,50,50,0.88)', alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
   },
-  controls: {
-    position: 'absolute',
-    bottom: 0, left: 0, right: 0,
-    alignItems: 'center',
-    zIndex: 20,
+
+  controlsPanel: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    alignItems: 'center', zIndex: 20, paddingHorizontal: 16,
   },
-  glassControlsContainer: {
-    alignItems: 'center',
-    gap: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: 'rgba(15,15,15,0.82)',
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
+  glassCard: {
+    width: '100%', alignItems: 'center', gap: 18,
+    paddingHorizontal: 20, paddingTop: 22, paddingBottom: 20,
+    backgroundColor: 'rgba(10,10,10,0.82)',
+    borderRadius: 34, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5, shadowRadius: 24, elevation: 16,
   },
-  glassControlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    gap: 8,
+  controlsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 8 },
+  ctrlItem: { flex: 1, alignItems: 'center', gap: 7 },
+  ctrlBtn: {
+    width: 54, height: 54, borderRadius: 27,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
-  controlItem: { flex: 1, alignItems: 'center', gap: 6 },
-  controlLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.65)',
-    fontWeight: '500',
-    letterSpacing: 0.2,
-    textAlign: 'center',
+  ctrlBtnOn: { backgroundColor: '#FFFFFF', borderColor: 'rgba(0,0,0,0.1)' },
+  ctrlLabel: {
+    fontSize: 10, color: 'rgba(255,255,255,0.65)',
+    fontWeight: '500', letterSpacing: 0.2, textAlign: 'center',
   },
-  controlButton: {
-    width: 50, height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  endCallBtn: {
+    width: 70, height: 70, borderRadius: 35,
+    backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#FF3B30', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.55, shadowRadius: 14, elevation: 10,
   },
-  controlButtonActive: { backgroundColor: '#FFF' },
-  endCallButton: {
-    width: 68, height: 68,
-    borderRadius: 34,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 8,
-  },
+  overlay: { ...StyleSheet.absoluteFillObject as any },
 });
