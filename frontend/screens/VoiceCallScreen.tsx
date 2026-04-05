@@ -9,8 +9,6 @@ import {
   Platform,
   Alert,
   Dimensions,
-<<<<<<< HEAD
-=======
   Text,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
