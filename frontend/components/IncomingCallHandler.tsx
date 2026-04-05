@@ -216,12 +216,14 @@ export default function IncomingCallHandler() {
     setInActiveCall(true);
 
     // Register in global call context
+    const callTypeFromData = incomingCall.callData?.callType === 'video' ? 'video' : 'voice';
     setActiveCall({
       userId: incomingCall.callerId,
       userName: incomingCall.callerInfo?.name || 'Unknown',
       userPhoto: incomingCall.callerInfo?.photo,
       isIncoming: true,
       callStatus: 'connected',
+      callType: callTypeFromData,
       duration: 0,
     });
 
