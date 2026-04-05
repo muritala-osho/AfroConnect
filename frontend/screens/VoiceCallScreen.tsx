@@ -8,11 +8,12 @@ import {
   Vibration,
   Platform,
   Alert,
+  Dimensions,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { ThemedText } from "@/components/ThemedText";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "expo-av";
@@ -25,9 +26,11 @@ import { getApiBaseUrl } from "@/constants/config";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import WebView from "react-native-webview";
 
-/* ─────────────────────────────────────────────
-   Audio wave bar component — shown while connected
-────────────────────────────────────────────── */
+const { width: SW } = Dimensions.get("window");
+
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Audio wave bars â€” shown when call is live
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 function AudioWaveBars({ isMuted }: { isMuted: boolean }) {
   const bars = useRef(
     Array.from({ length: 5 }, () => new Animated.Value(0.3))
@@ -52,30 +55,27 @@ function AudioWaveBars({ isMuted }: { isMuted: boolean }) {
   }, [isMuted]);
 
   return (
-    <View style={wavStyles.row}>
+    <View style={wav.row}>
       {bars.map((bar, i) => (
         <Animated.View
           key={i}
           style={[
-            wavStyles.bar,
-            {
-              scaleY: bar,
-              opacity: isMuted ? 0.25 : 1,
-            },
+            wav.bar,
+            { transform: [{ scaleY: bar }], opacity: isMuted ? 0.2 : 0.9 },
           ]}
         />
       ))}
     </View>
   );
 }
-const wavStyles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 4, height: 32 },
-  bar: { width: 4, height: 28, borderRadius: 3, backgroundColor: "rgba(167,139,250,0.8)" },
+const wav = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 4, height: 28 },
+  bar: { width: 4, height: 24, borderRadius: 3, backgroundColor: "#a78bfa" },
 });
 
-/* ─────────────────────────────────────────────
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Main VoiceCallScreen
-────────────────────────────────────────────── */
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 export default function VoiceCallScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
@@ -89,14 +89,23 @@ export default function VoiceCallScreen() {
     callData: incomingCallData,
     callerId,
     matchId,
-    callAccepted,   // true when navigated from IncomingCallHandler after already accepting
-    returnToCall,   // true when returning from minimized state
+    callAccepted,
+    returnToCall,
   } = route.params || {};
 
   const { token: authToken, user } = useAuth();
   const { post, get } = useApi();
-  const { setActiveCall, updateCallStatus, startGlobalTimer, stopGlobalTimer, minimizeCall, clearCall, activeCall } = useCallContext();
+  const {
+    setActiveCall,
+    updateCallStatus,
+    startGlobalTimer,
+    stopGlobalTimer,
+    minimizeCall,
+    clearCall,
+    activeCall,
+  } = useCallContext();
 
+  /* â”€â”€ State â”€â”€ */
   const [callStatus, setCallStatus] = useState<CallStatus>(
     callAccepted ? "connected" : "connecting"
   );
@@ -106,27 +115,34 @@ export default function VoiceCallScreen() {
   const [webviewReady, setWebviewReady] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
 
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  /* â”€â”€ Animated values â”€â”€ */
+  const fadeAnim   = useRef(new Animated.Value(0)).current;
+  const pulseAnim  = useRef(new Animated.Value(1)).current;
   const pulseAnim2 = useRef(new Animated.Value(1)).current;
   const pulseAnim3 = useRef(new Animated.Value(1)).current;
-  const endCallScaleAnim = useRef(new Animated.Value(1)).current;
-  const ringtoneRef = useRef<Audio.Sound | null>(null);
-  const shouldRingRef = useRef(false);
-  const ringingTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const webViewRef = useRef<WebView | null>(null);
-  const agoraJoined = useRef(false);
-  const activeCallDataRef = useRef<any>(incomingCallData || null);
-  const callStatusRef = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
+  const endBtnScale = useRef(new Animated.Value(1)).current;
 
-  /* ── helpers ── */
+  /* â”€â”€ Refs â”€â”€ */
+  const ringtoneRef        = useRef<Audio.Sound | null>(null);
+  const shouldRingRef      = useRef(false);
+  const ringingTimeout     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const webViewRef         = useRef<WebView | null>(null);
+  const agoraJoined        = useRef(false);
+  const activeCallDataRef  = useRef<any>(incomingCallData || null);
+  const callStatusRef      = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
+
+  /* â”€â”€ Derived â”€â”€ */
+  const duration = activeCall?.duration || 0;
+
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
   const setStatus = useCallback((s: CallStatus) => {
     callStatusRef.current = s;
     setCallStatus(s);
     updateCallStatus(s);
   }, [updateCallStatus]);
 
-  const stopRingtoneSound = useCallback(async () => {
+  const stopRingtone = useCallback(async () => {
     shouldRingRef.current = false;
     try {
       if (ringtoneRef.current) {
@@ -136,15 +152,13 @@ export default function VoiceCallScreen() {
         await s.unloadAsync().catch(() => {});
       }
       Vibration.cancel();
-    } catch (err) {
-      console.log("Ringtone cleanup error:", err);
-    }
+    } catch {}
   }, []);
 
   const playRingtone = useCallback(async () => {
     shouldRingRef.current = true;
     try {
-      await stopRingtoneSound();
+      await stopRingtone();
       if (!shouldRingRef.current) return;
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
@@ -171,13 +185,9 @@ export default function VoiceCallScreen() {
       console.error("Ringtone play error:", err);
       if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
-  }, [isIncoming, stopRingtoneSound]);
+  }, [isIncoming, stopRingtone]);
 
-  const startTimer = useCallback(() => {
-    startGlobalTimer();
-  }, [startGlobalTimer]);
-
-  /* ── microphone permission ── */
+  /* â”€â”€ Microphone permission â”€â”€ */
   const requestMicPermission = useCallback(async () => {
     try {
       const { status } = await Audio.requestPermissionsAsync();
@@ -196,24 +206,23 @@ export default function VoiceCallScreen() {
     }
   }, []);
 
-  /* ── WebView bridge ── */
+  /* â”€â”€ WebView bridge â”€â”€ */
   const sendToWebView = useCallback((msg: any) => {
     webViewRef.current?.postMessage(JSON.stringify(msg));
   }, []);
 
-  /* ── Agora join ── */
+  /* â”€â”€ Agora join â”€â”€ */
   const joinAgoraVoice = useCallback(async (callDataObj: any) => {
     if (agoraJoined.current) return;
     agoraJoined.current = true;
 
-    // Ensure mic permission
     const hasPerm = await requestMicPermission();
     if (!hasPerm) return;
 
     let joinToken = callDataObj.token;
-    let joinUid = callDataObj.uid || 0;
+    let joinUid   = callDataObj.uid || 0;
 
-    // Incoming callee needs their own token
+    // Incoming callee fetches their own Agora token
     if (isIncoming && authToken) {
       try {
         const res = await get<{ token: string; uid: number }>(
@@ -223,9 +232,9 @@ export default function VoiceCallScreen() {
         );
         if (res.success && res.data?.token) {
           joinToken = res.data.token;
-          joinUid = 0;
+          joinUid   = 0;
         }
-      } catch (e) {
+      } catch {
         console.log("Receiver token fetch failed, using shared token");
       }
     }
@@ -244,21 +253,18 @@ export default function VoiceCallScreen() {
     }
   }, [isIncoming, authToken, get, sendToWebView, requestMicPermission]);
 
-  /* ── End call ── */
+  /* â”€â”€ End call â”€â”€ */
   const handleEndCall = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const wasConnected = callStatusRef.current === "connected";
+    const wasConnected  = callStatusRef.current === "connected";
     const currentDuration = activeCall?.duration || 0;
     setStatus("ended");
-    await stopRingtoneSound();
+    await stopRingtone();
     stopGlobalTimer();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
 
-    if (Platform.OS === "web") {
-      agoraService.leave();
-    } else {
-      sendToWebView({ action: "leave" });
-    }
+    if (Platform.OS === "web") agoraService.leave();
+    else sendToWebView({ action: "leave" });
 
     socketService.endCall({
       targetUserId: isIncoming ? callerId : userId,
@@ -271,45 +277,30 @@ export default function VoiceCallScreen() {
     setTimeout(() => {
       if (navigation.canGoBack()) navigation.goBack();
     }, 600);
-  }, [callerId, userId, isIncoming, duration, stopRingtoneSound, sendToWebView, clearCall, navigation, setStatus]);
+  }, [callerId, userId, isIncoming, stopRingtone, sendToWebView, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
 
-  /* ── Minimize (return to app without ending call) ── */
+  /* â”€â”€ Minimize (keep call alive, leave screen) â”€â”€ */
   const handleMinimize = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     minimizeCall();
     if (navigation.canGoBack()) navigation.goBack();
   }, [minimizeCall, navigation]);
 
-  /* ── Premium 5-min limit ── */
-  const duration = activeCall?.duration || 0;
-  useEffect(() => {
-    const isPremium = user?.premium?.isActive;
-    if (isPremium || callStatus !== "connected") return;
-    if (duration === 240) {
-      Alert.alert(
-        "1 Minute Remaining",
-        "Free calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.",
-        [{ text: "OK" }]
-      );
-    }
-    if (duration >= 300) handleEndCall();
-  }, [duration, callStatus, user, handleEndCall]);
-
-  /* ── Accept incoming ── */
+  /* â”€â”€ Accept incoming â”€â”€ */
   const handleAccept = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await stopRingtoneSound();
+    await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     socketService.acceptCall({ callerId, callData: activeCallData });
     setStatus("connected");
-    startTimer();
+    startGlobalTimer();
     if (activeCallData) joinAgoraVoice(activeCallData);
-  }, [callerId, activeCallData, stopRingtoneSound, joinAgoraVoice, startTimer, setStatus]);
+  }, [callerId, activeCallData, stopRingtone, joinAgoraVoice, startGlobalTimer, setStatus]);
 
-  /* ── Decline incoming ── */
+  /* â”€â”€ Decline incoming â”€â”€ */
   const handleDecline = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    await stopRingtoneSound();
+    await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     socketService.declineCall({ callerId, callType: "audio" });
     if (authToken && isIncoming) {
@@ -318,9 +309,9 @@ export default function VoiceCallScreen() {
     setStatus("declined");
     clearCall();
     setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
-  }, [callerId, isIncoming, authToken, post, stopRingtoneSound, clearCall, navigation, setStatus]);
+  }, [callerId, isIncoming, authToken, post, stopRingtone, clearCall, navigation, setStatus]);
 
-  /* ── Toggle mute ── */
+  /* â”€â”€ Toggle mute â”€â”€ */
   const toggleMute = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsMuted((prev) => {
@@ -331,7 +322,7 @@ export default function VoiceCallScreen() {
     });
   }, [sendToWebView]);
 
-  /* ── Toggle speaker ── */
+  /* â”€â”€ Toggle speaker â”€â”€ */
   const toggleSpeaker = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = !isSpeakerOn;
@@ -348,11 +339,10 @@ export default function VoiceCallScreen() {
     }
   }, [isSpeakerOn]);
 
-  /* ── Initiate outgoing call ── */
+  /* â”€â”€ Initiate outgoing call â”€â”€ */
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setStatus("failed");
 
-    // Check mic permission before initiating
     const hasPerm = await requestMicPermission();
     if (!hasPerm) {
       setStatus("failed");
@@ -365,6 +355,7 @@ export default function VoiceCallScreen() {
         { targetUserId: userId, callType: "voice" },
         authToken
       );
+
       if (response.success && response.data?.callData) {
         const cd = response.data.callData;
         setActiveCallData(cd);
@@ -379,7 +370,7 @@ export default function VoiceCallScreen() {
           callerInfo: { name: user?.name || "User", photo: photoUrl, id: user?.id || "" },
         });
 
-        // 30-second ring timeout → missed
+        // 30-second timeout â†’ missed
         ringingTimeout.current = setTimeout(() => {
           if (callStatusRef.current === "ringing") {
             setStatus("missed");
@@ -396,11 +387,10 @@ export default function VoiceCallScreen() {
     }
   }, [authToken, userId, post, user, navigation, requestMicPermission, setStatus, clearCall]);
 
-  /* ── Main setup effect ── */
+  /* â”€â”€ Main setup effect â”€â”€ */
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
 
-    // Register call in context
     setActiveCall({
       userId: userId || callerId || "",
       userName: userName || "Unknown",
@@ -412,18 +402,12 @@ export default function VoiceCallScreen() {
     });
 
     if (callAccepted) {
-      // Already accepted in IncomingCallHandler — jump straight to connected
       setStatus("connected");
-      startTimer();
-      if (activeCallDataRef.current) {
-        // Join Agora after WebView loads (for native) or immediately (for web)
-        if (Platform.OS === "web") {
-          joinAgoraVoice(activeCallDataRef.current);
-        }
-        // Native: handled in webviewReady effect below
+      startGlobalTimer();
+      if (activeCallDataRef.current && Platform.OS === "web") {
+        joinAgoraVoice(activeCallDataRef.current);
       }
     } else if (returnToCall) {
-      // Returning from minimized state — restore connected UI
       setStatus("connected");
     } else if (isIncoming) {
       setStatus("ringing");
@@ -431,17 +415,16 @@ export default function VoiceCallScreen() {
       initiateCall();
     }
 
-    /* Socket listeners */
     socketService.onCallAccepted(async () => {
-      await stopRingtoneSound();
+      await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setStatus("connected");
-      startTimer();
+      startGlobalTimer();
       if (activeCallDataRef.current) joinAgoraVoice(activeCallDataRef.current);
     });
 
     socketService.onCallDeclined(async () => {
-      await stopRingtoneSound();
+      await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setStatus("declined");
       clearCall();
@@ -449,7 +432,7 @@ export default function VoiceCallScreen() {
     });
 
     socketService.onCallBusy(async () => {
-      await stopRingtoneSound();
+      await stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       setStatus("busy");
       clearCall();
@@ -457,7 +440,7 @@ export default function VoiceCallScreen() {
     });
 
     socketService.onCallEnded(async () => {
-      await stopRingtoneSound();
+      await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
       else sendToWebView({ action: "leave" });
       setStatus("ended");
@@ -467,24 +450,23 @@ export default function VoiceCallScreen() {
     });
 
     return () => {
-      stopRingtoneSound();
+      stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       socketService.off("call:accepted");
       socketService.off("call:declined");
       socketService.off("call:busy");
       socketService.off("call:ended");
-      // Note: global timer continues running in CallContext so FloatingCallBar stays live
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ── Ringtone based on status ── */
+  /* â”€â”€ Ringtone on status change â”€â”€ */
   useEffect(() => {
     if (callStatus === "ringing") playRingtone();
-    else stopRingtoneSound();
+    else stopRingtone();
   }, [callStatus]);
 
-  /* ── Pulse animation for ringing / connecting ── */
+  /* â”€â”€ Pulse animation for ringing / connecting â”€â”€ */
   useEffect(() => {
     if (callStatus === "ringing" || callStatus === "connecting") {
       const makeLoop = (anim: Animated.Value, delay: number) =>
@@ -507,7 +489,7 @@ export default function VoiceCallScreen() {
     }
   }, [callStatus]);
 
-  /* ── WebView ready: join Agora for native ── */
+  /* â”€â”€ WebView ready: join Agora on native â”€â”€ */
   useEffect(() => {
     if (
       webviewReady &&
@@ -519,43 +501,60 @@ export default function VoiceCallScreen() {
     }
   }, [webviewReady]);
 
-  /* ── Helpers ── */
+  /* â”€â”€ 5-min free-tier limit â”€â”€ */
+  useEffect(() => {
+    const isPremium = user?.premium?.isActive;
+    if (isPremium || callStatus !== "connected") return;
+    if (duration === 240) {
+      Alert.alert(
+        "1 Minute Remaining",
+        "Free calls are limited to 5 minutes. Upgrade to Premium for unlimited call time.",
+        [{ text: "OK" }]
+      );
+    }
+    if (duration >= 300) handleEndCall();
+  }, [duration, callStatus, user, handleEndCall]);
+
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 
-  const getStatusText = () => {
+  const getStatusText = (): string => {
     switch (callStatus) {
-      case "connecting": return "Connecting…";
-      case "ringing":    return isIncoming ? "Incoming voice call…" : "Ringing…";
+      case "connecting": return "Connectingâ€¦";
+      case "ringing":    return isIncoming ? "Incoming voice call" : "Ringingâ€¦";
       case "connected":  return formatDuration(duration);
       case "ended":      return "Call ended";
       case "declined":   return "Call declined";
-      case "busy":       return "User is currently busy";
+      case "busy":       return "User is busy";
       case "missed":     return "No answer";
       case "failed":     return "Call failed";
       default:           return "";
     }
   };
 
-  const isTerminal = ["ended", "declined", "missed", "failed", "busy"].includes(callStatus);
-  const isOutgoingWaiting = !isIncoming && callStatus === "ringing";
-  const showConnected = callStatus === "connected";
-  const showIncomingButtons = isIncoming && callStatus === "ringing";
+  const isTerminal         = ["ended", "declined", "missed", "failed", "busy"].includes(callStatus);
+  const isWaiting          = !isIncoming && callStatus === "ringing";
+  const isConnected        = callStatus === "connected";
+  const showIncoming       = isIncoming && callStatus === "ringing";
+  const showCancelBtn      = callStatus === "connecting" || isWaiting;
+  const agoraCallUrl       = `${getApiBaseUrl()}/public/agora-call.html`;
 
-  const agoraCallUrl = `${getApiBaseUrl()}/public/agora-call.html`;
-
+  /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   return (
-    <View style={styles.container}>
+    <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Full-screen blurred avatar as background */}
+      {/* Full-screen blurred avatar background */}
       <SafeImage
         source={{ uri: userPhoto || "https://via.placeholder.com/400" }}
-        style={styles.bgPhoto}
+        style={StyleSheet.absoluteFillObject as any}
         blurRadius={Platform.OS === "ios" ? 60 : 18}
       />
+      {/* Dark purple overlay â€” gives the whole screen a cohesive tint */}
       <LinearGradient
-        colors={["rgba(4,0,18,0.88)", "rgba(8,0,28,0.72)", "rgba(4,0,18,0.94)"]}
+        colors={["rgba(10,4,30,0.90)", "rgba(30,8,60,0.78)", "rgba(10,4,30,0.96)"]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -575,309 +574,461 @@ export default function VoiceCallScreen() {
           onMessage={(event) => {
             try {
               const data = JSON.parse(event.nativeEvent.data);
-              if (data.type === "joined")  console.log("Voice WebView joined:", data.uid);
-              if (data.type === "error")   console.log("Voice WebView error:", data.message);
+              if (data.type === "joined") console.log("Voice WebView joined:", data.uid);
+              if (data.type === "error")  console.log("Voice WebView error:", data.message);
             } catch {}
           }}
         />
       )}
 
-      <Animated.View style={[styles.screen, { opacity: fadeAnim }]}>
+      <Animated.View style={[s.screen, { opacity: fadeAnim }]}>
 
-        {/* ── TOP BAR ── */}
-        <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
-          {showConnected ? (
-            <Pressable style={styles.minimizeBtn} onPress={handleMinimize} hitSlop={12}>
-              <Ionicons name="chevron-down" size={20} color="rgba(255,255,255,0.85)" />
+        {/* â”€â”€ TOP BAR â”€â”€ */}
+        <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
+          {/* Minimize button â€” only shown when connected */}
+          {isConnected ? (
+            <Pressable style={s.topIconBtn} onPress={handleMinimize} hitSlop={12}>
+              <Ionicons name="chevron-down" size={22} color="rgba(255,255,255,0.85)" />
             </Pressable>
           ) : (
-            <View style={{ width: 40 }} />
+            <View style={s.topIconPlaceholder} />
           )}
-          <View style={styles.callTypePill}>
-            <Ionicons name="call" size={11} color="#a78bfa" />
-            <ThemedText style={styles.callTypePillText}>
-              {isIncoming && callStatus === "ringing" ? "Incoming Voice Call" : "Voice Call"}
-            </ThemedText>
+
+          {/* Call type label */}
+          <View style={s.callTypePill}>
+            <Ionicons name="call" size={11} color="#c4b5fd" />
+            <ThemedText style={s.callTypePillText}>Voice Call</ThemedText>
           </View>
-          <View style={{ width: 40 }} />
+
+          <View style={s.topIconPlaceholder} />
         </View>
 
-        {/* ── NAME + STATUS ── */}
-        <View style={[styles.nameSection, { marginTop: 16 }]}>
-          <ThemedText style={styles.userName} numberOfLines={1}>{userName || "Unknown"}</ThemedText>
-          <ThemedText style={[styles.statusText, isTerminal && { color: "#f87171" }]}>
+        {/* â”€â”€ CALLER INFO SECTION â”€â”€ */}
+        <View style={s.callerSection}>
+          {/* Avatar with animated pulse rings */}
+          <View style={s.avatarArea}>
+            {(callStatus === "ringing" || callStatus === "connecting") && (
+              <>
+                <Animated.View style={[s.ring3, { transform: [{ scale: pulseAnim3 }] }]} />
+                <Animated.View style={[s.ring2, { transform: [{ scale: pulseAnim2 }] }]} />
+                <Animated.View style={[s.ring1, { transform: [{ scale: pulseAnim  }] }]} />
+              </>
+            )}
+
+            {/* Muted indicator ring */}
+            {isConnected && isMuted && <View style={s.mutedRing} />}
+
+            {/* Avatar frame â€” border changes color with call state */}
+            <View style={[
+              s.avatarFrame,
+              isConnected  && s.avatarFrameConnected,
+              isConnected && isMuted && s.avatarFrameMuted,
+              isTerminal   && s.avatarFrameTerminal,
+            ]}>
+              <SafeImage
+                source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
+                style={s.avatar}
+              />
+            </View>
+
+            {/* Muted badge below avatar */}
+            {isConnected && isMuted && (
+              <View style={s.mutedBadge}>
+                <Ionicons name="mic-off" size={12} color="#fff" />
+                <ThemedText style={s.mutedBadgeText}>Muted</ThemedText>
+              </View>
+            )}
+          </View>
+
+          {/* Name */}
+          <ThemedText style={s.callerName} numberOfLines={1}>
+            {userName || "Unknown"}
+          </ThemedText>
+
+          {/* Status / timer */}
+          <ThemedText style={[s.statusText, isTerminal && s.statusTextError]}>
             {getStatusText()}
           </ThemedText>
 
-          {showConnected && (
-            <View style={styles.connectedRow}>
-              <View style={styles.liveGreen} />
-              <ThemedText style={styles.liveText}>Connected</ThemedText>
+          {/* Audio wave + "Connected" indicator */}
+          {isConnected && (
+            <View style={s.connectedRow}>
+              <View style={s.liveGreenDot} />
+              <ThemedText style={s.liveText}>Connected</ThemedText>
               <AudioWaveBars isMuted={isMuted} />
             </View>
           )}
 
+          {/* Encryption badge â€” shown while waiting */}
           {(callStatus === "ringing" || callStatus === "connecting") && (
-            <View style={styles.encryptBadge}>
-              <Ionicons name="lock-closed" size={10} color="rgba(167,139,250,0.8)" />
-              <ThemedText style={styles.encryptText}>End-to-end encrypted</ThemedText>
+            <View style={s.encryptBadge}>
+              <Ionicons name="lock-closed" size={10} color="rgba(196,181,253,0.75)" />
+              <ThemedText style={s.encryptText}>End-to-end encrypted</ThemedText>
             </View>
           )}
 
+          {/* Error pill â€” terminal states */}
           {isTerminal && callStatus !== "ended" && (
-            <View style={styles.errorPill}>
+            <View style={s.errorPill}>
               <Ionicons name="close-circle" size={14} color="#f87171" />
-              <ThemedText style={styles.errorPillText}>
-                {callStatus === "busy"     ? "User is in another call" :
-                 callStatus === "declined" ? "Call was declined" :
-                 callStatus === "missed"   ? "No answer" : "Unable to connect"}
+              <ThemedText style={s.errorPillText}>
+                {callStatus === "busy"     ? "User is in another call"
+                : callStatus === "declined"? "Call was declined"
+                : callStatus === "missed"  ? "No answer"
+                :                            "Unable to connect"}
               </ThemedText>
             </View>
           )}
         </View>
 
-        {/* ── AVATAR + PULSE RINGS ── */}
-        <View style={styles.avatarSection}>
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <>
-              <Animated.View style={[styles.ringOuter, { transform: [{ scale: pulseAnim3 }] }]} />
-              <Animated.View style={[styles.ringMid,   { transform: [{ scale: pulseAnim2 }] }]} />
-              <Animated.View style={[styles.ringInner, { transform: [{ scale: pulseAnim  }] }]} />
-            </>
-          )}
-          {showConnected && isMuted && <View style={styles.mutedRing} />}
+        {/* â”€â”€ BOTTOM CONTROLS â”€â”€ */}
+        <View style={[s.bottomArea, { paddingBottom: insets.bottom + 36 }]}>
 
-          <View style={[
-            styles.avatarFrame,
-            showConnected && styles.avatarFrameConnected,
-            showConnected && isMuted && styles.avatarFrameMuted,
-          ]}>
-            <SafeImage
-              source={{ uri: userPhoto || "https://via.placeholder.com/150" }}
-              style={styles.avatar}
-            />
-          </View>
-
-          {showConnected && isMuted && (
-            <View style={styles.mutedBadge}>
-              <Ionicons name="mic-off" size={13} color="#fff" />
-              <ThemedText style={{ fontSize: 11, color: "#fff", fontWeight: "600" }}>Muted</ThemedText>
-            </View>
-          )}
-        </View>
-
-        {/* ── BOTTOM CONTROLS ── */}
-        <View style={[styles.bottomContainer, { paddingBottom: insets.bottom + 32 }]}>
-
-          {/* INCOMING */}
-          {showIncomingButtons && (
-            <View style={styles.incomingRow}>
-              <View style={styles.actionWrap}>
-                <Pressable style={[styles.bigBtn, styles.redBtn]} onPress={handleDecline}>
+          {/* â”€ INCOMING CALL: Accept / Decline â”€ */}
+          {showIncoming && (
+            <View style={s.incomingRow}>
+              <View style={s.incomingAction}>
+                <Pressable
+                  style={[s.callActionBtn, s.declineBtn]}
+                  onPress={handleDecline}
+                  android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 38 }}
+                >
                   <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
                 </Pressable>
-                <ThemedText style={styles.btnLabel}>Decline</ThemedText>
+                <ThemedText style={s.actionLabel}>Decline</ThemedText>
               </View>
-              <View style={styles.actionWrap}>
-                <Pressable style={[styles.bigBtn, styles.greenBtn]} onPress={handleAccept}>
+
+              <View style={s.incomingAction}>
+                <Pressable
+                  style={[s.callActionBtn, s.acceptBtn]}
+                  onPress={handleAccept}
+                  android_ripple={{ color: "rgba(255,255,255,0.15)", borderless: true, radius: 38 }}
+                >
                   <Ionicons name="call" size={30} color="#FFF" />
                 </Pressable>
-                <ThemedText style={styles.btnLabel}>Accept</ThemedText>
+                <ThemedText style={s.actionLabel}>Accept</ThemedText>
               </View>
             </View>
           )}
 
-          {/* CONNECTED */}
-          {showConnected && (
-            <View style={styles.glassPanel}>
-              <View style={styles.controlsRow}>
-                <View style={styles.ctrlItem}>
-                  <Pressable style={[styles.ctrlBtn, isMuted && styles.ctrlBtnActive]} onPress={toggleMute}>
-                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#12003a" : "#FFF"} />
+          {/* â”€ CONNECTED: Mute / Speaker / End â”€ */}
+          {isConnected && (
+            <View style={s.connectedPanel}>
+              {/* Secondary controls row */}
+              <View style={s.controlsRow}>
+                {/* Mute */}
+                <View style={s.controlItem}>
+                  <Pressable
+                    style={[s.controlBtn, isMuted && s.controlBtnActive]}
+                    onPress={toggleMute}
+                  >
+                    <Ionicons
+                      name={isMuted ? "mic-off" : "mic"}
+                      size={22}
+                      color={isMuted ? "#0f0a2e" : "#FFF"}
+                    />
                   </Pressable>
-                  <ThemedText style={styles.ctrlLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
+                  <ThemedText style={s.controlLabel}>{isMuted ? "Unmute" : "Mute"}</ThemedText>
                 </View>
-                <View style={styles.ctrlItem}>
-                  <Pressable style={[styles.ctrlBtn, isSpeakerOn && styles.ctrlBtnActive]} onPress={toggleSpeaker}>
-                    <Ionicons name={isSpeakerOn ? "volume-high" : "ear"} size={22} color={isSpeakerOn ? "#12003a" : "#FFF"} />
+
+                {/* Speaker */}
+                <View style={s.controlItem}>
+                  <Pressable
+                    style={[s.controlBtn, isSpeakerOn && s.controlBtnActive]}
+                    onPress={toggleSpeaker}
+                  >
+                    <Ionicons
+                      name={isSpeakerOn ? "volume-high" : "ear"}
+                      size={22}
+                      color={isSpeakerOn ? "#0f0a2e" : "#FFF"}
+                    />
                   </Pressable>
-                  <ThemedText style={styles.ctrlLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
+                  <ThemedText style={s.controlLabel}>{isSpeakerOn ? "Earpiece" : "Speaker"}</ThemedText>
                 </View>
-                <View style={styles.ctrlItem}>
-                  <View style={[styles.ctrlBtn, { opacity: 0.3 }]}>
-                    <MaterialCommunityIcons name="dialpad" size={22} color="#FFF" />
+
+                {/* Keypad (disabled placeholder) */}
+                <View style={[s.controlItem, { opacity: 0.3 }]}>
+                  <View style={s.controlBtn}>
+                    <Ionicons name="keypad" size={22} color="#FFF" />
                   </View>
-                  <ThemedText style={[styles.ctrlLabel, { opacity: 0.3 }]}>Keypad</ThemedText>
+                  <ThemedText style={s.controlLabel}>Keypad</ThemedText>
                 </View>
               </View>
 
-              <Animated.View style={{ transform: [{ scale: endCallScaleAnim }] }}>
+              {/* End Call button */}
+              <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
                 <Pressable
-                  style={styles.endCallBtn}
+                  style={s.endCallBtn}
                   onPress={handleEndCall}
-                  onPressIn={() => Animated.spring(endCallScaleAnim, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()}
-                  onPressOut={() => Animated.spring(endCallScaleAnim, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()}
+                  onPressIn={() =>
+                    Animated.spring(endBtnScale, { toValue: 0.9, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                  }
+                  onPressOut={() =>
+                    Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()
+                  }
+                  android_ripple={{ color: "rgba(255,255,255,0.2)", borderless: true, radius: 40 }}
                 >
                   <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
                 </Pressable>
               </Animated.View>
-              <ThemedText style={styles.btnLabel}>End Call</ThemedText>
+              <ThemedText style={s.actionLabel}>End Call</ThemedText>
             </View>
           )}
 
-          {/* RINGING / CONNECTING: cancel */}
-          {(callStatus === "connecting" || isOutgoingWaiting) && (
-            <View style={styles.actionWrap}>
-              <Pressable style={[styles.bigBtn, styles.redBtn]} onPress={handleEndCall}>
+          {/* â”€ OUTGOING RINGING / CONNECTING: Cancel â”€ */}
+          {showCancelBtn && (
+            <View style={s.cancelArea}>
+              <Pressable style={[s.callActionBtn, s.declineBtn]} onPress={handleEndCall}>
                 <Ionicons name="call" size={30} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
               </Pressable>
-              <ThemedText style={styles.btnLabel}>Cancel</ThemedText>
+              <ThemedText style={s.actionLabel}>Cancel</ThemedText>
             </View>
           )}
 
-          {/* TERMINAL */}
-          {(isTerminal || callStatus === "ended") && (
-            <View style={styles.actionWrap}>
+          {/* â”€ TERMINAL: Close â”€ */}
+          {isTerminal && (
+            <View style={s.cancelArea}>
               <Pressable
-                style={[styles.bigBtn, { backgroundColor: "rgba(255,255,255,0.13)", borderWidth: 1, borderColor: "rgba(255,255,255,0.15)" }]}
+                style={[s.callActionBtn, s.closeBtn]}
                 onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}
               >
                 <Ionicons name="close" size={30} color="#FFF" />
               </Pressable>
-              <ThemedText style={styles.btnLabel}>Close</ThemedText>
+              <ThemedText style={s.actionLabel}>Close</ThemedText>
             </View>
           )}
-
         </View>
       </Animated.View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  bgPhoto: { ...StyleSheet.absoluteFillObject as any },
+/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+   Styles
+â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+const AVATAR_SIZE = Math.min(SW * 0.44, 186);
+
+const s = StyleSheet.create({
+  root:   { flex: 1 },
   screen: { flex: 1 },
 
+  /* Top bar */
   topBar: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: 18, paddingBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingBottom: 4,
   },
-  minimizeBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    justifyContent: "center", alignItems: "center",
+  topIconBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    alignItems: "center", justifyContent: "center",
   },
+  topIconPlaceholder: { width: 42 },
   callTypePill: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 22,
+    paddingHorizontal: 18, paddingVertical: 9,
+    borderRadius: 24,
     backgroundColor: "rgba(109,40,217,0.22)",
-    borderWidth: 1, borderColor: "rgba(167,139,250,0.35)",
+    borderWidth: 1, borderColor: "rgba(196,181,253,0.3)",
   },
-  callTypePillText: { fontSize: 12, color: "#a78bfa", fontWeight: "700", letterSpacing: 0.4 },
+  callTypePillText: {
+    fontSize: 12, color: "#c4b5fd", fontWeight: "700", letterSpacing: 0.4,
+  },
 
-  nameSection: { alignItems: "center", paddingHorizontal: 28, gap: 8 },
-  userName: {
-    fontSize: 36, fontWeight: "800", color: "#FFFFFF", letterSpacing: 0.1,
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 14,
+  /* Caller section â€” fills the flex space */
+  callerSection: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    gap: 12,
   },
-  statusText: {
-    fontSize: 16, color: "rgba(255,255,255,0.5)", fontWeight: "500",
-    letterSpacing: 0.7, textAlign: "center",
-  },
-  connectedRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  liveGreen:   { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
-  liveText:    { fontSize: 13, color: "#10B981", fontWeight: "700" },
-  encryptBadge:{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
-  encryptText: { fontSize: 11, color: "rgba(167,139,250,0.7)", fontWeight: "500" },
-  errorPill:   {
-    flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4,
-    paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 14, backgroundColor: "rgba(248,113,113,0.12)",
-    borderWidth: 1, borderColor: "rgba(248,113,113,0.3)",
-  },
-  errorPillText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  avatarSection: { flex: 1, alignItems: "center", justifyContent: "center" },
-  ringOuter: {
-    position: "absolute", width: 290, height: 290, borderRadius: 145,
+  /* Avatar + pulse rings */
+  avatarArea: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  ring3: {
+    position: "absolute",
+    width: AVATAR_SIZE + 110, height: AVATAR_SIZE + 110,
+    borderRadius: (AVATAR_SIZE + 110) / 2,
     backgroundColor: "rgba(109,40,217,0.06)",
-    borderWidth: 1, borderColor: "rgba(167,139,250,0.1)",
+    borderWidth: 1, borderColor: "rgba(196,181,253,0.08)",
   },
-  ringMid: {
-    position: "absolute", width: 232, height: 232, borderRadius: 116,
-    backgroundColor: "rgba(109,40,217,0.1)",
-    borderWidth: 1.2, borderColor: "rgba(167,139,250,0.2)",
+  ring2: {
+    position: "absolute",
+    width: AVATAR_SIZE + 70, height: AVATAR_SIZE + 70,
+    borderRadius: (AVATAR_SIZE + 70) / 2,
+    backgroundColor: "rgba(109,40,217,0.10)",
+    borderWidth: 1, borderColor: "rgba(196,181,253,0.16)",
   },
-  ringInner: {
-    position: "absolute", width: 186, height: 186, borderRadius: 93,
+  ring1: {
+    position: "absolute",
+    width: AVATAR_SIZE + 36, height: AVATAR_SIZE + 36,
+    borderRadius: (AVATAR_SIZE + 36) / 2,
     backgroundColor: "rgba(109,40,217,0.16)",
-    borderWidth: 1.5, borderColor: "rgba(167,139,250,0.32)",
+    borderWidth: 1.5, borderColor: "rgba(196,181,253,0.28)",
   },
   mutedRing: {
-    position: "absolute", width: 176, height: 176, borderRadius: 88,
-    borderWidth: 2.5, borderColor: "rgba(239,68,68,0.65)",
+    position: "absolute",
+    width: AVATAR_SIZE + 12, height: AVATAR_SIZE + 12,
+    borderRadius: (AVATAR_SIZE + 12) / 2,
+    borderWidth: 2.5, borderColor: "rgba(239,68,68,0.6)",
   },
   avatarFrame: {
-    width: 158, height: 158, borderRadius: 79,
+    width: AVATAR_SIZE, height: AVATAR_SIZE,
+    borderRadius: AVATAR_SIZE / 2,
     overflow: "hidden",
-    borderWidth: 3, borderColor: "rgba(167,139,250,0.55)",
+    borderWidth: 3, borderColor: "rgba(196,181,253,0.5)",
     shadowColor: "#7c3aed", shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.75, shadowRadius: 30, elevation: 20,
+    shadowOpacity: 0.7, shadowRadius: 28, elevation: 18,
   },
-  avatarFrameConnected: { borderColor: "rgba(16,185,129,0.65)", shadowColor: "#10B981" },
-  avatarFrameMuted:     { borderColor: "rgba(239,68,68,0.55)",  shadowColor: "#ef4444" },
+  avatarFrameConnected: {
+    borderColor: "rgba(16,185,129,0.7)",
+    shadowColor: "#10B981",
+  },
+  avatarFrameMuted: {
+    borderColor: "rgba(239,68,68,0.6)",
+    shadowColor: "#ef4444",
+  },
+  avatarFrameTerminal: {
+    borderColor: "rgba(255,255,255,0.18)",
+    shadowOpacity: 0.2,
+  },
   avatar: { width: "100%", height: "100%" },
   mutedBadge: {
-    position: "absolute", bottom: -10,
-    backgroundColor: "#ef4444", borderRadius: 16,
+    position: "absolute",
+    bottom: -4,
+    backgroundColor: "#ef4444",
+    borderRadius: 16,
     paddingHorizontal: 12, paddingVertical: 5,
     flexDirection: "row", alignItems: "center", gap: 5,
     borderWidth: 2, borderColor: "rgba(255,255,255,0.25)",
+    shadowColor: "#ef4444", shadowOpacity: 0.5, shadowRadius: 8, elevation: 6,
+  },
+  mutedBadgeText: { fontSize: 11, color: "#fff", fontWeight: "700" },
+
+  /* Caller text */
+  callerName: {
+    fontSize: 34,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.55)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
+  },
+  statusText: {
+    fontSize: 16,
+    color: "rgba(255,255,255,0.52)",
+    fontWeight: "500",
+    letterSpacing: 0.6,
+    textAlign: "center",
+  },
+  statusTextError: { color: "#f87171" },
+
+  connectedRow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+  },
+  liveGreenDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
+  liveText: { fontSize: 13, color: "#10B981", fontWeight: "700" },
+
+  encryptBadge: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+  },
+  encryptText: {
+    fontSize: 11, color: "rgba(196,181,253,0.65)", fontWeight: "500",
   },
 
-  bottomContainer: { width: "100%", alignItems: "center", paddingHorizontal: 24 },
+  errorPill: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: "rgba(248,113,113,0.12)",
+    borderWidth: 1, borderColor: "rgba(248,113,113,0.28)",
+  },
+  errorPillText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
+
+  /* Bottom area */
+  bottomArea: {
+    width: "100%",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    gap: 0,
+  },
+
+  /* Incoming call buttons */
   incomingRow: {
-    flexDirection: "row", justifyContent: "space-around",
-    width: "100%", paddingHorizontal: 20,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
-  actionWrap: { alignItems: "center", gap: 12 },
-  bigBtn: {
-    width: 76, height: 76, borderRadius: 38,
-    justifyContent: "center", alignItems: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4, shadowRadius: 12, elevation: 10,
-  },
-  redBtn:   { backgroundColor: "#dc2626", shadowColor: "#dc2626" },
-  greenBtn: { backgroundColor: "#16a34a", shadowColor: "#16a34a" },
-  btnLabel: { fontSize: 13, color: "rgba(255,255,255,0.75)", fontWeight: "600", letterSpacing: 0.3 },
-
-  glassPanel: {
-    width: "100%", alignItems: "center", gap: 20,
-    paddingHorizontal: 20, paddingTop: 26, paddingBottom: 22,
-    backgroundColor: "rgba(6,2,22,0.75)",
-    borderRadius: 36,
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.09)",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5, shadowRadius: 24, elevation: 14,
-  },
-  controlsRow: { flexDirection: "row", justifyContent: "space-evenly", width: "100%" },
-  ctrlItem:    { alignItems: "center", gap: 8, flex: 1 },
-  ctrlBtn: {
-    width: 62, height: 62, borderRadius: 31,
-    backgroundColor: "rgba(255,255,255,0.1)",
-    justifyContent: "center", alignItems: "center",
-    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
-  },
-  ctrlBtnActive: { backgroundColor: "#c4b5fd", borderColor: "rgba(196,181,253,0.5)" },
-  ctrlLabel: { fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: "500", letterSpacing: 0.2 },
-  endCallBtn: {
+  incomingAction: { alignItems: "center", gap: 12 },
+  callActionBtn: {
     width: 78, height: 78, borderRadius: 39,
-    backgroundColor: "#dc2626",
-    justifyContent: "center", alignItems: "center",
-    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6, shadowRadius: 18, elevation: 12,
+    alignItems: "center", justifyContent: "center",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45, shadowRadius: 14, elevation: 10,
   },
+  declineBtn: { backgroundColor: "#dc2626", shadowColor: "#dc2626" },
+  acceptBtn:  { backgroundColor: "#16a34a", shadowColor: "#16a34a" },
+  closeBtn:   {
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
+    shadowColor: "#000",
+  },
+  actionLabel: {
+    fontSize: 13, color: "rgba(255,255,255,0.72)", fontWeight: "600", letterSpacing: 0.3,
+  },
+
+  /* Connected panel */
+  connectedPanel: {
+    width: "100%",
+    alignItems: "center",
+    gap: 18,
+    paddingHorizontal: 18,
+    paddingTop: 26,
+    paddingBottom: 20,
+    backgroundColor: "rgba(8,4,24,0.78)",
+    borderRadius: 36,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.5, shadowRadius: 28, elevation: 16,
+  },
+  controlsRow: {
+    flexDirection: "row",
+    justifyContent: "space-evenly",
+    width: "100%",
+  },
+  controlItem: { alignItems: "center", gap: 8, flex: 1 },
+  controlBtn: {
+    width: 62, height: 62, borderRadius: 31,
+    backgroundColor: "rgba(255,255,255,0.10)",
+    alignItems: "center", justifyContent: "center",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.10)",
+  },
+  controlBtnActive: {
+    backgroundColor: "#c4b5fd",
+    borderColor: "rgba(196,181,253,0.5)",
+  },
+  controlLabel: {
+    fontSize: 11, color: "rgba(255,255,255,0.6)", fontWeight: "500", letterSpacing: 0.2,
+  },
+  endCallBtn: {
+    width: 80, height: 80, borderRadius: 40,
+    backgroundColor: "#dc2626",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.65, shadowRadius: 18, elevation: 14,
+  },
+
+  /* Cancel / close area */
+  cancelArea: { alignItems: "center", gap: 12 },
 });
