@@ -378,6 +378,7 @@ export default function ChatDetailScreen({
   const [sending, setSending] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
@@ -456,6 +457,7 @@ export default function ChatDetailScreen({
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingDurationRef = useRef<number>(0);
@@ -1502,6 +1504,19 @@ export default function ChatDetailScreen({
 
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
+  const scrollToMessage = useCallback((messageId: string) => {
+    const index = messages.findIndex(m => m._id === messageId);
+    if (index === -1) return;
+    try {
+      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    } catch {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    setHighlightedMessageId(messageId);
+    highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500);
+  }, [messages]);
+
   // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
     ({ item, index }: { item: Message; index: number }) => {
@@ -1546,15 +1561,22 @@ export default function ChatDetailScreen({
                       chatBubbleStyle === "minimal" && { borderRadius: 14, borderBottomRightRadius: isMe ? 14 : undefined, borderBottomLeftRadius: !isMe ? 14 : undefined },
                       (item.type === "image" || item.type === "video") && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
                       item.type === "location" ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
+                      item._id === highlightedMessageId && { borderWidth: 2, borderColor: isMe ? "rgba(255,255,255,0.7)" : theme.primary },
                     ]}
                   >
                     {item.replyTo && (
-                      <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary }]}>
+                      <Pressable
+                        onPress={() => scrollToMessage(item.replyTo!.messageId)}
+                        style={({ pressed }) => [
+                          styles.replyPreviewInBubble,
+                          { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary, opacity: pressed ? 0.7 : 1 }
+                        ]}
+                      >
                         <ThemedText style={[styles.replyPreviewName, { color: isMe ? "rgba(255,255,255,0.9)" : theme.primary }]} numberOfLines={1}>{item.replyTo.senderName}</ThemedText>
                         <ThemedText style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]} numberOfLines={2}>
                           {item.replyTo.type === "image" ? "📷 Photo" : item.replyTo.type === "video" ? "🎬 Video" : item.replyTo.type === "audio" ? "🎤 Voice message" : item.replyTo.content}
                         </ThemedText>
-                      </View>
+                      </Pressable>
                     )}
 
                     {item.type === "image" && item.imageUrl && (() => {
@@ -1806,7 +1828,7 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle],
+    [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
   );
 
   const keyExtractor = useCallback((item: Message) => item._id, []);
@@ -1826,13 +1848,18 @@ export default function ChatDetailScreen({
           data={messages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
-          extraData={[playingAudioId, audioProgress]}
+          extraData={[playingAudioId, audioProgress, highlightedMessageId]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
           maxToRenderPerBatch={20}
           windowSize={15}
           removeClippedSubviews={false}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+            }, 300);
+          }}
           // FIX: load more old messages when user scrolls to top
           onStartReached={loadMoreMessages}
           onStartReachedThreshold={0.1}

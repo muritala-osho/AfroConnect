@@ -57,6 +57,7 @@ export default function VoiceCallScreen() {
   const pulseAnim3 = useRef(new Animated.Value(1)).current;
   const ringtoneRef = useRef<Audio.Sound | null>(null);
   const shouldRingRef = useRef(false);
+  const endCallScaleAnim = useRef(new Animated.Value(1)).current;
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const ringingTimeout = useRef<NodeJS.Timeout | null>(null);
   const webViewRef = useRef<WebView | null>(null);
@@ -544,9 +545,16 @@ export default function VoiceCallScreen() {
 
               {/* Hang up row */}
               <View style={styles.hangupWrap}>
-                <Pressable style={styles.hangupBtn} onPress={handleEndCall}>
-                  <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
-                </Pressable>
+                <Animated.View style={{ transform: [{ scale: endCallScaleAnim }] }}>
+                  <Pressable
+                    style={styles.hangupBtn}
+                    onPress={handleEndCall}
+                    onPressIn={() => Animated.spring(endCallScaleAnim, { toValue: 0.88, useNativeDriver: true, tension: 250, friction: 8 }).start()}
+                    onPressOut={() => Animated.spring(endCallScaleAnim, { toValue: 1, useNativeDriver: true, tension: 250, friction: 8 }).start()}
+                  >
+                    <Ionicons name="call" size={32} color="#FFF" style={{ transform: [{ rotate: "135deg" }] }} />
+                  </Pressable>
+                </Animated.View>
                 <ThemedText style={styles.btnLabel}>Hang Up</ThemedText>
               </View>
             </View>
@@ -789,19 +797,21 @@ const styles = StyleSheet.create({
   },
   controlWrap: { alignItems: "center", gap: 8, minWidth: 64 },
 
-  hangupWrap: { alignItems: "center", gap: 8 },
+  hangupWrap: { alignItems: "center", gap: 10 },
   hangupBtn: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "#EF4444",
     justifyContent: "center",
     alignItems: "center",
     shadowColor: "#EF4444",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.55,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 18,
+    elevation: 14,
+    borderWidth: 3,
+    borderColor: "rgba(255,100,100,0.35)",
   },
 
   cancelWrap: { alignItems: "center", gap: 10 },
