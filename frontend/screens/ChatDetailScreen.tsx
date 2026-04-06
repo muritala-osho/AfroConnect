@@ -1679,7 +1679,15 @@ export default function ChatDetailScreen({
 
                     {item.type === "image" && item.imageUrl && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
-                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      const isViewedByMe = openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && isSender) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.10)' }]}>
+                            <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.7)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: 'rgba(255,255,255,0.75)' }]}>View once photo sent</ThemedText>
+                          </View>
+                        );
+                      }
                       if (item.viewOnce && !isSender && isViewedByMe) {
                         return (
                           <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
@@ -1706,24 +1714,25 @@ export default function ChatDetailScreen({
                         );
                       }
                       return (
-                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={!item.viewOnce ? () => saveImage(item.imageUrl!) : undefined}>
-                          {item.viewOnce && isSender && (
-                            <View style={styles.viewOnceSenderBadge}>
-                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
-                            </View>
-                          )}
+                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={() => saveImage(item.imageUrl!)}>
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                          {!item.viewOnce && (
-                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                              <Ionicons name="download-outline" size={16} color="#FFF" />
-                            </Pressable>
-                          )}
+                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                            <Ionicons name="download-outline" size={16} color="#FFF" />
+                          </Pressable>
                         </Pressable>
                       );
                     })()}
                     {item.type === "video" && (item.videoUrl || item.imageUrl) && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
-                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      const isViewedByMe = openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && isSender) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.10)' }]}>
+                            <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.7)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: 'rgba(255,255,255,0.75)' }]}>View once video sent</ThemedText>
+                          </View>
+                        );
+                      }
                       if (item.viewOnce && !isSender && isViewedByMe) {
                         return (
                           <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
@@ -1754,11 +1763,6 @@ export default function ChatDetailScreen({
                       }
                       return (
                         <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
-                          {item.viewOnce && isSender && (
-                            <View style={styles.viewOnceSenderBadge}>
-                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
-                            </View>
-                          )}
                           {failedThumbnails.has(item._id) ? (
                             <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
                               <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
