@@ -9,6 +9,8 @@ import {
   Animated,
   ScrollView,
   Alert,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -166,6 +168,8 @@ export default function ProfileDetailScreen() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [liked, setLiked] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [zoomVisible, setZoomVisible] = useState(false);
+  const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
 
   useEffect(() => {
     fetchUser();
@@ -355,7 +359,14 @@ export default function ProfileDetailScreen() {
         contentContainerStyle={{ paddingTop: 0, paddingHorizontal: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={handleTap} style={styles.photoContainer}>
+        <Pressable
+          onPress={handleTap}
+          onLongPress={() => {
+            setZoomPhotoIndex(currentPhotoIndex);
+            setZoomVisible(true);
+          }}
+          style={styles.photoContainer}
+        >
           {user.photos && user.photos.length > 0 ? (
             <Image
               source={getPhotoSource(user.photos[currentPhotoIndex]) || require("@/assets/images/placeholder-1.jpg")}
@@ -443,6 +454,18 @@ export default function ProfileDetailScreen() {
           <Pressable style={[styles.floatBack, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </Pressable>
+
+          {/* Zoom hint button */}
+          <TouchableOpacity
+            style={[styles.zoomBtn, { top: insets.top + 10 }]}
+            onPress={() => {
+              setZoomPhotoIndex(currentPhotoIndex);
+              setZoomVisible(true);
+            }}
+            hitSlop={10}
+          >
+            <Ionicons name="expand-outline" size={20} color="#FFF" />
+          </TouchableOpacity>
         </Pressable>
 
         <View style={[styles.contentWrapper, { backgroundColor: theme.background }]}>
@@ -720,6 +743,80 @@ export default function ProfileDetailScreen() {
           </View>
         </View>
       </ScreenScrollView>
+
+      {/* ── Full-screen zoom photo modal ── */}
+      <Modal
+        visible={zoomVisible}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setZoomVisible(false)}
+      >
+        <View style={styles.zoomModalContainer}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.zoomScrollContent}
+            maximumZoomScale={4}
+            minimumZoomScale={1}
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            centerContent
+            bounces={false}
+          >
+            {user?.photos && user.photos[zoomPhotoIndex] && (
+              <Image
+                source={getPhotoSource(user.photos[zoomPhotoIndex])}
+                style={styles.zoomImage}
+                resizeMode="contain"
+              />
+            )}
+          </ScrollView>
+
+          {/* Photo indicators */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={styles.zoomIndicators}>
+              {user.photos.map((_: any, idx: number) => (
+                <TouchableOpacity
+                  key={idx}
+                  onPress={() => setZoomPhotoIndex(idx)}
+                  style={[
+                    styles.zoomDot,
+                    { backgroundColor: idx === zoomPhotoIndex ? "#fff" : "rgba(255,255,255,0.4)" }
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Left / right tap areas */}
+          {user?.photos && user.photos.length > 1 && (
+            <>
+              <TouchableOpacity
+                style={styles.zoomLeft}
+                onPress={() => setZoomPhotoIndex(i => Math.max(0, i - 1))}
+              />
+              <TouchableOpacity
+                style={styles.zoomRight}
+                onPress={() => setZoomPhotoIndex(i => Math.min((user.photos?.length || 1) - 1, i + 1))}
+              />
+            </>
+          )}
+
+          {/* Close button */}
+          <TouchableOpacity
+            style={[styles.zoomClose, { top: insets.top + 16 }]}
+            onPress={() => setZoomVisible(false)}
+          >
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+
+          {/* Hint */}
+          <View style={[styles.zoomHint, { bottom: insets.bottom + 24 }]}>
+            <Ionicons name="search-outline" size={14} color="rgba(255,255,255,0.6)" />
+            <ThemedText style={styles.zoomHintText}>Pinch to zoom</ThemedText>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -1144,5 +1241,79 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     marginTop: 20,
+  },
+  zoomBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomModalContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  zoomScrollContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.5,
+  },
+  zoomClose: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomIndicators: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  zoomDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  zoomLeft: {
+    position: 'absolute',
+    left: 0,
+    top: '20%',
+    width: '30%',
+    height: '60%',
+  },
+  zoomRight: {
+    position: 'absolute',
+    right: 0,
+    top: '20%',
+    width: '30%',
+    height: '60%',
+  },
+  zoomHint: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+  },
+  zoomHintText: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
   },
 });

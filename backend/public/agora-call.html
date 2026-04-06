@@ -185,24 +185,48 @@
     if (!localVideoTrack || callType !== 'video') return;
     try {
       currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-      var track = localVideoTrack.getMediaStreamTrack();
-      if (track) {
-        await track.applyConstraints({ facingMode: currentFacingMode });
-        postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
-        return;
-      }
-    } catch (constraintErr) {}
-    try {
-      localVideoTrack.stop();
-      localVideoTrack.close();
+
+      /* Try Agora's built-in setDevice with enumerated cameras first */
+      try {
+        var cameras = await AgoraRTC.getCameras();
+        var targetCamera = cameras.find(function(cam) {
+          var label = cam.label.toLowerCase();
+          return currentFacingMode === 'environment'
+            ? (label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('0'))
+            : (label.includes('front') || label.includes('user') || label.includes('face') || label.includes('selfie') || label.includes('1'));
+        });
+        if (!targetCamera && cameras.length >= 2) {
+          targetCamera = currentFacingMode === 'environment' ? cameras[0] : cameras[cameras.length - 1];
+        }
+        if (targetCamera) {
+          await localVideoTrack.setDevice(targetCamera.deviceId);
+          postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
+          return;
+        }
+      } catch (deviceErr) {}
+
+      /* Fallback: try applyConstraints on the underlying media track */
+      try {
+        var track = localVideoTrack.getMediaStreamTrack();
+        if (track) {
+          await track.applyConstraints({ facingMode: { exact: currentFacingMode } });
+          postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
+          return;
+        }
+      } catch (constraintErr) {}
+
+      /* Final fallback: stop old video track, create new one with opposite facing mode */
+      var oldVideoTrack = localVideoTrack;
       localVideoTrack = null;
-      await client.unpublish();
+      try { await client.unpublish([oldVideoTrack]); } catch (e) {}
+      try { oldVideoTrack.stop(); oldVideoTrack.close(); } catch (e) {}
+
       localVideoTrack = await AgoraRTC.createCameraVideoTrack({
         facingMode: currentFacingMode,
         encoderConfig: '480p_1',
       });
       localVideoTrack.play('local-video');
-      await client.publish([localAudioTrack, localVideoTrack]);
+      await client.publish([localVideoTrack]);
       postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
     } catch (e) {
       postToNative({ type: 'error', message: 'Camera switch failed: ' + e.message });

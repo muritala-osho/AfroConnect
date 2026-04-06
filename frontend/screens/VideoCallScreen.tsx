@@ -730,8 +730,8 @@ export default function VideoCallScreen() {
 
         {/* ── TOP GRADIENT + header ── */}
         <Animated.View
-          style={[s.topOverlay, { opacity: 1 }]}
-          pointerEvents="box-none"
+          style={[s.topOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
+          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
         >
           <LinearGradient
             colors={["rgba(0,0,0,0.72)", "transparent"]}
@@ -805,8 +805,8 @@ export default function VideoCallScreen() {
 
         {/* ── BOTTOM GRADIENT + controls ── */}
         <Animated.View
-          style={[s.bottomOverlay, { opacity: 1 }]}
-          pointerEvents="box-none"
+          style={[s.bottomOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
+          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
         >
           <LinearGradient
             colors={["transparent", "rgba(0,0,0,0.85)"]}

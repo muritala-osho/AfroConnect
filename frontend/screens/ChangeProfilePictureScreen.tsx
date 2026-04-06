@@ -74,6 +74,10 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
   };
 
   const pickImage = async (useCamera: boolean, replaceIndex?: number) => {
+    if (replaceIndex === undefined && photos.length >= MAX_PHOTOS) {
+      Alert.alert("Maximum Photos Reached", `You can only upload up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     const permission = useCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
