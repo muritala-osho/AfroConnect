@@ -275,6 +275,7 @@ router.put('/settings', protect, async (req, res) => {
     }
     if (pushNotifications !== undefined) {
       user.settings.pushNotifications = pushNotifications;
+      user.pushNotificationsEnabled = pushNotifications;
     }
     if (theme !== undefined && ['light', 'dark', 'system'].includes(theme)) {
       user.settings.theme = theme;

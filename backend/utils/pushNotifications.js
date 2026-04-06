@@ -44,7 +44,7 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
  */
 async function sendSmartNotification(user, payload, type = 'system', mutedByUserId = null) {
   if (!user?.pushToken || !Expo.isExpoPushToken(user.pushToken)) return false;
-  if (!user.pushNotificationsEnabled) return false;
+  if (user.pushNotificationsEnabled === false) return false;
 
   const prefs = user.notificationPreferences || {};
   const mute  = user.muteSettings || {};

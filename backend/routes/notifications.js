@@ -53,7 +53,7 @@ router.post('/send', protect, async (req, res) => {
     // Fetch user from DB to get their push token and check if notifications are enabled
     const user = await User.findById(userId);
 
-    if (!user || !user.pushNotificationsEnabled || !user.pushToken) {
+    if (!user || user.pushNotificationsEnabled === false || !user.pushToken) {
       return res.status(404).json({
         success: false,
         message: 'User push token not found or notifications disabled'

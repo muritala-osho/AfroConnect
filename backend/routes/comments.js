@@ -6,7 +6,7 @@ const { protect } = require('../middleware/auth');
 async function sendPushNotification(userId, title, body, data = {}) {
   try {
     const user = await User.findById(userId);
-    if (!user || !user.pushNotificationsEnabled || !user.pushToken) {
+    if (!user || user.pushNotificationsEnabled === false || !user.pushToken) {
       return;
     }
 

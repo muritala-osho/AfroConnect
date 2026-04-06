@@ -373,6 +373,10 @@ const userSchema = new mongoose.Schema({
       default: 'system'
     }
   },
+  pushNotificationsEnabled: {
+    type: Boolean,
+    default: true
+  },
   isAdmin: {
     type: Boolean,
     default: false
