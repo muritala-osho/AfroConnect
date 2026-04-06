@@ -647,41 +647,32 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      <Animated.View style={[s.screen, { opacity: fadeAnim }]}>
+      {/* ── FULL-SCREEN OVERLAY (absolute fill — immune to nav height issues) ── */}
+      <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
 
-        {/* ── TOP BAR ── */}
-        <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
-          <Pressable
-            style={s.topBtn}
-            hitSlop={12}
-            onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
-          >
-            <Ionicons
-              name={isConnected ? "chevron-down" : "chevron-back"}
-              size={22}
-              color="rgba(255,255,255,0.85)"
-            />
-          </Pressable>
-          <Text style={s.topTitle}>Voice Call</Text>
-          <View style={s.topBtn} />
-        </View>
+        {/* ── TOP SECTION: back button + title + caller name + status ── */}
+        <View style={[s.topSection, { paddingTop: insets.top + 8 }]}>
+          <View style={s.topBar}>
+            <Pressable
+              style={s.topBtn}
+              hitSlop={12}
+              onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
+            >
+              <Ionicons
+                name={isConnected ? "chevron-down" : "arrow-back"}
+                size={22}
+                color="rgba(255,255,255,0.85)"
+              />
+            </Pressable>
+            <Text style={s.topTitle}>Voice Call</Text>
+            <View style={{ width: 38 }} />
+          </View>
 
-        {/* ── CALLER INFO (name + status) — always visible below top bar ── */}
-        <View style={s.callerInfoBlock}>
-          <Text style={s.callerName} numberOfLines={1}>
-            {userName || "Unknown"}
-          </Text>
-          <Text
-            style={[
-              s.statusText,
-              isConnected && s.statusConnected,
-              isTerminal && s.statusError,
-            ]}
-          >
+          <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
+          <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
             {statusText()}
           </Text>
 
-          {/* E2E badge while waiting */}
           {(callStatus === "ringing" || callStatus === "connecting") && (
             <View style={s.e2eBadge}>
               <Ionicons name="lock-closed" size={10} color="#34d399" />
@@ -690,9 +681,8 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* ── AVATAR (centered in remaining space) ── */}
-        <View style={s.avatarArea}>
-          {/* Pulse rings */}
+        {/* ── AVATAR — absolutely centered between top section and controls ── */}
+        <View style={s.avatarCenter}>
           {(callStatus === "ringing" || callStatus === "connecting") && (
             <>
               <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 120} />
@@ -700,21 +690,16 @@ export default function VoiceCallScreen() {
               <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 30} />
             </>
           )}
-
-          {/* Avatar circle */}
           <View style={s.avatarRing}>
             {userPhoto ? (
               <SafeImage source={{ uri: userPhoto }} style={s.avatar} />
             ) : (
               <LinearGradient colors={["#059669", "#10b981", "#34d399"]} style={s.avatar}>
-                <Text style={s.avatarInitial}>
-                  {(userName || "?").charAt(0).toUpperCase()}
-                </Text>
+                <Text style={s.avatarInitial}>{(userName || "?").charAt(0).toUpperCase()}</Text>
               </LinearGradient>
             )}
           </View>
 
-          {/* Live dot + wave bars when connected */}
           {isConnected && (
             <View style={s.liveRow}>
               <View style={s.liveDot} />
@@ -722,7 +707,6 @@ export default function VoiceCallScreen() {
             </View>
           )}
 
-          {/* Muted badge */}
           {isConnected && isMuted && (
             <View style={s.mutedBadge}>
               <Ionicons name="mic-off" size={12} color="#fff" />
@@ -730,7 +714,6 @@ export default function VoiceCallScreen() {
             </View>
           )}
 
-          {/* Terminal error pill */}
           {isTerminal && callStatus !== "ended" && (
             <View style={s.errorPill}>
               <Ionicons name="close-circle" size={14} color="#f87171" />
@@ -739,19 +722,13 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* ── CONTROLS ── */}
-        <View style={[s.controlsPanel, { paddingBottom: insets.bottom + 32 }]}>
+        {/* ── CONTROLS — pinned to the bottom ── */}
+        <View style={[s.controlsPanel, { paddingBottom: insets.bottom + 28 }]}>
           <View style={s.glass}>
 
-            {/* INCOMING: Decline + Accept */}
             {showIncoming && (
               <View style={s.btnRow}>
-                <CtrlBtn
-                  icon="call"
-                  label="Decline"
-                  danger
-                  onPress={handleDecline}
-                />
+                <CtrlBtn icon="call" label="Decline" danger onPress={handleDecline} />
                 <View style={s.acceptWrap}>
                   <Pressable style={s.acceptBtn} onPress={handleAccept}>
                     <Ionicons name="call" size={30} color="#fff" />
@@ -761,7 +738,6 @@ export default function VoiceCallScreen() {
               </View>
             )}
 
-            {/* CONNECTED: Mute + Speaker + Bluetooth */}
             {isConnected && (
               <View style={s.btnRow}>
                 <CtrlBtn
@@ -790,7 +766,6 @@ export default function VoiceCallScreen() {
               </View>
             )}
 
-            {/* OUTGOING / CONNECTING: Speaker only */}
             {showCancel && (
               <View style={s.btnRow}>
                 <CtrlBtn
@@ -802,7 +777,6 @@ export default function VoiceCallScreen() {
               </View>
             )}
 
-            {/* TERMINAL: Close */}
             {isTerminal && (
               <View style={s.btnRow}>
                 <CtrlBtn
@@ -813,7 +787,6 @@ export default function VoiceCallScreen() {
               </View>
             )}
 
-            {/* END CALL — visible when connected or outgoing */}
             {(isConnected || showCancel) && (
               <View style={s.endRow}>
                 <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
@@ -844,16 +817,25 @@ export default function VoiceCallScreen() {
    Styles
 ───────────────────────────────────────────────────────────────── */
 const s = StyleSheet.create({
-  root:   { flex: 1 },
-  screen: { flex: 1 },
+  root: { flex: 1, backgroundColor: "#030d08" },
 
-  /* Top bar */
+  /* Top section — absolutely pinned to the top */
+  topSection: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    paddingBottom: 16,
+    zIndex: 10,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    width: "100%",
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingBottom: 12,
   },
   topBtn: {
     width: 38,
@@ -870,19 +852,22 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Caller info block — sits between top bar and avatar */
-  callerInfoBlock: {
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-  },
-
-  /* Avatar area — takes remaining space, centers avatar */
-  avatarArea: {
-    flex: 1,
+  /* Avatar center — fills the screen, centers the avatar */
+  avatarCenter: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingTop: 140,   /* clear the top section */
+    paddingBottom: 200, /* clear the controls panel */
+  },
+
+  /* Keep avatarArea as alias so PulseRing refs don't break */
+  avatarArea: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 140,
+    paddingBottom: 200,
   },
   avatarRing: {
     width: AVATAR_SIZE,
@@ -966,8 +951,15 @@ const s = StyleSheet.create({
   },
   errorText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  /* Controls panel */
-  controlsPanel: { paddingHorizontal: 20 },
+  /* Controls panel — absolutely pinned to the bottom */
+  controlsPanel: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
   glass: {
     backgroundColor: "rgba(255,255,255,0.05)",
     borderRadius: 28,
