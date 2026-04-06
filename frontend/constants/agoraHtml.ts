@@ -74,16 +74,29 @@ export const AGORA_HTML = `<!DOCTYPE html>
 
       if (callType === 'video') {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'speech_standard', AEC: true, ANS: true, AGC: true
+          encoderConfig: 'speech_standard',
+          AEC: true, ANS: true, AGC: true,
+          mediaStreamTrackInitConfig: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
         });
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({
           facingMode: currentFacingMode, encoderConfig: '480p_1'
         });
         localVideoTrack.play('local-video');
         await client.publish([localAudioTrack, localVideoTrack]);
+        postToNative({ type: 'local-video-started' });
       } else {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'speech_standard', AEC: true, ANS: true, AGC: true
+          encoderConfig: 'speech_standard',
+          AEC: true, ANS: true, AGC: true,
+          mediaStreamTrackInitConfig: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
         });
         await client.publish([localAudioTrack]);
       }

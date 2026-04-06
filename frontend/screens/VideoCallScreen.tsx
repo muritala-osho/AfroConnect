@@ -510,6 +510,18 @@ export default function VideoCallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
+  /* ── Set audio mode for active call (enables AEC on iOS to prevent echo) ── */
+  useEffect(() => {
+    if (callStatus !== "connected") return;
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      playThroughEarpieceAndroid: false,
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callStatus]);
+
   /* ── Pulse ring animation ── */
   useEffect(() => {
     if (callStatus === "ringing" || callStatus === "connecting") {
@@ -581,7 +593,7 @@ export default function VideoCallScreen() {
     switch (callStatus) {
       case "connecting": return "Connecting…";
       case "ringing":    return isIncoming ? "Incoming video call" : "Ringing…";
-      case "connected":  return formatDuration(duration);
+      case "connected":  return "Connected";
       case "ended":      return "Call ended";
       case "declined":   return "Call declined";
       case "busy":       return "User is busy";
@@ -642,6 +654,7 @@ export default function VideoCallScreen() {
             try {
               const d = JSON.parse(e.nativeEvent.data);
               if (d.type === "joined")               console.log("Video joined:", d.uid);
+              if (d.type === "local-video-started")  console.log("Local video ready");
               if (d.type === "remote-video-started")  setHasRemoteVideo(true);
               if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
               if (d.type === "remote-user-left")      setHasRemoteVideo(false);
@@ -661,8 +674,8 @@ export default function VideoCallScreen() {
 
         {/* ── TOP GRADIENT + header ── */}
         <Animated.View
-          style={[s.topOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
-          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
+          style={[s.topOverlay, { opacity: 1 }]}
+          pointerEvents="box-none"
         >
           <LinearGradient
             colors={["rgba(0,0,0,0.72)", "transparent"]}
@@ -702,13 +715,6 @@ export default function VideoCallScreen() {
         {/* ── AVATAR (when no remote video or not connected) ── */}
         {(!isConnected || !hasRemoteVideo) && (
           <View style={s.avatarCenter}>
-            {(callStatus === "ringing" || callStatus === "connecting") && (
-              <>
-                <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 130} />
-                <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 80} />
-                <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 36} />
-              </>
-            )}
             <View
               style={[
                 s.avatarFrame,
@@ -742,8 +748,8 @@ export default function VideoCallScreen() {
 
         {/* ── BOTTOM GRADIENT + controls ── */}
         <Animated.View
-          style={[s.bottomOverlay, { opacity: isConnected ? controlsAnim : 1 }]}
-          pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
+          style={[s.bottomOverlay, { opacity: 1 }]}
+          pointerEvents="box-none"
         >
           <LinearGradient
             colors={["transparent", "rgba(0,0,0,0.85)"]}

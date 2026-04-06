@@ -406,7 +406,7 @@ export default function VoiceCallScreen() {
     setIsSpeakerOn(next);
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+        allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         playThroughEarpieceAndroid: !next,
@@ -534,6 +534,18 @@ export default function VoiceCallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
+  /* ── Set audio mode for active call (enables AEC to prevent echo) ── */
+  useEffect(() => {
+    if (callStatus !== "connected") return;
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      playThroughEarpieceAndroid: !isSpeakerOn,
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callStatus]);
+
   /* ── Pulse rings animation ── */
   useEffect(() => {
     if (callStatus === "ringing" || callStatus === "connecting") {
@@ -601,7 +613,7 @@ export default function VoiceCallScreen() {
     switch (callStatus) {
       case "connecting": return "Connecting…";
       case "ringing":    return isIncoming ? "Incoming voice call" : "Ringing…";
-      case "connected":  return formatDuration(duration);
+      case "connected":  return "Connected";
       case "ended":      return "Call ended";
       case "declined":   return "Call declined";
       case "busy":       return "User is busy";
