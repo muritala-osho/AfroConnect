@@ -240,6 +240,13 @@ export default function VideoCallScreen() {
         return;
       }
       ringtoneRef.current = sound;
+      /* Final guard: stopRingtone may have fired while the sound was being created */
+      if (!shouldRingRef.current) {
+        ringtoneRef.current = null;
+        await sound.stopAsync().catch(() => {});
+        await sound.unloadAsync().catch(() => {});
+        return;
+      }
       await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {

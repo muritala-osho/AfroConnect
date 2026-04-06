@@ -21,8 +21,15 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.6);
       touch-action: none;
       cursor: grab;
+      will-change: transform;
+      -webkit-user-select: none;
+      user-select: none;
     }
     #local-video:active { cursor: grabbing; }
+    #local-video.switching {
+      opacity: 0.45;
+      transition: opacity 0.15s ease;
+    }
     #remote-video {
       width: 100vw;
       height: 100vh;
@@ -45,13 +52,30 @@
   var callType = 'voice';
   var currentFacingMode = 'user';
 
-  /* ── Draggable local video ── */
+  /* ── Draggable local video with snap-to-corner ── */
   (function() {
     var el = document.getElementById('local-video');
     var startX = 0, startY = 0, origLeft = 0, origTop = 0;
     var isDragging = false;
+    var MARGIN = 12;
 
     function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
+
+    function snapToCorner() {
+      var W = window.innerWidth;
+      var H = window.innerHeight;
+      var rect = el.getBoundingClientRect();
+      var cx = rect.left + rect.width  / 2;
+      var cy = rect.top  + rect.height / 2;
+      var goRight  = cx > W / 2;
+      var goBottom = cy > H / 2;
+      var targetLeft = goRight  ? (W - el.offsetWidth  - MARGIN) : MARGIN;
+      var targetTop  = goBottom ? (H - el.offsetHeight - MARGIN) : (MARGIN + 56);
+      el.style.transition = 'left 0.22s cubic-bezier(0.25,0.46,0.45,0.94), top 0.22s cubic-bezier(0.25,0.46,0.45,0.94)';
+      el.style.left = targetLeft + 'px';
+      el.style.top  = targetTop  + 'px';
+      setTimeout(function() { el.style.transition = ''; }, 260);
+    }
 
     el.addEventListener('touchstart', function(e) {
       if (e.touches.length !== 1) return;
@@ -62,6 +86,7 @@
       var rect = el.getBoundingClientRect();
       origLeft = rect.left;
       origTop  = rect.top;
+      el.style.transition = '';
       el.style.right  = 'auto';
       el.style.bottom = 'auto';
       el.style.left   = origLeft + 'px';
@@ -72,16 +97,18 @@
     el.addEventListener('touchmove', function(e) {
       if (!isDragging || e.touches.length !== 1) return;
       var t = e.touches[0];
-      var dx = t.clientX - startX;
-      var dy = t.clientY - startY;
-      var newLeft = clamp(origLeft + dx, 0, window.innerWidth  - el.offsetWidth);
-      var newTop  = clamp(origTop  + dy, 0, window.innerHeight - el.offsetHeight);
+      var newLeft = clamp(origLeft + t.clientX - startX, 0, window.innerWidth  - el.offsetWidth);
+      var newTop  = clamp(origTop  + t.clientY - startY, 0, window.innerHeight - el.offsetHeight);
       el.style.left = newLeft + 'px';
       el.style.top  = newTop  + 'px';
       e.preventDefault();
     }, { passive: false });
 
-    el.addEventListener('touchend', function() { isDragging = false; });
+    el.addEventListener('touchend', function() {
+      if (!isDragging) return;
+      isDragging = false;
+      snapToCorner();
+    });
   })();
 
   /* ── Native bridge ── */
@@ -183,39 +210,50 @@
   /* ── Switch camera ── */
   async function switchCamera() {
     if (!localVideoTrack || callType !== 'video') return;
+    var localEl = document.getElementById('local-video');
+    if (localEl) localEl.classList.add('switching');
     try {
       currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
 
-      /* Try Agora's built-in setDevice with enumerated cameras first */
+      /* 1. Fastest: Agora setDevice with enumerated cameras */
       try {
         var cameras = await AgoraRTC.getCameras();
-        var targetCamera = cameras.find(function(cam) {
-          var label = cam.label.toLowerCase();
-          return currentFacingMode === 'environment'
-            ? (label.includes('back') || label.includes('rear') || label.includes('environment') || label.includes('0'))
-            : (label.includes('front') || label.includes('user') || label.includes('face') || label.includes('selfie') || label.includes('1'));
-        });
-        if (!targetCamera && cameras.length >= 2) {
-          targetCamera = currentFacingMode === 'environment' ? cameras[0] : cameras[cameras.length - 1];
+        var targetCamera = null;
+        if (cameras.length >= 2) {
+          targetCamera = cameras.find(function(cam) {
+            var label = cam.label.toLowerCase();
+            return currentFacingMode === 'environment'
+              ? (label.includes('back') || label.includes('rear') || label.includes('environment'))
+              : (label.includes('front') || label.includes('user') || label.includes('face') || label.includes('selfie'));
+          });
+          /* If label matching fails, just cycle through cameras */
+          if (!targetCamera) {
+            var curTrack = localVideoTrack.getMediaStreamTrack();
+            var curDeviceId = curTrack ? curTrack.getSettings().deviceId : null;
+            var curIdx = curDeviceId ? cameras.findIndex(function(c) { return c.deviceId === curDeviceId; }) : 0;
+            targetCamera = cameras[(curIdx + 1) % cameras.length];
+          }
         }
         if (targetCamera) {
           await localVideoTrack.setDevice(targetCamera.deviceId);
+          if (localEl) localEl.classList.remove('switching');
           postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
           return;
         }
       } catch (deviceErr) {}
 
-      /* Fallback: try applyConstraints on the underlying media track */
+      /* 2. Fallback: applyConstraints (no 'exact' — more permissive) */
       try {
         var track = localVideoTrack.getMediaStreamTrack();
         if (track) {
-          await track.applyConstraints({ facingMode: { exact: currentFacingMode } });
+          await track.applyConstraints({ facingMode: currentFacingMode });
+          if (localEl) localEl.classList.remove('switching');
           postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
           return;
         }
       } catch (constraintErr) {}
 
-      /* Final fallback: stop old video track, create new one with opposite facing mode */
+      /* 3. Last resort: recreate track */
       var oldVideoTrack = localVideoTrack;
       localVideoTrack = null;
       try { await client.unpublish([oldVideoTrack]); } catch (e) {}
@@ -227,8 +265,10 @@
       });
       localVideoTrack.play('local-video');
       await client.publish([localVideoTrack]);
+      if (localEl) localEl.classList.remove('switching');
       postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
     } catch (e) {
+      if (localEl) localEl.classList.remove('switching');
       postToNative({ type: 'error', message: 'Camera switch failed: ' + e.message });
     }
   }
