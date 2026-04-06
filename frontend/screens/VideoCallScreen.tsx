@@ -10,11 +10,12 @@ import {
   Platform,
   Alert,
   Dimensions,
+  BackHandler,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute } from "@react-navigation/native";
+import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
@@ -327,6 +328,30 @@ export default function VideoCallScreen() {
     minimizeCall();
     if (navigation.canGoBack()) navigation.goBack();
   }, [minimizeCall, navigation]);
+
+  /* ── Unified back press handler (UI button + Android hardware back) ── */
+  const handleBackPress = useCallback(() => {
+    const status = callStatusRef.current;
+    if (status === "connected") {
+      handleMinimize();
+    } else if (isIncoming && status === "ringing") {
+      handleDecline();
+    } else if (["ended", "declined", "missed", "failed", "busy"].includes(status)) {
+      clearCall();
+      if (navigation.canGoBack()) navigation.goBack();
+    } else {
+      handleEndCall();
+    }
+    return true;
+  }, [isIncoming, handleMinimize, handleDecline, handleEndCall, clearCall, navigation]);
+
+  /* ── Android hardware back button ── */
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", handleBackPress);
+      return () => sub.remove();
+    }, [handleBackPress])
+  );
 
   /* ── Accept incoming ── */
   const handleAccept = useCallback(async () => {
@@ -716,7 +741,7 @@ export default function VideoCallScreen() {
               <Pressable
                 style={s.topBtn}
                 hitSlop={12}
-                onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
+                onPress={handleBackPress}
               >
                 <Ionicons
                   name={isConnected ? "chevron-down" : "arrow-back"}

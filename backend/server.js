@@ -751,6 +751,22 @@ io.on('connection', (socket) => {
     }
   });
 
+  // User is busy — forward busy signal to the caller
+  socket.on('call:busy', async (data) => {
+    const { callerId, callType } = data;
+    if (callerId) {
+      // Clear pending call state without saving a history entry
+      socket.pendingCall = null;
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        const callerSocket = io.sockets.sockets.get(callerSocketId);
+        if (callerSocket) callerSocket.pendingCall = null;
+      }
+      io.to(callerId).emit('call:busy', { targetUserId: socket.userId });
+      console.log(`User ${socket.userId} is busy — notified caller ${callerId}`);
+    }
+  });
+
   // Call ended
   socket.on('call:end', async (data) => {
     const { targetUserId, callType, duration, wasAnswered } = data;

@@ -306,6 +306,10 @@ class SocketService {
     this.emitWithRetry('call:decline', data, 3);
   }
 
+  busyCall(data: { callerId: string; callType?: string }) {
+    this.emitWithRetry('call:busy', data, 3);
+  }
+
   endCall(data: { targetUserId: string; callType?: string; duration?: number; wasAnswered?: boolean }) {
     this.emitWithRetry('call:end', data, 3);
   }

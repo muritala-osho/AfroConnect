@@ -36,11 +36,10 @@ export default function IncomingCallHandler() {
   const { user, token } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { setActiveCall, clearCall } = useCallContext();
+  const { setActiveCall, clearCall, activeCall } = useCallContext();
 
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [inActiveCall, setInActiveCall] = useState(false);
 
   const slideAnim   = useRef(new Animated.Value(-300)).current;
   const pulseAnim   = useRef(new Animated.Value(1)).current;
@@ -109,9 +108,10 @@ export default function IncomingCallHandler() {
     const handleIncomingCall = async (data: IncomingCallData) => {
       console.log('Incoming call:', data);
 
-      // Already in a call → auto-decline (busy)
+      // Already in a call → send busy signal
+      const inActiveCall = activeCall && (activeCall.callStatus === 'connected' || activeCall.callStatus === 'ringing' || activeCall.callStatus === 'connecting');
       if (inActiveCall || isVisible) {
-        socketService.declineCall({
+        socketService.busyCall({
           callerId: data.callerId,
           callType: data.callData?.callType || 'audio',
         });
@@ -157,7 +157,6 @@ export default function IncomingCallHandler() {
     const handleCallEnded = async () => {
       await stopRingtone();
       dismissModal();
-      setInActiveCall(false);
     };
     socketService.on('call:ended', handleCallEnded);
 
@@ -198,7 +197,7 @@ export default function IncomingCallHandler() {
       if (unsubscribe) unsubscribe();
       stopRingtone();
     };
-  }, [user?.id, token, inActiveCall, isVisible]);
+  }, [user?.id, token, activeCall, isVisible]);
 
   /* ── Accept ── */
   const handleAccept = useCallback(async () => {
@@ -213,7 +212,6 @@ export default function IncomingCallHandler() {
     });
 
     setIsVisible(false);
-    setInActiveCall(true);
 
     // Register in global call context
     const callTypeFromData = incomingCall.callData?.callType === 'video' ? 'video' : 'voice';
