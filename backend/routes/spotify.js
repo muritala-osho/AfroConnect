@@ -264,6 +264,45 @@ router.post('/set-song', protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/spotify/track/:trackId
+// @desc    Get a single track's details including preview URL
+// @access  Private
+router.get('/track/:trackId', protect, async (req, res) => {
+  const { trackId } = req.params;
+  if (!trackId) {
+    return res.status(400).json({ success: false, message: 'Track ID required' });
+  }
+  try {
+    const user = await User.findById(req.user._id).select('spotify');
+    const accessToken = await getValidAccessToken(user);
+    if (!accessToken) {
+      return res.status(401).json({ success: false, message: 'Spotify not connected or token expired' });
+    }
+    const result = await httpsGet('api.spotify.com', `/v1/tracks/${trackId}`, {
+      'Authorization': `Bearer ${accessToken}`,
+    });
+    if (result.status !== 200) {
+      return res.status(result.status).json({ success: false, message: 'Failed to fetch track' });
+    }
+    const track = result.data;
+    res.json({
+      success: true,
+      track: {
+        id: track.id,
+        title: track.name,
+        artist: track.artists?.map((a) => a.name).join(', ') || '',
+        album: track.album?.name || '',
+        albumArt: track.album?.images?.[0]?.url || '',
+        spotifyUri: track.uri,
+        previewUrl: track.preview_url || '',
+      },
+    });
+  } catch (err) {
+    console.error('Spotify track fetch error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   GET /api/spotify/status
 // @desc    Get current user's Spotify connection status
 // @access  Private

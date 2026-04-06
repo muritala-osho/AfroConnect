@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Pressable, ActivityIndicator, Linking, StyleSheet } from "react-native";
+import { Pressable, ActivityIndicator, Alert, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
+import { useAuth } from "@/hooks/useAuth";
+import { getApiBaseUrl } from "@/constants/config";
 
 interface SongPreviewButtonProps {
   previewUrl?: string;
@@ -21,6 +23,15 @@ export default function SongPreviewButton({
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [resolvedPreviewUrl, setResolvedPreviewUrl] = useState<string | null>(
+    previewUrl || null
+  );
+
+  const { token } = useAuth();
+
+  useEffect(() => {
+    setResolvedPreviewUrl(previewUrl || null);
+  }, [previewUrl]);
 
   useEffect(() => {
     return () => {
@@ -30,19 +41,53 @@ export default function SongPreviewButton({
     };
   }, []);
 
-  const handlePress = async () => {
-    if (previewUrl) {
-      await handlePreviewPlay();
-    } else if (spotifyUri) {
-      const webUrl = spotifyUri.replace("spotify:track:", "https://open.spotify.com/track/");
-      const canOpen = await Linking.canOpenURL(spotifyUri).catch(() => false);
-      Linking.openURL(canOpen ? spotifyUri : webUrl).catch(() => {});
+  const fetchPreviewFromUri = async (): Promise<string | null> => {
+    if (!spotifyUri || !token) return null;
+    const match = spotifyUri.match(/spotify:track:([A-Za-z0-9]+)/);
+    if (!match) return null;
+    const trackId = match[1];
+    try {
+      const res = await fetch(
+        `${getApiBaseUrl()}/api/spotify/track/${trackId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const json = await res.json();
+      if (json.success && json.track?.previewUrl) {
+        return json.track.previewUrl;
+      }
+    } catch (err) {
+      console.warn("Failed to fetch Spotify preview:", err);
     }
+    return null;
   };
 
-  const handlePreviewPlay = async () => {
+  const handlePress = async () => {
     if (isLoading) return;
 
+    let urlToPlay = resolvedPreviewUrl;
+
+    if (!urlToPlay && spotifyUri) {
+      setIsLoading(true);
+      urlToPlay = await fetchPreviewFromUri();
+      if (urlToPlay) {
+        setResolvedPreviewUrl(urlToPlay);
+      }
+      setIsLoading(false);
+    }
+
+    if (!urlToPlay) {
+      Alert.alert(
+        "No Preview Available",
+        "This song doesn't have a 30-second preview available.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
+
+    await handlePreviewPlay(urlToPlay);
+  };
+
+  const handlePreviewPlay = async (url: string) => {
     if (isPlaying && soundRef.current) {
       await soundRef.current.pauseAsync();
       setIsPlaying(false);
@@ -59,7 +104,7 @@ export default function SongPreviewButton({
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
-        { uri: previewUrl! },
+        { uri: url },
         { shouldPlay: true }
       );
       soundRef.current = sound;
@@ -82,7 +127,13 @@ export default function SongPreviewButton({
   if (!previewUrl && !spotifyUri) return null;
 
   if (isLoading) {
-    return <ActivityIndicator size="small" color={color} style={{ width: size + 8, height: size + 8 }} />;
+    return (
+      <ActivityIndicator
+        size="small"
+        color={color}
+        style={{ width: size + 8, height: size + 8 }}
+      />
+    );
   }
 
   return (

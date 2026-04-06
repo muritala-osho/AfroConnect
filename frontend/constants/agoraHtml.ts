@@ -133,7 +133,7 @@ export const AGORA_HTML = `<!DOCTYPE html>
       if (callType === 'video') {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-          facingMode: currentFacingMode, encoderConfig: '480p_1'
+          facingMode: currentFacingMode, encoderConfig: '720p_1'
         });
         localVideoTrack.play('local-video');
         await client.publish([localAudioTrack, localVideoTrack]);
@@ -176,7 +176,7 @@ export const AGORA_HTML = `<!DOCTYPE html>
       localVideoTrack.stop(); localVideoTrack.close(); localVideoTrack = null;
       await client.unpublish();
       localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-        facingMode: currentFacingMode, encoderConfig: '480p_1'
+        facingMode: currentFacingMode, encoderConfig: '720p_1'
       });
       localVideoTrack.play('local-video');
       await client.publish([localAudioTrack, localVideoTrack]);

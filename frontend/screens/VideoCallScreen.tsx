@@ -676,7 +676,7 @@ export default function VideoCallScreen() {
             blurRadius={Platform.OS === "ios" ? 65 : 20}
           />
           <LinearGradient
-            colors={["rgba(0,0,0,0.88)", "rgba(5,10,25,0.78)", "rgba(0,0,0,0.94)"]}
+            colors={["rgba(0,0,0,0.55)", "rgba(5,10,25,0.45)", "rgba(0,0,0,0.60)"]}
             style={StyleSheet.absoluteFill}
           />
         </>
@@ -734,7 +734,7 @@ export default function VideoCallScreen() {
           pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
         >
           <LinearGradient
-            colors={["rgba(0,0,0,0.72)", "transparent"]}
+            colors={["rgba(0,0,0,0.50)", "transparent"]}
             style={s.topGrad}
           >
             <View style={[s.topRow, { paddingTop: insets.top + 16 }]}>
@@ -809,7 +809,7 @@ export default function VideoCallScreen() {
           pointerEvents={isConnected && !controlsVisible ? "none" : "box-none"}
         >
           <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.85)"]}
+            colors={["transparent", "rgba(0,0,0,0.60)"]}
             style={s.bottomGrad}
           >
             {/* INCOMING: Decline + Accept */}
