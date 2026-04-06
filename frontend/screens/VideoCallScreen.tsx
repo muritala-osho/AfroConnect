@@ -603,33 +603,8 @@ export default function VideoCallScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── VIDEO LAYER (full-screen WebView when connected) ── */}
-      {showVideo ? (
-        <WebView
-          ref={webViewRef}
-          source={{ uri: agoraUrl }}
-          style={StyleSheet.absoluteFillObject}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          mediaCapturePermissionGrantType="grant"
-          javaScriptEnabled
-          domStorageEnabled
-          scrollEnabled={false}
-          bounces={false}
-          onLoad={() => setWebviewReady(true)}
-          onMessage={(e) => {
-            try {
-              const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "joined")              console.log("Video joined:", d.uid);
-              if (d.type === "remote-video-started") setHasRemoteVideo(true);
-              if (d.type === "remote-video-stopped") setHasRemoteVideo(false);
-              if (d.type === "remote-user-left")     setHasRemoteVideo(false);
-              if (d.type === "error")               console.log("Video WebView error:", d.message);
-            } catch {}
-          }}
-        />
-      ) : (
-        /* Background: blurred avatar + dark overlay for pre-call states */
+      {/* Background: blurred avatar + dark overlay — visible until call connects */}
+      {!showVideo && (
         <>
           <SafeImage
             source={{ uri: userPhoto || "https://via.placeholder.com/400" }}
@@ -643,22 +618,34 @@ export default function VideoCallScreen() {
         </>
       )}
 
-      {/* Hidden WebView for non-video states (native) — handles joining audio */}
-      {!showVideo && Platform.OS !== "web" && (
+      {/* Single always-mounted WebView — stays alive through the whole call.
+          Hidden (0×0) pre-call so it can load + join; full-screen once connected.
+          Never unmounts, so agoraJoined stays valid and video streams persist. */}
+      {Platform.OS !== "web" && (
         <WebView
           ref={webViewRef}
           source={{ uri: agoraUrl }}
-          style={{ width: 0, height: 0, position: "absolute" }}
+          style={
+            showVideo
+              ? StyleSheet.absoluteFillObject
+              : { width: 0, height: 0, position: "absolute" }
+          }
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
+          scrollEnabled={false}
+          bounces={false}
           onLoad={() => setWebviewReady(true)}
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "joined") console.log("Video (pre) joined:", d.uid);
+              if (d.type === "joined")               console.log("Video joined:", d.uid);
+              if (d.type === "remote-video-started")  setHasRemoteVideo(true);
+              if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
+              if (d.type === "remote-user-left")      setHasRemoteVideo(false);
+              if (d.type === "error")                console.log("Video WebView error:", d.message);
             } catch {}
           }}
         />
@@ -681,7 +668,7 @@ export default function VideoCallScreen() {
             colors={["rgba(0,0,0,0.72)", "transparent"]}
             style={s.topGrad}
           >
-            <View style={[s.topRow, { paddingTop: insets.top + 10 }]}>
+            <View style={[s.topRow, { paddingTop: insets.top + 16 }]}>
               <Pressable
                 style={s.topBtn}
                 hitSlop={12}

@@ -663,41 +663,20 @@ export default function VoiceCallScreen() {
       {/* ── FULL-SCREEN OVERLAY (absolute fill — immune to nav height issues) ── */}
       <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
 
-        {/* ── TOP SECTION: gradient scrim + back/minimize + name + status ── */}
-        <LinearGradient
-          colors={["rgba(0,0,0,0.75)", "rgba(0,0,0,0.40)", "transparent"]}
-          style={[s.topSection, { paddingTop: Math.max(insets.top, 36) + 8 }]}
+        {/* ── BACK / MINIMIZE button — top-left only, no title bar ── */}
+        <Pressable
+          style={[s.backBtn, { top: insets.top + 12 }]}
+          hitSlop={16}
+          onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
         >
-          <View style={s.topBar}>
-            <Pressable
-              style={s.topBtn}
-              hitSlop={16}
-              onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
-            >
-              <Ionicons
-                name={isConnected ? "chevron-down" : "arrow-back"}
-                size={22}
-                color="#fff"
-              />
-            </Pressable>
-            <Text style={s.topTitle}>Voice Call</Text>
-            <View style={{ width: 38 }} />
-          </View>
+          <Ionicons
+            name={isConnected ? "chevron-down" : "arrow-back"}
+            size={22}
+            color="#fff"
+          />
+        </Pressable>
 
-          <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
-          <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
-            {statusText()}
-          </Text>
-
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <View style={s.e2eBadge}>
-              <Ionicons name="lock-closed" size={10} color="#34d399" />
-              <Text style={s.e2eText}>End-to-end encrypted</Text>
-            </View>
-          )}
-        </LinearGradient>
-
-        {/* ── AVATAR — centered in the space between header and controls ── */}
+        {/* ── AVATAR + name + status — vertically centered ── */}
         <View style={s.avatarCenter}>
           <View style={s.avatarRing}>
             {userPhoto ? (
@@ -712,6 +691,18 @@ export default function VoiceCallScreen() {
               </LinearGradient>
             )}
           </View>
+
+          <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
+          <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
+            {statusText()}
+          </Text>
+
+          {(callStatus === "ringing" || callStatus === "connecting") && (
+            <View style={s.e2eBadge}>
+              <Ionicons name="lock-closed" size={10} color="#34d399" />
+              <Text style={s.e2eText}>End-to-end encrypted</Text>
+            </View>
+          )}
 
           {isConnected && (
             <View style={s.liveRow}>
@@ -832,53 +823,33 @@ export default function VoiceCallScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#030d08" },
 
-  /* Top section — absolutely pinned to the top (LinearGradient scrim) */
-  topSection: {
+  /* Back / minimize button — top-left, no title bar */
+  backBtn: {
     position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    paddingBottom: 56, /* extra fade-out room for the gradient */
-    zIndex: 10,
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-  },
-  topBtn: {
+    left: 16,
+    zIndex: 20,
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(0,0,0,0.30)",
     alignItems: "center",
     justifyContent: "center",
   },
-  topTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.70)",
-    letterSpacing: 0.5,
-  },
 
-  /* Avatar center — sits between header and controls, nudged up */
+  /* Avatar center — no header to clear, balanced between back btn and controls */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 160,   /* clears gradient header */
-    paddingBottom: 240, /* clears controls — larger pushes avatar upward */
+    paddingTop: 60,    /* clear the small back button */
+    paddingBottom: 220, /* clear the controls panel */
   },
   avatarArea: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 160,
-    paddingBottom: 240,
+    paddingTop: 60,
+    paddingBottom: 220,
   },
   avatarRing: {
     width: AVATAR_SIZE,
