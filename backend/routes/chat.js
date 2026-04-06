@@ -413,26 +413,20 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       onlineUsers && onlineUsers.has(receiver.toString());
     if (!isReceiverOnline) {
       try {
-        const {
-          sendExpoPushNotification,
-        } = require("../utils/pushNotifications");
+        const { sendSmartNotification } = require("../utils/pushNotifications");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled muteSettings",
+          "pushToken pushNotificationsEnabled muteSettings notificationPreferences",
         );
-        const isMutedBySenderSocket = rcvUser?.muteSettings?.mutedUsers?.some(
-          (m) =>
-            m.userId.toString() === req.user._id.toString() &&
-            (m.muteAll || m.muteMessages),
-        );
-        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled && !isMutedBySenderSocket) {
-          const senderName = req.user.name || "Someone";
-          let notifBody = content || "";
-          if (type === "image") notifBody = "📷 Sent a photo";
-          else if (type === "audio") notifBody = "🎵 Sent a voice message";
-          else if (type === "location") notifBody = "📍 Shared a location";
-          else if (notifBody.length > 100)
-            notifBody = notifBody.substring(0, 97) + "...";
-          await sendExpoPushNotification(rcvUser.pushToken, {
+        const senderName = req.user.name || "Someone";
+        let notifBody = content || "";
+        if (type === "image") notifBody = "📷 Sent a photo";
+        else if (type === "audio") notifBody = "🎵 Sent a voice message";
+        else if (type === "location") notifBody = "📍 Shared a location";
+        else if (notifBody.length > 100)
+          notifBody = notifBody.substring(0, 97) + "...";
+        await sendSmartNotification(
+          rcvUser,
+          {
             title: senderName,
             body: notifBody,
             data: {
@@ -440,10 +434,10 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
             },
-            sound: "default",
-            channelId: "messages",
-          });
-        }
+          },
+          "message",
+          req.user._id.toString(),
+        );
       } catch (err) {
         console.error("Failed to send message push notification:", err);
       }
@@ -757,26 +751,20 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       onlineUsers && onlineUsers.has(receiver.toString());
     if (!isReceiverOnline) {
       try {
-        const {
-          sendExpoPushNotification,
-        } = require("../utils/pushNotifications");
+        const { sendSmartNotification } = require("../utils/pushNotifications");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled muteSettings",
+          "pushToken pushNotificationsEnabled muteSettings notificationPreferences",
         );
-        const isMutedBySender = rcvUser?.muteSettings?.mutedUsers?.some(
-          (m) =>
-            m.userId.toString() === req.user._id.toString() &&
-            (m.muteAll || m.muteMessages),
-        );
-        if (rcvUser?.pushToken && rcvUser.pushNotificationsEnabled && !isMutedBySender) {
-          const senderName = req.user.name || "Someone";
-          let notifBody = content || "";
-          if (type === "image") notifBody = "📷 Sent a photo";
-          else if (type === "audio") notifBody = "🎵 Sent a voice message";
-          else if (type === "location") notifBody = "📍 Shared a location";
-          else if (notifBody.length > 100)
-            notifBody = notifBody.substring(0, 97) + "...";
-          await sendExpoPushNotification(rcvUser.pushToken, {
+        const senderName = req.user.name || "Someone";
+        let notifBody = content || "";
+        if (type === "image") notifBody = "📷 Sent a photo";
+        else if (type === "audio") notifBody = "🎵 Sent a voice message";
+        else if (type === "location") notifBody = "📍 Shared a location";
+        else if (notifBody.length > 100)
+          notifBody = notifBody.substring(0, 97) + "...";
+        await sendSmartNotification(
+          rcvUser,
+          {
             title: senderName,
             body: notifBody,
             data: {
@@ -784,10 +772,10 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
             },
-            sound: "default",
-            channelId: "messages",
-          });
-        }
+          },
+          "message",
+          req.user._id.toString(),
+        );
       } catch (err) {
         console.error("Failed to send push notification:", err);
       }

@@ -673,24 +673,23 @@ io.on('connection', (socket) => {
       const isTargetOnline = onlineUsers.has(targetUserId);
       if (!isTargetOnline) {
         try {
-          const targetUser = await User.findById(targetUserId).select('pushToken pushNotificationsEnabled muteSettings');
           const callType = callData?.callType || 'voice';
-          const isMutedByCaller = targetUser?.muteSettings?.mutedUsers?.some(
-            (m) =>
-              m.userId.toString() === callerId &&
-              (m.muteAll || (callType === 'voice' ? m.muteVoiceCalls : m.muteVideoCalls))
+          const notifType = callType === 'video' ? 'video_call' : 'voice_call';
+          const targetUser = await User.findById(targetUserId).select(
+            'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
           );
-          if (targetUser?.pushToken && targetUser.pushNotificationsEnabled && !isMutedByCaller) {
-            const callerName = callerInfo?.name || 'Someone';
-            await sendExpoPushNotification(targetUser.pushToken, {
+          const callerName = callerInfo?.name || 'Someone';
+          const { sendSmartNotification } = require('./utils/pushNotifications');
+          await sendSmartNotification(
+            targetUser,
+            {
               title: `Incoming ${callType} call`,
               body: `${callerName} is calling you...`,
               data: { type: 'call', callerId, callType, callData, callerName, callerPhoto: callerInfo?.photo || '' },
-              priority: 'high',
-              sound: 'default',
-              channelId: 'calls'
-            });
-          }
+            },
+            notifType,
+            callerId,
+          );
         } catch (err) {
           console.error('Failed to send call push notification:', err);
         }
