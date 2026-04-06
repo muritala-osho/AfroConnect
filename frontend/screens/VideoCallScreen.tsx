@@ -22,9 +22,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
-import { getApiBaseUrl } from "@/constants/config";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import WebView from "react-native-webview";
+import { AGORA_HTML } from "@/constants/agoraHtml";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
@@ -158,6 +158,7 @@ export default function VideoCallScreen() {
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webViewRef        = useRef<WebView | null>(null);
   const agoraJoined       = useRef(false);
+  const pendingJoinRef    = useRef<object | null>(null);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
   const controlsTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -265,18 +266,26 @@ export default function VideoCallScreen() {
 
       if (Platform.OS === "web") {
         agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
+        return;
+      }
+
+      const msg = {
+        action: "join",
+        appId: callDataObj.appId,
+        channel: callDataObj.channelName,
+        token: joinToken,
+        uid: joinUid,
+        callType: "video",
+      };
+
+      /* Send immediately if WebView is ready, otherwise queue */
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify(msg));
       } else {
-        sendToWebView({
-          action: "join",
-          appId: callDataObj.appId,
-          channel: callDataObj.channelName,
-          token: joinToken,
-          uid: joinUid,
-          callType: "video",
-        });
+        pendingJoinRef.current = msg;
       }
     },
-    [isIncoming, authToken, get, sendToWebView],
+    [isIncoming, authToken, get],
   );
 
   /* ── End call ── */
@@ -524,10 +533,16 @@ export default function VideoCallScreen() {
     }
   }, [callStatus]);
 
-  /* ── WebView ready → join ── */
+  /* ── WebView ready → flush pending join or join if already connected ── */
   useEffect(() => {
+    if (!webviewReady) return;
+    /* Flush any queued join message */
+    if (pendingJoinRef.current) {
+      webViewRef.current?.postMessage(JSON.stringify(pendingJoinRef.current));
+      pendingJoinRef.current = null;
+      return;
+    }
     if (
-      webviewReady &&
       (callStatus === "connected" || callAccepted) &&
       activeCallDataRef.current &&
       !agoraJoined.current
@@ -557,7 +572,6 @@ export default function VideoCallScreen() {
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
   const showVideo    = isConnected && Platform.OS !== "web";
-  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -592,8 +606,9 @@ export default function VideoCallScreen() {
       {showVideo ? (
         <WebView
           ref={webViewRef}
-          source={{ uri: agoraUrl }}
+          source={{ html: AGORA_HTML }}
           style={StyleSheet.absoluteFillObject}
+          originWhitelist={["*"]}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"

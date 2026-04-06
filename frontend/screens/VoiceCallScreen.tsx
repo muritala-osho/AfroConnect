@@ -22,9 +22,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
-import { getApiBaseUrl } from "@/constants/config";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
+// getApiBaseUrl no longer needed — WebView uses inline HTML
 import WebView from "react-native-webview";
+import { AGORA_HTML } from "@/constants/agoraHtml";
 
 const { width: SW } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.42, 170);
@@ -200,6 +201,7 @@ export default function VoiceCallScreen() {
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const webViewRef        = useRef<WebView | null>(null);
   const agoraJoined       = useRef(false);
+  const pendingJoinRef    = useRef<object | null>(null);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
 
@@ -287,8 +289,9 @@ export default function VoiceCallScreen() {
     async (callDataObj: any) => {
       if (agoraJoined.current) return;
       agoraJoined.current = true;
+
       const hasPerm = await requestMicPermission();
-      if (!hasPerm) return;
+      if (!hasPerm) { agoraJoined.current = false; return; }
 
       let joinToken = callDataObj.token;
       let joinUid = callDataObj.uid || 0;
@@ -311,18 +314,26 @@ export default function VoiceCallScreen() {
 
       if (Platform.OS === "web") {
         agoraService.joinVoiceCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
+        return;
+      }
+
+      const msg = {
+        action: "join",
+        appId: callDataObj.appId,
+        channel: callDataObj.channelName,
+        token: joinToken,
+        uid: joinUid,
+        callType: "voice",
+      };
+
+      /* If WebView already loaded, send now; otherwise queue for onLoad */
+      if (webViewRef.current) {
+        webViewRef.current.postMessage(JSON.stringify(msg));
       } else {
-        sendToWebView({
-          action: "join",
-          appId: callDataObj.appId,
-          channel: callDataObj.channelName,
-          token: joinToken,
-          uid: joinUid,
-          callType: "voice",
-        });
+        pendingJoinRef.current = msg;
       }
     },
-    [isIncoming, authToken, get, sendToWebView, requestMicPermission],
+    [isIncoming, authToken, get, requestMicPermission],
   );
 
   /* ── End call ── */
@@ -547,14 +558,17 @@ export default function VoiceCallScreen() {
     }
   }, [callStatus]);
 
-  /* ── WebView ready → join ── */
+  /* ── WebView ready → flush pending join or join if already connected ── */
   useEffect(() => {
-    if (
-      webviewReady &&
-      (callStatus === "connected" || callAccepted) &&
-      activeCallDataRef.current &&
-      !agoraJoined.current
-    ) {
+    if (!webviewReady) return;
+    /* Flush any join message that was queued before WebView finished loading */
+    if (pendingJoinRef.current) {
+      webViewRef.current?.postMessage(JSON.stringify(pendingJoinRef.current));
+      pendingJoinRef.current = null;
+      return;
+    }
+    /* Handle case where call was already accepted before the screen mounted */
+    if ((callStatus === "connected" || callAccepted) && activeCallDataRef.current && !agoraJoined.current) {
       joinAgoraVoice(activeCallDataRef.current);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -579,7 +593,6 @@ export default function VoiceCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
-  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -625,17 +638,18 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      {/* Hidden Agora WebView — native only */}
+      {/* Hidden Agora WebView — inline HTML, no network dependency */}
       {Platform.OS !== "web" && (
         <WebView
           ref={webViewRef}
-          source={{ uri: agoraUrl }}
+          source={{ html: AGORA_HTML }}
           style={{ width: 0, height: 0, position: "absolute" }}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
+          originWhitelist={["*"]}
           onLoad={() => setWebviewReady(true)}
           onMessage={(e) => {
             try {
@@ -684,15 +698,8 @@ export default function VoiceCallScreen() {
           )}
         </LinearGradient>
 
-        {/* ── AVATAR — absolutely centered between top section and controls ── */}
+        {/* ── AVATAR — centered in the space between header and controls ── */}
         <View style={s.avatarCenter}>
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <>
-              <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 120} />
-              <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 72} />
-              <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 30} />
-            </>
-          )}
           <View style={s.avatarRing}>
             {userPhoto ? (
               <SafeImage
@@ -859,22 +866,20 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Avatar center — fills the screen, vertically centered in the content zone */
+  /* Avatar center — sits between header and controls, nudged up */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 200,  /* clear the gradient header (status bar + title + name + status + badge) */
-    paddingBottom: 220, /* clear the controls panel */
+    paddingTop: 160,   /* clears gradient header */
+    paddingBottom: 240, /* clears controls — larger pushes avatar upward */
   },
-
-  /* Alias kept for any legacy refs */
   avatarArea: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 200,
-    paddingBottom: 220,
+    paddingTop: 160,
+    paddingBottom: 240,
   },
   avatarRing: {
     width: AVATAR_SIZE,
