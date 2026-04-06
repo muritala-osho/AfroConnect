@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -6,12 +6,19 @@ import {
   Pressable,
   Image,
   Dimensions,
-  Animated,
   ScrollView,
   Alert,
   Modal,
   TouchableOpacity,
+  FlatList,
 } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -32,7 +39,7 @@ import CompatibilityQuiz, { CompatibilityScore } from "@/components/Compatibilit
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.25;
 
 const INTEREST_COLORS = [
@@ -154,6 +161,78 @@ function getUserLocalTime(user: any): string {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
+
+/* ── Zoomable photo with pinch + pan + double-tap ── */
+function ZoomablePhoto({ source }: { source: any }) {
+  const scale       = useSharedValue(1);
+  const savedScale  = useSharedValue(1);
+  const tx          = useSharedValue(0);
+  const ty          = useSharedValue(0);
+  const savedTx     = useSharedValue(0);
+  const savedTy     = useSharedValue(0);
+
+  const resetZoom = () => {
+    scale.value      = withSpring(1);
+    savedScale.value = 1;
+    tx.value         = withSpring(0);
+    ty.value         = withSpring(0);
+    savedTx.value    = 0;
+    savedTy.value    = 0;
+  };
+
+  const pinch = Gesture.Pinch()
+    .onUpdate(e => {
+      scale.value = Math.min(Math.max(savedScale.value * e.scale, 0.8), 5);
+    })
+    .onEnd(() => {
+      if (scale.value < 1) { runOnJS(resetZoom)(); }
+      else { savedScale.value = scale.value; }
+    });
+
+  const pan = Gesture.Pan()
+    .onUpdate(e => {
+      if (savedScale.value > 1) {
+        tx.value = savedTx.value + e.translationX;
+        ty.value = savedTy.value + e.translationY;
+      }
+    })
+    .onEnd(() => {
+      savedTx.value = tx.value;
+      savedTy.value = ty.value;
+    });
+
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (savedScale.value > 1) { runOnJS(resetZoom)(); }
+      else {
+        scale.value      = withSpring(2.5);
+        savedScale.value = 2.5;
+      }
+    });
+
+  const composed = Gesture.Simultaneous(pinch, pan);
+  const gesture  = Gesture.Exclusive(doubleTap, composed);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: tx.value },
+      { translateY: ty.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={gesture}>
+      <Animated.Image
+        source={source}
+        style={[{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.82 }, animStyle]}
+        resizeMode="contain"
+      />
+    </GestureDetector>
+  );
+}
+
 export default function ProfileDetailScreen() {
   const { theme } = useTheme();
   const { token, user: currentUser } = useAuth();
@@ -753,53 +832,44 @@ export default function ProfileDetailScreen() {
         onRequestClose={() => setZoomVisible(false)}
       >
         <View style={styles.zoomModalContainer}>
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={styles.zoomScrollContent}
-            maximumZoomScale={4}
-            minimumZoomScale={1}
-            showsHorizontalScrollIndicator={false}
-            showsVerticalScrollIndicator={false}
-            centerContent
-            bounces={false}
-          >
-            {user?.photos && user.photos[zoomPhotoIndex] && (
-              <Image
-                source={getPhotoSource(user.photos[zoomPhotoIndex])}
-                style={styles.zoomImage}
-                resizeMode="contain"
-              />
-            )}
-          </ScrollView>
+          {user?.photos && user.photos.length > 0 && (
+            <FlatList
+              data={user.photos}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(_: any, i: number) => i.toString()}
+              initialScrollIndex={zoomPhotoIndex}
+              getItemLayout={(_: any, index: number) => ({
+                length: SCREEN_WIDTH,
+                offset: SCREEN_WIDTH * index,
+                index,
+              })}
+              renderItem={({ item }: { item: any }) => (
+                <View style={styles.zoomPhotoPage}>
+                  <ZoomablePhoto source={getPhotoSource(item)} />
+                </View>
+              )}
+              onMomentumScrollEnd={(e: any) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setZoomPhotoIndex(idx);
+              }}
+            />
+          )}
 
-          {/* Photo indicators */}
+          {/* Photo count indicator */}
           {user?.photos && user.photos.length > 1 && (
-            <View style={styles.zoomIndicators}>
+            <View style={[styles.zoomIndicators, { top: insets.top + 56 }]}>
               {user.photos.map((_: any, idx: number) => (
-                <TouchableOpacity
+                <View
                   key={idx}
-                  onPress={() => setZoomPhotoIndex(idx)}
                   style={[
                     styles.zoomDot,
-                    { backgroundColor: idx === zoomPhotoIndex ? "#fff" : "rgba(255,255,255,0.4)" }
+                    { backgroundColor: idx === zoomPhotoIndex ? "#fff" : "rgba(255,255,255,0.35)" }
                   ]}
                 />
               ))}
             </View>
-          )}
-
-          {/* Left / right tap areas */}
-          {user?.photos && user.photos.length > 1 && (
-            <>
-              <TouchableOpacity
-                style={styles.zoomLeft}
-                onPress={() => setZoomPhotoIndex(i => Math.max(0, i - 1))}
-              />
-              <TouchableOpacity
-                style={styles.zoomRight}
-                onPress={() => setZoomPhotoIndex(i => Math.min((user.photos?.length || 1) - 1, i + 1))}
-              />
-            </>
           )}
 
           {/* Close button */}
@@ -810,10 +880,10 @@ export default function ProfileDetailScreen() {
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
 
-          {/* Hint */}
-          <View style={[styles.zoomHint, { bottom: insets.bottom + 24 }]}>
-            <Ionicons name="search-outline" size={14} color="rgba(255,255,255,0.6)" />
-            <ThemedText style={styles.zoomHintText}>Pinch to zoom</ThemedText>
+          {/* Double-tap / pinch hint */}
+          <View style={[styles.zoomHint, { bottom: insets.bottom + 20 }]}>
+            <Ionicons name="search-outline" size={13} color="rgba(255,255,255,0.5)" />
+            <ThemedText style={styles.zoomHintText}>Pinch or double-tap to zoom · Swipe for next photo</ThemedText>
           </View>
         </View>
       </Modal>
