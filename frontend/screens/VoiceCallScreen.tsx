@@ -650,18 +650,21 @@ export default function VoiceCallScreen() {
       {/* ── FULL-SCREEN OVERLAY (absolute fill — immune to nav height issues) ── */}
       <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
 
-        {/* ── TOP SECTION: back button + title + caller name + status ── */}
-        <View style={[s.topSection, { paddingTop: Math.max(insets.top, 28) + 12 }]}>
+        {/* ── TOP SECTION: gradient scrim + back/minimize + name + status ── */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.75)", "rgba(0,0,0,0.40)", "transparent"]}
+          style={[s.topSection, { paddingTop: Math.max(insets.top, 36) + 8 }]}
+        >
           <View style={s.topBar}>
             <Pressable
               style={s.topBtn}
-              hitSlop={12}
+              hitSlop={16}
               onPress={isConnected ? handleMinimize : () => navigation.canGoBack() && navigation.goBack()}
             >
               <Ionicons
                 name={isConnected ? "chevron-down" : "arrow-back"}
                 size={22}
-                color="rgba(255,255,255,0.85)"
+                color="#fff"
               />
             </Pressable>
             <Text style={s.topTitle}>Voice Call</Text>
@@ -679,7 +682,7 @@ export default function VoiceCallScreen() {
               <Text style={s.e2eText}>End-to-end encrypted</Text>
             </View>
           )}
-        </View>
+        </LinearGradient>
 
         {/* ── AVATAR — absolutely centered between top section and controls ── */}
         <View style={s.avatarCenter}>
@@ -696,7 +699,6 @@ export default function VoiceCallScreen() {
                 source={{ uri: userPhoto }}
                 style={s.avatar}
                 contentFit="cover"
-                contentPosition="top"
               />
             ) : (
               <LinearGradient colors={["#059669", "#10b981", "#34d399"]} style={s.avatar}>
@@ -824,14 +826,14 @@ export default function VoiceCallScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#030d08" },
 
-  /* Top section — absolutely pinned to the top */
+  /* Top section — absolutely pinned to the top (LinearGradient scrim) */
   topSection: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     alignItems: "center",
-    paddingBottom: 16,
+    paddingBottom: 56, /* extra fade-out room for the gradient */
     zIndex: 10,
   },
   topBar: {
@@ -857,22 +859,22 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Avatar center — fills the screen, centers the avatar */
+  /* Avatar center — fills the screen, vertically centered in the content zone */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 140,   /* clear the top section */
-    paddingBottom: 200, /* clear the controls panel */
+    paddingTop: 200,  /* clear the gradient header (status bar + title + name + status + badge) */
+    paddingBottom: 220, /* clear the controls panel */
   },
 
-  /* Keep avatarArea as alias so PulseRing refs don't break */
+  /* Alias kept for any legacy refs */
   avatarArea: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 140,
-    paddingBottom: 200,
+    paddingTop: 200,
+    paddingBottom: 220,
   },
   avatarRing: {
     width: AVATAR_SIZE,
