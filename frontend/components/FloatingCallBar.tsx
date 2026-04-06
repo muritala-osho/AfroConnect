@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { SafeImage } from "@/components/SafeImage";
 import { useCallContext } from "@/contexts/CallContext";
-import { useNavigation, useNavigationState } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function formatDuration(s: number) {
@@ -19,26 +19,18 @@ function formatDuration(s: number) {
 }
 
 export default function FloatingCallBar() {
-  const { activeCall, isCallMinimized, maximizeCall } = useCallContext();
+  const { activeCall, isCallMinimized, isOnCallScreen, maximizeCall } = useCallContext();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-80)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  /* Check if the user is currently on a call screen */
-  const currentRouteName = useNavigationState((state) => {
-    if (!state) return null;
-    const route = state.routes[state.index];
-    return route?.name ?? null;
-  });
-  const onCallScreen =
-    currentRouteName === "VoiceCall" || currentRouteName === "VideoCall";
-
+  /* Only show the bar when minimized AND not currently on a call screen */
   const show = !!(
     activeCall &&
     isCallMinimized &&
     activeCall.callStatus === "connected" &&
-    !onCallScreen
+    !isOnCallScreen
   );
 
   useEffect(() => {
@@ -62,7 +54,8 @@ export default function FloatingCallBar() {
     return () => loop.stop();
   }, [show]);
 
-  if (!activeCall || onCallScreen) return null;
+  /* Never render on top of the call screens */
+  if (!activeCall || isOnCallScreen) return null;
 
   const handleTap = () => {
     maximizeCall();

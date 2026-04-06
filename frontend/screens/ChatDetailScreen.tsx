@@ -427,6 +427,16 @@ export default function ChatDetailScreen({
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
   const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
   const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [viewOnceCountdown, setViewOnceCountdown] = useState(10);
+  const viewOnceCountdownRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  /* Clean up view-once timers on unmount */
+  useEffect(() => {
+    return () => {
+      if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+      if (viewOnceCountdownRef.current) clearInterval(viewOnceCountdownRef.current);
+    };
+  }, []);
 
   
   const setViewOnceModeSync = (val: boolean | ((prev: boolean) => boolean)) => {
@@ -983,6 +993,44 @@ export default function ChatDetailScreen({
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     }).catch(e => console.error("View once mark error:", e));
+  };
+
+  /** Start the 10-second view-once countdown and handle auto-close. */
+  const startViewOnceCountdown = (onClose: () => void) => {
+    // Prevent screenshots while the view-once content is visible
+    if (Platform.OS !== "web" && !screenshotProtection) {
+      try { ScreenCapture.preventScreenCaptureAsync(); } catch (_) {}
+    }
+    // Cancel any existing timers
+    if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+    if (viewOnceCountdownRef.current) clearInterval(viewOnceCountdownRef.current);
+    // Reset and start the countdown display
+    setViewOnceCountdown(10);
+    let remaining = 10;
+    viewOnceCountdownRef.current = setInterval(() => {
+      remaining -= 1;
+      setViewOnceCountdown(remaining);
+      if (remaining <= 0 && viewOnceCountdownRef.current) {
+        clearInterval(viewOnceCountdownRef.current);
+        viewOnceCountdownRef.current = null;
+      }
+    }, 1000);
+    // Auto-close after 10 seconds
+    viewOnceTimerRef.current = setTimeout(() => {
+      onClose();
+      viewOnceTimerRef.current = null;
+    }, 10000);
+  };
+
+  /** Stop the countdown and re-allow screenshots (unless global protection is on). */
+  const stopViewOnceCountdown = () => {
+    if (viewOnceTimerRef.current) { clearTimeout(viewOnceTimerRef.current); viewOnceTimerRef.current = null; }
+    if (viewOnceCountdownRef.current) { clearInterval(viewOnceCountdownRef.current); viewOnceCountdownRef.current = null; }
+    if (Platform.OS !== "web" && !screenshotProtection) {
+      try { ScreenCapture.allowScreenCaptureAsync(); } catch (_) {}
+    }
+    setViewOnceViewerActive(false);
+    setViewOnceCountdown(10);
   };
 
   const handleTypingIndicator = useCallback(() => {
@@ -1647,11 +1695,10 @@ export default function ChatDetailScreen({
                               handleMarkViewOnce(item._id);
                               setViewOnceViewerActive(true);
                               setViewingImage(item.imageUrl!);
-                              if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
-                              viewOnceTimerRef.current = setTimeout(() => {
+                              startViewOnceCountdown(() => {
                                 setViewingImage(null);
-                                setViewOnceViewerActive(false);
-                              }, 10000);
+                                stopViewOnceCountdown();
+                              });
                             }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
                             <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
@@ -1694,11 +1741,10 @@ export default function ChatDetailScreen({
                                 handleMarkViewOnce(item._id);
                                 setViewOnceViewerActive(true);
                                 setViewingVideo(url);
-                                if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
-                                viewOnceTimerRef.current = setTimeout(() => {
+                                startViewOnceCountdown(() => {
                                   setViewingVideo(null);
-                                  setViewOnceViewerActive(false);
-                                }, 10000);
+                                  stopViewOnceCountdown();
+                                });
                               }
                             }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
@@ -2252,14 +2298,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
                 <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
               </View>
             </View>
           ) : (
@@ -2272,14 +2318,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Video viewer */}
-      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
+      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
                 <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
               </View>
             </View>
           ) : (

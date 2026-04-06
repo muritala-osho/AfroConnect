@@ -131,6 +131,7 @@ export default function VideoCallScreen() {
     maximizeCall,
     clearCall,
     activeCall,
+    setIsOnCallScreen,
   } = useCallContext();
 
   /* ── State ── */
@@ -444,7 +445,8 @@ export default function VideoCallScreen() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
 
-    /* Ensure the floating call bar is hidden while on this screen */
+    /* Tell the FloatingCallBar we are on a call screen — hide it */
+    setIsOnCallScreen(true);
     maximizeCall();
 
     setActiveCall({
@@ -515,6 +517,7 @@ export default function VideoCallScreen() {
     });
 
     return () => {
+      setIsOnCallScreen(false);
       stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       if (controlsTimer.current) clearTimeout(controlsTimer.current);

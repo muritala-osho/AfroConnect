@@ -177,6 +177,7 @@ export default function VoiceCallScreen() {
     maximizeCall,
     clearCall,
     activeCall,
+    setIsOnCallScreen,
   } = useCallContext();
 
   /* ── State ── */
@@ -472,7 +473,8 @@ export default function VoiceCallScreen() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
 
-    /* Ensure the floating call bar is hidden while on this screen */
+    /* Tell the FloatingCallBar we are on a call screen — hide it */
+    setIsOnCallScreen(true);
     maximizeCall();
 
     setActiveCall({
@@ -540,6 +542,7 @@ export default function VoiceCallScreen() {
     });
 
     return () => {
+      setIsOnCallScreen(false);
       stopRingtone();
       if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
       socketService.off("call:accepted");
