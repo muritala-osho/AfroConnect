@@ -647,13 +647,14 @@ export default function VideoCallScreen() {
       {!showVideo && Platform.OS !== "web" && (
         <WebView
           ref={webViewRef}
-          source={{ uri: agoraUrl }}
+          source={{ html: AGORA_HTML }}
           style={{ width: 0, height: 0, position: "absolute" }}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
+          originWhitelist={["*"]}
           onLoad={() => setWebviewReady(true)}
           onMessage={(e) => {
             try {

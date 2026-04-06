@@ -23,7 +23,6 @@ import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
-// getApiBaseUrl no longer needed — WebView uses inline HTML
 import WebView from "react-native-webview";
 import { AGORA_HTML } from "@/constants/agoraHtml";
 
