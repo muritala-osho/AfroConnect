@@ -239,7 +239,7 @@ router.get('/search', protect, async (req, res) => {
 // @desc    Save a song to user's profile
 // @access  Private
 router.post('/set-song', protect, async (req, res) => {
-  const { title, artist, spotifyUri, albumArt } = req.body;
+  const { title, artist, spotifyUri, albumArt, previewUrl } = req.body;
   if (!title) {
     return res.status(400).json({ success: false, message: 'Song title required' });
   }
@@ -252,6 +252,7 @@ router.post('/set-song', protect, async (req, res) => {
           artist: (artist || '').trim(),
           spotifyUri: spotifyUri || '',
           albumArt: albumArt || '',
+          previewUrl: previewUrl || '',
         },
       },
       { new: true }

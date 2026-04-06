@@ -23,6 +23,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { getPhotoSource } from "@/utils/photos";
 import ActivityStatus from "@/components/ActivityStatus";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import SongPreviewButton from "@/components/SongPreviewButton";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
@@ -607,6 +608,11 @@ export default function ProfileDetailScreen() {
                       </ThemedText>
                     ) : null}
                   </View>
+                  <SongPreviewButton
+                    previewUrl={(user as any).favoriteSong?.previewUrl}
+                    spotifyUri={(user as any).favoriteSong?.spotifyUri}
+                    size={20}
+                  />
                 </View>
               </View>
             )}

@@ -19,6 +19,7 @@ import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import SongPreviewButton from "@/components/SongPreviewButton";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import VoiceBio from "@/components/VoiceBio";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -967,6 +968,11 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                     <ThemedText style={[styles.songArtist, { color: theme.textSecondary }]}>{(user as any).favoriteSong.artist}</ThemedText>
                   )}
                 </View>
+                <SongPreviewButton
+                  previewUrl={(user as any).favoriteSong?.previewUrl}
+                  spotifyUri={(user as any).favoriteSong?.spotifyUri}
+                  size={18}
+                />
               </View>
             </View>
           </View>

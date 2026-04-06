@@ -400,6 +400,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           artist: track.artist,
           spotifyUri: track.spotifyUri,
           albumArt: track.albumArt,
+          previewUrl: track.previewUrl,
         }),
       });
       if (fetchUser) await fetchUser();
