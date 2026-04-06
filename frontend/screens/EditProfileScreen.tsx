@@ -266,6 +266,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [spotifySearchVisible, setSpotifySearchVisible] = useState(false);
   const [searchingSpotify, setSearchingSpotify] = useState(false);
   const [songAlbumArt, setSongAlbumArt] = useState((user as any)?.favoriteSong?.albumArt || "");
+  const [songSpotifyUri, setSongSpotifyUri] = useState((user as any)?.favoriteSong?.spotifyUri || "");
+  const [songPreviewUrl, setSongPreviewUrl] = useState((user as any)?.favoriteSong?.previewUrl || "");
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -328,6 +330,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           setSongTitle(statusData.favoriteSong.title);
           setSongArtist(statusData.favoriteSong.artist || "");
           setSongAlbumArt(statusData.favoriteSong.albumArt || "");
+          setSongSpotifyUri(statusData.favoriteSong.spotifyUri || "");
+          setSongPreviewUrl(statusData.favoriteSong.previewUrl || "");
         }
         if (fetchUser) await fetchUser();
       }
@@ -388,6 +392,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     setSongTitle(track.title);
     setSongArtist(track.artist);
     setSongAlbumArt(track.albumArt || "");
+    setSongSpotifyUri(track.spotifyUri || "");
+    setSongPreviewUrl(track.previewUrl || "");
     setSpotifySearchVisible(false);
     setSpotifySearchQuery("");
     setSpotifySearchResults([]);
@@ -431,6 +437,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           title: songTitle.trim(),
           artist: songArtist.trim(),
           ...(songAlbumArt ? { albumArt: songAlbumArt } : {}),
+          ...(songSpotifyUri ? { spotifyUri: songSpotifyUri } : {}),
+          ...(songPreviewUrl ? { previewUrl: songPreviewUrl } : {}),
         } : undefined,
         lifestyle: {
           smoking: smoking || undefined,

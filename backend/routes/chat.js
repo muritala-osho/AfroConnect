@@ -681,6 +681,7 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       longitude,
       address,
       replyTo,
+      viewOnce,
     } = req.body;
 
     const match = await Match.findById(matchId);
@@ -697,21 +698,31 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       sender: req.user._id,
       receiver,
       type,
-      content,
       status: "sent",
       deliveredAt: new Date(),
     };
 
-    if (type === "image" && imageUrl) messageData.imageUrl = imageUrl;
-    if (type === "video" && videoUrl) messageData.videoUrl = videoUrl;
-    if (type === "audio" && audioUrl) {
+    if (type === "text") {
+      messageData.content = content;
+    } else if (type === "image" && imageUrl) {
+      messageData.imageUrl = imageUrl;
+      messageData.content = viewOnce ? "📷 View Once Photo" : (content || "📷 Photo");
+      if (viewOnce) messageData.viewOnce = true;
+    } else if (type === "video" && videoUrl) {
+      messageData.videoUrl = videoUrl;
+      messageData.content = viewOnce ? "🎥 View Once Video" : (content || "🎥 Video");
+      if (viewOnce) messageData.viewOnce = true;
+    } else if (type === "audio" && audioUrl) {
       messageData.audioUrl = audioUrl;
       messageData.audioDuration = audioDuration || 0;
-    }
-    if (type === "location") {
+      messageData.content = content || "🎤 Voice message";
+    } else if (type === "location") {
       messageData.latitude = latitude;
       messageData.longitude = longitude;
       messageData.address = address;
+      messageData.content = content;
+    } else {
+      messageData.content = content;
     }
 
     if (replyTo) {

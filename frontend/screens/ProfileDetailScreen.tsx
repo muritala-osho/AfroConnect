@@ -170,31 +170,34 @@ function ZoomablePhoto({ source }: { source: any }) {
   const ty          = useSharedValue(0);
   const savedTx     = useSharedValue(0);
   const savedTy     = useSharedValue(0);
-
-  const resetZoom = () => {
-    scale.value      = withSpring(1);
-    savedScale.value = 1;
-    tx.value         = withSpring(0);
-    ty.value         = withSpring(0);
-    savedTx.value    = 0;
-    savedTy.value    = 0;
-  };
+  const [isZoomed, setIsZoomed] = useState(false);
 
   const pinch = Gesture.Pinch()
     .onUpdate(e => {
       scale.value = Math.min(Math.max(savedScale.value * e.scale, 0.8), 5);
     })
     .onEnd(() => {
-      if (scale.value < 1) { runOnJS(resetZoom)(); }
-      else { savedScale.value = scale.value; }
+      if (scale.value < 1) {
+        scale.value      = withSpring(1);
+        savedScale.value = 1;
+        tx.value         = withSpring(0);
+        ty.value         = withSpring(0);
+        savedTx.value    = 0;
+        savedTy.value    = 0;
+        runOnJS(setIsZoomed)(false);
+      } else {
+        savedScale.value = scale.value;
+        runOnJS(setIsZoomed)(scale.value > 1.05);
+      }
     });
 
+  // Pan is only enabled when the image is zoomed in — when at scale=1 the
+  // FlatList handles horizontal swipes to navigate between photos.
   const pan = Gesture.Pan()
+    .enabled(isZoomed)
     .onUpdate(e => {
-      if (savedScale.value > 1) {
-        tx.value = savedTx.value + e.translationX;
-        ty.value = savedTy.value + e.translationY;
-      }
+      tx.value = savedTx.value + e.translationX;
+      ty.value = savedTy.value + e.translationY;
     })
     .onEnd(() => {
       savedTx.value = tx.value;
@@ -204,10 +207,18 @@ function ZoomablePhoto({ source }: { source: any }) {
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
     .onEnd(() => {
-      if (savedScale.value > 1) { runOnJS(resetZoom)(); }
-      else {
+      if (savedScale.value > 1) {
+        scale.value      = withSpring(1);
+        savedScale.value = 1;
+        tx.value         = withSpring(0);
+        ty.value         = withSpring(0);
+        savedTx.value    = 0;
+        savedTy.value    = 0;
+        runOnJS(setIsZoomed)(false);
+      } else {
         scale.value      = withSpring(2.5);
         savedScale.value = 2.5;
+        runOnJS(setIsZoomed)(true);
       }
     });
 
@@ -1385,5 +1396,12 @@ const styles = StyleSheet.create({
   zoomHintText: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.6)',
+  },
+  zoomPhotoPage: {
+    width: SCREEN_WIDTH,
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
   },
 });

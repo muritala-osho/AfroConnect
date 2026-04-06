@@ -1935,7 +1935,7 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds],
   );
 
   const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);
@@ -1955,7 +1955,7 @@ export default function ChatDetailScreen({
           data={enrichedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
-          extraData={[playingAudioId, audioProgress, highlightedMessageId]}
+          extraData={[playingAudioId, audioProgress, highlightedMessageId, openedViewOnceIds]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
