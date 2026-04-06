@@ -21,8 +21,15 @@ export const AGORA_HTML = `<!DOCTYPE html>
       box-shadow: 0 4px 16px rgba(0,0,0,0.6);
       touch-action: none;
       cursor: grab;
+      will-change: transform;
+      -webkit-user-select: none;
+      user-select: none;
     }
     #local-video:active { cursor: grabbing; }
+    #local-video.switching {
+      opacity: 0.45;
+      transition: opacity 0.15s ease;
+    }
     #remote-video {
       width: 100vw;
       height: 100vh;
@@ -44,13 +51,30 @@ export const AGORA_HTML = `<!DOCTYPE html>
   var callType = 'voice';
   var currentFacingMode = 'user';
 
-  /* ── Draggable local video ── */
+  /* ── Draggable local video with snap-to-corner ── */
   (function() {
     var el = document.getElementById('local-video');
     var startX = 0, startY = 0, origLeft = 0, origTop = 0;
     var isDragging = false;
+    var MARGIN = 12;
 
     function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
+
+    function snapToCorner() {
+      var W = window.innerWidth;
+      var H = window.innerHeight;
+      var rect = el.getBoundingClientRect();
+      var cx = rect.left + rect.width  / 2;
+      var cy = rect.top  + rect.height / 2;
+      var goRight  = cx > W / 2;
+      var goBottom = cy > H / 2;
+      var targetLeft = goRight  ? (W - el.offsetWidth  - MARGIN) : MARGIN;
+      var targetTop  = goBottom ? (H - el.offsetHeight - MARGIN) : (MARGIN + 56);
+      el.style.transition = 'left 0.22s cubic-bezier(0.25,0.46,0.45,0.94), top 0.22s cubic-bezier(0.25,0.46,0.45,0.94)';
+      el.style.left = targetLeft + 'px';
+      el.style.top  = targetTop  + 'px';
+      setTimeout(function() { el.style.transition = ''; }, 250);
+    }
 
     el.addEventListener('touchstart', function(e) {
       if (e.touches.length !== 1) return;
@@ -63,24 +87,27 @@ export const AGORA_HTML = `<!DOCTYPE html>
       origTop  = rect.top;
       el.style.right  = 'auto';
       el.style.bottom = 'auto';
-      el.style.left   = origLeft + 'px';
-      el.style.top    = origTop  + 'px';
+      el.style.transition = '';
+      el.style.left = origLeft + 'px';
+      el.style.top  = origTop  + 'px';
       e.preventDefault();
     }, { passive: false });
 
     el.addEventListener('touchmove', function(e) {
       if (!isDragging || e.touches.length !== 1) return;
       var t = e.touches[0];
-      var dx = t.clientX - startX;
-      var dy = t.clientY - startY;
-      var newLeft = clamp(origLeft + dx, 0, window.innerWidth  - el.offsetWidth);
-      var newTop  = clamp(origTop  + dy, 0, window.innerHeight - el.offsetHeight);
+      var newLeft = clamp(origLeft + t.clientX - startX, 0, window.innerWidth  - el.offsetWidth);
+      var newTop  = clamp(origTop  + t.clientY - startY, 0, window.innerHeight - el.offsetHeight);
       el.style.left = newLeft + 'px';
       el.style.top  = newTop  + 'px';
       e.preventDefault();
     }, { passive: false });
 
-    el.addEventListener('touchend', function() { isDragging = false; });
+    el.addEventListener('touchend', function() {
+      if (!isDragging) return;
+      isDragging = false;
+      snapToCorner();
+    });
   })();
 
   function postToNative(data) {

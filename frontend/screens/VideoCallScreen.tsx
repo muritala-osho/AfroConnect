@@ -230,15 +230,17 @@ export default function VideoCallScreen() {
         ? require("../assets/sounds/mixkit-waiting-ringtone-1354.wav")
         : require("../assets/sounds/phone-calling-1b.mp3");
       const { sound } = await Audio.Sound.createAsync(source, {
-        shouldPlay: true,
+        shouldPlay: false,   // don't auto-play; check ref first to avoid audio leak
         isLooping: true,
         volume: 1.0,
       });
       if (!shouldRingRef.current) {
+        await sound.stopAsync().catch(() => {});
         await sound.unloadAsync().catch(() => {});
         return;
       }
       ringtoneRef.current = sound;
+      await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
       console.error("Video ringtone error:", err);
@@ -723,8 +725,10 @@ export default function VideoCallScreen() {
       {/* ── UI OVERLAY ── */}
       <Animated.View style={[s.overlay, { opacity: fadeAnim }]} pointerEvents="box-none">
 
-        {/* Tap anywhere to show controls when connected */}
-        {isConnected && (
+        {/* Tap anywhere to show controls — only active when controls are hidden,
+            so WebView touch events (self-view drag) pass through freely when
+            controls are already visible */}
+        {isConnected && !controlsVisible && (
           <Pressable style={StyleSheet.absoluteFillObject} onPress={showControls} />
         )}
 
