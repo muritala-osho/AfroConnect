@@ -174,6 +174,7 @@ export default function VoiceCallScreen() {
     startGlobalTimer,
     stopGlobalTimer,
     minimizeCall,
+    maximizeCall,
     clearCall,
     activeCall,
   } = useCallContext();
@@ -227,6 +228,15 @@ export default function VoiceCallScreen() {
         await snd.stopAsync().catch(() => {});
         await snd.unloadAsync().catch(() => {});
       }
+    } catch {}
+    /* Reset audio session so mic is available for the call */
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: true,
+      });
     } catch {}
   }, []);
 
@@ -462,6 +472,9 @@ export default function VoiceCallScreen() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
 
+    /* Ensure the floating call bar is hidden while on this screen */
+    maximizeCall();
+
     setActiveCall({
       userId: userId || callerId || "",
       userName: userName || "Unknown",
@@ -481,6 +494,16 @@ export default function VoiceCallScreen() {
       setStatus("connected");
     } else if (isIncoming) {
       setStatus("ringing");
+      /* Auto-decline if not answered within 60 seconds */
+      ringingTimeout.current = setTimeout(async () => {
+        if (callStatusRef.current === "ringing") {
+          await stopRingtone();
+          socketService.declineCall({ callerId, callType: "audio" });
+          setStatus("missed");
+          clearCall();
+          setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
+        }
+      }, 60000);
     } else {
       initiateCall();
     }
@@ -688,7 +711,21 @@ export default function VoiceCallScreen() {
           />
         </Pressable>
 
-        {/* ── AVATAR + name + status — vertically centered ── */}
+        {/* ── NAME + STATUS — top-center header area ── */}
+        <View style={[s.topNameBlock, { top: insets.top + 12 }]}>
+          <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
+          <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
+            {statusText()}
+          </Text>
+          {(callStatus === "ringing" || callStatus === "connecting") && (
+            <View style={s.e2eBadge}>
+              <Ionicons name="lock-closed" size={10} color="#34d399" />
+              <Text style={s.e2eText}>End-to-end encrypted</Text>
+            </View>
+          )}
+        </View>
+
+        {/* ── AVATAR — centered in the middle ── */}
         <View style={s.avatarCenter}>
           <View style={s.avatarRing}>
             {userPhoto ? (
@@ -703,18 +740,6 @@ export default function VoiceCallScreen() {
               </LinearGradient>
             )}
           </View>
-
-          <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
-          <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
-            {statusText()}
-          </Text>
-
-          {(callStatus === "ringing" || callStatus === "connecting") && (
-            <View style={s.e2eBadge}>
-              <Ionicons name="lock-closed" size={10} color="#34d399" />
-              <Text style={s.e2eText}>End-to-end encrypted</Text>
-            </View>
-          )}
 
           {isConnected && (
             <View style={s.liveRow}>
@@ -848,20 +873,22 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* Avatar center — no header to clear, balanced between back btn and controls */
+  /* Name + status pinned at the top-center, below the back button */
+  topNameBlock: {
+    position: "absolute",
+    left: 60,
+    right: 60,
+    alignItems: "center",
+    zIndex: 10,
+  },
+
+  /* Avatar center — fills screen minus header/controls, avatar only */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 60,    /* clear the small back button */
+    paddingTop: 140,    /* clear the top name block */
     paddingBottom: 220, /* clear the controls panel */
-  },
-  avatarArea: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 60,
-    paddingBottom: 220,
   },
   avatarRing: {
     width: AVATAR_SIZE,
@@ -884,7 +911,7 @@ const s = StyleSheet.create({
   },
 
   callerName: {
-    fontSize: 26,
+    fontSize: 20,
     fontWeight: "700",
     color: "#ffffff",
     letterSpacing: 0.3,

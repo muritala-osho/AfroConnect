@@ -128,6 +128,7 @@ export default function VideoCallScreen() {
     startGlobalTimer,
     stopGlobalTimer,
     minimizeCall,
+    maximizeCall,
     clearCall,
     activeCall,
   } = useCallContext();
@@ -199,6 +200,15 @@ export default function VideoCallScreen() {
         await snd.stopAsync().catch(() => {});
         await snd.unloadAsync().catch(() => {});
       }
+    } catch {}
+    /* Reset audio session so mic and camera work for the call */
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: false,
+      });
     } catch {}
   }, []);
 
@@ -382,7 +392,7 @@ export default function VideoCallScreen() {
     setIsSpeakerOn(next);
     try {
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+        allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         playThroughEarpieceAndroid: !next,
@@ -434,6 +444,9 @@ export default function VideoCallScreen() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
 
+    /* Ensure the floating call bar is hidden while on this screen */
+    maximizeCall();
+
     setActiveCall({
       userId: userId || callerId || "",
       userName: userName || "Unknown",
@@ -455,6 +468,16 @@ export default function VideoCallScreen() {
       showControls();
     } else if (isIncoming) {
       setStatus("ringing");
+      /* Auto-decline if not answered within 60 seconds */
+      ringingTimeout.current = setTimeout(async () => {
+        if (callStatusRef.current === "ringing") {
+          await stopRingtone();
+          socketService.declineCall({ callerId, callType: "video" });
+          setStatus("missed");
+          clearCall();
+          setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
+        }
+      }, 60000);
     } else {
       initiateCall();
     }
@@ -701,13 +724,14 @@ export default function VideoCallScreen() {
                 </Text>
               </View>
 
-              {/* Camera off badge */}
-              {isConnected && isCameraOff && (
+              {/* Right side placeholder — always same width as back button to keep name centered */}
+              {isConnected && isCameraOff ? (
                 <View style={s.camOffBadge}>
                   <Ionicons name="videocam-off" size={14} color="#fff" />
                 </View>
+              ) : (
+                <View style={{ width: 38 }} />
               )}
-              {!isConnected && <View style={{ width: 38 }} />}
             </View>
           </LinearGradient>
         </Animated.View>
