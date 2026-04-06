@@ -651,7 +651,7 @@ export default function VoiceCallScreen() {
       <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
 
         {/* ── TOP SECTION: back button + title + caller name + status ── */}
-        <View style={[s.topSection, { paddingTop: insets.top + 8 }]}>
+        <View style={[s.topSection, { paddingTop: Math.max(insets.top, 28) + 12 }]}>
           <View style={s.topBar}>
             <Pressable
               style={s.topBtn}
@@ -692,7 +692,12 @@ export default function VoiceCallScreen() {
           )}
           <View style={s.avatarRing}>
             {userPhoto ? (
-              <SafeImage source={{ uri: userPhoto }} style={s.avatar} />
+              <SafeImage
+                source={{ uri: userPhoto }}
+                style={s.avatar}
+                contentFit="cover"
+                contentPosition="top"
+              />
             ) : (
               <LinearGradient colors={["#059669", "#10b981", "#34d399"]} style={s.avatar}>
                 <Text style={s.avatarInitial}>{(userName || "?").charAt(0).toUpperCase()}</Text>

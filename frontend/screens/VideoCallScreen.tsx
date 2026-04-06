@@ -717,6 +717,8 @@ export default function VideoCallScreen() {
               <SafeImage
                 source={{ uri: userPhoto || "https://via.placeholder.com/200" }}
                 style={s.avatarImg}
+                contentFit="cover"
+                contentPosition="top"
               />
             </View>
 
