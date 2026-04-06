@@ -23,8 +23,8 @@ import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
+import { getApiBaseUrl } from "@/constants/config";
 import WebView from "react-native-webview";
-import { AGORA_HTML } from "@/constants/agoraHtml";
 
 const { width: SW } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.42, 170);
@@ -592,6 +592,7 @@ export default function VoiceCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
+  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -637,18 +638,17 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      {/* Hidden Agora WebView — inline HTML, no network dependency */}
+      {/* Hidden Agora WebView — loads from HTTPS backend for getUserMedia permission */}
       {Platform.OS !== "web" && (
         <WebView
           ref={webViewRef}
-          source={{ html: AGORA_HTML }}
+          source={{ uri: agoraUrl }}
           style={{ width: 0, height: 0, position: "absolute" }}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"
           javaScriptEnabled
           domStorageEnabled
-          originWhitelist={["*"]}
           onLoad={() => setWebviewReady(true)}
           onMessage={(e) => {
             try {
