@@ -425,7 +425,8 @@ export default function VoiceCallScreen() {
     } catch (e) {
       console.log("Speaker error:", e);
     }
-  }, [isSpeakerOn]);
+    if (Platform.OS !== "web") sendToWebView({ action: "speaker", on: next });
+  }, [isSpeakerOn, sendToWebView]);
 
   /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
@@ -693,6 +694,9 @@ export default function VoiceCallScreen() {
               const d = JSON.parse(e.nativeEvent.data);
               if (d.type === "sdk-ready") console.log("Voice: Agora SDK ready");
               if (d.type === "joined") console.log("Voice joined:", d.uid);
+              if (d.type === "remote-user-left") {
+                if (callStatusRef.current === "connected") handleEndCall();
+              }
               if (d.type === "error") console.warn("Voice WebView error:", d.message);
             } catch {}
           }}

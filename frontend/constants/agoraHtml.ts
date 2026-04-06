@@ -9,13 +9,27 @@ export const AGORA_HTML = `<!DOCTYPE html>
     * { box-sizing: border-box; }
     body { margin: 0; background: #000; overflow: hidden; }
     #local-video {
-      position: absolute; bottom: 0; right: 0;
-      width: 120px; height: 160px; z-index: 10;
-      border-radius: 12px; overflow: hidden;
+      position: absolute;
+      bottom: 120px;
+      right: 12px;
+      width: 110px;
+      height: 150px;
+      z-index: 20;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,0.35);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+      touch-action: none;
+      cursor: grab;
     }
+    #local-video:active { cursor: grabbing; }
     #remote-video {
-      width: 100vw; height: 100vh; object-fit: cover;
-      position: absolute; top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
     }
   </style>
 </head>
@@ -29,6 +43,45 @@ export const AGORA_HTML = `<!DOCTYPE html>
   var joined = false;
   var callType = 'voice';
   var currentFacingMode = 'user';
+
+  /* ── Draggable local video ── */
+  (function() {
+    var el = document.getElementById('local-video');
+    var startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    var isDragging = false;
+
+    function clamp(val, min, max) { return Math.min(Math.max(val, min), max); }
+
+    el.addEventListener('touchstart', function(e) {
+      if (e.touches.length !== 1) return;
+      isDragging = true;
+      var t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      var rect = el.getBoundingClientRect();
+      origLeft = rect.left;
+      origTop  = rect.top;
+      el.style.right  = 'auto';
+      el.style.bottom = 'auto';
+      el.style.left   = origLeft + 'px';
+      el.style.top    = origTop  + 'px';
+      e.preventDefault();
+    }, { passive: false });
+
+    el.addEventListener('touchmove', function(e) {
+      if (!isDragging || e.touches.length !== 1) return;
+      var t = e.touches[0];
+      var dx = t.clientX - startX;
+      var dy = t.clientY - startY;
+      var newLeft = clamp(origLeft + dx, 0, window.innerWidth  - el.offsetWidth);
+      var newTop  = clamp(origTop  + dy, 0, window.innerHeight - el.offsetHeight);
+      el.style.left = newLeft + 'px';
+      el.style.top  = newTop  + 'px';
+      e.preventDefault();
+    }, { passive: false });
+
+    el.addEventListener('touchend', function() { isDragging = false; });
+  })();
 
   function postToNative(data) {
     try {
@@ -72,16 +125,13 @@ export const AGORA_HTML = `<!DOCTYPE html>
       await client.join(appId, channel, token || null, uid || 0);
       joined = true;
 
+      var audioConfig = {
+        encoderConfig: 'speech_standard',
+        AEC: true, ANS: true, AGC: true,
+      };
+
       if (callType === 'video') {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'speech_standard',
-          AEC: true, ANS: true, AGC: true,
-          mediaStreamTrackInitConfig: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        });
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({
           facingMode: currentFacingMode, encoderConfig: '480p_1'
         });
@@ -89,15 +139,7 @@ export const AGORA_HTML = `<!DOCTYPE html>
         await client.publish([localAudioTrack, localVideoTrack]);
         postToNative({ type: 'local-video-started' });
       } else {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-          encoderConfig: 'speech_standard',
-          AEC: true, ANS: true, AGC: true,
-          mediaStreamTrackInitConfig: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          }
-        });
+        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         await client.publish([localAudioTrack]);
       }
 
@@ -144,6 +186,26 @@ export const AGORA_HTML = `<!DOCTYPE html>
     }
   }
 
+  async function setSpeaker(on) {
+    try {
+      var devices = await AgoraRTC.getPlaybackDevices();
+      if (!devices || devices.length === 0) return;
+      var speaker = devices.find(function(d) {
+        return on
+          ? (d.label.toLowerCase().includes('speaker') || d.label.toLowerCase().includes('phone'))
+          : (d.label.toLowerCase().includes('earpiece') || d.label.toLowerCase().includes('receiver'));
+      });
+      var target = speaker || devices[0];
+      if (client) {
+        client.remoteUsers.forEach(function(u) {
+          if (u.audioTrack) {
+            u.audioTrack.setPlaybackDevice(target.deviceId).catch(function() {});
+          }
+        });
+      }
+    } catch (e) {}
+  }
+
   function handleMessage(event) {
     try {
       var data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -154,6 +216,7 @@ export const AGORA_HTML = `<!DOCTYPE html>
         case 'mute':    if (localAudioTrack) localAudioTrack.setMuted(data.muted === true); break;
         case 'camera':  if (localVideoTrack) localVideoTrack.setMuted(data.off === true); break;
         case 'switch-camera': switchCamera(); break;
+        case 'speaker': setSpeaker(data.on === true); break;
         default: break;
       }
     } catch (e) {

@@ -399,8 +399,9 @@ export default function VideoCallScreen() {
         playThroughEarpieceAndroid: !next,
       });
     } catch {}
+    if (Platform.OS !== "web") sendToWebView({ action: "speaker", on: next });
     showControls();
-  }, [isSpeakerOn, showControls]);
+  }, [isSpeakerOn, showControls, sendToWebView]);
 
   /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
@@ -684,7 +685,10 @@ export default function VideoCallScreen() {
               if (d.type === "local-video-started")   console.log("Local video ready");
               if (d.type === "remote-video-started")  setHasRemoteVideo(true);
               if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
-              if (d.type === "remote-user-left")      setHasRemoteVideo(false);
+              if (d.type === "remote-user-left") {
+                setHasRemoteVideo(false);
+                if (callStatusRef.current === "connected") handleEndCall();
+              }
               if (d.type === "error")                 console.warn("Video WebView error:", d.message);
             } catch {}
           }}
