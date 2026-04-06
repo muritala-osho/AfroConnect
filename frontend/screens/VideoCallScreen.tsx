@@ -27,7 +27,7 @@ import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import WebView from "react-native-webview";
 
 const { width: SW, height: SH } = Dimensions.get("window");
-const AVATAR_SIZE = Math.min(SW * 0.38, 155);
+const AVATAR_SIZE = Math.min(SW * 0.44, 175);
 
 /* ─────────────────────────────────────────────────────────────────
    Pulse ring
@@ -907,11 +907,13 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* Avatar center (fallback) */
+  /* Avatar center (fallback) — padded so it centers between header and controls */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+    paddingTop: 100,   /* clear top overlay (header + gradient) */
+    paddingBottom: 160, /* clear bottom overlay (controls + gradient) */
   },
   avatarFrame: {
     width: AVATAR_SIZE,
