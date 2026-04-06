@@ -128,6 +128,7 @@ router.get('/active', protect, async (req, res) => {
           hasStory: true,
           hasNewStory: userId === req.user._id.toString() ? false : !hasViewed,
           storyCount: 1,
+          latestStoryAt: story.createdAt,
           isSelf: userId === req.user._id.toString()
         });
       } else {
@@ -140,7 +141,9 @@ router.get('/active', protect, async (req, res) => {
     const result = Array.from(userStoryMap.values()).sort((a, b) => {
       if (a.isSelf) return -1;
       if (b.isSelf) return 1;
-      return 0;
+      if (a.hasNewStory && !b.hasNewStory) return -1;
+      if (!a.hasNewStory && b.hasNewStory) return 1;
+      return new Date(b.latestStoryAt).getTime() - new Date(a.latestStoryAt).getTime();
     });
 
     await redis.set(cacheKey, result, STORY_ACTIVE_TTL);

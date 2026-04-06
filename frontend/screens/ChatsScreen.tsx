@@ -83,6 +83,7 @@ interface StoryUser {
   hasStory: boolean;
   hasNewStory: boolean;
   storyCount?: number;
+  latestStoryAt?: string;
   stories?: any[];
 }
 
@@ -108,6 +109,7 @@ const CACHE_KEY = "@conversations_cache";
 const ARCHIVED_KEY = "@archived_chats";
 const MUTED_KEY = "@muted_chats";
 const PINNED_KEY = "@pinned_chats";
+const VIEWED_STORIES_KEY = "@viewed_story_users";
 const CACHE_DURATION = 120000; // 2 minutes for better UX
 
 const ChatItem = memo(
@@ -404,14 +406,17 @@ const StoryItem = memo(
     onPress,
     user,
     navigation,
+    isViewed,
   }: {
     item: StoryUser;
     theme: any;
     onPress: () => void;
     user: any;
     navigation: any;
+    isViewed?: boolean;
   }) => {
     const isOwnStory = item.id === user?.id || item.name === "Your Story";
+    const showAsViewed = !isOwnStory && item.hasStory && (isViewed || !item.hasNewStory);
 
     return (
       <Pressable
@@ -438,11 +443,13 @@ const StoryItem = memo(
       >
         <LinearGradient
           colors={
-            item.hasNewStory
-              ? ["#FF6B6B", "#FF8E53", "#FFC93C"]
-              : item.hasStory
-                ? ["#FF6B6B", "#FF8E53"]
-                : [theme.border, theme.border]
+            showAsViewed
+              ? ["#9CA3AF", "#9CA3AF"]
+              : item.hasNewStory
+                ? ["#FF6B6B", "#FF8E53", "#FFC93C"]
+                : item.hasStory
+                  ? ["#FF6B6B", "#FF8E53"]
+                  : [theme.border, theme.border]
           }
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
@@ -486,7 +493,7 @@ const StoryItem = memo(
             <Ionicons name="add" size={12} color="#fff" />
           </Pressable>
         )}
-        {item.hasNewStory && !isOwnStory && <View style={styles.storyNewDot} />}
+        {item.hasNewStory && !isOwnStory && !showAsViewed && <View style={styles.storyNewDot} />}
         <ThemedText
           style={[styles.storyName, { color: theme.text }]}
           numberOfLines={1}
@@ -512,6 +519,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const [pinnedChats, setPinnedChats] = useState<Set<string>>(new Set());
   const [storyUsers, setStoryUsers] = useState<StoryUser[]>([]);
   const [userHasStory, setUserHasStory] = useState(false);
+  const [viewedStoryUsers, setViewedStoryUsers] = useState<Set<string>>(new Set());
   const [callHistory, setCallHistory] = useState<CallHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -560,17 +568,28 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   }, [loadingMore, hasMore, currentPage, searchQuery]);
   const loadLocalSettings = useCallback(async () => {
     try {
-      const [archived, muted, pinned] = await Promise.all([
+      const [archived, muted, pinned, viewedStories] = await Promise.all([
         AsyncStorage.getItem(ARCHIVED_KEY),
         AsyncStorage.getItem(MUTED_KEY),
         AsyncStorage.getItem(PINNED_KEY),
+        AsyncStorage.getItem(VIEWED_STORIES_KEY),
       ]);
       if (archived) setArchivedChats(new Set(JSON.parse(archived)));
       if (muted) setMutedChats(new Set(JSON.parse(muted)));
       if (pinned) setPinnedChats(new Set(JSON.parse(pinned)));
+      if (viewedStories) setViewedStoryUsers(new Set(JSON.parse(viewedStories)));
     } catch (e) {
       console.log("Settings load error:", e);
     }
+  }, []);
+
+  const markUserStoryViewed = useCallback(async (userId: string) => {
+    setViewedStoryUsers((prev) => {
+      const next = new Set(prev);
+      next.add(userId);
+      AsyncStorage.setItem(VIEWED_STORIES_KEY, JSON.stringify(Array.from(next))).catch(() => {});
+      return next;
+    });
   }, []);
 
   const saveLocalSettings = useCallback(
@@ -1410,7 +1429,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                         theme={theme}
                         user={user}
                         navigation={navigation}
+                        isViewed={viewedStoryUsers.has(storyUser.id)}
                         onPress={() => {
+                          markUserStoryViewed(storyUser.id);
                           navigation.navigate("StoryViewer" as any, {
                             userId: storyUser.id,
                             userName: storyUser.name,
