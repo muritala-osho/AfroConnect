@@ -954,9 +954,10 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             <View style={[styles.card, { backgroundColor: theme.surface }]}>
               <View style={styles.songRow}>
                 {(user as any).favoriteSong?.albumArt ? (
-                  <View style={[styles.songIconWrap, { backgroundColor: 'transparent', overflow: 'hidden' }]}>
-                    <SafeImage source={{ uri: (user as any).favoriteSong.albumArt }} style={{ width: 44, height: 44, borderRadius: 10 }} />
-                  </View>
+                  <SafeImage
+                    source={{ uri: (user as any).favoriteSong.albumArt }}
+                    style={{ width: 44, height: 44, borderRadius: 10 }}
+                  />
                 ) : (
                   <LinearGradient colors={['#1DB954', '#158f3f']} style={[styles.songIconWrap, { borderRadius: 12 }]}>
                     <Feather name="music" size={18} color="#FFF" />
