@@ -676,12 +676,13 @@ export default function VideoCallScreen() {
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "joined")               console.log("Video joined:", d.uid);
-              if (d.type === "local-video-started")  console.log("Local video ready");
+              if (d.type === "sdk-ready")             console.log("Video: Agora SDK ready");
+              if (d.type === "joined")                console.log("Video joined:", d.uid);
+              if (d.type === "local-video-started")   console.log("Local video ready");
               if (d.type === "remote-video-started")  setHasRemoteVideo(true);
               if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
               if (d.type === "remote-user-left")      setHasRemoteVideo(false);
-              if (d.type === "error")                console.log("Video WebView error:", d.message);
+              if (d.type === "error")                 console.warn("Video WebView error:", d.message);
             } catch {}
           }}
         />

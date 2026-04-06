@@ -4,9 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Agora Call Bridge</title>
-  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"
-          integrity="sha384-vvrWy30L5pS73SZopHhspS3Yc/PyQmG0V80Br7kCOURjTCM5ML0lZ/eKC/2GJxgh"
-          crossorigin="anonymous"></script>
+  <!-- SRI removed — WebView environments do not reliably support Subresource Integrity -->
+  <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; background: #000; overflow: hidden; }
@@ -50,7 +49,20 @@
     } catch (e) {}
   }
 
+  /* Verify the Agora SDK loaded correctly */
+  window.addEventListener('load', function() {
+    if (typeof AgoraRTC === 'undefined') {
+      postToNative({ type: 'error', message: 'AgoraRTC SDK failed to load. Check network connection.' });
+    } else {
+      postToNative({ type: 'sdk-ready' });
+    }
+  });
+
   async function joinChannel(appId, channel, token, uid, type) {
+    if (typeof AgoraRTC === 'undefined') {
+      postToNative({ type: 'error', message: 'AgoraRTC is not available. SDK did not load.' });
+      return;
+    }
     try {
       callType = type || 'voice';
       client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
@@ -97,6 +109,7 @@
         });
         localVideoTrack.play('local-video');
         await client.publish([localAudioTrack, localVideoTrack]);
+        postToNative({ type: 'local-video-started' });
       } else {
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack({
           encoderConfig: 'speech_standard',

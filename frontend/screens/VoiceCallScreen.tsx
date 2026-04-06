@@ -688,8 +688,9 @@ export default function VoiceCallScreen() {
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);
+              if (d.type === "sdk-ready") console.log("Voice: Agora SDK ready");
               if (d.type === "joined") console.log("Voice joined:", d.uid);
-              if (d.type === "error") console.log("Voice WebView error:", d.message);
+              if (d.type === "error") console.warn("Voice WebView error:", d.message);
             } catch {}
           }}
         />
