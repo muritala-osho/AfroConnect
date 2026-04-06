@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Switch,
   Platform,
+  Image,
+  Linking,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -27,6 +29,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import VoiceBio from "@/components/VoiceBio";
 import { getApiBaseUrl } from "@/constants/config";
+import * as WebBrowser from "expo-web-browser";
 
 type EditProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "EditProfile">;
 
@@ -255,6 +258,15 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [interestsModalVisible, setInterestsModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'vibes' | 'roots' | 'more'>('profile');
 
+  const [spotifyConnected, setSpotifyConnected] = useState((user as any)?.spotify?.connected || false);
+  const [spotifyDisplayName, setSpotifyDisplayName] = useState((user as any)?.spotify?.displayName || "");
+  const [connectingSpotify, setConnectingSpotify] = useState(false);
+  const [spotifySearchQuery, setSpotifySearchQuery] = useState("");
+  const [spotifySearchResults, setSpotifySearchResults] = useState<any[]>([]);
+  const [spotifySearchVisible, setSpotifySearchVisible] = useState(false);
+  const [searchingSpotify, setSearchingSpotify] = useState(false);
+  const [songAlbumArt, setSongAlbumArt] = useState((user as any)?.favoriteSong?.albumArt || "");
+
   useEffect(() => {
     const loadDraft = async () => {
       try {
@@ -292,6 +304,110 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     loadDraft();
   }, []);
 
+  const handleConnectSpotify = async () => {
+    if (!token) return;
+    setConnectingSpotify(true);
+    try {
+      const resp = await fetch(`${getApiBaseUrl()}/api/spotify/auth-url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!data.success || !data.authUrl) {
+        Alert.alert("Spotify", data.message || "Could not connect to Spotify. Make sure Spotify integration is configured.");
+        return;
+      }
+      await WebBrowser.openBrowserAsync(data.authUrl);
+      const statusResp = await fetch(`${getApiBaseUrl()}/api/spotify/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const statusData = await statusResp.json();
+      if (statusData.connected) {
+        setSpotifyConnected(true);
+        setSpotifyDisplayName(statusData.displayName || "");
+        if (statusData.favoriteSong?.title) {
+          setSongTitle(statusData.favoriteSong.title);
+          setSongArtist(statusData.favoriteSong.artist || "");
+          setSongAlbumArt(statusData.favoriteSong.albumArt || "");
+        }
+        if (fetchUser) await fetchUser();
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to connect Spotify. Please try again.");
+    } finally {
+      setConnectingSpotify(false);
+    }
+  };
+
+  const handleDisconnectSpotify = () => {
+    if (!token) return;
+    Alert.alert("Disconnect Spotify", "Are you sure you want to disconnect your Spotify account?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Disconnect",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await fetch(`${getApiBaseUrl()}/api/spotify/disconnect`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            setSpotifyConnected(false);
+            setSpotifyDisplayName("");
+            if (fetchUser) await fetchUser();
+          } catch (err) {
+            Alert.alert("Error", "Failed to disconnect Spotify.");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSpotifySearch = async () => {
+    if (!spotifySearchQuery.trim() || !token) return;
+    setSearchingSpotify(true);
+    try {
+      const resp = await fetch(
+        `${getApiBaseUrl()}/api/spotify/search?q=${encodeURIComponent(spotifySearchQuery.trim())}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        setSpotifySearchResults(data.tracks || []);
+      } else {
+        Alert.alert("Search Failed", data.message || "Could not search Spotify.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to search Spotify.");
+    } finally {
+      setSearchingSpotify(false);
+    }
+  };
+
+  const handleSelectSpotifySong = async (track: any) => {
+    if (!token) return;
+    setSongTitle(track.title);
+    setSongArtist(track.artist);
+    setSongAlbumArt(track.albumArt || "");
+    setSpotifySearchVisible(false);
+    setSpotifySearchQuery("");
+    setSpotifySearchResults([]);
+    try {
+      await fetch(`${getApiBaseUrl()}/api/spotify/set-song`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          spotifyUri: track.spotifyUri,
+          albumArt: track.albumArt,
+        }),
+      });
+      if (fetchUser) await fetchUser();
+    } catch (err) {
+      console.error("Failed to save Spotify song:", err);
+    }
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       showAlert("Error", "Name is required", [{ text: "OK", style: "default" }], "alert-circle");
@@ -313,6 +429,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         favoriteSong: (songTitle.trim() || songArtist.trim()) ? {
           title: songTitle.trim(),
           artist: songArtist.trim(),
+          ...(songAlbumArt ? { albumArt: songAlbumArt } : {}),
         } : undefined,
         lifestyle: {
           smoking: smoking || undefined,
@@ -959,38 +1076,159 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={[styles.cardHeader, { borderBottomColor: theme.border + '60' }]}>
-                <LinearGradient colors={['#9333EA28', '#9333EA10']} style={styles.cardIconWrap}>
-                  <Feather name="music" size={16} color="#9333EA" />
+                <LinearGradient colors={['#1DB95428', '#1DB95410']} style={styles.cardIconWrap}>
+                  <Feather name="music" size={16} color="#1DB954" />
                 </LinearGradient>
-                <View>
+                <View style={{ flex: 1 }}>
                   <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Soundtrack</ThemedText>
                   <ThemedText style={[styles.cardSub, { color: theme.textSecondary }]}>Your current anthem</ThemedText>
                 </View>
+                {spotifyConnected && (
+                  <View style={[styles.spotifyBadge, { backgroundColor: '#1DB95420' }]}>
+                    <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>● Spotify</ThemedText>
+                  </View>
+                )}
               </View>
               <View style={styles.cardBody}>
-                <View style={[styles.songCard, { backgroundColor: isDark ? 'rgba(147,51,234,0.08)' : '#9333EA0A', borderColor: '#9333EA25' }]}>
-                  <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.songIconBox}>
-                    <Feather name="music" size={20} color="#FFF" />
-                  </LinearGradient>
+                {!spotifyConnected ? (
+                  <Pressable
+                    style={[styles.spotifyConnectBtn, { backgroundColor: '#1DB954', opacity: connectingSpotify ? 0.7 : 1 }]}
+                    onPress={handleConnectSpotify}
+                    disabled={connectingSpotify}
+                  >
+                    {connectingSpotify ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <>
+                        <Feather name="music" size={18} color="#FFF" />
+                        <ThemedText style={styles.spotifyConnectText}>Connect with Spotify</ThemedText>
+                      </>
+                    )}
+                  </Pressable>
+                ) : (
+                  <View style={styles.spotifyConnectedRow}>
+                    <View style={[styles.spotifyAvatarWrap, { backgroundColor: '#1DB95420' }]}>
+                      <Feather name="music" size={18} color="#1DB954" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={[styles.spotifyConnectedName, { color: theme.text }]}>{spotifyDisplayName || "Spotify"}</ThemedText>
+                      <ThemedText style={[styles.spotifyConnectedSub, { color: '#1DB954' }]}>Connected</ThemedText>
+                    </View>
+                    <Pressable onPress={handleDisconnectSpotify} style={[styles.spotifyDisconnectBtn, { borderColor: theme.border }]}>
+                      <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>Disconnect</ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+
+                <View style={[styles.songCard, { backgroundColor: isDark ? 'rgba(29,185,84,0.06)' : '#1DB9540A', borderColor: '#1DB95425', marginTop: 12 }]}>
+                  {songAlbumArt ? (
+                    <Image source={{ uri: songAlbumArt }} style={styles.songAlbumArt} />
+                  ) : (
+                    <LinearGradient colors={['#1DB954', '#158f3f']} style={styles.songIconBox}>
+                      <Feather name="music" size={20} color="#FFF" />
+                    </LinearGradient>
+                  )}
                   <View style={{ flex: 1 }}>
-                    <TextInput
-                      style={[styles.songTitleInput, { color: theme.text, borderBottomColor: theme.border }]}
-                      value={songTitle}
-                      onChangeText={setSongTitle}
-                      placeholder="Song title"
-                      placeholderTextColor={theme.textSecondary}
-                    />
-                    <TextInput
-                      style={[styles.songArtistInput, { color: theme.textSecondary }]}
-                      value={songArtist}
-                      onChangeText={setSongArtist}
-                      placeholder="Artist name"
-                      placeholderTextColor={theme.textSecondary + '90'}
-                    />
+                    {spotifyConnected ? (
+                      <Pressable onPress={() => setSpotifySearchVisible(true)} style={styles.spotifyPickSong}>
+                        <ThemedText style={[styles.songTitleInput, { color: songTitle ? theme.text : theme.textSecondary, paddingVertical: 6 }]} numberOfLines={1}>
+                          {songTitle || "Tap to search songs on Spotify"}
+                        </ThemedText>
+                        {songArtist ? (
+                          <ThemedText style={[styles.songArtistInput, { color: theme.textSecondary }]} numberOfLines={1}>{songArtist}</ThemedText>
+                        ) : null}
+                      </Pressable>
+                    ) : (
+                      <>
+                        <TextInput
+                          style={[styles.songTitleInput, { color: theme.text, borderBottomColor: theme.border }]}
+                          value={songTitle}
+                          onChangeText={setSongTitle}
+                          placeholder="Song title"
+                          placeholderTextColor={theme.textSecondary}
+                        />
+                        <TextInput
+                          style={[styles.songArtistInput, { color: theme.textSecondary }]}
+                          value={songArtist}
+                          onChangeText={setSongArtist}
+                          placeholder="Artist name"
+                          placeholderTextColor={theme.textSecondary + '90'}
+                        />
+                      </>
+                    )}
                   </View>
                 </View>
               </View>
             </View>
+
+            <Modal
+              visible={spotifySearchVisible}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setSpotifySearchVisible(false)}
+            >
+              <View style={[styles.spotifyModal, { backgroundColor: theme.background }]}>
+                <View style={[styles.spotifyModalHeader, { borderBottomColor: theme.border }]}>
+                  <Pressable onPress={() => setSpotifySearchVisible(false)} style={{ padding: 8 }}>
+                    <Ionicons name="close" size={24} color={theme.text} />
+                  </Pressable>
+                  <ThemedText style={[styles.spotifyModalTitle, { color: theme.text }]}>Search Songs</ThemedText>
+                  <View style={{ width: 40 }} />
+                </View>
+                <View style={[styles.spotifySearchBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Feather name="search" size={18} color={theme.textSecondary} />
+                  <TextInput
+                    style={[styles.spotifySearchInput, { color: theme.text }]}
+                    value={spotifySearchQuery}
+                    onChangeText={setSpotifySearchQuery}
+                    placeholder="Search songs, artists..."
+                    placeholderTextColor={theme.textSecondary}
+                    returnKeyType="search"
+                    onSubmitEditing={handleSpotifySearch}
+                    autoFocus
+                  />
+                  {searchingSpotify ? (
+                    <ActivityIndicator size="small" color="#1DB954" />
+                  ) : (
+                    <Pressable onPress={handleSpotifySearch} style={[styles.spotifySearchGo, { backgroundColor: '#1DB954' }]}>
+                      <ThemedText style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }}>Go</ThemedText>
+                    </Pressable>
+                  )}
+                </View>
+                <FlatList
+                  data={spotifySearchResults}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                      <Feather name="music" size={40} color={theme.textSecondary} style={{ opacity: 0.4 }} />
+                      <ThemedText style={{ color: theme.textSecondary, marginTop: 12 }}>Search for a song above</ThemedText>
+                    </View>
+                  }
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={[styles.spotifyTrackRow, { borderBottomColor: theme.border }]}
+                      onPress={() => handleSelectSpotifySong(item)}
+                    >
+                      {item.albumArt ? (
+                        <Image source={{ uri: item.albumArt }} style={styles.spotifyTrackArt} />
+                      ) : (
+                        <View style={[styles.spotifyTrackArt, { backgroundColor: '#1DB95420', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="music" size={16} color="#1DB954" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <ThemedText style={[styles.spotifyTrackTitle, { color: theme.text }]} numberOfLines={1}>{item.title}</ThemedText>
+                        <ThemedText style={[styles.spotifyTrackArtist, { color: theme.textSecondary }]} numberOfLines={1}>{item.artist}</ThemedText>
+                      </View>
+                      {songTitle === item.title && songArtist === item.artist && (
+                        <Ionicons name="checkmark-circle" size={20} color="#1DB954" />
+                      )}
+                    </Pressable>
+                  )}
+                />
+              </View>
+            </Modal>
 
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={[styles.cardHeader, { borderBottomColor: theme.border + '60' }]}>
@@ -1135,8 +1373,29 @@ const styles = StyleSheet.create({
   // SONG CARD
   songCard: { borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
   songIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
+  songAlbumArt: { width: 48, height: 48, borderRadius: 14 },
   songTitleInput: { fontSize: 15, fontWeight: '600', paddingVertical: 6, borderBottomWidth: 1, marginBottom: 4 },
   songArtistInput: { fontSize: 13, paddingVertical: 4 },
+
+  spotifyConnectBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, paddingVertical: 13, borderRadius: 12 },
+  spotifyConnectText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  spotifyConnectedRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  spotifyAvatarWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const },
+  spotifyConnectedName: { fontSize: 14, fontWeight: '600' },
+  spotifyConnectedSub: { fontSize: 12 },
+  spotifyDisconnectBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  spotifyBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  spotifyPickSong: { flex: 1 },
+  spotifyModal: { flex: 1 },
+  spotifyModalHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  spotifyModalTitle: { fontSize: 17, fontWeight: '700' },
+  spotifySearchBar: { flexDirection: 'row' as const, alignItems: 'center' as const, margin: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 10 },
+  spotifySearchInput: { flex: 1, fontSize: 15, paddingVertical: 2 },
+  spotifySearchGo: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  spotifyTrackRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 12, borderBottomWidth: 0.5 },
+  spotifyTrackArt: { width: 50, height: 50, borderRadius: 8 },
+  spotifyTrackTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  spotifyTrackArtist: { fontSize: 12 },
 
   // QUIZ CTA
   quizCta: { borderRadius: 14, overflow: 'hidden' as const, marginTop: 4 },

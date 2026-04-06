@@ -578,6 +578,39 @@ export default function ProfileDetailScreen() {
               </View>
             )}
 
+            {(user as any).favoriteSong?.title && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="music" size={18} color="#1DB954" />
+                  <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Soundtrack</ThemedText>
+                  {(user as any).spotify?.connected && (
+                    <View style={{ marginLeft: 6, backgroundColor: '#1DB95420', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                      <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>Spotify</ThemedText>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.spotifySongCard, { backgroundColor: theme.surface, borderColor: '#1DB95430' }]}>
+                  {(user as any).favoriteSong?.albumArt ? (
+                    <Image source={{ uri: (user as any).favoriteSong.albumArt }} style={styles.spotifyAlbumArt} />
+                  ) : (
+                    <LinearGradient colors={['#1DB954', '#158f3f']} style={styles.spotifyIconBox}>
+                      <Feather name="music" size={20} color="#FFF" />
+                    </LinearGradient>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.spotifySongTitle, { color: theme.text }]} numberOfLines={2}>
+                      {(user as any).favoriteSong.title}
+                    </ThemedText>
+                    {(user as any).favoriteSong.artist ? (
+                      <ThemedText style={[styles.spotifySongArtist, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {(user as any).favoriteSong.artist}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            )}
+
             {additionalPhotos.length > 0 && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -965,6 +998,34 @@ const styles = StyleSheet.create({
   interestChipText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  spotifySongCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  spotifyAlbumArt: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+  spotifyIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotifySongTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  spotifySongArtist: {
+    fontSize: 13,
   },
   galleryContainer: {
     gap: 10,

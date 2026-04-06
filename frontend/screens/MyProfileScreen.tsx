@@ -940,16 +940,27 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         {(user as any)?.favoriteSong?.title && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
-              <View style={[styles.sectionIconBubble, { backgroundColor: '#9333EA20' }]}>
-                <Feather name="music" size={15} color="#9333EA" />
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#1DB95420' }]}>
+                <Feather name="music" size={15} color="#1DB954" />
               </View>
               <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Soundtrack</ThemedText>
+              {(user as any)?.spotify?.connected && (
+                <View style={{ marginLeft: 8, backgroundColor: '#1DB95420', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                  <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>Spotify</ThemedText>
+                </View>
+              )}
             </View>
             <View style={[styles.card, { backgroundColor: theme.surface }]}>
               <View style={styles.songRow}>
-                <View style={[styles.songIconWrap, { backgroundColor: '#9333EA' }]}>
-                  <Feather name="music" size={18} color="#FFF" />
-                </View>
+                {(user as any).favoriteSong?.albumArt ? (
+                  <View style={[styles.songIconWrap, { backgroundColor: 'transparent', overflow: 'hidden' }]}>
+                    <SafeImage source={{ uri: (user as any).favoriteSong.albumArt }} style={{ width: 44, height: 44, borderRadius: 10 }} />
+                  </View>
+                ) : (
+                  <LinearGradient colors={['#1DB954', '#158f3f']} style={[styles.songIconWrap, { borderRadius: 12 }]}>
+                    <Feather name="music" size={18} color="#FFF" />
+                  </LinearGradient>
+                )}
                 <View style={{ flex: 1 }}>
                   <ThemedText style={[styles.songTitle, { color: theme.text }]}>{(user as any).favoriteSong.title}</ThemedText>
                   {(user as any).favoriteSong.artist && (

@@ -82,7 +82,8 @@ const userSchema = new mongoose.Schema({
   favoriteSong: {
     title: { type: String, maxlength: 200, default: '' },
     artist: { type: String, maxlength: 200, default: '' },
-    spotifyUri: { type: String, default: '' }
+    spotifyUri: { type: String, default: '' },
+    albumArt: { type: String, default: '' }
   },
   spotify: {
     connected: { type: Boolean, default: false },

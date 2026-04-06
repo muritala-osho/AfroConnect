@@ -966,10 +966,17 @@ export default function ChatDetailScreen({
         token,
       );
       if (response.success && response.data?.message) {
-        // FIX: preserve "sent" status on replace â€” socket events will upgrade it
+        // FIX: preserve "sent" status on replace — socket events will upgrade it
+        // FIX: preserve viewOnce flag from temp message in case server response omits it
         setMessages((prev) =>
           prev.map((m) =>
-            m._id === tempMessage._id ? { ...response.data!.message, status: "sent" } : m,
+            m._id === tempMessage._id
+              ? {
+                  ...response.data!.message,
+                  status: "sent",
+                  ...(tempMessage.viewOnce ? { viewOnce: true } : {}),
+                }
+              : m,
           ),
         );
       }

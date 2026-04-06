@@ -357,6 +357,8 @@ app.use('/api/engagement', engagementRoutes);
 app.use('/api/comments', commentsRoutes);
 const streakRoutes = require('./routes/streak');
 app.use('/api/streak', streakRoutes);
+const spotifyRoutes = require('./routes/spotify');
+app.use('/api/spotify', spotifyRoutes);
 
 logRoutes();
 
