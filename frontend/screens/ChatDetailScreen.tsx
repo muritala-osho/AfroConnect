@@ -2413,7 +2413,13 @@ export default function ChatDetailScreen({
       <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setEditingMessage(null); }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <Pressable style={styles.modalOverlay} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
-            <Pressable style={[styles.translateModal, { backgroundColor: theme.background }]} onPress={() => {}}>
+            {/* Plain View with onStartShouldSetResponder stops touches from bubbling
+                to the outer Pressable, so the modal stays open and the TextInput
+                keeps focus on every keystroke (fixes the one-letter-at-a-time bug). */}
+            <View
+              style={[styles.translateModal, { backgroundColor: theme.background }]}
+              onStartShouldSetResponder={() => true}
+            >
               <View style={styles.translateHeader}>
                 <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Edit Message</ThemedText>
                 <Pressable onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
@@ -2449,7 +2455,7 @@ export default function ChatDetailScreen({
                   )}
                 </Pressable>
               </View>
-            </Pressable>
+            </View>
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>

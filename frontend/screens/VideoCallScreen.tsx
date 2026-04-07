@@ -200,8 +200,8 @@ export default function VideoCallScreen() {
       if (ringtoneRef.current) {
         const snd = ringtoneRef.current;
         ringtoneRef.current = null;
-        await snd.stopAsync().catch(() => {});
-        await snd.unloadAsync().catch(() => {});
+        /* Fire-and-forget: send stop to native layer immediately without blocking */
+        snd.stopAsync().catch(() => {}).finally(() => snd.unloadAsync().catch(() => {}));
       }
     } catch {}
     /* Reset audio session so mic and camera work for the call */
