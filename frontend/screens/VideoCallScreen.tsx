@@ -645,7 +645,9 @@ export default function VideoCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
-  const showVideo    = isConnected && Platform.OS !== "web";
+  /* Show WebView full-screen once connected, OR for the outgoing caller
+     while connecting/ringing so they see their own camera immediately. */
+  const showVideo    = (isConnected || (!isIncoming && (callStatus === "connecting" || callStatus === "ringing"))) && Platform.OS !== "web";
   const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>

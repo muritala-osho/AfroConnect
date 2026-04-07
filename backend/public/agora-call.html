@@ -51,6 +51,36 @@
   var joined = false;
   var callType = 'voice';
   var currentFacingMode = 'user';
+  var hasRemoteStream = false;
+
+  /* ── Layout: local video fills screen when alone, shrinks to PiP when remote is live ── */
+  function updateVideoLayout() {
+    var localEl = document.getElementById('local-video');
+    if (!localEl) return;
+    if (hasRemoteStream) {
+      /* PiP corner */
+      localEl.style.cssText = [
+        'position:absolute', 'bottom:120px', 'right:12px',
+        'width:110px', 'height:150px', 'z-index:20',
+        'border-radius:14px', 'overflow:hidden',
+        'border:2px solid rgba(255,255,255,0.35)',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.6)',
+        'touch-action:none', 'cursor:grab', 'will-change:transform',
+        '-webkit-user-select:none', 'user-select:none',
+        'transition:all 0.3s cubic-bezier(0.25,0.46,0.45,0.94)',
+      ].join(';');
+    } else {
+      /* Full-screen — show own camera while waiting for other person */
+      localEl.style.cssText = [
+        'position:absolute', 'top:0', 'left:0',
+        'width:100vw', 'height:100vh', 'z-index:5',
+        'border-radius:0', 'overflow:hidden', 'border:none',
+        'box-shadow:none', 'touch-action:none',
+        '-webkit-user-select:none', 'user-select:none',
+        'transition:all 0.3s cubic-bezier(0.25,0.46,0.45,0.94)',
+      ].join(';');
+    }
+  }
 
   /* ── Draggable local video with snap-to-corner ── */
   (function() {
@@ -78,6 +108,7 @@
     }
 
     el.addEventListener('touchstart', function(e) {
+      if (!hasRemoteStream) return; /* full-screen local — don't allow drag */
       if (e.touches.length !== 1) return;
       isDragging = true;
       var t = e.touches[0];
@@ -145,6 +176,8 @@
           postToNative({ type: 'remote-user-joined', uid: user.uid });
         }
         if (mediaType === 'video' && callType === 'video') {
+          hasRemoteStream = true;
+          updateVideoLayout();
           user.videoTrack && user.videoTrack.play('remote-video');
           postToNative({ type: 'remote-video-started', uid: user.uid });
         }
@@ -152,11 +185,15 @@
 
       client.on('user-unpublished', function(user, mediaType) {
         if (mediaType === 'video') {
+          hasRemoteStream = false;
+          updateVideoLayout();
           postToNative({ type: 'remote-video-stopped', uid: user.uid });
         }
       });
 
       client.on('user-left', function(user) {
+        hasRemoteStream = false;
+        updateVideoLayout();
         postToNative({ type: 'remote-user-left', uid: user.uid });
       });
 
@@ -170,9 +207,6 @@
         postToNative({ type: 'networkQuality', level: worst });
       });
 
-      await client.join(appId, channel, token || null, uid || 0);
-      joined = true;
-
       var audioConfig = {
         encoderConfig: 'speech_standard',
         AEC: true,
@@ -180,17 +214,48 @@
         AGC: true,
       };
 
+      /* ── Start join + track creation in parallel so camera appears immediately ── */
+      var joinPromise  = client.join(appId, channel, token || null, uid || 0);
+      var audioPromise = AgoraRTC.createMicrophoneAudioTrack(audioConfig);
+
+      var cameraPromise = null;
       if (callType === 'video') {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
-        localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+        /* Camera creation is independent of join — start immediately */
+        cameraPromise = AgoraRTC.createCameraVideoTrack({
           facingMode: currentFacingMode,
           encoderConfig: '720p_1',
+        }).then(function(track) {
+          localVideoTrack = track;
+          updateVideoLayout();        /* full-screen until remote joins */
+          track.play('local-video');
+          postToNative({ type: 'local-video-started' });
+          return track;
+        }).catch(function(camErr) {
+          postToNative({ type: 'error', message: 'Camera error: ' + camErr.message });
+          return null;
         });
-        localVideoTrack.play('local-video');
+      }
+
+      /* Wait for channel join and audio track */
+      await joinPromise;
+      joined = true;
+      localAudioTrack = await audioPromise;
+
+      if (callType === 'video') {
+        /* Ensure camera track is ready before publishing */
+        if (cameraPromise) await cameraPromise;
+        if (!localVideoTrack) {
+          /* Fallback if parallel creation failed: try once more after join */
+          localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+            facingMode: currentFacingMode,
+            encoderConfig: '720p_1',
+          });
+          updateVideoLayout();
+          localVideoTrack.play('local-video');
+          postToNative({ type: 'local-video-started' });
+        }
         await client.publish([localAudioTrack, localVideoTrack]);
-        postToNative({ type: 'local-video-started' });
       } else {
-        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         await client.publish([localAudioTrack]);
       }
 
