@@ -212,6 +212,231 @@ const DIASPORA_GENERATION_OPTIONS = [
   { value: 'not_applicable', label: 'Not Applicable' },
 ];
 
+const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldLabelRow}>
+        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+        {value?.length > 0 && (
+          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
+        )}
+      </View>
+      <View style={[
+        styles.inputRow,
+        {
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
+          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
+        },
+      ]}>
+        {icon && (
+          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
+          </View>
+        )}
+        <TextInput
+          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.textSecondary}
+          multiline={multiline}
+        />
+      </View>
+    </View>
+  );
+};
+
+const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
+  const hasValue = !!value;
+  return (
+    <Pressable
+      style={[
+        styles.selectButton,
+        {
+          backgroundColor: hasValue
+            ? (accent ? accent + '10' : theme.primary + '0D')
+            : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
+          borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
+        },
+      ]}
+      onPress={onPress}
+    >
+      {icon && (
+        <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+          <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
+        </View>
+      )}
+      <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
+        {displayLabel || label}
+      </ThemedText>
+      <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
+    </Pressable>
+  );
+};
+
+const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
+      <View style={styles.toggleLeft}>
+        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
+          <Feather name={icon} size={16} color={accent || theme.primary} />
+        </View>
+        <View style={styles.toggleTextGroup}>
+          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
+          {description && (
+            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+          )}
+        </View>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
+        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
+      />
+    </View>
+  );
+};
+
+const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
+      <LinearGradient
+        colors={[color + '25', color + '10']}
+        style={styles.sectionIconWrap}
+      >
+        <Feather name={icon} size={17} color={color} />
+      </LinearGradient>
+      <View style={styles.sectionHeaderText}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
+        {description && (
+          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
+              {subtitle && (
+                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
+              )}
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={options}
+            keyExtractor={(item: any) => item.value}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            renderItem={({ item }: any) => {
+              const isSelected = selectedValue === item.value;
+              return (
+                <Pressable
+                  style={[
+                    styles.optionItem,
+                    { borderBottomColor: theme.border },
+                    isSelected && { backgroundColor: theme.primary + '0C' },
+                  ]}
+                  onPress={() => { onSelect(item.value); onClose(); }}
+                >
+                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const InterestModal = ({ visible, onClose, interests, toggleInterest, insetsBottom }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                {interests.length} selected
+              </ThemedText>
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={INTEREST_OPTIONS}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+            renderItem={({ item }) => {
+              const isSelected = interests.includes(item.id);
+              return (
+                <Pressable
+                  style={[
+                    styles.interestOptionItem,
+                    {
+                      borderColor: isSelected ? theme.primary : theme.border,
+                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                    },
+                  ]}
+                  onPress={() => toggleInterest(item.id)}
+                >
+                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
+                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
+                  </View>
+                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={10} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insetsBottom + 8 }]}>
+            <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
+              <ThemedText style={styles.doneButtonText}>Done  ·  {interests.length} selected</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
   const { theme, isDark } = useTheme();
   const { user, updateProfile, fetchUser, token } = useAuth();
@@ -518,215 +743,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       showAlert('Error', err.message || 'Failed to delete voice bio', [{ text: 'OK', style: 'default' }], 'alert-circle');
     }
   };
-
-  const InterestModal = ({ visible, onClose }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
-              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                {interests.length} selected
-              </ThemedText>
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={INTEREST_OPTIONS}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-            renderItem={({ item }) => {
-              const isSelected = interests.includes(item.id);
-              return (
-                <Pressable
-                  style={[
-                    styles.interestOptionItem,
-                    {
-                      borderColor: isSelected ? theme.primary : theme.border,
-                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
-                    },
-                  ]}
-                  onPress={() => toggleInterest(item.id)}
-                >
-                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
-                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
-                  </View>
-                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={10} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
-            <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
-              <ThemedText style={styles.doneButtonText}>Done  Â·  {interests.length} selected</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
-              {subtitle && (
-                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
-              )}
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={options}
-            keyExtractor={(item: any) => item.value}
-            contentContainerStyle={{ paddingVertical: 8 }}
-            renderItem={({ item }: any) => {
-              const isSelected = selectedValue === item.value;
-              return (
-                <Pressable
-                  style={[
-                    styles.optionItem,
-                    { borderBottomColor: theme.border },
-                    isSelected && { backgroundColor: theme.primary + '0C' },
-                  ]}
-                  onPress={() => { onSelect(item.value); onClose(); }}
-                >
-                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={12} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
-    const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
-    const hasValue = !!value;
-    return (
-      <Pressable
-        style={[
-          styles.selectButton,
-          {
-            backgroundColor: hasValue
-              ? (accent ? accent + '10' : theme.primary + '0D')
-              : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
-            borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
-          },
-        ]}
-        onPress={onPress}
-      >
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
-          {displayLabel || label}
-        </ThemedText>
-        <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-      </Pressable>
-    );
-  };
-
-  const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => (
-    <View style={styles.fieldContainer}>
-      <View style={styles.fieldLabelRow}>
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
-        {value?.length > 0 && (
-          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
-        )}
-      </View>
-      <View style={[
-        styles.inputRow,
-        {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
-          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
-        },
-      ]}>
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <TextInput
-          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={theme.textSecondary}
-          multiline={multiline}
-        />
-      </View>
-    </View>
-  );
-
-  const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => (
-    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
-      <View style={styles.toggleLeft}>
-        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
-          <Feather name={icon} size={16} color={accent || theme.primary} />
-        </View>
-        <View style={styles.toggleTextGroup}>
-          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
-          {description && (
-            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-          )}
-        </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
-        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
-      />
-    </View>
-  );
-
-  const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => (
-    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
-      <LinearGradient
-        colors={[color + '25', color + '10']}
-        style={styles.sectionIconWrap}
-      >
-        <Feather name={icon} size={17} color={color} />
-      </LinearGradient>
-      <View style={styles.sectionHeaderText}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
-        {description && (
-          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-        )}
-      </View>
-    </View>
-  );
 
   const filledFields = [
     name, bio, jobTitle, livingIn, zodiacSign, education, lookingFor,
@@ -1294,7 +1310,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
       <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
       <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={handleDiasporaSelect} />
-      <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
+      <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} interests={interests} toggleInterest={toggleInterest} insetsBottom={insets.bottom} />
       <AlertComponent />
     </View>
   );
