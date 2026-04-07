@@ -1,0 +1,22 @@
+# EAS Build archive exclusions
+# Only the frontend/ folder is needed for the Android/iOS build.
+# Everything else is excluded to keep the archive small and fast.
+
+# Backend API server
+backend/
+
+# React/Vite admin dashboard
+admin-dashboard/
+
+# Replit agent local data
+.local/
+
+# IDE and tool caches
+.cache/
+.config/
+
+# Root-level files not needed by Expo
+.snyk
+replit.md
+attached_assets/
+screenshots/
