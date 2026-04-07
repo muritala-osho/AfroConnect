@@ -146,6 +146,7 @@ export default function VideoCallScreen() {
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
   const [webviewReady, setWebviewReady]     = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [networkQuality, setNetworkQuality] = useState(0);
 
   /* ── Animated values ── */
   const fadeAnim      = useRef(new Animated.Value(0)).current;
@@ -719,6 +720,7 @@ export default function VideoCallScreen() {
               if (d.type === "local-video-started")   console.log("Local video ready");
               if (d.type === "remote-video-started")  setHasRemoteVideo(true);
               if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
+              if (d.type === "networkQuality")        setNetworkQuality(d.level ?? 0);
               if (d.type === "remote-user-left") {
                 setHasRemoteVideo(false);
                 if (callStatusRef.current === "connected") handleEndCall();
@@ -763,9 +765,19 @@ export default function VideoCallScreen() {
 
               <View style={s.topInfo}>
                 <Text style={s.topName} numberOfLines={1}>{userName || "Unknown"}</Text>
-                <Text style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
-                  {statusText()}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, justifyContent: "center" }}>
+                  <Text style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
+                    {isConnected && duration > 0 ? formatDuration(duration) : statusText()}
+                  </Text>
+                  {isConnected && networkQuality >= 4 && (
+                    <View style={s.qualityBadge}>
+                      <Ionicons name="wifi" size={10} color="#fbbf24" />
+                      <Text style={s.qualityText}>
+                        {networkQuality === 6 ? "No signal" : "Weak signal"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
               {/* Right side placeholder — always same width as back button to keep name centered */}
@@ -983,6 +995,18 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  qualityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: "rgba(251,191,36,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.35)",
+  },
+  qualityText: { fontSize: 10, color: "#fbbf24", fontWeight: "600" },
 
   /* Avatar center (fallback) — padded so it centers between header and controls */
   avatarCenter: {

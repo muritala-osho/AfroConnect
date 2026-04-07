@@ -136,7 +136,7 @@
     }
     try {
       callType = type || 'voice';
-      client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+      client = AgoraRTC.createClient({ mode: 'rtc', codec: 'h264' });
 
       client.on('user-published', async function(user, mediaType) {
         await client.subscribe(user, mediaType);
@@ -164,6 +164,12 @@
         postToNative({ type: 'connectionState', state: curState });
       });
 
+      client.on('network-quality', function(stats) {
+        /* uplinkNetworkQuality / downlinkNetworkQuality: 0=unknown 1=excellent … 6=disconnected */
+        var worst = Math.max(stats.uplinkNetworkQuality, stats.downlinkNetworkQuality);
+        postToNative({ type: 'networkQuality', level: worst });
+      });
+
       await client.join(appId, channel, token || null, uid || 0);
       joined = true;
 
@@ -178,7 +184,7 @@
         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(audioConfig);
         localVideoTrack = await AgoraRTC.createCameraVideoTrack({
           facingMode: currentFacingMode,
-          encoderConfig: '480p_1',
+          encoderConfig: '720p_1',
         });
         localVideoTrack.play('local-video');
         await client.publish([localAudioTrack, localVideoTrack]);
@@ -261,7 +267,7 @@
 
       localVideoTrack = await AgoraRTC.createCameraVideoTrack({
         facingMode: currentFacingMode,
-        encoderConfig: '480p_1',
+        encoderConfig: '720p_1',
       });
       localVideoTrack.play('local-video');
       await client.publish([localVideoTrack]);
