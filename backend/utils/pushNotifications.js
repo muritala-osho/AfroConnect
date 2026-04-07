@@ -1,7 +1,7 @@
 const { Expo } = require('expo-server-sdk');
 const expo = new Expo();
 
-async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId }) {
+async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl }) {
   if (!Expo.isExpoPushToken(pushToken)) {
     console.log(`Invalid Expo push token: ${pushToken}`);
     return null;
@@ -14,7 +14,8 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
     body,
     data: data || {},
     priority: priority || 'high',
-    channelId: channelId || 'default'
+    channelId: channelId || 'default',
+    ...(ttl !== undefined ? { ttl } : {}),
   };
 
   try {
@@ -96,11 +97,22 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
   const priorityMap = {
     message:    'high',
     match:      'high',
-    like:       'high',
+    like:       'normal',
     voice_call: 'high',
     video_call: 'high',
     support:    'normal',
     system:     'normal',
+  };
+
+  // Call notifications must expire fast — a stale "incoming call" notif is useless
+  const ttlMap = {
+    voice_call: 30, // 30 seconds — same as call auto-dismiss
+    video_call: 30,
+    message:    86400, // 24 hours
+    match:      86400,
+    like:       86400,
+    support:    86400,
+    system:     86400,
   };
 
   const channelMap = {
@@ -118,6 +130,7 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     priority: priorityMap[type] || 'high',
     sound,
     channelId: payload.channelId || channelMap[type] || 'default',
+    ttl: ttlMap[type] ?? 86400,
   });
 
   return true;
