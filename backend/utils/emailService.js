@@ -1,6 +1,27 @@
-const { Resend } = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY || 'missing_key');
+async function brevoSend({ to, subject, html, text }) {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: {
+        name: 'AfroConnect',
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(JSON.stringify(err));
+  }
+  return response.json();
+}
 
 // Escape user-supplied strings before embedding them in HTML email bodies
 function escapeHtml(str) {
@@ -319,8 +340,7 @@ const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
 // ─── Send functions ───────────────────────────────────────────────────────────
 const sendOTP = async (email, otp) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: 'Your OTP Code',
       html: `<h2>Your OTP is: ${otp}</h2>`,
@@ -334,8 +354,7 @@ const sendOTP = async (email, otp) => {
 
 const sendWelcomeEmail = async (email, userName) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '🎉 Welcome to AfroConnect — Let\'s Find Your Match!',
       html: getWelcomeEmailTemplate(userName),
@@ -351,8 +370,7 @@ const sendWelcomeEmail = async (email, userName) => {
 const sendPasswordResetEmail = async (email, userName, resetToken) => {
   try {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '🔒 Reset Your AfroConnect Password',
       html: getPasswordResetEmailTemplate(userName, resetLink),
@@ -367,8 +385,7 @@ const sendPasswordResetEmail = async (email, userName, resetToken) => {
 
 const sendBanNotificationEmail = async (email, userName, reason) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '⚠️ Your AfroConnect Account Has Been Suspended',
       html: getBanNotificationTemplate(userName, reason),
@@ -383,8 +400,7 @@ const sendBanNotificationEmail = async (email, userName, reason) => {
 
 const sendUnbanNotificationEmail = async (email, userName) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '✓ Your Appeal Was Approved — Welcome Back!',
       html: getUnbanNotificationTemplate(userName),
@@ -399,8 +415,7 @@ const sendUnbanNotificationEmail = async (email, userName) => {
 
 const sendAppealDecisionEmail = async (email, userName, approved, adminResponse) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: approved ? '✓ Your Appeal Was Approved!' : '⚠️ Appeal Decision',
       html: getAppealDecisionTemplate(userName, approved, adminResponse),
@@ -552,8 +567,7 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 
 const sendVerificationApprovedEmail = async (email, userName) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '✓ Your AfroConnect Profile is Verified!',
       html: getVerificationApprovedTemplate(userName),
@@ -567,8 +581,7 @@ const sendVerificationApprovedEmail = async (email, userName) => {
 
 const sendVerificationRejectedEmail = async (email, userName, reason) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '⚠️ AfroConnect Verification Update',
       html: getVerificationRejectedTemplate(userName, reason),
@@ -582,8 +595,7 @@ const sendVerificationRejectedEmail = async (email, userName, reason) => {
 
 const sendWarningEmail = async (email, userName, reason) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '⚠️ Community Guideline Warning — AfroConnect',
       html: getWarningEmailTemplate(userName, reason),
@@ -597,8 +609,7 @@ const sendWarningEmail = async (email, userName, reason) => {
 
 const sendSuspensionEmail = async (email, userName, reason, durationDays) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '⛔ Your AfroConnect Account Has Been Temporarily Suspended',
       html: getSuspensionEmailTemplate(userName, reason, durationDays),
@@ -645,8 +656,7 @@ const getSuspensionLiftedTemplate = (userName) => emailShell(`
 
 const sendSuspensionLiftedEmail = async (email, userName) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '✅ Your AfroConnect Suspension Has Been Lifted',
       html: getSuspensionLiftedTemplate(userName),
@@ -702,8 +712,7 @@ const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
 
 const sendNewMatchEmail = async (email, userName, matchName, matchPhoto) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: `💚 You matched with ${matchName} on AfroConnect!`,
       html: getNewMatchTemplate(userName, matchName, matchPhoto),
@@ -754,8 +763,7 @@ const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => email
 
 const sendSupportReplyEmail = async (email, userName, replyContent, ticketSubject) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect Support <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: '💬 AfroConnect Support has replied to your ticket',
       html: getSupportReplyTemplate(userName, replyContent, ticketSubject),
@@ -806,8 +814,7 @@ const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) =
 
 const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, daysLeft) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: `⏰ Your AfroConnect ${planName} plan renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
       html: getRenewalReminderTemplate(userName, planName, renewalDate, daysLeft),
@@ -877,8 +884,7 @@ const getInactivityTemplate = (userName) => emailShell(`
 
 const sendInactivityEmail = async (email, userName) => {
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
+    await brevoSend({
       to: email,
       subject: `👋 ${userName}, we miss you! New matches are waiting`,
       html: getInactivityTemplate(userName),

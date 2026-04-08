@@ -11,7 +11,6 @@
 
 const express = require('express');
 const router = express.Router();
-const { Resend } = require('resend');
 const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
 const User = require('../models/User');
@@ -20,17 +19,22 @@ const { sendExpoPushNotification } = require('../utils/pushNotifications');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const resend = new Resend(process.env.RESEND_API_KEY || 'missing_key');
-
 /** Send optional email alert to admin inbox (non-critical, never crashes a route) */
 async function emailAdmin(subject, body) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) return;
   try {
-    await resend.emails.send({
-      from: 'AfroConnect <onboarding@resend.dev>',
-      to: 'onboarding@resend.dev',
-      subject,
-      text: body,
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'AfroConnect', email: process.env.BREVO_SENDER_EMAIL },
+        to: [{ email: process.env.BREVO_SENDER_EMAIL }],
+        subject,
+        textContent: body,
+      }),
     });
   } catch (err) {
     console.error('[Support] Admin email failed (non-critical):', err.message);
