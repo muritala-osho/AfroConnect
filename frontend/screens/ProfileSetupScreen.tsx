@@ -146,6 +146,7 @@ const RELIGION_OPTIONS = [
   { value: "traditional", label: "Traditional" },
   { value: "atheist", label: "Atheist" },
   { value: "agnostic", label: "Agnostic" },
+  { value: "deist", label: "Deist" },
   { value: "spiritual", label: "Spiritual" },
   { value: "other", label: "Other" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
