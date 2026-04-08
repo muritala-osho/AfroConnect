@@ -316,10 +316,14 @@ router.get('/nearby', protect, async (req, res) => {
       query['lifestyle.wantsKids'] = wantsKids === 'true';
     }
 
-    const maxDist = normaliseMaxDistanceKm(
+    const isPremium = currentUser.premium?.isActive;
+    const FREE_MAX_DISTANCE_KM = 50;
+
+    const rawMaxDist = normaliseMaxDistanceKm(
       maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
-      50
+      FREE_MAX_DISTANCE_KM
     );
+    const maxDist = isPremium ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
     if (isGlobal) {
       if (countryFilter) {
@@ -376,8 +380,6 @@ router.get('/nearby', protect, async (req, res) => {
 
       return { ...userObj, score, distance: distanceKm };
     });
-
-    const isPremium = currentUser.premium?.isActive;
 
     if (!isGlobal && hasOrigin) {
       // Free users are capped at their maxDistance setting.

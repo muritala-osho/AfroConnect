@@ -299,7 +299,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (discoveryType === 'local' && user.location?.lat && user.location?.lng) {
         params.lat = user.location.lat;
         params.lng = user.location.lng;
-        params.maxDistance = user.preferences?.maxDistance || 50;
+        const rawMax = user.preferences?.maxDistance || 50;
+        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 50);
       } else if (discoveryType === 'global') {
         params.global = true;
         if (selectedCountry) {

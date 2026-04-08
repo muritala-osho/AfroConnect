@@ -89,7 +89,9 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
 
   const [minAge, setMinAge] = useState(user?.preferences?.ageRange?.min ?? 18);
   const [maxAge, setMaxAge] = useState(user?.preferences?.ageRange?.max ?? 35);
-  const [distance, setDistance] = useState(user?.preferences?.maxDistance ?? 50);
+  const [distance, setDistance] = useState(
+    Math.min(user?.preferences?.maxDistance ?? 50, user?.premium?.isActive ? 200 : 50)
+  );
   const [genderPref, setGenderPref] = useState<string>(user?.preferences?.genderPreference ?? "both");
   const [lookingFor, setLookingFor] = useState<string>(user?.lifestyle?.lookingFor ?? "relationship");
   const [religion, setReligion] = useState<string>(user?.lifestyle?.religion ?? "any");
@@ -109,6 +111,8 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   );
   const [saving, setSaving] = useState(false);
   const isPremium = user?.premium?.isActive;
+  const FREE_MAX_DISTANCE = 50;
+  const maxAllowedDistance = isPremium ? 200 : FREE_MAX_DISTANCE;
 
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -125,7 +129,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
       const updatedPreferences = {
         ...user?.preferences,
         ageRange: { min: minAge, max: maxAge },
-        maxDistance: distance,
+        maxDistance: Math.min(distance, maxAllowedDistance),
         genderPreference: genderPref,
         smoking: smoking === "any" ? undefined : smoking,
         drinking: drinking === "any" ? undefined : drinking,
@@ -328,10 +332,14 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
           <Slider
             style={[styles.slider, { marginTop: 4 }]}
             minimumValue={1}
-            maximumValue={200}
+            maximumValue={maxAllowedDistance}
             step={1}
             value={distance}
-            onValueChange={(v) => { setDistance(Math.round(v)); Haptics.selectionAsync(); }}
+            onValueChange={(v) => {
+              const capped = Math.min(Math.round(v), maxAllowedDistance);
+              setDistance(capped);
+              Haptics.selectionAsync();
+            }}
             minimumTrackTintColor="#FF6B9D"
             maximumTrackTintColor={theme.border}
             thumbTintColor="#FF6B9D"
@@ -342,8 +350,18 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               <Feather name="map-pin" size={11} color="#FF6B9D" />
               <ThemedText style={[styles.distancePillText, { color: "#FF6B9D" }]}>{distance} km radius</ThemedText>
             </View>
-            <ThemedText style={[styles.rangeEndText, { color: theme.textSecondary }]}>200 km</ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <ThemedText style={[styles.rangeEndText, { color: theme.textSecondary }]}>{maxAllowedDistance} km</ThemedText>
+              {!isPremium && (
+                <Feather name="lock" size={11} color={theme.primary} />
+              )}
+            </View>
           </View>
+          {!isPremium && (
+            <ThemedText style={[styles.rangeEndText, { color: theme.primary, textAlign: 'center', marginTop: 6, fontSize: 12 }]}>
+              Upgrade to Premium to discover beyond 50 km
+            </ThemedText>
+          )}
         </FilterSection>
 
         {/* ─── Show Me ─── */}
