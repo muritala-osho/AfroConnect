@@ -342,8 +342,8 @@ const sendOTP = async (email, otp) => {
   try {
     await brevoSend({
       to: email,
-      subject: 'Your OTP Code',
-      html: `<h2>Your OTP is: ${otp}</h2>`,
+      subject: '🔐 Your AfroConnect Verification Code',
+      html: getOTPEmailTemplate('there', otp),
     });
     console.log('OTP sent successfully');
   } catch (error) {
