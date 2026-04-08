@@ -6,6 +6,7 @@ const { sendOTP } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
 const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
+const { calculateMatchScore } = require('../utils/matching');
 
 
 // @route   GET /api/users/me
@@ -348,9 +349,6 @@ router.get('/nearby', protect, async (req, res) => {
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
 
-    const myInterests = currentUser.interests || [];
-
-    const myInterestSet = new Set(myInterests.map(i => i.toLowerCase()));
     const hasOrigin = effectiveLat != null && effectiveLng != null;
 
     users = users.map(user => {
@@ -358,44 +356,24 @@ router.get('/nearby', protect, async (req, res) => {
 
       const distanceKm = distanceToUser(effectiveLat, effectiveLng, user.location);
 
-      let score = 0;
+      const { total: score, breakdown } = calculateMatchScore(
+        userObj,
+        currentUser,
+        isGlobal ? null : distanceKm,
+        maxDist
+      );
 
-      if (!isGlobal && distanceKm != null) {
-        score += Math.max(0, maxDist - distanceKm);
-      }
-
-      if (myInterestSet.size > 0 && user.interests?.length > 0) {
-        const shared = user.interests.filter(i => myInterestSet.has(i.toLowerCase()));
-        score += shared.length * 10;
-      }
-
-      if (
-        currentUser.lifestyle?.personalityType &&
-        user.lifestyle?.personalityType === currentUser.lifestyle.personalityType
-      ) {
-        score += 30;
-      }
-
-      if (user.verified) score += 5;
-
-      return { ...userObj, score, distance: distanceKm };
+      return { ...userObj, score, scoreBreakdown: breakdown, distance: distanceKm };
     });
 
-    if (!isGlobal && hasOrigin) {
-      // Free users are capped at their maxDistance setting.
-      // Premium users can discover people at any range.
-      if (!isPremium) {
-        users = users.filter(u => u.distance == null || u.distance <= maxDist);
-      }
-      users.sort((a, b) => {
-        const da = a.distance ?? 99999;
-        const db = b.distance ?? 99999;
-        if (da !== db) return da - db;
-        return b.score - a.score;
-      });
-    } else {
-      users.sort((a, b) => b.score - a.score);
+    // Apply distance cap for free users in local mode
+    if (!isGlobal && hasOrigin && !isPremium) {
+      users = users.filter(u => u.distance == null || u.distance <= maxDist);
     }
+
+    // Sort by match score descending (score already encodes distance, recency,
+    // interests, profile completeness, etc.)
+    users.sort((a, b) => b.score - a.score);
 
     users = users.slice(0, 40);
 
@@ -407,8 +385,11 @@ router.get('/nearby', protect, async (req, res) => {
       // Filter photos by per-photo privacy — in discovery (no match yet) only show public photos
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
+      // eslint-disable-next-line no-unused-vars
+      const { scoreBreakdown, ...userWithoutBreakdown } = user;
+
       return {
-        ...user,
+        ...userWithoutBreakdown,
         photos: visiblePhotos,
         age: privacy.hideAge ? null : user.age,
         online: privacy.showOnlineStatus === false ? null : isOnline,
