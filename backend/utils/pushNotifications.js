@@ -1,7 +1,7 @@
 const { Expo } = require('expo-server-sdk');
 const expo = new Expo();
 
-async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl }) {
+async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge }) {
   if (!Expo.isExpoPushToken(pushToken)) {
     console.log(`Invalid Expo push token: ${pushToken}`);
     return null;
@@ -16,6 +16,7 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
     priority: priority || 'high',
     channelId: channelId || 'default',
     ...(ttl !== undefined ? { ttl } : {}),
+    ...(badge !== undefined ? { badge } : {}),
   };
 
   try {
@@ -130,6 +131,7 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     sound,
     channelId: payload.channelId || channelMap[type] || 'default',
     ttl: ttlMap[type] ?? 86400,
+    ...(payload.badge !== undefined ? { badge: payload.badge } : {}),
   });
 
   return true;

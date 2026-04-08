@@ -21,6 +21,7 @@ import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
 import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import VoiceBio from "@/components/VoiceBio";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -479,6 +480,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={styles.heroAge}>, {user.age}</ThemedText>
                 )}
               </ThemedText>
+              {(user as any)?.verified && <VerificationBadge verified size="small" />}
               {user?.premium?.isActive && <PremiumBadge size="medium" />}
             </View>
             {((user as any)?.livingIn || (user as any)?.location?.city || (user as any)?.location?.address) && (

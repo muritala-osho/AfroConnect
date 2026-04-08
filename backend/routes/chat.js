@@ -424,11 +424,15 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         else if (type === "location") notifBody = "📍 Shared a location";
         else if (notifBody.length > 100)
           notifBody = notifBody.substring(0, 97) + "...";
+
+        const totalUnread = await Message.countDocuments({ receiver, seen: false });
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
+            badge: totalUnread,
             data: {
               type: "message",
               matchId: matchId.toString(),
@@ -762,11 +766,15 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
         else if (type === "location") notifBody = "📍 Shared a location";
         else if (notifBody.length > 100)
           notifBody = notifBody.substring(0, 97) + "...";
+
+        const totalUnread = await Message.countDocuments({ receiver, seen: false });
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
+            badge: totalUnread,
             data: {
               type: "message",
               matchId: matchId.toString(),
