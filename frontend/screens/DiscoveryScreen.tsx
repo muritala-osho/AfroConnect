@@ -236,7 +236,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         const radarUsers: DiscoverUser[] = data.users.map((u: any) => {
           // Use profilePhoto URL directly, or fallback to photos array
           const photoUrl = u.profilePhoto || (u.photos?.[0]?.url || u.photos?.[0]);
-          console.log(`[DISCOVERY RADAR] User ${u.name}: photo=${photoUrl ? 'YES' : 'NO'}`);
           return {
             id: u.id || u._id,
             name: u.name || 'Unknown',

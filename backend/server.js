@@ -46,6 +46,8 @@ const muteRoutes = require('./routes/mute');
 const compression = require('compression');
 const helmet = require('helmet');
 const hpp = require('hpp');
+const mongoSanitize = require('express-mongo-sanitize');
+const xssClean = require('xss-clean');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -187,7 +189,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Sanitize request data against NoSQL injection
+// Sanitize request data against NoSQL injection (custom deep sanitizer)
 // Recursively removes keys starting with $ or containing . from req.body and req.params
 const sanitizeObject = (obj) => {
   if (!obj || typeof obj !== 'object') return;
@@ -204,6 +206,12 @@ app.use((req, res, next) => {
   sanitizeObject(req.params);
   next();
 });
+
+// Additional NoSQL injection protection (strips $ and . from keys)
+app.use(mongoSanitize({ replaceWith: '_' }));
+
+// XSS protection — sanitize user input strings
+app.use(xssClean());
 
 // Prevent HTTP parameter pollution
 app.use(hpp());

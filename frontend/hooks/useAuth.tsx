@@ -252,10 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const baseUrl = getApiBaseUrl();
     const signupUrl = `${baseUrl}/api/auth/signup`;
     try {
-      console.log('\n\n========== SIGNUP ATTEMPT ==========');
-      console.log('📝 Signup URL:', signupUrl);
-      console.log('✉️  Email:', email);
-      console.log('====================================\n\n');
+      console.log('📝 Signup attempt initiated');
 
       const response = await fetch(signupUrl, {
         method: 'POST',
