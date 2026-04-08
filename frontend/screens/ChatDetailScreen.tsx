@@ -540,7 +540,7 @@ export default function ChatDetailScreen({
     const showSub = Keyboard.addListener(showEvent, () => {
       setIsKeyboardVisible(true);
       if (Platform.OS === "android") {
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
       }
     });
     const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
@@ -554,7 +554,7 @@ export default function ChatDetailScreen({
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
     };
     vv.addEventListener("resize", handleResize);
     vv.addEventListener("scroll", handleResize);
@@ -796,7 +796,7 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
 
       // Since we are actively in the chat, immediately mark as read
       // This makes ticks turn blue on sender's side without them refreshing
@@ -957,7 +957,7 @@ export default function ChatDetailScreen({
     };
     setMessages((prev) => [...prev, tempMessage]);
     setReplyingTo(null);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
 
     try {
       const response = await post<{ message: Message }>(
@@ -1553,9 +1553,19 @@ export default function ChatDetailScreen({
     () =>
       messages.map((msg, index) => ({
         ...msg,
-        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
+        // With inverted FlatList we mark the LAST message of each day group
+        // (chronologically) so the header appears at the top of each group visually.
+        // That means: show header when the NEXT message is on a different day, or
+        // when this is the very last message (most recent).
+        _showDateHeader: shouldShowDateHeader(msg, index < messages.length - 1 ? messages[index + 1] : null),
       })),
     [messages],
+  );
+
+  // Inverted FlatList expects newest-first so the list naturally opens at the bottom
+  const invertedMessages = useMemo(
+    () => [...enrichedMessages].reverse(),
+    [enrichedMessages],
   );
 
   const formatRecordingTime = (seconds: number) => {
@@ -1567,12 +1577,14 @@ export default function ChatDetailScreen({
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
   const scrollToMessage = useCallback((messageId: string) => {
-    const index = messages.findIndex(m => m._id === messageId);
-    if (index === -1) return;
+    const originalIndex = messages.findIndex(m => m._id === messageId);
+    if (originalIndex === -1) return;
+    // inverted list is reversed — newest is at index 0
+    const invertedIndex = messages.length - 1 - originalIndex;
     try {
-      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      flatListRef.current?.scrollToIndex({ index: invertedIndex, animated: true, viewPosition: 0.5 });
     } catch {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     }
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     setHighlightedMessageId(messageId);
@@ -1589,13 +1601,6 @@ export default function ChatDetailScreen({
 
       return (
         <View>
-          {showDateHeader && (
-            <View style={styles.dateHeaderContainer}>
-              <View style={[styles.dateHeader, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
-                <ThemedText style={[styles.dateHeaderText, { color: "#FFF" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
-              </View>
-            </View>
-          )}
 
           {item.type === "system" || item.type === "call" || item.deletedForEveryone ? (
             <View style={styles.systemMessageContainer}>
@@ -1932,6 +1937,13 @@ export default function ChatDetailScreen({
               </Pressable>
             </SwipeableMessage>
           )}
+          {showDateHeader && (
+            <View style={styles.dateHeaderContainer}>
+              <View style={[styles.dateHeader, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
+                <ThemedText style={[styles.dateHeaderText, { color: "#FFF" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
+              </View>
+            </View>
+          )}
         </View>
       );
     },
@@ -1952,13 +1964,13 @@ export default function ChatDetailScreen({
       ) : (
         <FlatList
           ref={flatListRef}
-          data={enrichedMessages}
+          data={invertedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
           extraData={[playingAudioId, audioProgress, highlightedMessageId, openedViewOnceIds]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          inverted
           initialNumToRender={20}
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={50}
@@ -1969,10 +1981,10 @@ export default function ChatDetailScreen({
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 300);
           }}
-          // FIX: load more old messages when user scrolls to top
-          onStartReached={loadMoreMessages}
-          onStartReachedThreshold={0.1}
-          ListHeaderComponent={
+          // Load older messages when user scrolls to the visual top (end of inverted list)
+          onEndReached={loadMoreMessages}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 12, alignItems: "center" }}>
                 <ActivityIndicator size="small" color={theme.primary} />
