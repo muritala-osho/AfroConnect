@@ -972,7 +972,7 @@ router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
 // ─── SUPPORT TICKETS ────────────────────────────────────────────────────────
 
 const SupportTicket = require('../models/SupportTicket');
-const { sendExpoPushNotification } = require('../utils/pushNotifications');
+const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
 
 // @route   GET /api/admin/support-tickets
 // @desc    Get all support tickets
@@ -1019,14 +1019,16 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
     // Send push notification to the user if they have a push token
     if (ticket.userId) {
       try {
-        const user = await User.findById(ticket.userId).select('pushToken pushNotificationsEnabled');
-        if (user?.pushToken && user.pushNotificationsEnabled !== false) {
-          await sendExpoPushNotification(user.pushToken, {
+        const user = await User.findById(ticket.userId).select(
+          'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        if (user?.pushToken) {
+          await sendSmartNotification(user, {
             title: '💬 Support Reply from AfroConnect',
             body: content.length > 80 ? content.substring(0, 80) + '...' : content,
             data: { screen: 'Support', ticketId: ticket._id.toString() },
             channelId: 'support',
-          });
+          }, 'support');
         }
       } catch (pushErr) {
         console.error('Push notification failed (non-critical):', pushErr.message);

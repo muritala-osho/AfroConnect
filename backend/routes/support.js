@@ -15,7 +15,7 @@ const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
 const User = require('../models/User');
 const SupportTicket = require('../models/SupportTicket');
-const { sendExpoPushNotification } = require('../utils/pushNotifications');
+const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -45,9 +45,11 @@ async function emailAdmin(subject, body) {
 async function pushToUser(userId, title, body, data = {}) {
   if (!userId) return;
   try {
-    const user = await User.findById(userId).select('pushToken pushNotificationsEnabled');
-    if (user?.pushToken && user.pushNotificationsEnabled !== false) {
-      await sendExpoPushNotification(user.pushToken, { title, body, data, channelId: 'support' });
+    const user = await User.findById(userId).select(
+      'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+    );
+    if (user?.pushToken) {
+      await sendSmartNotification(user, { title, body, data, channelId: 'support' }, 'support');
     }
   } catch (err) {
     console.error('[Support] Push to user failed (non-critical):', err.message);

@@ -53,17 +53,15 @@ router.post('/send', protect, async (req, res) => {
     // Fetch user from DB to get their push token and check if notifications are enabled
     const user = await User.findById(userId);
 
-    if (!user || user.pushNotificationsEnabled === false || !user.pushToken) {
+    if (!user || !user.pushToken) {
       return res.status(404).json({
         success: false,
         message: 'User push token not found or notifications disabled'
       });
     }
 
-    const pushToken = user.pushToken;
-
-    const { sendExpoPushNotification } = require('../utils/pushNotifications');
-    const result = await sendExpoPushNotification(pushToken, { title, body, data });
+    const { sendSmartNotification } = require('../utils/pushNotifications');
+    const sent = await sendSmartNotification(user, { title, body, data }, 'system');
 
     res.json({
       success: true,

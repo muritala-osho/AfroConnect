@@ -374,9 +374,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await get<{ user: User }>('/users/me', {}, token);
 
     if (response.success && response.data) {
-      const updatedUser = response.data.user;
+      const updatedUser = response.data.user as any;
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
       setUser(updatedUser);
+
+      // Seed notification preferences to AsyncStorage so the foreground
+      // notification handler can read them without an API call
+      try {
+        if (updatedUser.notificationPreferences) {
+          await AsyncStorage.setItem(
+            'notificationPreferences',
+            JSON.stringify(updatedUser.notificationPreferences)
+          );
+        }
+        const pushEnabled = updatedUser.settings?.pushNotifications;
+        if (pushEnabled !== undefined) {
+          await AsyncStorage.setItem(
+            'pushNotificationsEnabled',
+            pushEnabled ? 'true' : 'false'
+          );
+        }
+      } catch {}
     }
   };
 

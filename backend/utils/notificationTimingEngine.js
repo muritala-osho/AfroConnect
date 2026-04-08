@@ -18,7 +18,7 @@
  *   notificationEngagement: [{ hour: 0, sent: N, opened: N, lastUpdated: Date }, ...]
  */
 
-const { sendExpoPushNotification } = require('./pushNotifications');
+const { sendSmartNotification } = require('./pushNotifications');
 
 // Minimum open rate threshold — below this we fall back to a sensible default
 const MIN_SAMPLES_FOR_LEARNING = 5;
@@ -122,43 +122,45 @@ const recordNotificationOpened = (user, hourUTC) => {
  * @param {Object} user     - Mongoose user document (must have pushToken, notificationEngagement)
  * @param {Object} payload  - { title, body, data, channelId }
  * @param {boolean} sendNow - Bypass timing and send immediately
+ * @param {string} type     - Notification type passed to sendSmartNotification
  * @returns {{ scheduled: boolean, delayMs: number }}
  */
-const scheduleNotification = async (user, payload, sendNow = false) => {
+const scheduleNotification = async (user, payload, sendNow = false, type = 'system') => {
   if (!user?.pushToken) {
     return { scheduled: false, reason: 'no_push_token' };
   }
 
   const optimalHour = getOptimalSendHour(user);
   const delayMs     = sendNow ? 0 : msUntilNextOccurrence(optimalHour);
-  const nowHourUTC  = new Date().getUTCHours();
 
-  const doSend = async () => {
+  const doSend = async (targetUser) => {
     try {
       const sendHourUTC = new Date().getUTCHours();
-      recordNotificationSent(user, sendHourUTC);
-      await user.save();
-      await sendExpoPushNotification(user.pushToken, payload);
+      recordNotificationSent(targetUser, sendHourUTC);
+      await targetUser.save();
+      await sendSmartNotification(targetUser, payload, type);
     } catch (err) {
       console.error('[TimingEngine] Push send error:', err.message);
     }
   };
 
   if (delayMs === 0) {
-    await doSend();
+    await doSend(user);
     return { scheduled: true, delayMs: 0, sentNow: true };
   } else {
     // Queue for later — use setTimeout (fire and forget)
     setTimeout(async () => {
       try {
-        // Re-fetch user to get fresh pushToken before delayed send
+        // Re-fetch user to get fresh state before delayed send
         const User = require('../models/User');
-        const freshUser = await User.findById(user._id).select('pushToken notificationEngagement settings');
-        if (freshUser?.pushToken && freshUser.settings?.pushNotifications !== false) {
+        const freshUser = await User.findById(user._id).select(
+          'pushToken notificationEngagement pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        if (freshUser?.pushToken) {
           const sendHourUTC = new Date().getUTCHours();
           recordNotificationSent(freshUser, sendHourUTC);
           await freshUser.save();
-          await sendExpoPushNotification(freshUser.pushToken, payload);
+          await sendSmartNotification(freshUser, payload, type);
         }
       } catch (err) {
         console.error('[TimingEngine] Delayed push error:', err.message);

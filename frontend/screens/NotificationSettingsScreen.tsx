@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { ThemedText } from '@/components/ThemedText';
 import { useTheme } from '@/hooks/useTheme';
@@ -176,8 +177,14 @@ export default function NotificationSettingsScreen() {
     setter(value);
     try {
       const res = await put('/account/settings', { [field]: value }, token || '');
-      if (res.success && fetchUser) fetchUser();
-      else setter(!value);
+      if (res.success) {
+        if (field === 'pushNotifications') {
+          await AsyncStorage.setItem('pushNotificationsEnabled', value ? 'true' : 'false');
+        }
+        if (fetchUser) fetchUser();
+      } else {
+        setter(!value);
+      }
     } catch { setter(!value); }
   };
 
@@ -187,6 +194,16 @@ export default function NotificationSettingsScreen() {
     setSavingPrefs(true);
     try {
       await put('/mute/notification-preferences', overrides, token);
+      // Mirror updated prefs to AsyncStorage so the foreground notification
+      // handler can read them without an API call
+      try {
+        const existing = await AsyncStorage.getItem('notificationPreferences');
+        const current = existing ? JSON.parse(existing) : {};
+        await AsyncStorage.setItem(
+          'notificationPreferences',
+          JSON.stringify({ ...current, ...overrides })
+        );
+      } catch {}
       if (fetchUser) fetchUser();
     } catch {}
     finally { setSavingPrefs(false); }

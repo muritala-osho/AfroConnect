@@ -4,16 +4,46 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Always show notifications when app is in foreground.
-// Do NOT make API calls here — it's too slow and can drop notifications.
+// Dynamically check the user's notification preferences before showing
+// foreground notifications so that sound/alert toggles are respected.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async () => {
+    try {
+      const prefsRaw = await AsyncStorage.getItem('notificationPreferences');
+      const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
+      const pushEnabled = await AsyncStorage.getItem('pushNotificationsEnabled');
+
+      // If the user has globally disabled push notifications, suppress everything
+      if (pushEnabled === 'false') {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      const soundEnabled = prefs.soundEnabled !== false;
+
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: soundEnabled,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    } catch {
+      // Fall back to showing the notification if preferences can't be read
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      };
+    }
+  },
 });
 
 const isExpoGo = Constants.appOwnership === 'expo';
