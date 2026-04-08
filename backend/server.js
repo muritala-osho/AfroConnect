@@ -46,7 +46,6 @@ const muteRoutes = require('./routes/mute');
 const compression = require('compression');
 const helmet = require('helmet');
 const hpp = require('hpp');
-const xssClean = require('xss-clean');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -206,8 +205,26 @@ app.use((req, res, next) => {
   next();
 });
 
-// XSS protection — sanitize user input strings
-app.use(xssClean());
+// XSS protection — strip dangerous HTML tags from string values in req.body only
+// (avoids the req.query getter-only issue that breaks xss-clean on this Express version)
+const xssSanitize = (obj) => {
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(key => {
+    if (typeof obj[key] === 'string') {
+      obj[key] = obj[key]
+        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/javascript:/gi, '')
+        .replace(/on\w+\s*=/gi, '');
+    } else if (typeof obj[key] === 'object') {
+      xssSanitize(obj[key]);
+    }
+  });
+};
+app.use((req, res, next) => {
+  if (req.body) xssSanitize(req.body);
+  next();
+});
 
 // Prevent HTTP parameter pollution
 app.use(hpp());
