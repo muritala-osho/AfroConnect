@@ -100,6 +100,7 @@ const RELIGION_OPTIONS = [
   { value: 'traditional', label: 'Traditional' },
   { value: 'atheist', label: 'Atheist' },
   { value: 'agnostic', label: 'Agnostic' },
+  { value: 'deist', label: 'Deist' },
   { value: 'spiritual', label: 'Spiritual' },
   { value: 'other', label: 'Other' },
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
@@ -115,16 +116,19 @@ const ETHNICITY_OPTIONS = [
 ];
 
 const PETS_OPTIONS = [
-  { value: 'none', label: 'No pets' },
-  { value: 'dog', label: 'Dog' },
-  { value: 'cat', label: 'Cat' },
-  { value: 'parrot', label: 'Parrot' },
+  { value: 'dog', label: 'Dog 🐕' },
+  { value: 'cat', label: 'Cat 🐈' },
+  { value: 'parrot', label: 'Parrot 🦜' },
+  { value: 'fish', label: 'Fish 🐟' },
+  { value: 'rabbit', label: 'Rabbit 🐇' },
   { value: 'other', label: 'Other' },
+  { value: 'none', label: 'No pets' },
   { value: 'allergic', label: 'Allergic to pets' },
 ];
 
 const RELATIONSHIP_STATUS_OPTIONS = [
   { value: 'single', label: 'Single' },
+  { value: 'dating', label: 'Dating' },
   { value: 'married', label: 'Married' },
   { value: 'single_parent', label: 'Single Parent' },
   { value: 'divorced', label: 'Divorced' },
@@ -374,6 +378,70 @@ const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue
   );
 };
 
+const MultiSelectModal = ({ visible, onClose, title, options, selectedValues, onSelect }: any) => {
+  const { theme, isDark } = useTheme();
+  const toggle = (value: string) => {
+    const exclusive = ['none', 'allergic'];
+    if (exclusive.includes(value)) {
+      onSelect([value]);
+      return;
+    }
+    const current: string[] = (selectedValues || []).filter((v: string) => !exclusive.includes(v));
+    if (current.includes(value)) {
+      onSelect(current.filter((v: string) => v !== value));
+    } else {
+      onSelect([...current, value]);
+    }
+  };
+  const selected: string[] = selectedValues || [];
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Select all that apply</ThemedText>
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={options}
+            keyExtractor={(item: any) => item.value}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            renderItem={({ item }: any) => {
+              const isSelected = selected.includes(item.value);
+              return (
+                <Pressable
+                  style={[
+                    styles.optionItem,
+                    { borderBottomColor: theme.border },
+                    isSelected && { backgroundColor: theme.primary + '0C' },
+                  ]}
+                  onPress={() => toggle(item.value)}
+                >
+                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 const InterestModal = ({ visible, onClose, interests, toggleInterest, insetsBottom }: any) => {
   const { theme, isDark } = useTheme();
   return (
@@ -459,7 +527,10 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [workout, setWorkout] = useState(user?.lifestyle?.workout || "");
   const [religion, setReligion] = useState(user?.lifestyle?.religion || "");
   const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || "");
-  const [pets, setPets] = useState(user?.lifestyle?.pets || "");
+  const rawPets = user?.lifestyle?.pets;
+  const [pets, setPets] = useState<string[]>(
+    Array.isArray(rawPets) ? rawPets : (rawPets ? [rawPets] : [])
+  );
   const [relationshipStatus, setRelationshipStatus] = useState(user?.lifestyle?.relationshipStatus || "");
   const [personalityType, setPersonalityType] = useState(user?.lifestyle?.personalityType || "");
   const [communicationStyle, setCommunicationStyle] = useState(user?.lifestyle?.communicationStyle || "");
@@ -514,7 +585,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           if (d.workout) setWorkout(d.workout);
           if (d.religion) setReligion(d.religion);
           if (d.ethnicity) setEthnicity(d.ethnicity);
-          if (d.pets) setPets(d.pets);
+          if (d.pets) setPets(Array.isArray(d.pets) ? d.pets : [d.pets]);
           if (d.relationshipStatus) setRelationshipStatus(d.relationshipStatus);
           if (d.personalityType) setPersonalityType(d.personalityType);
           if (d.communicationStyle) setCommunicationStyle(d.communicationStyle);
@@ -671,7 +742,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           workout: workout || undefined,
           religion: religion || undefined,
           ethnicity: ethnicity || undefined,
-          pets: pets || undefined,
+          pets: pets.length > 0 ? pets : undefined,
           relationshipStatus: relationshipStatus || undefined,
           personalityType: personalityType.trim() || undefined,
           communicationStyle: communicationStyle || undefined,
@@ -1002,7 +1073,14 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
                   </View>
                   <View style={styles.half}>
                     <ThemedText style={[styles.miniLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
-                    <SelectButton label="Pets?" value={pets} options={PETS_OPTIONS} onPress={() => setActiveModal('pets')} icon="heart" accent="#10B981" />
+                    <SelectButton
+                      label="Pets?"
+                      value={pets.length > 0 ? pets.map((v: string) => PETS_OPTIONS.find((o: any) => o.value === v)?.label || v).join(', ') : ''}
+                      options={PETS_OPTIONS}
+                      onPress={() => setActiveModal('pets')}
+                      icon="heart"
+                      accent="#10B981"
+                    />
                   </View>
                 </View>
                 <View style={[styles.toggleCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA', borderColor: theme.border }]}>
@@ -1306,7 +1384,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'zodiac'} onClose={() => setActiveModal(null)} title="Zodiac Sign" options={ZODIAC_OPTIONS} selectedValue={zodiacSign} onSelect={setZodiacSign} />
       <OptionModal visible={activeModal === 'education'} onClose={() => setActiveModal(null)} title="Education" options={EDUCATION_OPTIONS} selectedValue={education} onSelect={setEducation} />
       <OptionModal visible={activeModal === 'ethnicity'} onClose={() => setActiveModal(null)} title="Ethnicity" options={ETHNICITY_OPTIONS} selectedValue={ethnicity} onSelect={setEthnicity} />
-      <OptionModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
+      <MultiSelectModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValues={pets} onSelect={setPets} />
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
       <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
       <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={handleDiasporaSelect} />
