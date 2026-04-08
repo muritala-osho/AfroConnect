@@ -82,6 +82,11 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
           });
+          // Map genders array → genderPreference string
+          if (Array.isArray(updates.preferences.genders) && updates.preferences.genders.length > 0) {
+            const g = updates.preferences.genders;
+            user.preferences.genderPreference = g.length === 1 ? g[0] : 'both';
+          }
         } else if (field === 'lifestyle' && updates.lifestyle) {
           // Merge lifestyle instead of replacing
           const lifestyleUpdate = { ...updates.lifestyle };
@@ -99,6 +104,12 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ...(user.privacySettings || {}),
             ...updates.privacySettings
           };
+        } else if (['communicationStyle', 'loveStyle', 'personalityType'].includes(field)) {
+          // These belong under lifestyle — merge them in for backwards compatibility
+          const currentLifestyle = user.lifestyle && typeof user.lifestyle.toObject === 'function'
+            ? user.lifestyle.toObject()
+            : (user.lifestyle || {});
+          user.lifestyle = { ...currentLifestyle, [field]: updates[field] };
         } else {
           user[field] = updates[field];
         }

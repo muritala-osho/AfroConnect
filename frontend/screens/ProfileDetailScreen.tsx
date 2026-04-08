@@ -12,13 +12,7 @@ import {
   TouchableOpacity,
   FlatList,
 } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from "react-native-reanimated";
-import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -160,88 +154,6 @@ function getUserLocalTime(user: any): string {
   } catch {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
-}
-
-/* ── Zoomable photo with pinch + pan + double-tap ── */
-function ZoomablePhoto({ source }: { source: any }) {
-  const scale       = useSharedValue(1);
-  const savedScale  = useSharedValue(1);
-  const tx          = useSharedValue(0);
-  const ty          = useSharedValue(0);
-  const savedTx     = useSharedValue(0);
-  const savedTy     = useSharedValue(0);
-  const [isZoomed, setIsZoomed] = useState(false);
-
-  const pinch = Gesture.Pinch()
-    .onUpdate(e => {
-      scale.value = Math.min(Math.max(savedScale.value * e.scale, 0.8), 5);
-    })
-    .onEnd(() => {
-      if (scale.value < 1) {
-        scale.value      = withSpring(1);
-        savedScale.value = 1;
-        tx.value         = withSpring(0);
-        ty.value         = withSpring(0);
-        savedTx.value    = 0;
-        savedTy.value    = 0;
-        runOnJS(setIsZoomed)(false);
-      } else {
-        savedScale.value = scale.value;
-        runOnJS(setIsZoomed)(scale.value > 1.05);
-      }
-    });
-
-  // Pan is only enabled when the image is zoomed in — when at scale=1 the
-  // FlatList handles horizontal swipes to navigate between photos.
-  const pan = Gesture.Pan()
-    .enabled(isZoomed)
-    .onUpdate(e => {
-      tx.value = savedTx.value + e.translationX;
-      ty.value = savedTy.value + e.translationY;
-    })
-    .onEnd(() => {
-      savedTx.value = tx.value;
-      savedTy.value = ty.value;
-    });
-
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      if (savedScale.value > 1) {
-        scale.value      = withSpring(1);
-        savedScale.value = 1;
-        tx.value         = withSpring(0);
-        ty.value         = withSpring(0);
-        savedTx.value    = 0;
-        savedTy.value    = 0;
-        runOnJS(setIsZoomed)(false);
-      } else {
-        scale.value      = withSpring(2.5);
-        savedScale.value = 2.5;
-        runOnJS(setIsZoomed)(true);
-      }
-    });
-
-  const composed = Gesture.Simultaneous(pinch, pan);
-  const gesture  = Gesture.Exclusive(doubleTap, composed);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateX: tx.value },
-      { translateY: ty.value },
-    ],
-  }));
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <Animated.Image
-        source={source}
-        style={[{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.82 }, animStyle]}
-        resizeMode="contain"
-      />
-    </GestureDetector>
-  );
 }
 
 export default function ProfileDetailScreen() {
@@ -841,7 +753,6 @@ export default function ProfileDetailScreen() {
         statusBarTranslucent
         onRequestClose={() => setZoomVisible(false)}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.zoomModalContainer}>
           {user?.photos && user.photos.length > 0 && (
             <FlatList
@@ -897,7 +808,6 @@ export default function ProfileDetailScreen() {
             <ThemedText style={styles.zoomHintText}>Pinch or double-tap to zoom · Swipe for next photo</ThemedText>
           </View>
         </View>
-        </GestureHandlerRootView>
       </Modal>
     </ThemedView>
   );

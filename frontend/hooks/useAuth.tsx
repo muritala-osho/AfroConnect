@@ -64,6 +64,14 @@ export interface User {
     smoking?: string;
     workout?: string;
     pets?: string;
+    hasKids?: boolean;
+    hasPets?: boolean;
+    wantsKids?: boolean;
+    communicationStyle?: string;
+    loveStyle?: string;
+    personalityType?: string;
+    ethnicity?: string;
+    relationshipStatus?: string;
   };
   googleId?: string;
   isAdmin?: boolean;

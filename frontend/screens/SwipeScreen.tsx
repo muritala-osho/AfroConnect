@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Platform, Dimensions } from "react-native";
+import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Platform, Dimensions, Modal, TouchableOpacity, FlatList } from "react-native";
 import { Image } from "expo-image";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -56,6 +58,8 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [zoomVisible, setZoomVisible] = useState(false);
+  const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
 
   const handleTap = (evt: any) => {
     const currentProfile = potentialMatches[currentIndex];
@@ -349,11 +353,17 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
   );
 
   const photoSource = currentProfile.photos[currentPhotoIndex] ? getPhotoSource(currentProfile.photos[currentPhotoIndex]) : null;
+  const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
   return (
     <ThemedView style={styles.container}>
       <Pressable 
         onPress={handleTap}
+        onLongPress={() => {
+          setZoomPhotoIndex(currentPhotoIndex);
+          setZoomVisible(true);
+        }}
+        delayLongPress={300}
         style={[styles.card, { backgroundColor: theme.backgroundSecondary }]}
       >
         {photoSource ? (
@@ -463,6 +473,58 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
             <Feather name="zap" size={22} color={theme.boost} />
           </Pressable>
       </View>
+
+      <Modal
+        visible={zoomVisible}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setZoomVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          {currentProfile.photos.length > 0 && (
+            <FlatList
+              data={currentProfile.photos}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(_: any, i: number) => i.toString()}
+              initialScrollIndex={zoomPhotoIndex}
+              getItemLayout={(_: any, index: number) => ({
+                length: SCREEN_WIDTH,
+                offset: SCREEN_WIDTH * index,
+                index,
+              })}
+              renderItem={({ item }: { item: any }) => (
+                <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                  <ZoomablePhoto source={getPhotoSource(item)} width={SCREEN_WIDTH} height={SCREEN_HEIGHT * 0.82} />
+                </View>
+              )}
+              onMomentumScrollEnd={(e: any) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setZoomPhotoIndex(idx);
+              }}
+            />
+          )}
+          {currentProfile.photos.length > 1 && (
+            <View style={{ position: 'absolute', top: insets.top + 56, flexDirection: 'row', justifyContent: 'center', width: '100%', gap: 6 }}>
+              {currentProfile.photos.map((_: any, idx: number) => (
+                <View key={idx} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: idx === zoomPhotoIndex ? '#fff' : 'rgba(255,255,255,0.35)' }} />
+              ))}
+            </View>
+          )}
+          <TouchableOpacity
+            style={{ position: 'absolute', top: insets.top + 16, left: 16, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}
+            onPress={() => setZoomVisible(false)}
+          >
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={{ position: 'absolute', bottom: insets.bottom + 24, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="search-outline" size={13} color="rgba(255,255,255,0.5)" />
+            <ThemedText style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>Pinch or double-tap to zoom</ThemedText>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
