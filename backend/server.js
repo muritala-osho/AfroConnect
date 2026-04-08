@@ -46,7 +46,6 @@ const muteRoutes = require('./routes/mute');
 const compression = require('compression');
 const helmet = require('helmet');
 const hpp = require('hpp');
-const mongoSanitize = require('express-mongo-sanitize');
 const xssClean = require('xss-clean');
 
 const app = express();
@@ -206,9 +205,6 @@ app.use((req, res, next) => {
   sanitizeObject(req.params);
   next();
 });
-
-// Additional NoSQL injection protection (strips $ and . from keys)
-app.use(mongoSanitize({ replaceWith: '_' }));
 
 // XSS protection — sanitize user input strings
 app.use(xssClean());
