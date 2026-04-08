@@ -75,7 +75,7 @@ router.post(
       }
 
       // Generate OTP
-      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const { generateOTP, sendOTP } = require("../utils/emailService");
       const otpCode = generateOTP();
 
       // Create user with minimal data - not verified yet
@@ -97,7 +97,7 @@ router.post(
 
       // Send OTP email
       try {
-        await sendOTPEmail(email, "User", otpCode);
+        await sendOTP(email, otpCode);
       } catch (emailError) {
         console.error("Failed to send OTP email:", emailError);
         // Continue anyway - user can request resend
@@ -197,14 +197,14 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
       });
     }
 
-    const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+    const { generateOTP, sendOTP } = require("../utils/emailService");
     const otpCode = generateOTP();
 
     user.verificationOTP = otpCode;
     user.verificationOTPExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    await sendOTPEmail(user.email, user.name, otpCode);
+    await sendOTP(user.email, otpCode);
 
     res.json({
       success: true,
@@ -341,7 +341,7 @@ router.post(
         });
       }
 
-      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const { generateOTP, sendOTP } = require("../utils/emailService");
       const otpCode = generateOTP();
 
       user.resetPasswordOTP = otpCode;
@@ -349,7 +349,7 @@ router.post(
       await user.save();
 
       try {
-        await sendOTPEmail(user.email, user.name, otpCode);
+        await sendOTP(user.email, otpCode);
       } catch (emailError) {
         console.error("Forgot password email failed");
       }

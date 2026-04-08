@@ -11,7 +11,7 @@
 
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
 const User = require('../models/User');
@@ -20,20 +20,15 @@ const { sendExpoPushNotification } = require('../utils/pushNotifications');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const resend = new Resend(process.env.RESEND_API_KEY || 'missing_key');
+
 /** Send optional email alert to admin inbox (non-critical, never crashes a route) */
 async function emailAdmin(subject, body) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+  if (!process.env.RESEND_API_KEY) return;
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
+    await resend.emails.send({
+      from: 'AfroConnect <onboarding@resend.dev>',
+      to: 'onboarding@resend.dev',
       subject,
       text: body,
     });

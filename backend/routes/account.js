@@ -9,7 +9,7 @@ const Activity = require('../models/Activity');
 const CallHistory = require('../models/CallHistory');
 const FriendRequest = require('../models/FriendRequest');
 const crypto = require('crypto');
-const { sendOTPEmail } = require('../utils/emailService');
+const { sendOTP } = require('../utils/emailService');
 
 // @route   DELETE /api/account/delete
 // @desc    Permanently delete user account and all data
@@ -331,7 +331,7 @@ router.post('/request-deletion-otp', protect, async (req, res) => {
     user.deletionOTPExpire = otpExpiry;
     await user.save();
     
-    await sendOTPEmail(user.email, user.name, otp);
+    await sendOTP(user.email, otp);
     
     res.json({
       success: true,

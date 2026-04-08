@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const { sendOTPEmail } = require('../utils/emailService');
+const { sendOTP } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
 
