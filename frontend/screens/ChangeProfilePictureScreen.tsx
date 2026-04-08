@@ -267,13 +267,14 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
 
     if (photo) {
       const source = getPhotoSource(photo);
+      const canDelete = photos.length > 4;
       return (
-        <Pressable
-          key={index}
-          style={[styles.photoSlot, { backgroundColor: theme.surface }]}
-          onPress={() => showPhotoOptions(index)}
-          disabled={uploading || isDeleting}
-        >
+        <View key={index} style={[styles.photoSlot, { backgroundColor: theme.surface }]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => showPhotoOptions(index)}
+            disabled={uploading || isDeleting}
+          />
           <Image source={source} style={styles.photoImage} contentFit="cover" />
           {index === 0 && (
             <View style={[styles.primaryBadge, { backgroundColor: theme.primary }]}>
@@ -285,10 +286,18 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
               <ActivityIndicator color={theme.buttonText} />
             </View>
           )}
-          <View style={[styles.editBadge, { backgroundColor: theme.surfaceElevated }]}>
-            <Feather name="edit-2" size={12} color={theme.text} />
-          </View>
-        </Pressable>
+          {/* Visible delete button — red X when deletable, lock icon when at minimum */}
+          <Pressable
+            style={[
+              styles.deleteBtn,
+              { backgroundColor: canDelete ? '#EF4444' : 'rgba(100,100,100,0.7)' },
+            ]}
+            onPress={() => canDelete ? handleDeletePhoto(index) : Alert.alert('Minimum Photos', 'You must keep at least 4 photos.')}
+            hitSlop={6}
+          >
+            <Feather name={canDelete ? 'x' : 'lock'} size={11} color="#fff" />
+          </Pressable>
+        </View>
       );
     }
 
@@ -450,6 +459,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  deleteBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   photoOverlay: {
     ...StyleSheet.absoluteFillObject,

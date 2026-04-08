@@ -8,6 +8,7 @@ import {
   Switch,
   Animated,
   Dimensions,
+  Text,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -30,20 +31,20 @@ interface FiltersScreenProps {
 }
 
 const INTEREST_OPTIONS = [
-  { label: "🎵 Music", value: "Music" },
-  { label: "✈️ Travel", value: "Travel" },
-  { label: "🍕 Food", value: "Food" },
-  { label: "⚽ Sports", value: "Sports" },
-  { label: "🎨 Art", value: "Art" },
-  { label: "🎬 Movies", value: "Movies" },
-  { label: "📚 Reading", value: "Reading" },
-  { label: "🎮 Gaming", value: "Gaming" },
-  { label: "💪 Fitness", value: "Fitness" },
-  { label: "📸 Photography", value: "Photography" },
-  { label: "💃 Dancing", value: "Dancing" },
-  { label: "👨‍🍳 Cooking", value: "Cooking" },
-  { label: "👗 Fashion", value: "Fashion" },
-  { label: "💻 Technology", value: "Technology" },
+  { emoji: "🎵", label: "Music", value: "Music" },
+  { emoji: "✈️", label: "Travel", value: "Travel" },
+  { emoji: "🍕", label: "Food", value: "Food" },
+  { emoji: "⚽", label: "Sports", value: "Sports" },
+  { emoji: "🎨", label: "Art", value: "Art" },
+  { emoji: "🎬", label: "Movies", value: "Movies" },
+  { emoji: "📚", label: "Reading", value: "Reading" },
+  { emoji: "🎮", label: "Gaming", value: "Gaming" },
+  { emoji: "💪", label: "Fitness", value: "Fitness" },
+  { emoji: "📸", label: "Photography", value: "Photography" },
+  { emoji: "💃", label: "Dancing", value: "Dancing" },
+  { emoji: "👨‍🍳", label: "Cooking", value: "Cooking" },
+  { emoji: "👗", label: "Fashion", value: "Fashion" },
+  { emoji: "💻", label: "Technology", value: "Technology" },
 ];
 
 interface SectionProps {
@@ -448,9 +449,13 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
                     {
                       borderColor: active ? theme.primary : theme.border,
                       backgroundColor: active ? theme.primary : theme.background,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
                     },
                   ]}
                 >
+                  <Text style={styles.chipEmoji}>{item.emoji}</Text>
                   <ThemedText style={[styles.chipText, { color: active ? "#fff" : theme.text }]}>
                     {item.label}
                   </ThemedText>
@@ -994,6 +999,9 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
+  },
+  chipEmoji: {
+    fontSize: 14,
   },
   chipText: {
     fontSize: 13,
