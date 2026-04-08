@@ -193,46 +193,6 @@ export default function PremiumScreen({ navigation }: any) {
     }
   };
 
-  const handleRestore = async () => {
-    if (!token) {
-      Alert.alert('Login Required', 'Please log in to restore purchases.');
-      return;
-    }
-
-    if (Platform.OS === 'web') return;
-
-    setProcessing(true);
-    try {
-      const history = await iapService.getPurchaseHistory();
-      if (history && history.length > 0) {
-        const latest = history[0];
-        const receipt = Platform.OS === 'ios'
-          ? latest.transactionReceipt
-          : latest.purchaseToken;
-        const response = await post<{ subscription?: any }>(
-          '/subscription/restore-purchases',
-          {
-            platform: Platform.OS === 'ios' ? 'ios' : 'android',
-            receipt,
-          },
-          token
-        );
-        if (response.success) {
-          setIsActive(true);
-          Alert.alert('Restored!', 'Your premium subscription has been restored.');
-        } else {
-          Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
-        }
-      } else {
-        Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore.');
-      }
-    } catch (error) {
-      Alert.alert('Restore Failed', 'Unable to restore purchases. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const glowStyle = useAnimatedStyle(() => ({
     opacity: glowOpacity.value,
   }));
@@ -390,13 +350,6 @@ export default function PremiumScreen({ navigation }: any) {
               </LinearGradient>
             </TouchableOpacity>
             
-            {Platform.OS !== 'web' && !isActive && (
-              <TouchableOpacity onPress={handleRestore} disabled={processing} style={{ marginTop: 8, paddingVertical: 6 }}>
-                <Text style={[styles.termsText, { textDecorationLine: 'underline' }]}>
-                  Restore Purchases
-                </Text>
-              </TouchableOpacity>
-            )}
             <Text style={styles.termsText}>
               By subscribing, you agree to our Terms of Service. Cancel anytime.
             </Text>
