@@ -377,8 +377,14 @@ router.get('/nearby', protect, async (req, res) => {
       return { ...userObj, score, distance: distanceKm };
     });
 
+    const isPremium = currentUser.premium?.isActive;
+
     if (!isGlobal && hasOrigin) {
-      users = users.filter(u => u.distance == null || u.distance <= maxDist);
+      // Free users are capped at their maxDistance setting.
+      // Premium users can discover people at any range.
+      if (!isPremium) {
+        users = users.filter(u => u.distance == null || u.distance <= maxDist);
+      }
       users.sort((a, b) => {
         const da = a.distance ?? 99999;
         const db = b.distance ?? 99999;
@@ -388,8 +394,6 @@ router.get('/nearby', protect, async (req, res) => {
     } else {
       users.sort((a, b) => b.score - a.score);
     }
-
-    const isPremium = currentUser.premium?.isActive;
 
     users = users.slice(0, 40);
 
