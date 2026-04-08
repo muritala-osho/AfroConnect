@@ -267,7 +267,7 @@ const userSchema = new mongoose.Schema({
     },
     religion: {
       type: String,
-      enum: ['christian', 'muslim', 'traditional', 'atheist', 'agnostic', 'spiritual', 'other', 'prefer_not_to_say'],
+      enum: ['christian', 'muslim', 'traditional', 'atheist', 'agnostic', 'spiritual', 'deist', 'other', 'prefer_not_to_say'],
       default: null,
       trim: true
     },

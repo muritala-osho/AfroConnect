@@ -143,8 +143,8 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
     const photo = photos[index];
     if (!photo) return;
 
-    if (photos.length <= 1) {
-      Alert.alert("Cannot Delete", "You must have at least one photo.");
+    if (photos.length <= 4) {
+      Alert.alert("Cannot Delete", "You must keep at least 4 photos on your profile.");
       return;
     }
 

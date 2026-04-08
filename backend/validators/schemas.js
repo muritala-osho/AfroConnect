@@ -104,7 +104,7 @@ const updateProfile = Joi.object({
   name: Joi.string().trim().min(2).max(60).optional(),
   bio: Joi.string().max(500).optional().allow(''),
   age: Joi.number().integer().min(18).max(100).optional(),
-  gender: Joi.string().valid('male', 'female', 'non-binary', 'other').optional(),
+  gender: Joi.string().valid('male', 'female', 'non-binary', 'other', 'man', 'woman', 'prefer_not_to_say').optional(),
   interestedIn: Joi.array().items(Joi.string()).optional(),
   interests: Joi.array().items(Joi.string().max(50)).max(20).optional(),
   location: Joi.object().optional(),

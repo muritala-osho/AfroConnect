@@ -482,6 +482,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               { value: "spiritual", label: "Spiritual", emoji: "🌟" },
               { value: "atheist", label: "Atheist", emoji: "🔬" },
               { value: "agnostic", label: "Agnostic", emoji: "🤔" },
+              { value: "deist", label: "Deist", emoji: "🌌" },
             ].map((opt) => {
               const active = religion === opt.value;
               return (
