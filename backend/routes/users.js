@@ -5,6 +5,7 @@ const User = require('../models/User');
 const { sendOTP } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
+const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 
 
 // @route   GET /api/users/me
@@ -193,7 +194,11 @@ router.get('/countries', protect, async (req, res) => {
 
 router.get('/nearby', protect, async (req, res) => {
   try {
-    const { lat, lng, maxDistance, minAge, maxAge, genders } = req.query;
+    const {
+      lat, lng, maxDistance, minAge, maxAge, genders,
+      lookingFor, religion, smoking, drinking, wantsKids,
+      verifiedOnly, onlineOnly,
+    } = req.query;
     const isGlobal = req.query.global === 'true';
     const countryFilter = req.query.country;
 
@@ -263,20 +268,21 @@ router.get('/nearby', protect, async (req, res) => {
       suspended: { $ne: true },
     };
 
-    if (req.query.verifiedOnly === 'true') {
-      query.verified = true;
-    }
+    const wantVerifiedOnly =
+      verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true;
+    if (wantVerifiedOnly) query.verified = true;
 
-    if (req.query.onlineOnly === 'true') {
-      query.onlineStatus = 'online';
-    }
+    const wantOnlineOnly =
+      onlineOnly === 'true' || currentUser.preferences?.onlineNow === true;
+    if (wantOnlineOnly) query.onlineStatus = 'online';
 
-    const minAgeFilter = minAge ? parseInt(minAge) : currentUser.preferences?.ageRange?.min || 18;
-    const maxAgeFilter = maxAge ? parseInt(maxAge) : currentUser.preferences?.ageRange?.max || 100;
-    query.age = { $gte: minAgeFilter, $lte: maxAgeFilter };
+    const minAgeFilter = minAge ? parseInt(minAge, 10) : (currentUser.preferences?.ageRange?.min || 18);
+    const maxAgeFilter = maxAge ? parseInt(maxAge, 10) : (currentUser.preferences?.ageRange?.max || 100);
+    query.age = { $gte: Number(minAgeFilter), $lte: Number(maxAgeFilter) };
 
-    if (genders) {
-      const genderArray = genders.split(',');
+    const resolvedGenders = genders || currentUser.preferences?.genderPreference;
+    if (resolvedGenders && resolvedGenders !== 'both' && resolvedGenders !== 'any') {
+      const genderArray = resolvedGenders.split(',').map(g => g.trim().toLowerCase());
       const expandedGenders = [];
       genderArray.forEach(g => {
         expandedGenders.push(g);
@@ -286,17 +292,34 @@ router.get('/nearby', protect, async (req, res) => {
         else if (g === 'woman') expandedGenders.push('female');
       });
       query.gender = { $in: [...new Set(expandedGenders)] };
-    } else {
-      const genderPref = currentUser.preferences?.genderPreference || 'both';
-      if (genderPref === 'male') query.gender = { $in: ['male', 'man'] };
-      else if (genderPref === 'female') query.gender = { $in: ['female', 'woman'] };
     }
 
-    let maxDist = maxDistance ? parseInt(maxDistance) : 50;
-    if (!maxDistance && currentUser.preferences?.maxDistance) {
-      const storedDist = currentUser.preferences.maxDistance;
-      maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
+    const resolvedLookingFor = lookingFor || null;
+    if (resolvedLookingFor) query.lookingFor = resolvedLookingFor;
+
+    const resolvedReligion = religion || null;
+    if (resolvedReligion && resolvedReligion !== 'any') {
+      query['lifestyle.religion'] = resolvedReligion;
     }
+
+    const resolvedSmoking = smoking || null;
+    if (resolvedSmoking && resolvedSmoking !== 'any') {
+      query['lifestyle.smoking'] = resolvedSmoking;
+    }
+
+    const resolvedDrinking = drinking || null;
+    if (resolvedDrinking && resolvedDrinking !== 'any') {
+      query['lifestyle.drinking'] = resolvedDrinking;
+    }
+
+    if (wantsKids != null && wantsKids !== 'any') {
+      query['lifestyle.wantsKids'] = wantsKids === 'true';
+    }
+
+    const maxDist = normaliseMaxDistanceKm(
+      maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
+      50
+    );
 
     if (isGlobal) {
       if (countryFilter) {
@@ -323,58 +346,50 @@ router.get('/nearby', protect, async (req, res) => {
 
     const myInterests = currentUser.interests || [];
 
+    const myInterestSet = new Set(myInterests.map(i => i.toLowerCase()));
+    const hasOrigin = effectiveLat != null && effectiveLng != null;
+
     users = users.map(user => {
       const userObj = user.toObject();
+
+      const distanceKm = distanceToUser(effectiveLat, effectiveLng, user.location);
+
       let score = 0;
 
-      let distanceKm = null;
-      if (effectiveLat && effectiveLng) {
-        let userLat, userLng;
-        if (user.location?.coordinates && user.location.coordinates.length >= 2 &&
-            !(user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
-          userLng = user.location.coordinates[0];
-          userLat = user.location.coordinates[1];
-        } else if (user.location?.lat && user.location?.lng) {
-          userLat = user.location.lat;
-          userLng = user.location.lng;
-        }
-
-        if (userLat != null && userLng != null) {
-          distanceKm = calculateDistance(effectiveLat, effectiveLng, userLat, userLng);
-        }
-      }
-      if (distanceKm === null) {
-        distanceKm = 99999;
-      }
-
-      if (!isGlobal) {
+      if (!isGlobal && distanceKm != null) {
         score += Math.max(0, maxDist - distanceKm);
       }
 
-      if (myInterests.length > 0 && user.interests?.length > 0) {
-        const mySet = new Set(myInterests.map(i => i.toLowerCase()));
-        const shared = user.interests.filter(i => mySet.has(i.toLowerCase()));
+      if (myInterestSet.size > 0 && user.interests?.length > 0) {
+        const shared = user.interests.filter(i => myInterestSet.has(i.toLowerCase()));
         score += shared.length * 10;
       }
 
-      if (currentUser.lifestyle?.personalityType && user.lifestyle?.personalityType === currentUser.lifestyle?.personalityType) {
+      if (
+        currentUser.lifestyle?.personalityType &&
+        user.lifestyle?.personalityType === currentUser.lifestyle.personalityType
+      ) {
         score += 30;
       }
 
-      if (user.verified) {
-        score += 5;
-      }
+      if (user.verified) score += 5;
 
       return { ...userObj, score, distance: distanceKm };
     });
 
-    users.sort((a, b) => b.score - a.score);
+    if (!isGlobal && hasOrigin) {
+      users = users.filter(u => u.distance == null || u.distance <= maxDist);
+      users.sort((a, b) => {
+        const da = a.distance ?? 99999;
+        const db = b.distance ?? 99999;
+        if (da !== db) return da - db;
+        return b.score - a.score;
+      });
+    } else {
+      users.sort((a, b) => b.score - a.score);
+    }
 
     const isPremium = currentUser.premium?.isActive;
-
-    if (!isGlobal && !isPremium && effectiveLat && effectiveLng) {
-      users = users.filter(u => u.distance <= maxDist);
-    }
 
     users = users.slice(0, 40);
 
@@ -659,23 +674,6 @@ router.delete('/me', protect, async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
-    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  // Return distance in kilometers with one decimal precision (e.g., 1.3 km)
-  const distanceKm = R * c;
-  return Math.max(0, Number(distanceKm.toFixed(1)));
-}
 
 // Location routes
 router.post('/me/locations', protect, async (req, res) => {

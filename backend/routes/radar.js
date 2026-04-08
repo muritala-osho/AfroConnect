@@ -3,21 +3,7 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const redis = require('../utils/redis');
-
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const toRad = (deg) => deg * Math.PI / 180;
-  
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  
-  return R * c;
-}
+const { haversineDistance, extractLatLng } = require('../utils/distance');
 
 function formatDistance(distanceKm) {
   if (distanceKm < 1) {
@@ -137,19 +123,10 @@ router.get('/nearby-users', protect, async (req, res) => {
 
     const nearbyUsers = users
       .map(user => {
-        let userLat, userLng;
-        
-        if (user.location?.coordinates?.length === 2 && 
-            !(user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
-          userLat = user.location.coordinates[1];
-          userLng = user.location.coordinates[0];
-        } else if (user.location?.lat && user.location?.lng) {
-          userLat = user.location.lat;
-          userLng = user.location.lng;
-        } else {
-          return null;
-        }
-        const distance = calculateDistance(latitude, longitude, userLat, userLng);
+        const { lat: userLat, lng: userLng } = extractLatLng(user.location);
+        if (userLat == null || userLng == null) return null;
+
+        const distance = haversineDistance(latitude, longitude, userLat, userLng);
 
         if (distance > searchRadius) {
           return null;

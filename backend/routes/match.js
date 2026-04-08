@@ -9,6 +9,7 @@ const validate = require('../middleware/validate');
 const { swipeLimiter } = require('../middleware/rateLimiter');
 const schemas = require('../validators/schemas');
 const redis = require('../utils/redis');
+const { distanceToUser, extractLatLng, normaliseMaxDistanceKm } = require('../utils/distance');
 
 // @route   GET /api/match/who-likes-me
 // @desc    Get list of users who liked current user (pending friend requests)
@@ -54,11 +55,9 @@ router.get('/who-likes-me', protect, async (req, res) => {
       processedUsers = processedUsers.map(u => {
         const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
         let distance = null;
-        if (req.user.location?.coordinates && userObj.location?.coordinates) {
-          distance = calculateDistance(
-            req.user.location.coordinates,
-            userObj.location.coordinates
-          );
+        {
+          const { lat: myLat, lng: myLng } = extractLatLng(req.user.location);
+          distance = distanceToUser(myLat, myLng, userObj.location);
         }
 
         return {
@@ -422,15 +421,15 @@ router.get('/daily-match', protect, async (req, res) => {
       ...genderFilter
     }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(60);
 
-    // Filter by distance if user has location and a maxDistance preference
-    const maxDist = me.preferences?.maxDistance;
-    if (maxDist && me.location?.coordinates?.length === 2) {
-      const myCoords = me.location.coordinates;
-      candidates = candidates.filter(c => {
-        if (!c.location?.coordinates?.length) return true; // include users without location
-        const dist = calculateDistance(myCoords, c.location.coordinates);
-        return dist <= maxDist;
-      });
+    const maxDist = normaliseMaxDistanceKm(me.preferences?.maxDistance, 0);
+    if (maxDist > 0) {
+      const { lat: myLat, lng: myLng } = extractLatLng(me.location);
+      if (myLat != null && myLng != null) {
+        candidates = candidates.filter(c => {
+          const d = distanceToUser(myLat, myLng, c.location);
+          return d == null || d <= maxDist;
+        });
+      }
     }
 
     if (!candidates.length) {
@@ -512,17 +511,6 @@ function calculateCulturalScore(me, other) {
   total += genScore;
 
   return { totalScore: total, maxScore: 100, breakdown };
-}
-
-function calculateDistance(coords1, coords2) {
-  const [lon1, lat1] = coords1;
-  const [lon2, lat2] = coords2;
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return Math.round(R * c * 10) / 10;
 }
 
 module.exports = router;

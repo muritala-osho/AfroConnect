@@ -307,14 +307,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
       }
 
-      if ((user.preferences as any)?.ageRange) {
-        params.minAge = (user.preferences as any).ageRange.min;
-        params.maxAge = (user.preferences as any).ageRange.max;
+      const prefs = user.preferences as any;
+
+      if (prefs?.ageRange) {
+        params.minAge = Number(prefs.ageRange.min);
+        params.maxAge = Number(prefs.ageRange.max);
       }
 
       const userGender = user.gender?.toLowerCase();
-      const prefs = user.preferences as any;
-      if (prefs?.genderPreference && prefs.genderPreference !== 'any') {
+      if (prefs?.genderPreference && prefs.genderPreference !== 'any' && prefs.genderPreference !== 'both') {
         params.genders = prefs.genderPreference;
       } else if (prefs?.gender && prefs.gender !== 'any') {
         params.genders = prefs.gender;
@@ -323,6 +324,16 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       } else if (userGender === 'female') {
         params.genders = 'male';
       }
+
+      if (prefs?.showVerifiedOnly) params.verifiedOnly = 'true';
+      if (prefs?.onlineNow) params.onlineOnly = 'true';
+
+      const lifestyle = (user as any).lifestyle;
+      if (lifestyle?.lookingFor) params.lookingFor = lifestyle.lookingFor;
+      if (lifestyle?.religion) params.religion = lifestyle.religion;
+      if (prefs?.smoking) params.smoking = prefs.smoking;
+      if (prefs?.drinking) params.drinking = prefs.drinking;
+      if (prefs?.wantsKids != null) params.wantsKids = String(prefs.wantsKids);
 
       const response = await api.get<{ success: boolean; users: any[] }>('/users/nearby', params, token);
       console.log('API Response Success:', response.success);
@@ -394,6 +405,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         usersWithSimilarity.sort((a, b) => {
           if (a.isBoosted && !b.isBoosted) return -1;
           if (!a.isBoosted && b.isBoosted) return 1;
+          if (discoveryType === 'local') {
+            const da = a.distance ?? 99999;
+            const db = b.distance ?? 99999;
+            return da - db;
+          }
           return Math.random() - 0.5;
         });
         
@@ -428,15 +444,25 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
 
     // Create a hash of current preferences to detect changes
+    const prefs = user?.preferences as any;
+    const lifestyle = (user as any)?.lifestyle;
     const currentPrefs = JSON.stringify({
       lat: user?.location?.lat,
       lng: user?.location?.lng,
-      maxDistance: user?.preferences?.maxDistance,
-      ageMin: user?.preferences?.ageRange?.min,
-      ageMax: user?.preferences?.ageRange?.max,
+      maxDistance: prefs?.maxDistance,
+      ageMin: prefs?.ageRange?.min,
+      ageMax: prefs?.ageRange?.max,
       gender: user?.gender,
+      genderPref: prefs?.genderPreference,
+      verifiedOnly: prefs?.showVerifiedOnly,
+      onlineNow: prefs?.onlineNow,
+      lookingFor: lifestyle?.lookingFor,
+      religion: lifestyle?.religion,
+      smoking: prefs?.smoking,
+      drinking: prefs?.drinking,
+      wantsKids: prefs?.wantsKids,
       discoveryType: discoveryType,
-      selectedCountry: selectedCountry
+      selectedCountry: selectedCountry,
     });
     
     // Load on initial mount or when preferences actually change
