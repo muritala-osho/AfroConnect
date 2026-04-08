@@ -44,7 +44,14 @@ const BRAND = {
   accentLight:   '#E0F2FE',
 };
 
-const LOGO_BLOCK = '';
+const LOGO_URL = process.env.RENDER_EXTERNAL_URL
+  ? `${process.env.RENDER_EXTERNAL_URL}/public/logo.png`
+  : '';
+
+const LOGO_BLOCK = LOGO_URL
+  ? `<img src="${LOGO_URL}" alt="AfroConnect" width="120" height="120"
+       style="border-radius: 20px; display: block; margin: 0 auto 14px auto;" />`
+  : '';
 
 // Reusable header section
 const emailHeader = (title, subtitle = '') => `
