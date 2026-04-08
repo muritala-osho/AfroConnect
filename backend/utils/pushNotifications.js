@@ -104,11 +104,10 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     system:     'normal',
   };
 
-  // Call notifications must expire fast — a stale "incoming call" notif is useless
   const ttlMap = {
-    voice_call: 30, // 30 seconds — same as call auto-dismiss
-    video_call: 30,
-    message:    86400, // 24 hours
+    voice_call: 86400,
+    video_call: 86400,
+    message:    86400,
     match:      86400,
     like:       86400,
     support:    86400,
