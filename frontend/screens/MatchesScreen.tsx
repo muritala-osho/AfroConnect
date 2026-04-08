@@ -29,6 +29,7 @@ import { StoredUser } from "@/utils/storage";
 import { getPhotoSource } from "@/utils/photos";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { Image as ExpoImage } from "expo-image";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import LikeCard from "@/components/LikeCard";
 import socketService from "@/services/socket";
 
@@ -156,11 +157,7 @@ const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibil
             {item.user.name}, {item.user.age}
           </ThemedText>
           {item.user.verified && (
-            <ExpoImage
-              source={require("@/assets/icons/verified-tick.png")}
-              style={{ width: 18, height: 18, marginLeft: 4 }}
-              contentFit="contain"
-            />
+            <VerificationBadge size={14} />
           )}
         </View>
         {item.user.location ? (

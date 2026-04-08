@@ -52,6 +52,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/context/UnreadContext";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -2052,7 +2053,7 @@ export default function ChatDetailScreen({
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
               <ThemedText style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>{userName}</ThemedText>
-              {otherUserVerified && <Image source={require("@/assets/icons/verified-tick.png")} style={styles.verifiedBadge} contentFit="contain" />}
+              {otherUserVerified && <VerificationBadge size={14} />}
             </View>
             <ThemedText style={[styles.headerStatus, { color: isOtherRecording ? "#F44336" : isTyping ? theme.primary : isOnline ? "#4CAF50" : theme.textSecondary }]}>
               {getStatusText()}

@@ -23,6 +23,7 @@ import {
   DeviceEventEmitter,
 } from "react-native";
 import { Image } from "expo-image";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import { CompositeNavigationProp } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -227,11 +228,7 @@ const ChatItem = memo(
                 {item.user.name}
               </ThemedText>
               {item.user.verified && (
-                <Image
-                  source={require("@/assets/icons/verified-tick.png")}
-                  style={{ width: 16, height: 16, marginLeft: 4 }}
-                  contentFit="contain"
-                />
+                <VerificationBadge size={14} />
               )}
               {item.isMuted && (
                 <Ionicons

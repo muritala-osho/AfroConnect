@@ -39,6 +39,7 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -1522,11 +1523,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     )}
                   </ThemedText>
                   {currentUser.verified && (
-                    <Image 
-                      source={require("@/assets/icons/verified-tick.png")} 
-                      style={styles.verifiedTick} 
-                      contentFit="contain"
-                    />
+                    <VerificationBadge size={14} />
                   )}
                   {(currentUser as any).premium?.isActive && (
                     <PremiumBadge size="small" style={{ marginLeft: 4 }} />

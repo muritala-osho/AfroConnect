@@ -13,6 +13,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import { getApiBaseUrl } from '@/constants/config';
+import { VerificationBadge } from '@/components/VerificationBadge';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -322,7 +323,7 @@ export default function VerificationScreen() {
 
               {verificationState?.verified && (
                 <View style={[styles.statusPill, { backgroundColor: '#4CAF5025' }]}>
-                  <Image source={require("@/assets/icons/verified-tick.png")} style={{ width: 18, height: 18 }} contentFit="contain" />
+                  <VerificationBadge size={18} />
                   <ThemedText style={[styles.statusPillText, { color: '#4CAF50' }]}>You're Verified</ThemedText>
                 </View>
               )}

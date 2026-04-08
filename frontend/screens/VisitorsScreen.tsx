@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import { Image } from "expo-image";
 import { getPhotoSource } from "@/utils/photos";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import { useTranslation } from "@/hooks/useLanguage";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -114,11 +115,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
           <View style={styles.nameRow}>
             <ThemedText style={styles.name}>{isPremium ? item.name : hashName(item.name)}, {item.age}</ThemedText>
             {item.verified && (
-               <Image 
-               source={require("@/assets/icons/verified-tick.png")} 
-               style={{ width: 16, height: 16, marginLeft: 4 }} 
-               contentFit="contain"
-             />
+              <VerificationBadge size={14} />
             )}
           </View>
           <ThemedText style={[styles.time, { color: theme.textSecondary }]}>

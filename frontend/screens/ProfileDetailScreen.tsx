@@ -503,11 +503,7 @@ export default function ProfileDetailScreen() {
                 ) : null}
               </ThemedText>
               {user.verified && (
-                <Image
-                  source={require("@/assets/icons/verified-tick.png")}
-                  style={{ width: 22, height: 22, marginLeft: 8 }}
-                  resizeMode="contain"
-                />
+                <VerificationBadge size={18} />
               )}
               {user.premium?.isActive && (
                 <PremiumBadge size="medium" style={{ marginLeft: 6 }} />
