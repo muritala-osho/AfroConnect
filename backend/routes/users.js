@@ -82,9 +82,14 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
           });
         } else if (field === 'lifestyle' && updates.lifestyle) {
           // Merge lifestyle instead of replacing
+          const lifestyleUpdate = { ...updates.lifestyle };
+          // Convert pets array to comma-separated string if needed
+          if (Array.isArray(lifestyleUpdate.pets)) {
+            lifestyleUpdate.pets = lifestyleUpdate.pets.join(',');
+          }
           user.lifestyle = {
             ...(user.lifestyle && typeof user.lifestyle.toObject === 'function' ? user.lifestyle.toObject() : (user.lifestyle || {})),
-            ...updates.lifestyle
+            ...lifestyleUpdate
           };
         } else if (field === 'privacySettings' && updates.privacySettings) {
           // Merge privacySettings
@@ -110,7 +115,13 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     });
   } catch (error) {
     console.error('Profile update error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    let message = 'Server error';
+    if (error.name === 'ValidationError') {
+      message = Object.values(error.errors).map(e => e.message).join(', ');
+    } else if (error.message) {
+      message = error.message;
+    }
+    res.status(500).json({ success: false, message });
   }
 });
 

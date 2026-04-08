@@ -40,18 +40,18 @@ interface EditProfileScreenProps {
 const EDIT_PROFILE_STORAGE_KEY = "afroconnect_edit_profile_draft";
 
 const ZODIAC_OPTIONS = [
-  { value: 'aries', label: 'Aries â™ˆ' },
-  { value: 'taurus', label: 'Taurus â™‰' },
-  { value: 'gemini', label: 'Gemini â™Š' },
-  { value: 'cancer', label: 'Cancer â™‹' },
-  { value: 'leo', label: 'Leo â™Œ' },
-  { value: 'virgo', label: 'Virgo â™' },
-  { value: 'libra', label: 'Libra â™Ž' },
-  { value: 'scorpio', label: 'Scorpio â™' },
-  { value: 'sagittarius', label: 'Sagittarius â™' },
-  { value: 'capricorn', label: 'Capricorn â™‘' },
-  { value: 'aquarius', label: 'Aquarius â™’' },
-  { value: 'pisces', label: 'Pisces â™“' },
+  { value: 'aries', label: 'Aries' },
+  { value: 'taurus', label: 'Taurus' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'cancer', label: 'Cancer' },
+  { value: 'leo', label: 'Leo' },
+  { value: 'virgo', label: 'Virgo' },
+  { value: 'libra', label: 'Libra' },
+  { value: 'scorpio', label: 'Scorpio' },
+  { value: 'sagittarius', label: 'Sagittarius' },
+  { value: 'capricorn', label: 'Capricorn' },
+  { value: 'aquarius', label: 'Aquarius' },
+  { value: 'pisces', label: 'Pisces' },
 ];
 
 const EDUCATION_OPTIONS = [
@@ -529,7 +529,9 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || "");
   const rawPets = user?.lifestyle?.pets;
   const [pets, setPets] = useState<string[]>(
-    Array.isArray(rawPets) ? rawPets : (rawPets ? [rawPets] : [])
+    Array.isArray(rawPets)
+      ? rawPets
+      : (rawPets ? String(rawPets).split(',').map((p: string) => p.trim()).filter(Boolean) : [])
   );
   const [relationshipStatus, setRelationshipStatus] = useState(user?.lifestyle?.relationshipStatus || "");
   const [personalityType, setPersonalityType] = useState(user?.lifestyle?.personalityType || "");
