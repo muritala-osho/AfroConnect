@@ -46,7 +46,9 @@ Notifications.setNotificationHandler({
   },
 });
 
-const isExpoGo = Constants.appOwnership === 'expo';
+const isExpoGo =
+  Constants.executionEnvironment === 'storeClient' ||
+  (Constants as any).appOwnership === 'expo';
 
 export async function registerForPushNotificationsAsync() {
   let token;
@@ -71,23 +73,47 @@ export async function registerForPushNotificationsAsync() {
     }
 
     try {
-      token = (await Notifications.getExpoPushTokenAsync({
-        projectId: Constants.expoConfig?.extra?.eas?.projectId || 'your-project-id',
-      })).data;
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) {
+        console.error('EAS projectId not found in app config. Push notifications will not work.');
+        return;
+      }
+
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      console.log('Expo push token obtained:', token);
       await AsyncStorage.setItem('pushToken', token);
 
       const authToken = await AsyncStorage.getItem('token');
       if (authToken && token) {
         const { getApiBaseUrl } = require('../constants/config');
         const apiUrl = getApiBaseUrl();
-        await fetch(`${apiUrl}/api/notifications/register-token`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}`,
-          },
-          body: JSON.stringify({ pushToken: token }),
-        });
+
+        let registered = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const res = await fetch(`${apiUrl}/api/notifications/register-token`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`,
+              },
+              body: JSON.stringify({ pushToken: token }),
+            });
+            if (res.ok) {
+              console.log('Push token registered with backend successfully.');
+              registered = true;
+              break;
+            } else {
+              console.warn(`Push token registration attempt ${attempt} failed with status ${res.status}`);
+            }
+          } catch (fetchErr) {
+            console.warn(`Push token registration attempt ${attempt} error:`, fetchErr);
+          }
+          if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+        }
+        if (!registered) {
+          console.error('Failed to register push token with backend after 3 attempts.');
+        }
       }
     } catch (error) {
       console.error('Error getting or registering push token:', error);

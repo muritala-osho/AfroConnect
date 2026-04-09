@@ -30,7 +30,9 @@
         "android.permission.READ_MEDIA_VIDEO",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.VIBRATE",
-        "android.permission.RECEIVE_BOOT_COMPLETED"
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM"
       ]
     },
     "web": {
@@ -59,6 +61,15 @@
           }
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#FF6B9D",
+          "defaultChannel": "default",
+          "sounds": []
+        }
+      ],
       "expo-web-browser",
       [
         "expo-media-library",
@@ -71,8 +82,7 @@
             "video"
           ]
         }
-      ],
-      "expo-build-properties"
+      ]
     ],
     "experiments": {
       "reactCompiler": false
