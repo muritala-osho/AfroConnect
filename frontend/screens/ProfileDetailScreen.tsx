@@ -13,6 +13,7 @@ import {
   FlatList,
 } from "react-native";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -755,6 +756,7 @@ export default function ProfileDetailScreen() {
         statusBarTranslucent
         onRequestClose={() => setZoomVisible(false)}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.zoomModalContainer}>
           {user?.photos && user.photos.length > 0 && (
             <FlatList
@@ -815,6 +817,7 @@ export default function ProfileDetailScreen() {
             <ThemedText style={styles.zoomHintText}>Pinch or double-tap to zoom · Swipe for next photo</ThemedText>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </ThemedView>
   );

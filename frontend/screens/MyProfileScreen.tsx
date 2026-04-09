@@ -3,6 +3,7 @@ import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, FlatList, T
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { SafeImage } from "@/components/SafeImage";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { CompositeNavigationProp } from "@react-navigation/native";
@@ -1169,6 +1170,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         statusBarTranslucent
         onRequestClose={() => setPhotoModalVisible(false)}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.photoModalOverlay}>
           {user?.photos && user.photos.length > 0 && (
             <FlatList
@@ -1240,6 +1242,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             <ThemedText style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Pinch or double-tap to zoom</ThemedText>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
       <AlertComponent />
     </View>
