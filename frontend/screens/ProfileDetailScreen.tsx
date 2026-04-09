@@ -549,13 +549,14 @@ export default function ProfileDetailScreen() {
                 {user.relationshipGoal && <DetailItem icon="ribbon-outline" label="Relationship Goal" value={user.relationshipGoal} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
                 {user.jobTitle && <DetailItem icon="briefcase-outline" label="Job" value={user.jobTitle} />}
-                {user.education && <DetailItem icon="school-outline" label="Education" value={user.education} />}
+                {(user as any)?.school && <DetailItem icon="school-outline" label="School" value={(user as any).school} />}
+                {user.education && <DetailItem icon="ribbon-outline" label="Education" value={user.education} />}
                 {user.lifestyle?.personalityType && <DetailItem icon="bulb-outline" label="Personality" value={user.lifestyle.personalityType} />}
                 {user.lifestyle?.communicationStyle && <DetailItem icon="chatbubbles-outline" label="Communication" value={user.lifestyle.communicationStyle} />}
                 {user.lifestyle?.loveStyle && <DetailItem icon="heart-circle-outline" label="Love Style" value={user.lifestyle.loveStyle} />}
                 {user.lifestyle?.relationshipStatus && <DetailItem icon="heart-half-outline" label="Relationship" value={user.lifestyle.relationshipStatus} />}
-                {user.lifestyle?.religion && <DetailItem icon="sunny-outline" label="Religion" value={user.lifestyle.religion} />}
-                {user.lifestyle?.ethnicity && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle.ethnicity} />}
+                {(user.lifestyle?.religion || (user as any)?.religion) && <DetailItem icon="sunny-outline" label="Religion" value={user.lifestyle?.religion || (user as any)?.religion} />}
+                {(user.lifestyle?.ethnicity || (user as any)?.ethnicity) && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle?.ethnicity || (user as any)?.ethnicity} />}
               </View>
             </View>
 

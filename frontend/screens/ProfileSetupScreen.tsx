@@ -28,6 +28,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
+import * as Location from "expo-location";
 
 const ActionSheetIOS = Platform.OS === "ios" ? require("react-native").ActionSheetIOS : null;
 const { width } = Dimensions.get("window");
@@ -550,6 +551,15 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         ? preferredGenders.map((g) => g.toLowerCase())
         : [finalGender === "man" ? "female" : "male"];
 
+      let locationData: any = undefined;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          locationData = { type: "Point", coordinates: [coords.coords.longitude, coords.coords.latitude] };
+        }
+      } catch {}
+
       await completeProfileSetup({
         name: name.trim(),
         age: ageNum,
@@ -564,6 +574,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           smoking: smoking || undefined,
           drinking: drinking || undefined,
           religion: religion || undefined,
+          ethnicity: ethnicity.trim() || undefined,
           communicationStyle: communicationStyle || undefined,
           loveStyle: loveStyle || undefined,
           personalityType: personalityType.trim() || undefined,
@@ -575,10 +586,10 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         lookingFor: lookingFor.toLowerCase() || "friends",
         photos: formattedPhotos,
         favoriteSong: favoriteSongTitle.trim() ? { title: favoriteSongTitle.trim(), artist: favoriteSongArtist.trim() } : undefined,
-        location: { type: "Point", coordinates: [3.3792, 6.5244] },
+        ...(locationData ? { location: locationData } : {}),
         preferences: {
           ageRange: { min: minAgeNum, max: maxAgeNum },
-          maxDistance: maxDistanceNum * 1000,
+          maxDistance: maxDistanceNum,
           genders: finalPreferredGenders,
         },
       });

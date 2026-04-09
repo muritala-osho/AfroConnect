@@ -296,6 +296,11 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: t('work'),
       value: (user as any).jobTitle,
     },
+    (user as any)?.school && {
+      icon: 'book-open' as const,
+      label: 'School',
+      value: (user as any).school,
+    },
     (user as any)?.education && {
       icon: 'book' as const,
       label: t('education'),
@@ -326,15 +331,15 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: 'Drinking',
       value: LIFESTYLE_LABELS[(user as any).lifestyle.drinking] || (user as any).lifestyle.drinking,
     },
-    (user as any)?.lifestyle?.religion && {
+    ((user as any)?.lifestyle?.religion || (user as any)?.religion) && {
       icon: 'sun' as const,
       label: 'Religion',
-      value: LIFESTYLE_LABELS[(user as any).lifestyle.religion] || (user as any).lifestyle.religion,
+      value: LIFESTYLE_LABELS[(user as any).lifestyle?.religion || (user as any).religion] || (user as any).lifestyle?.religion || (user as any).religion,
     },
-    (user as any)?.lifestyle?.ethnicity && {
+    ((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity) && {
       icon: 'globe' as const,
       label: 'Ethnicity',
-      value: (user as any).lifestyle.ethnicity,
+      value: (user as any).lifestyle?.ethnicity || (user as any).ethnicity,
     },
     (user as any)?.lifestyle?.personalityType && {
       icon: 'zap' as const,
@@ -838,7 +843,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         </View>
 
         {/* BACKGROUND SECTION */}
-        {((user as any)?.lifestyle?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.education || user?.gender || (user as any)?.height) && (
+        {((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.religion || (user as any)?.education || (user as any)?.school || user?.gender || (user as any)?.height) && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
               <View style={[styles.sectionIconBubble, { backgroundColor: '#0EA5E920' }]}>
@@ -865,31 +870,40 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).height} cm</ThemedText>
                 </View>
               )}
-              {(user as any)?.lifestyle?.ethnicity && (
+              {((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity) && (
                 <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="globe" size={15} color="#0EA5E9" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
                   </View>
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>
-                    {LIFESTYLE_LABELS[(user as any).lifestyle.ethnicity] || (user as any).lifestyle.ethnicity}
+                    {LIFESTYLE_LABELS[(user as any).lifestyle?.ethnicity || (user as any).ethnicity] || (user as any).lifestyle?.ethnicity || (user as any).ethnicity}
                   </ThemedText>
                 </View>
               )}
-              {(user as any)?.lifestyle?.religion && (
+              {((user as any)?.lifestyle?.religion || (user as any)?.religion) && (
                 <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="sun" size={15} color="#0EA5E9" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Religion</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.religion] || (user as any).lifestyle.religion}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle?.religion || (user as any).religion] || (user as any).lifestyle?.religion || (user as any).religion}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.school && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="book-open" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>School</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).school}</ThemedText>
                 </View>
               )}
               {(user as any)?.education && (
                 <View style={styles.detailRow}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="book" size={15} color="#0EA5E9" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Education</ThemedText>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Education Level</ThemedText>
                   </View>
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>{EDUCATION_LABELS[(user as any).education] || (user as any).education}</ThemedText>
                 </View>
