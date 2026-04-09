@@ -526,7 +526,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [drinking, setDrinking] = useState(user?.lifestyle?.drinking || "");
   const [workout, setWorkout] = useState(user?.lifestyle?.workout || "");
   const [religion, setReligion] = useState(user?.lifestyle?.religion || "");
-  const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || "");
+  const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || (user as any)?.ethnicity || "");
   const rawPets = user?.lifestyle?.pets;
   const [pets, setPets] = useState<string[]>(
     Array.isArray(rawPets)

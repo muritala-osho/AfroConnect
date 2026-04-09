@@ -26,7 +26,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
 
 const ActionSheetIOS = Platform.OS === "ios" ? require("react-native").ActionSheetIOS : null;
@@ -47,57 +47,32 @@ type PhotoSlot = PhotoItem | null;
 
 const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
-const INTEREST_CATEGORIES = [
-  {
-    category: "🎵 Arts & Entertainment",
-    color: "#FF6B6B",
-    items: [
-      { label: "🎵 Music", value: "music" },
-      { label: "🎨 Art", value: "art" },
-      { label: "🎮 Gaming", value: "gaming" },
-      { label: "🎬 Movies", value: "movies" },
-      { label: "💃 Dancing", value: "dancing" },
-      { label: "✨ Creativity", value: "creativity" },
-    ],
-  },
-  {
-    category: "⚽ Sports & Wellness",
-    color: "#4ECDC4",
-    items: [
-      { label: "💪 Fitness", value: "fitness" },
-      { label: "⚽ Sports", value: "sports" },
-      { label: "🏕️ Outdoors", value: "outdoors" },
-      { label: "🌿 Nature", value: "nature" },
-      { label: "🧘 Wellness", value: "wellness" },
-    ],
-  },
-  {
-    category: "✈️ Lifestyle & Social",
-    color: "#F59E0B",
-    items: [
-      { label: "✈️ Travel", value: "travel" },
-      { label: "🍕 Food", value: "food" },
-      { label: "👨‍🍳 Cooking", value: "cooking" },
-      { label: "👗 Fashion", value: "fashion" },
-      { label: "👥 Socializing", value: "socializing" },
-    ],
-  },
-  {
-    category: "💻 Tech & Knowledge",
-    color: "#74B9FF",
-    items: [
-      { label: "💻 Technology", value: "technology" },
-      { label: "💻 Coding", value: "coding" },
-      { label: "📸 Photography", value: "photography" },
-      { label: "📚 Reading", value: "reading" },
-      { label: "💼 Business", value: "business" },
-      { label: "💎 Values", value: "values" },
-    ],
-  },
+const INTEREST_OPTIONS = [
+  { id: "music", label: "Music", icon: "musical-notes" },
+  { id: "travel", label: "Travel", icon: "airplane" },
+  { id: "cooking", label: "Cooking", icon: "restaurant" },
+  { id: "fitness", label: "Fitness", icon: "fitness" },
+  { id: "art", label: "Art", icon: "color-palette" },
+  { id: "gaming", label: "Gaming", icon: "game-controller" },
+  { id: "movies", label: "Movies", icon: "film" },
+  { id: "reading", label: "Reading", icon: "book" },
+  { id: "photography", label: "Photography", icon: "camera" },
+  { id: "dancing", label: "Dancing", icon: "footsteps" },
+  { id: "coding", label: "Coding", icon: "code-slash" },
+  { id: "sports", label: "Sports", icon: "basketball" },
+  { id: "fashion", label: "Fashion", icon: "shirt" },
+  { id: "nature", label: "Nature", icon: "leaf" },
+  { id: "technology", label: "Technology", icon: "hardware-chip" },
+  { id: "business", label: "Business", icon: "briefcase" },
+  { id: "outdoors", label: "Outdoors", icon: "trail-sign" },
+  { id: "socializing", label: "Socializing", icon: "people" },
+  { id: "wellness", label: "Wellness", icon: "heart-half" },
+  { id: "creativity", label: "Creativity", icon: "brush" },
+  { id: "values", label: "Values", icon: "diamond" },
+  { id: "food", label: "Food", icon: "fast-food" },
 ];
 
-const INTERESTS_OPTIONS = INTEREST_CATEGORIES.flatMap((cat) =>
-  cat.items.map((item) => ({ ...item, color: cat.color }))
+const INTERESTS_OPTIONS = INTEREST_OPTIONS.map((item) => ({ ...item, value: item.id, color: "#10B981" })
 );
 
 const ZODIAC_SIGNS = [
@@ -170,7 +145,7 @@ function InterestChip({
   selected,
   onPress,
 }: {
-  item: { label: string; value: string; color: string };
+  item: { label: string; value: string; icon?: string; color: string };
   selected: boolean;
   onPress: () => void;
 }) {
@@ -213,9 +188,11 @@ function InterestChip({
             : { backgroundColor: `${item.color}14`, borderColor: `${item.color}50` },
         ]}
       >
-        {selected && (
+        {item.icon ? (
+          <Ionicons name={item.icon as any} size={13} color={selected ? "#fff" : item.color} />
+        ) : selected ? (
           <Feather name="check" size={11} color="#fff" />
-        )}
+        ) : null}
         <ThemedText
           style={{
             fontSize: 13,

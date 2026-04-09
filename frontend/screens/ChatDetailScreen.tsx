@@ -1550,18 +1550,15 @@ export default function ChatDetailScreen({
 
   type EnrichedMessage = Message & { _showDateHeader: boolean };
 
-  const enrichedMessages = useMemo<EnrichedMessage[]>(
-    () =>
-      messages.map((msg, index) => ({
-        ...msg,
-        // With inverted FlatList we mark the FIRST message of each day group
-        // (chronologically) so the header appears at the top of each group visually.
-        // That means: show header when the PREVIOUS (older) message is on a different
-        // day, or when this is the very first message (oldest).
-        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
-      })),
-    [messages],
-  );
+  const enrichedMessages = useMemo<EnrichedMessage[]>(() => {
+    const sorted = [...messages].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    return sorted.map((msg, index) => ({
+      ...msg,
+      _showDateHeader: shouldShowDateHeader(msg, index > 0 ? sorted[index - 1] : null),
+    }));
+  }, [messages]);
 
   // Inverted FlatList expects newest-first so the list naturally opens at the bottom
   const invertedMessages = useMemo(
@@ -1578,10 +1575,9 @@ export default function ChatDetailScreen({
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
   const scrollToMessage = useCallback((messageId: string) => {
-    const originalIndex = messages.findIndex(m => m._id === messageId);
+    const originalIndex = enrichedMessages.findIndex(m => m._id === messageId);
     if (originalIndex === -1) return;
-    // inverted list is reversed — newest is at index 0
-    const invertedIndex = messages.length - 1 - originalIndex;
+    const invertedIndex = enrichedMessages.length - 1 - originalIndex;
     try {
       flatListRef.current?.scrollToIndex({ index: invertedIndex, animated: true, viewPosition: 0.5 });
     } catch {
@@ -1590,7 +1586,7 @@ export default function ChatDetailScreen({
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     setHighlightedMessageId(messageId);
     highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500);
-  }, [messages]);
+  }, [enrichedMessages]);
 
   // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
