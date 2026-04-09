@@ -1,7 +1,9 @@
 import React, { useState, useRef } from "react";
-import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, FlatList } from "react-native";
+import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, FlatList, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { SafeImage } from "@/components/SafeImage";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { CompositeNavigationProp } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -410,7 +412,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const source = getPhotoSource(item);
     return (
       <View style={styles.photoSlideContainer}>
-        <SafeImage source={source} style={styles.fullPhoto} contentFit="contain" />
+        <ZoomablePhoto source={source} width={width} height={height * 0.75} />
       </View>
     );
   };
@@ -445,13 +447,23 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               style={styles.tapArea} 
               onPress={() => {
                 handleIndicatorPress((currentHeroPhoto - 1 + totalPhotos) % totalPhotos);
-              }} 
+              }}
+              onLongPress={() => {
+                setSelectedPhoto(currentHeroPhoto);
+                setPhotoModalVisible(true);
+              }}
+              delayLongPress={300}
             />
             <Pressable 
               style={styles.tapArea} 
               onPress={() => {
                 handleIndicatorPress((currentHeroPhoto + 1) % totalPhotos);
-              }} 
+              }}
+              onLongPress={() => {
+                setSelectedPhoto(currentHeroPhoto);
+                setPhotoModalVisible(true);
+              }}
+              delayLongPress={300}
             />
           </View>
 
@@ -1125,69 +1137,81 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
 
       <Modal
         visible={photoModalVisible}
-        transparent
+        transparent={false}
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setPhotoModalVisible(false)}
       >
         <View style={styles.photoModalOverlay}>
-          <Pressable 
-            style={styles.photoModalClose} 
+          {user?.photos && user.photos.length > 0 && (
+            <FlatList
+              ref={flatListRef}
+              data={user.photos}
+              renderItem={renderPhotoItem}
+              keyExtractor={(_, index) => index.toString()}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={viewabilityConfig}
+              initialScrollIndex={selectedPhoto}
+              getItemLayout={(_, index) => ({
+                length: width,
+                offset: width * index,
+                index,
+              })}
+            />
+          )}
+
+          {/* Close */}
+          <TouchableOpacity
+            style={[styles.photoModalClose, { top: insets.top + 16 }]}
             onPress={() => setPhotoModalVisible(false)}
           >
-            <Feather name="x" size={28} color="#fff" />
-          </Pressable>
-          
-          {user?.photos && user.photos.length > 0 && (
-            <>
-              <FlatList
-                ref={flatListRef}
-                data={user.photos}
-                renderItem={renderPhotoItem}
-                keyExtractor={(_, index) => index.toString()}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={viewabilityConfig}
-                initialScrollIndex={selectedPhoto}
-                getItemLayout={(_, index) => ({
-                  length: width,
-                  offset: width * index,
-                  index,
-                })}
-              />
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
 
-              <View style={styles.photoModalActions}>
-                <Pressable 
-                  style={[styles.photoModalButton, { backgroundColor: theme.error }]}
-                  onPress={() => handleDeletePhoto(selectedPhoto)}
-                >
-                  <Feather name="trash-2" size={18} color="#FFF" />
-                  <ThemedText style={styles.photoModalButtonText}>{t('delete')}</ThemedText>
-                </Pressable>
-              </View>
-
-              <View style={styles.modalPhotoIndicators}>
-                {user.photos.map((_, index) => (
-                  <Pressable 
-                    key={index} 
-                    onPress={() => {
-                      setSelectedPhoto(index);
-                      flatListRef.current?.scrollToIndex({ index, animated: true });
-                    }}
-                    style={[
-                      styles.modalPhotoIndicator, 
-                      { backgroundColor: index === selectedPhoto ? '#fff' : 'rgba(255,255,255,0.4)' }
-                    ]} 
-                  />
-                ))}
-              </View>
-
-              <ThemedText style={styles.photoCounter}>
-                {selectedPhoto + 1} / {user.photos.length}
-              </ThemedText>
-            </>
+          {/* Dot indicators */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={[styles.modalPhotoIndicators, { top: insets.top + 56 }]}>
+              {user.photos.map((_, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => {
+                    setSelectedPhoto(index);
+                    flatListRef.current?.scrollToIndex({ index, animated: true });
+                  }}
+                  style={[
+                    styles.modalPhotoIndicator,
+                    { backgroundColor: index === selectedPhoto ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  ]}
+                />
+              ))}
+            </View>
           )}
+
+          {/* Delete + counter at bottom */}
+          <View style={[styles.photoModalActions, { bottom: insets.bottom + 24 }]}>
+            <ThemedText style={styles.photoCounter}>
+              {selectedPhoto + 1} / {user?.photos?.length ?? 0}
+            </ThemedText>
+            <Pressable
+              style={[styles.photoModalButton, { backgroundColor: theme.error }]}
+              onPress={() => {
+                setPhotoModalVisible(false);
+                handleDeletePhoto(selectedPhoto);
+              }}
+            >
+              <Feather name="trash-2" size={16} color="#FFF" />
+              <ThemedText style={styles.photoModalButtonText}>{t('delete')}</ThemedText>
+            </Pressable>
+          </View>
+
+          {/* Hint */}
+          <View style={{ position: 'absolute', bottom: insets.bottom + 72, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Ionicons name="search-outline" size={12} color="rgba(255,255,255,0.4)" />
+            <ThemedText style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Pinch or double-tap to zoom</ThemedText>
+          </View>
         </View>
       </Modal>
       <AlertComponent />
@@ -1442,30 +1466,38 @@ const styles = StyleSheet.create({
   },
   photoModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#000',
   },
   photoModalClose: {
     position: 'absolute',
-    top: 50,
-    right: 20,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 10,
-    padding: Spacing.sm,
   },
   photoSlideContainer: {
     width: width,
+    height: height,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   fullPhoto: {
     width: width,
     height: width * 1.2,
   },
   photoModalActions: {
+    position: 'absolute',
     flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.lg,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
   },
   photoModalButton: {
     flexDirection: 'row',
@@ -1480,19 +1512,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalPhotoIndicators: {
+    position: 'absolute',
     flexDirection: 'row',
-    gap: 8,
-    marginTop: Spacing.lg,
+    gap: 6,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
   },
   modalPhotoIndicator: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   photoCounter: {
     color: '#fff',
-    marginTop: Spacing.md,
     opacity: 0.7,
+    fontSize: 14,
+    fontWeight: '500',
   },
   premiumBadgeContainer: {
     flexDirection: 'row',
