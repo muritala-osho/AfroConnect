@@ -762,6 +762,7 @@ export default function ProfileDetailScreen() {
               showsHorizontalScrollIndicator={false}
               keyExtractor={(_: any, i: number) => i.toString()}
               initialScrollIndex={zoomPhotoIndex}
+              style={{ flex: 1 }}
               getItemLayout={(_: any, index: number) => ({
                 length: SCREEN_WIDTH,
                 offset: SCREEN_WIDTH * index,
@@ -769,7 +770,11 @@ export default function ProfileDetailScreen() {
               })}
               renderItem={({ item }: { item: any }) => (
                 <View style={styles.zoomPhotoPage}>
-                  <ZoomablePhoto source={getPhotoSource(item)} />
+                  <ZoomablePhoto
+                    source={getPhotoSource(item) || require('@/assets/images/placeholder-1.jpg')}
+                    width={SCREEN_WIDTH}
+                    height={SCREEN_HEIGHT}
+                  />
                 </View>
               )}
               onMomentumScrollEnd={(e: any) => {
@@ -1310,7 +1315,7 @@ const styles = StyleSheet.create({
   },
   zoomPhotoPage: {
     width: SCREEN_WIDTH,
-    flex: 1,
+    height: SCREEN_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#000',
