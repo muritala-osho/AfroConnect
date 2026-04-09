@@ -1554,11 +1554,11 @@ export default function ChatDetailScreen({
     () =>
       messages.map((msg, index) => ({
         ...msg,
-        // With inverted FlatList we mark the LAST message of each day group
+        // With inverted FlatList we mark the FIRST message of each day group
         // (chronologically) so the header appears at the top of each group visually.
-        // That means: show header when the NEXT message is on a different day, or
-        // when this is the very last message (most recent).
-        _showDateHeader: shouldShowDateHeader(msg, index < messages.length - 1 ? messages[index + 1] : null),
+        // That means: show header when the PREVIOUS (older) message is on a different
+        // day, or when this is the very first message (oldest).
+        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
       })),
     [messages],
   );
@@ -1602,6 +1602,13 @@ export default function ChatDetailScreen({
 
       return (
         <View>
+          {showDateHeader && (
+            <View style={styles.dateHeaderContainer}>
+              <View style={[styles.dateHeader, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
+                <ThemedText style={[styles.dateHeaderText, { color: "#FFF" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
+              </View>
+            </View>
+          )}
 
           {item.type === "system" || item.type === "call" || item.deletedForEveryone ? (
             <View style={styles.systemMessageContainer}>
@@ -1937,13 +1944,6 @@ export default function ChatDetailScreen({
                 </View>
               </Pressable>
             </SwipeableMessage>
-          )}
-          {showDateHeader && (
-            <View style={styles.dateHeaderContainer}>
-              <View style={[styles.dateHeader, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
-                <ThemedText style={[styles.dateHeaderText, { color: "#FFF" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
-              </View>
-            </View>
           )}
         </View>
       );

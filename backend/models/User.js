@@ -247,7 +247,12 @@ const userSchema = new mongoose.Schema({
       type: String,
       enum: ['en', 'es', 'fr', 'pt', 'ar', 'sw', 'yo', 'ig', 'ha', 'zu', 'xh', 'am'],
       default: 'en'
-    }
+    },
+    smoking: { type: String, default: null },
+    drinking: { type: String, default: null },
+    wantsKids: { type: Boolean, default: null },
+    onlineNow: { type: Boolean, default: false },
+    interests: [{ type: String }]
   },
   lifestyle: {
     smoking: {

@@ -49,51 +49,49 @@ const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
 const INTEREST_CATEGORIES = [
   {
-    category: "🎵 Music & Arts",
+    category: "🎵 Arts & Entertainment",
     color: "#FF6B6B",
     items: [
-      { label: "🎵 Music", value: "Music" },
-      { label: "🎸 Guitar", value: "Guitar" },
-      { label: "💃 Dancing", value: "Dancing" },
-      { label: "🎨 Art", value: "Art" },
-      { label: "🎭 Theatre", value: "Theatre" },
-      { label: "🎬 Movies", value: "Movies" },
+      { label: "🎵 Music", value: "music" },
+      { label: "🎨 Art", value: "art" },
+      { label: "🎮 Gaming", value: "gaming" },
+      { label: "🎬 Movies", value: "movies" },
+      { label: "💃 Dancing", value: "dancing" },
+      { label: "✨ Creativity", value: "creativity" },
     ],
   },
   {
-    category: "⚽ Sports & Fitness",
+    category: "⚽ Sports & Wellness",
     color: "#4ECDC4",
     items: [
-      { label: "⚽ Sports", value: "Sports" },
-      { label: "💪 Fitness", value: "Fitness" },
-      { label: "🏄 Surfing", value: "Surfing" },
-      { label: "🏊 Swimming", value: "Swimming" },
-      { label: "🧘 Yoga", value: "Yoga" },
-      { label: "🏃 Running", value: "Running" },
+      { label: "💪 Fitness", value: "fitness" },
+      { label: "⚽ Sports", value: "sports" },
+      { label: "🏕️ Outdoors", value: "outdoors" },
+      { label: "🌿 Nature", value: "nature" },
+      { label: "🧘 Wellness", value: "wellness" },
     ],
   },
   {
     category: "✈️ Lifestyle & Social",
     color: "#F59E0B",
     items: [
-      { label: "✈️ Travel", value: "Travel" },
-      { label: "🍕 Food", value: "Food" },
-      { label: "👨‍🍳 Cooking", value: "Cooking" },
-      { label: "👗 Fashion", value: "Fashion" },
-      { label: "🌿 Nature", value: "Nature" },
-      { label: "🐾 Pets", value: "Pets" },
+      { label: "✈️ Travel", value: "travel" },
+      { label: "🍕 Food", value: "food" },
+      { label: "👨‍🍳 Cooking", value: "cooking" },
+      { label: "👗 Fashion", value: "fashion" },
+      { label: "👥 Socializing", value: "socializing" },
     ],
   },
   {
-    category: "💻 Creative & Tech",
+    category: "💻 Tech & Knowledge",
     color: "#74B9FF",
     items: [
-      { label: "💻 Technology", value: "Technology" },
-      { label: "📸 Photography", value: "Photography" },
-      { label: "📚 Reading", value: "Reading" },
-      { label: "🎮 Gaming", value: "Gaming" },
-      { label: "🎙️ Podcasts", value: "Podcasts" },
-      { label: "✍️ Writing", value: "Writing" },
+      { label: "💻 Technology", value: "technology" },
+      { label: "💻 Coding", value: "coding" },
+      { label: "📸 Photography", value: "photography" },
+      { label: "📚 Reading", value: "reading" },
+      { label: "💼 Business", value: "business" },
+      { label: "💎 Values", value: "values" },
     ],
   },
 ];
@@ -148,6 +146,15 @@ const RELIGION_OPTIONS = [
   { value: "agnostic", label: "Agnostic" },
   { value: "deist", label: "Deist" },
   { value: "spiritual", label: "Spiritual" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+const ETHNICITY_OPTIONS = [
+  { value: "african", label: "African" },
+  { value: "african_american", label: "African American" },
+  { value: "caribbean", label: "Caribbean" },
+  { value: "mixed", label: "Mixed" },
   { value: "other", label: "Other" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
@@ -263,6 +270,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [reorderSource, setReorderSource] = useState<number | null>(null);
 
   const [religionModalVisible, setReligionModalVisible] = useState(false);
+  const [ethnicityModalVisible, setEthnicityModalVisible] = useState(false);
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
   const [photoPickerSlotIndex, setPhotoPickerSlotIndex] = useState<number>(0);
 
@@ -563,7 +571,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       const finalGender = gender.toLowerCase() === "other" ? "other" : gender.toLowerCase();
       const finalPreferredGenders = preferredGenders.length > 0
         ? preferredGenders.map((g) => g.toLowerCase())
-        : [finalGender === "male" ? "female" : "male"];
+        : [finalGender === "man" ? "female" : "male"];
 
       await completeProfileSetup({
         name: name.trim(),
@@ -947,7 +955,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Gender *</ThemedText>
                   <View style={styles.pillRow}>
-                    {["Male", "Female", "Other"].map((g) => (
+                    {["Man", "Woman", "Non-binary"].map((g) => (
                       <Pressable
                         key={g}
                         style={[
@@ -977,13 +985,15 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Ethnicity *</ThemedText>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. Yoruba, Igbo, Ashanti"
-                    placeholderTextColor={theme.textSecondary}
-                    value={ethnicity}
-                    onChangeText={setEthnicity}
-                  />
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setEthnicityModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: ethnicity ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {ethnicity ? ETHNICITY_OPTIONS.find((e) => e.value === ethnicity)?.label : "Select ethnicity"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -1566,6 +1576,34 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 >
                   <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
                   {religion === option.value && <Feather name="check" size={18} color={theme.primary} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={ethnicityModalVisible} transparent animationType="slide" onRequestClose={() => setEthnicityModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.listModal, { backgroundColor: theme.background }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Ethnicity</ThemedText>
+              <Pressable onPress={() => setEthnicityModalVisible(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {ETHNICITY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.listItem,
+                    { borderColor: ethnicity === option.value ? theme.primary : theme.border, backgroundColor: ethnicity === option.value ? `${theme.primary}10` : theme.surface },
+                  ]}
+                  onPress={() => { setEthnicity(option.value); setEthnicityModalVisible(false); }}
+                >
+                  <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
+                  {ethnicity === option.value && <Feather name="check" size={18} color={theme.primary} />}
                 </Pressable>
               ))}
             </ScrollView>

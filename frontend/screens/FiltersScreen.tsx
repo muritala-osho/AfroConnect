@@ -16,7 +16,6 @@ import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { useApi } from "@/hooks/useApi";
 import { Feather } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
@@ -31,20 +30,28 @@ interface FiltersScreenProps {
 }
 
 const INTEREST_OPTIONS = [
-  { emoji: "🎵", label: "Music", value: "Music" },
-  { emoji: "✈️", label: "Travel", value: "Travel" },
-  { emoji: "🍕", label: "Food", value: "Food" },
-  { emoji: "⚽", label: "Sports", value: "Sports" },
-  { emoji: "🎨", label: "Art", value: "Art" },
-  { emoji: "🎬", label: "Movies", value: "Movies" },
-  { emoji: "📚", label: "Reading", value: "Reading" },
-  { emoji: "🎮", label: "Gaming", value: "Gaming" },
-  { emoji: "💪", label: "Fitness", value: "Fitness" },
-  { emoji: "📸", label: "Photography", value: "Photography" },
-  { emoji: "💃", label: "Dancing", value: "Dancing" },
-  { emoji: "👨‍🍳", label: "Cooking", value: "Cooking" },
-  { emoji: "👗", label: "Fashion", value: "Fashion" },
-  { emoji: "💻", label: "Technology", value: "Technology" },
+  { emoji: "🎵", label: "Music", value: "music" },
+  { emoji: "✈️", label: "Travel", value: "travel" },
+  { emoji: "🍕", label: "Food", value: "food" },
+  { emoji: "⚽", label: "Sports", value: "sports" },
+  { emoji: "🎨", label: "Art", value: "art" },
+  { emoji: "🎬", label: "Movies", value: "movies" },
+  { emoji: "📚", label: "Reading", value: "reading" },
+  { emoji: "🎮", label: "Gaming", value: "gaming" },
+  { emoji: "💪", label: "Fitness", value: "fitness" },
+  { emoji: "📸", label: "Photography", value: "photography" },
+  { emoji: "💃", label: "Dancing", value: "dancing" },
+  { emoji: "👨‍🍳", label: "Cooking", value: "cooking" },
+  { emoji: "👗", label: "Fashion", value: "fashion" },
+  { emoji: "💻", label: "Technology", value: "technology" },
+  { emoji: "💻", label: "Coding", value: "coding" },
+  { emoji: "🌿", label: "Nature", value: "nature" },
+  { emoji: "💼", label: "Business", value: "business" },
+  { emoji: "🏕️", label: "Outdoors", value: "outdoors" },
+  { emoji: "👥", label: "Socializing", value: "socializing" },
+  { emoji: "🧘", label: "Wellness", value: "wellness" },
+  { emoji: "✨", label: "Creativity", value: "creativity" },
+  { emoji: "💎", label: "Values", value: "values" },
 ];
 
 interface SectionProps {
@@ -84,7 +91,6 @@ function FilterSection({ icon, iconColor, iconBg, title, subtitle, badge, badgeC
 export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   const { theme } = useTheme();
   const { user, token, updateProfile } = useAuth();
-  const api = useApi();
   const insets = useSafeAreaInsets();
 
   const [minAge, setMinAge] = useState(user?.preferences?.ageRange?.min ?? 18);
@@ -93,7 +99,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
     Math.min(user?.preferences?.maxDistance ?? 50, user?.premium?.isActive ? 200 : 50)
   );
   const [genderPref, setGenderPref] = useState<string>(user?.preferences?.genderPreference ?? "both");
-  const [lookingFor, setLookingFor] = useState<string>(user?.lifestyle?.lookingFor ?? "relationship");
+  const [lookingFor, setLookingFor] = useState<string>(user?.lookingFor ?? user?.lifestyle?.lookingFor ?? "relationship");
   const [religion, setReligion] = useState<string>(user?.lifestyle?.religion ?? "any");
   const [smoking, setSmoking] = useState<string>(user?.preferences?.smoking ?? "any");
   const [drinking, setDrinking] = useState<string>(user?.preferences?.drinking ?? "any");
@@ -101,7 +107,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
     user?.preferences?.wantsKids != null ? String(user.preferences.wantsKids) : "any"
   );
   const [selectedInterests, setSelectedInterests] = useState<string[]>(
-    user?.preferences?.interests ?? []
+    (user?.preferences?.interests ?? []).map((i: string) => i.toLowerCase())
   );
   const [showVerifiedOnly, setShowVerifiedOnly] = useState<boolean>(
     user?.preferences?.showVerifiedOnly ?? false
@@ -131,32 +137,24 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
         ageRange: { min: minAge, max: maxAge },
         maxDistance: Math.min(distance, maxAllowedDistance),
         genderPreference: genderPref,
-        smoking: smoking === "any" ? undefined : smoking,
-        drinking: drinking === "any" ? undefined : drinking,
-        wantsKids: wantsKids === "any" ? undefined : wantsKids === "true",
+        smoking,
+        drinking,
+        wantsKids: wantsKids === "any" ? null : wantsKids === "true",
         showVerifiedOnly: isPremium ? showVerifiedOnly : false,
         onlineNow,
-        interests: selectedInterests.length > 0 ? selectedInterests : undefined,
+        interests: selectedInterests,
       };
 
       const lifestyleUpdates = {
-        lookingFor,
-        religion: religion === "any" ? undefined : religion,
+        religion: religion === "any" ? null : religion,
       };
 
-      const response = await api.put<{ success: boolean }>(
-        "/users/me",
-        { preferences: updatedPreferences, lifestyle: lifestyleUpdates },
-        token
-      );
-
-      if (response.success) {
-        await updateProfile({
-          preferences: updatedPreferences,
-          lifestyle: { ...user?.lifestyle, ...lifestyleUpdates },
-        });
-        navigation.goBack();
-      }
+      await updateProfile({
+        preferences: updatedPreferences,
+        lookingFor,
+        lifestyle: { ...user?.lifestyle, ...lifestyleUpdates },
+      } as any);
+      navigation.goBack();
     } catch (error) {
       console.error("Filter update error:", error);
     } finally {

@@ -70,7 +70,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
         // Handle preference updates
         else if (field === 'preferences') {
           // Merge preferences instead of replacing
-          const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language'];
+          const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language', 'smoking', 'drinking', 'wantsKids', 'onlineNow', 'interests'];
           allowedPrefKeys.forEach(prefKey => {
             if (updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {

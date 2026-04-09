@@ -540,9 +540,18 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [hasKids, setHasKids] = useState<boolean>(user?.lifestyle?.hasKids ?? false);
   const [wantsKids, setWantsKids] = useState<boolean>(user?.lifestyle?.wantsKids ?? false);
   const [relationshipGoal, setRelationshipGoal] = useState((user as any)?.relationshipGoal || "");
-  const [gender, setGender] = useState(user?.gender || "");
+  const normalizeGender = (g?: string) => {
+    if (!g) return "";
+    const lower = g.toLowerCase();
+    if (lower === "male") return "man";
+    if (lower === "female") return "woman";
+    return lower;
+  };
+  const [gender, setGender] = useState(normalizeGender(user?.gender));
   const [height, setHeight] = useState(user?.height?.toString() || "");
-  const [interests, setInterests] = useState<string[]>(user?.interests || []);
+  const [interests, setInterests] = useState<string[]>(
+    (user?.interests || []).map((i: string) => i.toLowerCase())
+  );
   const [saving, setSaving] = useState(false);
 
   const [countryOfOrigin, setCountryOfOrigin] = useState((user as any)?.countryOfOrigin || "");
