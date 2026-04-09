@@ -560,7 +560,7 @@ export default function ProfileDetailScreen() {
               </View>
             </View>
 
-            {(user.lifestyle?.smoking || user.lifestyle?.drinking || user.lifestyle?.workout || user.lifestyle?.pets || user.lifestyle?.hasKids != null || user.lifestyle?.wantsKids != null) && (
+            {(user.lifestyle?.smoking || user.lifestyle?.drinking || user.lifestyle?.workout || user.lifestyle?.pets || (user.lifestyle as any)?.hasPets != null || user.lifestyle?.hasKids != null || user.lifestyle?.wantsKids != null) && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="leaf-outline" size={18} color={theme.primary} />
@@ -571,6 +571,7 @@ export default function ProfileDetailScreen() {
                   {user.lifestyle?.drinking && <DetailItem icon="wine-outline" label="Drinking" value={user.lifestyle.drinking} />}
                   {user.lifestyle?.workout && <DetailItem icon="barbell-outline" label="Workout" value={user.lifestyle.workout} />}
                   {user.lifestyle?.pets && <DetailItem icon="paw-outline" label="Pets" value={user.lifestyle.pets} />}
+                  {!(user.lifestyle?.pets) && (user.lifestyle as any)?.hasPets != null && <DetailItem icon="paw-outline" label="Has Pets" value={(user.lifestyle as any).hasPets ? 'Yes' : 'No'} />}
                   {user.lifestyle?.hasKids != null && <DetailItem icon="people-outline" label="Has Kids" value={user.lifestyle.hasKids ? 'Yes' : 'No'} />}
                   {user.lifestyle?.wantsKids != null && <DetailItem icon="happy-outline" label="Wants Kids" value={user.lifestyle.wantsKids ? 'Yes' : 'No'} />}
                 </View>

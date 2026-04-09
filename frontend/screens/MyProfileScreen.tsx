@@ -346,10 +346,14 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: 'Personality',
       value: (user as any).lifestyle.personalityType,
     },
-    (user as any)?.lifestyle?.pets && {
+    (user as any)?.lifestyle?.pets ? {
       icon: 'heart' as const,
       label: 'Pets',
-      value: (user as any).lifestyle.pets,
+      value: LIFESTYLE_LABELS[(user as any).lifestyle.pets] || (user as any).lifestyle.pets,
+    } : (user as any)?.lifestyle?.hasPets != null && {
+      icon: 'heart' as const,
+      label: 'Has Pets',
+      value: (user as any).lifestyle.hasPets ? 'Yes' : 'No',
     },
     (user as any)?.lifestyle?.relationshipStatus && {
       icon: 'heart' as const,
@@ -686,7 +690,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         )}
 
         {/* LIFESTYLE SECTION */}
-        {((user as any)?.lifestyle?.smoking || (user as any)?.lifestyle?.drinking || (user as any)?.lifestyle?.workout || (user as any)?.lifestyle?.pets || (user as any)?.lifestyle?.hasKids !== undefined || (user as any)?.lifestyle?.wantsKids !== undefined) && (
+        {((user as any)?.lifestyle?.smoking || (user as any)?.lifestyle?.drinking || (user as any)?.lifestyle?.workout || (user as any)?.lifestyle?.pets || (user as any)?.lifestyle?.hasPets != null || (user as any)?.lifestyle?.hasKids !== undefined || (user as any)?.lifestyle?.wantsKids !== undefined) && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
               <View style={[styles.sectionIconBubble, { backgroundColor: '#10B98120' }]}>
@@ -731,6 +735,15 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>
                     {LIFESTYLE_LABELS[(user as any).lifestyle.pets] || (user as any).lifestyle.pets}
                   </ThemedText>
+                </View>
+              )}
+              {!(user as any)?.lifestyle?.pets && (user as any)?.lifestyle?.hasPets != null && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="heart" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Has Pets</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.hasPets ? 'Yes' : 'No'}</ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.hasKids !== undefined && (
