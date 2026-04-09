@@ -63,7 +63,10 @@ const isOriginAllowed = (origin) => {
   if (!origin) return true; // allow non-browser requests (mobile apps, Postman)
   if (ALLOWED_ORIGINS.length === 0) return true; // dev mode: no restriction
   return ALLOWED_ORIGINS.some(allowed =>
-    origin === allowed || origin.endsWith('.replit.app') || origin.endsWith('.replit.dev')
+    origin === allowed ||
+    origin.endsWith('.replit.app') ||
+    origin.endsWith('.replit.dev') ||
+    origin.endsWith('.vercel.app')
   );
 };
 

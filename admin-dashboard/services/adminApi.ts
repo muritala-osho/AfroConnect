@@ -1,4 +1,4 @@
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 const getToken = (): string | null => localStorage.getItem('afroconnect_token');
 
@@ -13,6 +13,22 @@ const authHeaders = (): Record<string, string> => {
 };
 
 const handleResponse = async (res: Response) => {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (res.status === 401) {
+      clearToken();
+      window.location.reload();
+    }
+    const text = await res.text();
+    if (!res.ok || !contentType.includes('json')) {
+      throw new Error(
+        res.ok
+          ? 'Server returned an unexpected response. Check that VITE_API_URL is set correctly.'
+          : `Server error (${res.status}): Backend may be unreachable. Please check your API URL configuration.`
+      );
+    }
+    return JSON.parse(text);
+  }
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401) {
