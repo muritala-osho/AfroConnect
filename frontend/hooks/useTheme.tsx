@@ -3,7 +3,7 @@ import { useColorScheme as useSystemColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Colors } from "@/constants/theme";
 
-export type ThemeMode = "light" | "dark" | "grey" | "system";
+export type ThemeMode = "light" | "dark" | "system";
 export type FontSizeOption = "small" | "default" | "large";
 export type ChatBubbleStyle = "rounded" | "sharp" | "minimal";
 
@@ -82,7 +82,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       stored.forEach(([k, v]) => { map[k] = v; });
 
       const themeVal = map[THEME_STORAGE_KEY];
-      if (themeVal && ["light", "dark", "grey", "system"].includes(themeVal)) {
+      if (themeVal && ["light", "dark", "system"].includes(themeVal)) {
         setThemeModeState(themeVal as ThemeMode);
       }
       if (map[ACCENT_COLOR_KEY]) {
@@ -177,7 +177,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const effectiveTheme = themeMode === "system" ? systemColorScheme : themeMode;
   const isDark = effectiveTheme === "dark";
-  const themeKey = themeMode === "grey" ? "grey" : (isDark ? "dark" : "light");
+  const themeKey = isDark ? "dark" : "light";
   const baseTheme = Colors[themeKey];
   const theme = applyAccentColor(baseTheme, accentColor);
   const fontScale = FONT_SCALE_MAP[fontSize];

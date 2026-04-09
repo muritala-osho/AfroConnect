@@ -63,7 +63,6 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
   const themeOptions: { value: ThemeMode; label: string; icon: string }[] = [
     { value: "light", label: "Light", icon: "sun" },
     { value: "dark", label: "Dark", icon: "moon" },
-    { value: "grey", label: "Grey", icon: "cloud" },
     { value: "system", label: "Auto", icon: "monitor" },
   ];
 
