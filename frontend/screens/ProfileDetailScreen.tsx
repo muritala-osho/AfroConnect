@@ -11,8 +11,6 @@ import {
   Modal,
   TouchableOpacity,
 } from "react-native";
-import ZoomablePhoto from "@/components/ZoomablePhoto";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -172,7 +170,6 @@ export default function ProfileDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
-  const [isZoomedIn, setIsZoomedIn] = useState(false);
   const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -764,12 +761,8 @@ export default function ProfileDetailScreen() {
         transparent={false}
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => {
-          setZoomVisible(false);
-          setIsZoomedIn(false);
-        }}
+        onRequestClose={() => setZoomVisible(false)}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={[styles.zoomModalContainer, { flex: 1 }]}>
           {user?.photos && user.photos.length > 0 && (
             <ScrollView
@@ -778,23 +771,20 @@ export default function ProfileDetailScreen() {
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               scrollEventThrottle={16}
-              scrollEnabled={!isZoomedIn}
               style={{ flex: 1 }}
               onMomentumScrollEnd={(e) => {
                 const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
                 setZoomPhotoIndex(idx);
-                setIsZoomedIn(false);
               }}
             >
               {user.photos.map((photo: any, index: number) => {
                 const source = getPhotoSource(photo) || require('@/assets/images/placeholder-1.jpg');
                 return (
                   <View key={index} style={styles.zoomPhotoPage}>
-                    <ZoomablePhoto
+                    <Image
                       source={source}
-                      width={SCREEN_WIDTH}
-                      height={SCREEN_HEIGHT}
-                      onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
+                      style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
+                      resizeMode="contain"
                     />
                   </View>
                 );
@@ -833,21 +823,11 @@ export default function ProfileDetailScreen() {
           {/* Close button */}
           <TouchableOpacity
             style={[styles.zoomClose, { top: insets.top + 16 }]}
-            onPress={() => {
-              setZoomVisible(false);
-              setIsZoomedIn(false);
-            }}
+            onPress={() => setZoomVisible(false)}
           >
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
-
-          {/* Hint */}
-          <View style={[styles.zoomHint, { bottom: insets.bottom + 20 }]}>
-            <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.5)" />
-            <ThemedText style={styles.zoomHintText}>Swipe left/right · Pinch or double-tap to zoom</ThemedText>
-          </View>
         </View>
-        </GestureHandlerRootView>
       </Modal>
     </ThemedView>
   );
@@ -1334,19 +1314,6 @@ const styles = StyleSheet.create({
     top: '20%',
     width: '30%',
     height: '60%',
-  },
-  zoomHint: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-  },
-  zoomHintText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
   },
   zoomCounter: {
     position: 'absolute',
