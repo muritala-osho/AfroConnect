@@ -4,7 +4,7 @@
     "slug": "afroconnect",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/afroconnect-logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "afroconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -16,7 +16,7 @@
       "package": "com.afroconnect.app",
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/afroconnect-logo.png",
+        "foregroundImage": "./assets/images/app-icon-new.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
