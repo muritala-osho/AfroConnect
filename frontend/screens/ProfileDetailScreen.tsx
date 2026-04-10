@@ -10,7 +10,6 @@ import {
   Alert,
   Modal,
   TouchableOpacity,
-  FlatList,
 } from "react-native";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -173,10 +172,23 @@ export default function ProfileDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
+  const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     fetchUser();
   }, [userId]);
+
+  useEffect(() => {
+    if (zoomVisible && zoomPhotoIndex > 0) {
+      const timer = setTimeout(() => {
+        zoomScrollRef.current?.scrollTo({
+          x: SCREEN_WIDTH * zoomPhotoIndex,
+          animated: false,
+        });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [zoomVisible]);
 
   const fetchUser = async () => {
     try {
@@ -759,33 +771,28 @@ export default function ProfileDetailScreen() {
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.zoomModalContainer}>
           {user?.photos && user.photos.length > 0 && (
-            <FlatList
-              data={user.photos}
+            <ScrollView
+              ref={zoomScrollRef}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              keyExtractor={(_: any, i: number) => i.toString()}
-              initialScrollIndex={zoomPhotoIndex}
               style={{ flex: 1 }}
-              getItemLayout={(_: any, index: number) => ({
-                length: SCREEN_WIDTH,
-                offset: SCREEN_WIDTH * index,
-                index,
-              })}
-              renderItem={({ item }: { item: any }) => (
-                <View style={styles.zoomPhotoPage}>
+              scrollEventThrottle={16}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setZoomPhotoIndex(idx);
+              }}
+            >
+              {user.photos.map((item: any, index: number) => (
+                <View key={index} style={styles.zoomPhotoPage}>
                   <ZoomablePhoto
                     source={getPhotoSource(item) || require('@/assets/images/placeholder-1.jpg')}
                     width={SCREEN_WIDTH}
                     height={SCREEN_HEIGHT}
                   />
                 </View>
-              )}
-              onMomentumScrollEnd={(e: any) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-                setZoomPhotoIndex(idx);
-              }}
-            />
+              ))}
+            </ScrollView>
           )}
 
           {/* Photo count indicator */}

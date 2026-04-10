@@ -1,5 +1,5 @@
-import React, { useState, useRef } from "react";
-import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, FlatList, TouchableOpacity } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { SafeImage } from "@/components/SafeImage";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
@@ -180,7 +180,19 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<number>(0);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [currentHeroPhoto, setCurrentHeroPhoto] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (photoModalVisible && selectedPhoto > 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollTo({
+          x: width * selectedPhoto,
+          animated: false,
+        });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [photoModalVisible]);
 
   const handleLogout = () => {
     showAlert(
@@ -1173,23 +1185,27 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.photoModalOverlay}>
           {user?.photos && user.photos.length > 0 && (
-            <FlatList
+            <ScrollView
               ref={flatListRef}
-              data={user.photos}
-              renderItem={renderPhotoItem}
-              keyExtractor={(_, index) => index.toString()}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={viewabilityConfig}
-              initialScrollIndex={selectedPhoto}
-              getItemLayout={(_, index) => ({
-                length: width,
-                offset: width * index,
-                index,
+              scrollEventThrottle={16}
+              style={{ flex: 1 }}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                setSelectedPhoto(idx);
+              }}
+            >
+              {user.photos.map((item: any, index: number) => {
+                const source = getPhotoSource(item);
+                return (
+                  <View key={index} style={styles.photoSlideContainer}>
+                    <ZoomablePhoto source={source} width={width} height={height * 0.75} />
+                  </View>
+                );
               })}
-            />
+            </ScrollView>
           )}
 
           {/* Close */}
@@ -1208,7 +1224,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   key={index}
                   onPress={() => {
                     setSelectedPhoto(index);
-                    flatListRef.current?.scrollToIndex({ index, animated: true });
+                    flatListRef.current?.scrollTo({ x: width * index, animated: true });
                   }}
                   style={[
                     styles.modalPhotoIndicator,
