@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -173,6 +173,16 @@ export default function ProfileDetailScreen() {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
+  const zoomScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (zoomVisible && zoomPhotoIndex > 0) {
+      const timer = setTimeout(() => {
+        zoomScrollRef.current?.scrollTo({ x: SCREEN_WIDTH * zoomPhotoIndex, animated: false });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [zoomVisible]);
 
   useEffect(() => {
     fetchUser();
@@ -762,35 +772,46 @@ export default function ProfileDetailScreen() {
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={[styles.zoomModalContainer, { flex: 1 }]}>
           {user?.photos && user.photos.length > 0 && (
-            <View style={styles.zoomPhotoPage}>
-              <ZoomablePhoto
-                key={zoomPhotoIndex}
-                source={getPhotoSource(user.photos[zoomPhotoIndex]) || require('@/assets/images/placeholder-1.jpg')}
-                width={SCREEN_WIDTH}
-                height={SCREEN_HEIGHT}
-                onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
-                onSwipeNext={() => {
-                  if (zoomPhotoIndex < user.photos.length - 1) {
-                    setZoomPhotoIndex(zoomPhotoIndex + 1);
-                    setIsZoomedIn(false);
-                  }
-                }}
-                onSwipePrev={() => {
-                  if (zoomPhotoIndex > 0) {
-                    setZoomPhotoIndex(zoomPhotoIndex - 1);
-                    setIsZoomedIn(false);
-                  }
-                }}
-              />
-            </View>
+            <ScrollView
+              ref={zoomScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              scrollEnabled={!isZoomedIn}
+              style={{ flex: 1 }}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setZoomPhotoIndex(idx);
+                setIsZoomedIn(false);
+              }}
+            >
+              {user.photos.map((photo: any, index: number) => {
+                const source = getPhotoSource(photo) || require('@/assets/images/placeholder-1.jpg');
+                return (
+                  <View key={index} style={styles.zoomPhotoPage}>
+                    <ZoomablePhoto
+                      source={source}
+                      width={SCREEN_WIDTH}
+                      height={SCREEN_HEIGHT}
+                      onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
+                    />
+                  </View>
+                );
+              })}
+            </ScrollView>
           )}
 
-          {/* Photo count indicator */}
+          {/* Photo count indicator dots */}
           {user?.photos && user.photos.length > 1 && (
             <View style={[styles.zoomIndicators, { top: insets.top + 56 }]}>
               {user.photos.map((_: any, idx: number) => (
-                <View
+                <Pressable
                   key={idx}
+                  onPress={() => {
+                    setZoomPhotoIndex(idx);
+                    zoomScrollRef.current?.scrollTo({ x: SCREEN_WIDTH * idx, animated: true });
+                  }}
                   style={[
                     styles.zoomDot,
                     { backgroundColor: idx === zoomPhotoIndex ? "#fff" : "rgba(255,255,255,0.35)" }
