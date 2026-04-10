@@ -70,6 +70,8 @@ export default function PremiumScreen({ navigation }: any) {
   const [processing, setProcessing] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [iapReady, setIapReady] = useState(false);
+  const [storePrices, setStorePrices] = useState<Record<string, string>>({});
+  const [pricesLoading, setPricesLoading] = useState(false);
 
   const cardScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.5);
@@ -102,6 +104,31 @@ export default function PremiumScreen({ navigation }: any) {
     setIapReady(available);
 
     if (available) {
+      try {
+        setPricesLoading(true);
+        const subs = await iapService.getSubscriptions();
+        if (subs && subs.length > 0) {
+          const priceMap: Record<string, string> = {};
+          subs.forEach((sub: any) => {
+            const productId = sub.productId;
+            const localizedPrice =
+              sub.localizedPrice ||
+              sub.price ||
+              null;
+            if (productId && localizedPrice) {
+              priceMap[productId] = localizedPrice;
+            }
+          });
+          if (Object.keys(priceMap).length > 0) {
+            setStorePrices(priceMap);
+          }
+        }
+      } catch (e) {
+        // silently fall back to hardcoded prices
+      } finally {
+        setPricesLoading(false);
+      }
+
       const removePurchaseListener = iapService.addPurchaseListener(async (purchase: any) => {
         const receipt = Platform.OS === 'ios'
           ? purchase.transactionReceipt
@@ -155,6 +182,11 @@ export default function PremiumScreen({ navigation }: any) {
     }).format(amount / 100);
   };
 
+  const getDisplayPrice = (tier: PriceTier): string => {
+    if (storePrices[tier.id]) return storePrices[tier.id];
+    return formatPrice(tier.amount, tier.currency);
+  };
+
   const handleSubscribe = async () => {
     if (!token) {
       Alert.alert('Login Required', 'Please log in to subscribe.');
@@ -175,7 +207,7 @@ export default function PremiumScreen({ navigation }: any) {
       const storeName = Platform.OS === 'ios' ? 'App Store' : 'Google Play Store';
       Alert.alert(
         'Coming Soon',
-        `In-app purchases through the ${storeName} will be available soon. You'll be able to subscribe to the ${selectedTier.label} plan at ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}.`
+        `In-app purchases through the ${storeName} will be available soon. You'll be able to subscribe to the ${selectedTier.label} plan at ${getDisplayPrice(selectedTier)}/${selectedTier.interval}.`
       );
       return;
     }
@@ -285,7 +317,7 @@ export default function PremiumScreen({ navigation }: any) {
                     <View style={styles.tierRight}>
                       <View style={styles.priceRow}>
                         <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]}>
-                          {formatPrice(tier.amount, tier.currency)}
+                          {pricesLoading ? '...' : getDisplayPrice(tier)}
                         </Text>
                         {tier.savings && (
                           <View style={styles.savingsBadge}>
@@ -342,7 +374,7 @@ export default function PremiumScreen({ navigation }: any) {
                 ) : (
                   <>
                     <Text style={styles.subscribeText}>
-                      {isActive ? 'Already Premium' : `Get Premium - ${formatPrice(selectedTier.amount, selectedTier.currency)}/${selectedTier.interval}`}
+                      {isActive ? 'Already Premium' : `Get Premium - ${pricesLoading ? '...' : getDisplayPrice(selectedTier)}/${selectedTier.interval}`}
                     </Text>
                     {!isActive && <Feather name="arrow-right" size={20} color="#FFF" style={{ marginLeft: 8 }} />}
                   </>
