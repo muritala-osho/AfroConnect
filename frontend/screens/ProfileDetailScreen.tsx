@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -172,23 +172,10 @@ export default function ProfileDetailScreen() {
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
   const [isZoomedIn, setIsZoomedIn] = useState(false);
-  const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     fetchUser();
   }, [userId]);
-
-  useEffect(() => {
-    if (zoomVisible && zoomPhotoIndex > 0) {
-      const timer = setTimeout(() => {
-        zoomScrollRef.current?.scrollTo({
-          x: SCREEN_WIDTH * zoomPhotoIndex,
-          animated: false,
-        });
-      }, 80);
-      return () => clearTimeout(timer);
-    }
-  }, [zoomVisible]);
 
   const fetchUser = async () => {
     try {
@@ -773,31 +760,27 @@ export default function ProfileDetailScreen() {
       >
         <View style={[styles.zoomModalContainer, { flex: 1 }]}>
           {user?.photos && user.photos.length > 0 && (
-            <ScrollView
-              ref={zoomScrollRef}
-              horizontal
-              pagingEnabled
-              scrollEnabled={!isZoomedIn}
-              showsHorizontalScrollIndicator={false}
-              style={{ flex: 1 }}
-              scrollEventThrottle={16}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-                setZoomPhotoIndex(idx);
-                setIsZoomedIn(false);
-              }}
-            >
-              {user.photos.map((item: any, index: number) => (
-                <View key={index} style={styles.zoomPhotoPage}>
-                  <ZoomablePhoto
-                    source={getPhotoSource(item) || require('@/assets/images/placeholder-1.jpg')}
-                    width={SCREEN_WIDTH}
-                    height={SCREEN_HEIGHT}
-                    onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
-                  />
-                </View>
-              ))}
-            </ScrollView>
+            <View style={styles.zoomPhotoPage}>
+              <ZoomablePhoto
+                key={zoomPhotoIndex}
+                source={getPhotoSource(user.photos[zoomPhotoIndex]) || require('@/assets/images/placeholder-1.jpg')}
+                width={SCREEN_WIDTH}
+                height={SCREEN_HEIGHT}
+                onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
+                onSwipeNext={() => {
+                  if (zoomPhotoIndex < user.photos.length - 1) {
+                    setZoomPhotoIndex(zoomPhotoIndex + 1);
+                    setIsZoomedIn(false);
+                  }
+                }}
+                onSwipePrev={() => {
+                  if (zoomPhotoIndex > 0) {
+                    setZoomPhotoIndex(zoomPhotoIndex - 1);
+                    setIsZoomedIn(false);
+                  }
+                }}
+              />
+            </View>
           )}
 
           {/* Photo count indicator */}
@@ -815,6 +798,15 @@ export default function ProfileDetailScreen() {
             </View>
           )}
 
+          {/* Photo counter text */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={[styles.zoomCounter, { top: insets.top + 16 }]}>
+              <ThemedText style={styles.zoomCounterText}>
+                {zoomPhotoIndex + 1} / {user.photos.length}
+              </ThemedText>
+            </View>
+          )}
+
           {/* Close button */}
           <TouchableOpacity
             style={[styles.zoomClose, { top: insets.top + 16 }]}
@@ -826,10 +818,10 @@ export default function ProfileDetailScreen() {
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>
 
-          {/* Double-tap / pinch hint */}
+          {/* Hint */}
           <View style={[styles.zoomHint, { bottom: insets.bottom + 20 }]}>
-            <Ionicons name="search-outline" size={13} color="rgba(255,255,255,0.5)" />
-            <ThemedText style={styles.zoomHintText}>Pinch or double-tap to zoom · Swipe for next photo</ThemedText>
+            <Ionicons name="information-circle-outline" size={13} color="rgba(255,255,255,0.5)" />
+            <ThemedText style={styles.zoomHintText}>Swipe left/right · Pinch or double-tap to zoom</ThemedText>
           </View>
         </View>
       </Modal>
@@ -1331,6 +1323,18 @@ const styles = StyleSheet.create({
   zoomHintText: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.6)',
+  },
+  zoomCounter: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  zoomCounterText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
   },
   zoomPhotoPage: {
     width: SCREEN_WIDTH,
