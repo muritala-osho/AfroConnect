@@ -26,7 +26,6 @@ export default function ZoomablePhoto({
   const ty         = useSharedValue(0);
   const savedTx    = useSharedValue(0);
   const savedTy    = useSharedValue(0);
-  const panEnabled = useSharedValue(false);
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
@@ -40,21 +39,26 @@ export default function ZoomablePhoto({
         ty.value         = withSpring(0);
         savedTx.value    = 0;
         savedTy.value    = 0;
-        panEnabled.value = false;
       } else {
         savedScale.value = scale.value;
-        panEnabled.value = scale.value > 1.05;
       }
     });
 
   const pan = Gesture.Pan()
-    .enabled(panEnabled)
     .averageTouches(true)
     .onUpdate((e) => {
+      if (scale.value <= 1.05) return;
       tx.value = savedTx.value + e.translationX;
       ty.value = savedTy.value + e.translationY;
     })
     .onEnd(() => {
+      if (scale.value <= 1.05) {
+        tx.value      = withSpring(0);
+        ty.value      = withSpring(0);
+        savedTx.value = 0;
+        savedTy.value = 0;
+        return;
+      }
       savedTx.value = tx.value;
       savedTy.value = ty.value;
     });
@@ -70,11 +74,9 @@ export default function ZoomablePhoto({
         ty.value         = withSpring(0);
         savedTx.value    = 0;
         savedTy.value    = 0;
-        panEnabled.value = false;
       } else {
         scale.value      = withSpring(2.5);
         savedScale.value = 2.5;
-        panEnabled.value = true;
       }
     });
 
