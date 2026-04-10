@@ -1,5 +1,5 @@
-import React, { useEffect, useCallback } from "react";
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import React, { useEffect, useCallback, useRef } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, AppState } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -61,6 +61,7 @@ function AppContent() {
   const { isDark } = useTheme();
   const { user } = useAuth();
   const [isOverlayVisible, setIsOverlayVisible] = React.useState(false);
+  const appState = useRef(AppState.currentState);
 
   const onLayoutRootView = useCallback(async () => {
     await SplashScreen.hideAsync();
@@ -109,8 +110,19 @@ function AppContent() {
 
     setupNotifications();
 
+    // Re-register push token every time the app comes back to the foreground.
+    // This ensures the token stays fresh if Expo rotates it while the app was
+    // in the background, and also retries any failed registration from login.
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === "active") {
+        registerForPushNotificationsAsync().catch(() => {});
+      }
+      appState.current = nextState;
+    });
+
     return () => {
       if (unsubscribe) unsubscribe();
+      appStateSubscription.remove();
     };
   }, [user?.id]);
 
