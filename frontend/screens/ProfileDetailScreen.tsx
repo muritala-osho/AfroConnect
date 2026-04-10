@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { Ionicons, Feather } from "@expo/vector-icons";
@@ -758,6 +759,7 @@ export default function ProfileDetailScreen() {
           setIsZoomedIn(false);
         }}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={[styles.zoomModalContainer, { flex: 1 }]}>
           {user?.photos && user.photos.length > 0 && (
             <View style={styles.zoomPhotoPage}>
@@ -824,6 +826,7 @@ export default function ProfileDetailScreen() {
             <ThemedText style={styles.zoomHintText}>Swipe left/right · Pinch or double-tap to zoom</ThemedText>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </ThemedView>
   );
