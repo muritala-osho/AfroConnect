@@ -172,6 +172,7 @@ export default function ProfileDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
+  const [isZoomedIn, setIsZoomedIn] = useState(false);
   const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -766,7 +767,10 @@ export default function ProfileDetailScreen() {
         transparent={false}
         animationType="fade"
         statusBarTranslucent
-        onRequestClose={() => setZoomVisible(false)}
+        onRequestClose={() => {
+          setZoomVisible(false);
+          setIsZoomedIn(false);
+        }}
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.zoomModalContainer}>
@@ -775,12 +779,14 @@ export default function ProfileDetailScreen() {
               ref={zoomScrollRef}
               horizontal
               pagingEnabled
+              scrollEnabled={!isZoomedIn}
               showsHorizontalScrollIndicator={false}
               style={{ flex: 1 }}
               scrollEventThrottle={16}
               onMomentumScrollEnd={(e) => {
                 const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
                 setZoomPhotoIndex(idx);
+                setIsZoomedIn(false);
               }}
             >
               {user.photos.map((item: any, index: number) => (
@@ -789,6 +795,7 @@ export default function ProfileDetailScreen() {
                     source={getPhotoSource(item) || require('@/assets/images/placeholder-1.jpg')}
                     width={SCREEN_WIDTH}
                     height={SCREEN_HEIGHT}
+                    onZoomChange={(zoomed) => setIsZoomedIn(zoomed)}
                   />
                 </View>
               ))}
@@ -813,7 +820,10 @@ export default function ProfileDetailScreen() {
           {/* Close button */}
           <TouchableOpacity
             style={[styles.zoomClose, { top: insets.top + 16 }]}
-            onPress={() => setZoomVisible(false)}
+            onPress={() => {
+              setZoomVisible(false);
+              setIsZoomedIn(false);
+            }}
           >
             <Ionicons name="close" size={24} color="#fff" />
           </TouchableOpacity>

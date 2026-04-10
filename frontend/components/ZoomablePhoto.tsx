@@ -4,6 +4,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -13,12 +14,14 @@ interface ZoomablePhotoProps {
   source: any;
   width?: number;
   height?: number;
+  onZoomChange?: (zoomed: boolean) => void;
 }
 
 export default function ZoomablePhoto({
   source,
   width = SCREEN_WIDTH,
   height = SCREEN_HEIGHT * 0.82,
+  onZoomChange,
 }: ZoomablePhotoProps) {
   const scale      = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -26,6 +29,12 @@ export default function ZoomablePhoto({
   const ty         = useSharedValue(0);
   const savedTx    = useSharedValue(0);
   const savedTy    = useSharedValue(0);
+
+  const notifyZoom = (s: number) => {
+    if (onZoomChange) {
+      runOnJS(onZoomChange)(s > 1.05);
+    }
+  };
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
@@ -39,13 +48,17 @@ export default function ZoomablePhoto({
         ty.value         = withSpring(0);
         savedTx.value    = 0;
         savedTy.value    = 0;
+        notifyZoom(1);
       } else {
         savedScale.value = scale.value;
+        notifyZoom(scale.value);
       }
     });
 
   const pan = Gesture.Pan()
     .averageTouches(true)
+    .activeOffsetX([-10, 10])
+    .activeOffsetY([-10, 10])
     .onUpdate((e) => {
       if (scale.value <= 1.05) return;
       tx.value = savedTx.value + e.translationX;
@@ -74,9 +87,11 @@ export default function ZoomablePhoto({
         ty.value         = withSpring(0);
         savedTx.value    = 0;
         savedTy.value    = 0;
+        notifyZoom(1);
       } else {
         scale.value      = withSpring(2.5);
         savedScale.value = 2.5;
+        notifyZoom(2.5);
       }
     });
 
