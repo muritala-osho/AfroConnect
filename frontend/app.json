@@ -82,7 +82,8 @@
             "video"
           ]
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "reactCompiler": false
