@@ -203,10 +203,12 @@ export default function IncomingCallHandler() {
   useEffect(() => {
     const unsubscribe = setupNotificationListeners(
       () => {}, // foreground receive — socket handles this
-      (response) => {
+      async (response) => {
         const data = response.notification.request.content.data;
         if (data?.type === 'call') {
-          // User tapped a call notification from background/killed state
+          // Stop any currently-playing ringtone before opening the call screen
+          await stopRingtone();
+          dismissModal();
           navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
             userId: data.callerId,
             userName: data.callerName,
