@@ -66,8 +66,7 @@ export async function registerForPushNotificationsAsync() {
   }
 
   if (isExpoGo) {
-    console.warn('[Notifications] ⚠️  Running in Expo Go — push notifications require a development or production build.');
-    return;
+    console.warn('[Notifications] ⚠️  Running in Expo Go — token is for TESTING ONLY via expo.dev/notifications');
   }
 
   if (!Device.isDevice) {
@@ -99,14 +98,18 @@ export async function registerForPushNotificationsAsync() {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     console.log('[Notifications] EAS projectId:', projectId || 'NOT FOUND');
 
-    if (!projectId) {
-      console.error('[Notifications] ❌ EAS projectId missing from app.json extra.eas.projectId — push tokens cannot be obtained.');
-      return;
-    }
-
     console.log('[Notifications] Fetching Expo push token from Expo servers…');
-    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    if (projectId && !isExpoGo) {
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    } else {
+      // In Expo Go or when projectId is missing: get token without projectId
+      // This produces a valid test token you can use at expo.dev/notifications
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+    }
     console.log('[Notifications] ✅ Token obtained:', token);
+    if (isExpoGo) {
+      console.log('[Notifications] 👉 COPY THIS TOKEN and paste it at: https://expo.dev/notifications to send a test push');
+    }
 
     if (!token) {
       console.error('[Notifications] ❌ Token came back empty — Expo server issue or misconfigured projectId.');
