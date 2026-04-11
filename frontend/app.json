@@ -15,7 +15,7 @@
     "android": {
       "package": "com.afroconnect.app",
       "adaptiveIcon": {
-        "backgroundColor": "#ffffff",
+        "backgroundColor": "#1A0A2E",
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
