@@ -7,17 +7,6 @@ if (typeof global !== 'undefined') {
 
 export const GlobalPlatform = Platform;
 
-// ─── API URL Resolution ───────────────────────────────────────────────────────
-//
-// Priority order:
-//   1. EXPO_PUBLIC_API_URL  — set in frontend/.env  (required for all builds)
-//   2. Web browser fallback — uses current window host
-//   3. Replit dev           — derives from REPLIT_DEV_DOMAIN (dev only)
-//   4. localhost fallback   — WILL NOT work on physical devices (logs a warning)
-//
-// To fix "notifications not working" or any API failure on a real device:
-//   → Set EXPO_PUBLIC_API_URL=https://your-backend.onrender.com in frontend/.env
-// ─────────────────────────────────────────────────────────────────────────────
 
 export const getApiBaseUrl = (): string => {
   // 1. Explicit env var — works in dev builds, EAS builds, and production
