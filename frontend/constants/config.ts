@@ -38,24 +38,13 @@ export const getApiBaseUrl = (): string => {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }
 
-  // 4. ⚠️  UNREACHABLE from any physical device — localhost is NOT the Render server.
-  //    Every API call (including push token registration) will fail silently.
-  //    → Fix: add EXPO_PUBLIC_API_URL to frontend/.env
-  console.error(
-    '\n[Config] ❌ EXPO_PUBLIC_API_URL is not set.\n' +
-    'The app is using http://localhost:3001 which cannot be reached from a physical device.\n' +
-    'Push notifications WILL NOT work until you set EXPO_PUBLIC_API_URL in frontend/.env\n' +
-    'Example: EXPO_PUBLIC_API_URL=https://afroconnect-api.onrender.com\n'
-  );
-  return 'http://localhost:3001';
+  // 4. Production fallback — Render backend (used when no .env is present, e.g. Expo Go)
+  return 'https://afroconnect-op7e.onrender.com';
 };
 
 // Log the resolved URL once at startup so it is visible in Metro/device logs
 const _resolvedUrl = getApiBaseUrl();
 console.log(`[Config] API base URL: ${_resolvedUrl}`);
-if (_resolvedUrl.includes('localhost')) {
-  console.warn('[Config] ⚠️  Using localhost — push tokens will NOT register on physical devices!');
-}
 
 export const getSocketUrl = (): string => {
   return getApiBaseUrl();
