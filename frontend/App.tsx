@@ -59,7 +59,7 @@ function LanguageSync() {
 
 function AppContent() {
   const { isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [isOverlayVisible, setIsOverlayVisible] = React.useState(false);
   const appState = useRef(AppState.currentState);
 
@@ -75,8 +75,9 @@ function AppContent() {
 
     const setupNotifications = async () => {
       try {
-        // Register for push notifications
-        await registerForPushNotificationsAsync();
+        // Register for push notifications — pass token directly so we
+        // don't rely on AsyncStorage timing after a fresh login
+        await registerForPushNotificationsAsync(token ?? undefined);
 
         // Setup listeners for incoming notifications
         unsubscribe = setupNotificationListeners(
@@ -115,7 +116,7 @@ function AppContent() {
     // in the background, and also retries any failed registration from login.
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === "active") {
-        registerForPushNotificationsAsync().catch(() => {});
+        registerForPushNotificationsAsync(token ?? undefined).catch(() => {});
       }
       appState.current = nextState;
     });

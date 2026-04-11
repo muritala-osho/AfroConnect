@@ -51,7 +51,7 @@ Notifications.setNotificationHandler({
 // executionEnvironment is 'storeClient' in Expo Go, 'bare' in dev/prod builds.
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
-export async function registerForPushNotificationsAsync() {
+export async function registerForPushNotificationsAsync(authTokenOverride?: string) {
   console.log('\n[Notifications] ─── registerForPushNotificationsAsync ───');
   console.log('[Notifications] Platform:', Platform.OS);
   console.log('[Notifications] Is physical device:', Device.isDevice);
@@ -136,10 +136,12 @@ export async function registerForPushNotificationsAsync() {
     const tokenChanged = token !== storedToken;
     console.log('[Notifications] Registering token with backend (changed:', tokenChanged, ')…');
 
-    const authToken = await AsyncStorage.getItem('auth_token');
+    // Prefer the token passed directly from the auth context (avoids AsyncStorage timing gaps).
+    // Fall back to AsyncStorage for cases like foreground re-registration.
+    const authToken = authTokenOverride || await AsyncStorage.getItem('auth_token');
 
     if (!authToken) {
-      console.warn('[Notifications] ⚠️  No auth token in storage — user may not be logged in yet. Skipping backend registration.');
+      console.warn('[Notifications] ⚠️  No auth token available — user may not be logged in yet. Skipping backend registration.');
       return token;
     }
 
