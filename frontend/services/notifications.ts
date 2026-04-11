@@ -46,93 +46,139 @@ Notifications.setNotificationHandler({
   },
 });
 
-const isExpoGo = Constants.executionEnvironment === 'storeClient';
+// Detect Expo Go — push notifications require a development or production build
+const isExpoGo = Constants.appOwnership === 'expo';
 
 export async function registerForPushNotificationsAsync() {
-  let token;
+  console.log('\n[Notifications] ─── registerForPushNotificationsAsync ───');
+  console.log('[Notifications] Platform:', Platform.OS);
+  console.log('[Notifications] Is physical device:', Device.isDevice);
+  console.log('[Notifications] Is Expo Go:', isExpoGo);
+
+  let token: string | undefined;
 
   // Always set up Android notification channels — they must exist before any
   // notification arrives, regardless of whether token registration succeeds.
   if (Platform.OS === 'android') {
+    console.log('[Notifications] Setting up Android channels…');
     await setupAndroidChannels();
+    console.log('[Notifications] Android channels ready.');
   }
 
   if (isExpoGo) {
-    console.log('Push notifications not available on Expo Go. Use a development or production build.');
+    console.warn('[Notifications] ⚠️  Running in Expo Go — push notifications require a development or production build.');
     return;
   }
 
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+  if (!Device.isDevice) {
+    console.warn('[Notifications] ⚠️  Must use a physical device for push notifications (not a simulator).');
+    return;
+  }
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
+  // ── Permission check ────────────────────────────────────────────────────────
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  console.log('[Notifications] Existing permission status:', existingStatus);
+  let finalStatus = existingStatus;
 
-    if (finalStatus !== 'granted') {
-      console.log('Push notification permission not granted.');
+  if (existingStatus !== 'granted') {
+    console.log('[Notifications] Requesting permission…');
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+    console.log('[Notifications] Permission response:', finalStatus);
+  }
+
+  if (finalStatus !== 'granted') {
+    console.error('[Notifications] ❌ Permission denied — user did not grant notification permission.');
+    return;
+  }
+
+  console.log('[Notifications] ✅ Permission granted.');
+
+  // ── Token retrieval ─────────────────────────────────────────────────────────
+  try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    console.log('[Notifications] EAS projectId:', projectId || 'NOT FOUND');
+
+    if (!projectId) {
+      console.error('[Notifications] ❌ EAS projectId missing from app.json extra.eas.projectId — push tokens cannot be obtained.');
       return;
     }
 
-    try {
-      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-      if (!projectId) {
-        console.error('EAS projectId not found in app config. Push notifications will not work.');
-        return;
+    console.log('[Notifications] Fetching Expo push token from Expo servers…');
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    console.log('[Notifications] ✅ Token obtained:', token);
+
+    if (!token) {
+      console.error('[Notifications] ❌ Token came back empty — Expo server issue or misconfigured projectId.');
+      return;
+    }
+
+    // ── Backend registration ──────────────────────────────────────────────────
+    const storedToken = await AsyncStorage.getItem('pushToken');
+    console.log('[Notifications] Previously stored token:', storedToken ? storedToken.slice(0, 40) + '…' : 'none');
+
+    await AsyncStorage.setItem('pushToken', token);
+
+    if (token !== storedToken) {
+      console.log('[Notifications] Token changed (or first time) — registering with backend…');
+      const authToken = await AsyncStorage.getItem('token');
+
+      if (!authToken) {
+        console.warn('[Notifications] ⚠️  No auth token in storage — user may not be logged in yet. Skipping backend registration.');
+        return token;
       }
 
-      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-      console.log('Expo push token obtained:', token);
+      const { getApiBaseUrl } = require('../constants/config');
+      const apiUrl = getApiBaseUrl();
+      const registerUrl = `${apiUrl}/api/notifications/register-token`;
+      console.log('[Notifications] Registering token at:', registerUrl);
 
-      // Only re-register if the token changed or was never stored
-      const storedToken = await AsyncStorage.getItem('pushToken');
-      await AsyncStorage.setItem('pushToken', token);
+      let registered = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        console.log(`[Notifications] Registration attempt ${attempt}/3…`);
+        try {
+          const res = await fetch(registerUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${authToken}`,
+            },
+            body: JSON.stringify({ pushToken: token }),
+          });
 
-      if (token !== storedToken) {
-        const authToken = await AsyncStorage.getItem('token');
-        if (authToken && token) {
-          const { getApiBaseUrl } = require('../constants/config');
-          const apiUrl = getApiBaseUrl();
+          const responseText = await res.text();
+          console.log(`[Notifications] Attempt ${attempt} — status: ${res.status}, body: ${responseText}`);
 
-          let registered = false;
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            try {
-              const res = await fetch(`${apiUrl}/api/notifications/register-token`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${authToken}`,
-                },
-                body: JSON.stringify({ pushToken: token }),
-              });
-              if (res.ok) {
-                console.log('Push token registered with backend successfully.');
-                registered = true;
-                break;
-              } else {
-                console.warn(`Push token registration attempt ${attempt} failed with status ${res.status}`);
-              }
-            } catch (fetchErr) {
-              console.warn(`Push token registration attempt ${attempt} error:`, fetchErr);
-            }
-            if (attempt < 3) await new Promise(r => setTimeout(r, 2000 * attempt));
+          if (res.ok) {
+            console.log('[Notifications] ✅ Push token registered with backend successfully.');
+            registered = true;
+            break;
+          } else {
+            console.warn(`[Notifications] ⚠️  Registration attempt ${attempt} failed — HTTP ${res.status}: ${responseText}`);
           }
-          if (!registered) {
-            console.error('Failed to register push token with backend after 3 attempts.');
-            // Clear stored token so next app open retries registration
-            await AsyncStorage.removeItem('pushToken');
-          }
+        } catch (fetchErr: any) {
+          console.error(`[Notifications] ❌ Registration attempt ${attempt} network error:`, fetchErr?.message || fetchErr);
+        }
+        if (attempt < 3) {
+          const delay = 2000 * attempt;
+          console.log(`[Notifications] Retrying in ${delay}ms…`);
+          await new Promise(r => setTimeout(r, delay));
         }
       }
-    } catch (error) {
-      console.error('Error getting or registering push token:', error);
+
+      if (!registered) {
+        console.error('[Notifications] ❌ Failed to register push token after 3 attempts. Clearing stored token so next launch retries.');
+        // Clear stored token so next app open retries registration
+        await AsyncStorage.removeItem('pushToken');
+      }
+    } else {
+      console.log('[Notifications] Token unchanged — skipping backend registration.');
     }
-  } else {
-    console.log('Must use physical device for push notifications.');
+  } catch (error: any) {
+    console.error('[Notifications] ❌ Unexpected error during token setup:', error?.message || error);
   }
 
+  console.log('[Notifications] ─────────────────────────────────────────────\n');
   return token;
 }
 
@@ -210,16 +256,25 @@ export function setupNotificationListeners(
   onNotificationReceived: (notification: any) => void,
   onNotificationResponse: (response: any) => void
 ) {
+  console.log('[Notifications] Setting up notification listeners…');
   try {
-    const receivedSubscription = Notifications.addNotificationReceivedListener(onNotificationReceived);
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(onNotificationResponse);
+    const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
+      console.log('[Notifications] 📩 Notification received in foreground:', JSON.stringify(notification?.request?.content));
+      onNotificationReceived(notification);
+    });
 
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log('[Notifications] 👆 User tapped notification:', JSON.stringify(response?.notification?.request?.content?.data));
+      onNotificationResponse(response);
+    });
+
+    console.log('[Notifications] ✅ Listeners active.');
     return () => {
       receivedSubscription.remove();
       responseSubscription.remove();
     };
   } catch (error) {
-    console.log('Notification listeners not available:', error);
+    console.error('[Notifications] ❌ Failed to set up listeners:', error);
     return () => {};
   }
 }

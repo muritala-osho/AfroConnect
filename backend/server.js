@@ -178,10 +178,19 @@ app.use(compression());
 // Middleware - CORS first
 app.use(cors(corsOptions));
 
-// Lightweight request logging (only in development to avoid performance hit)
+// Lightweight request logging (non-production: log everything; production: log notification routes always)
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
     console.log(`[BACKEND] ${req.method} ${req.url}`);
+    next();
+  });
+} else {
+  // In production, always log push-notification-related routes so we can
+  // diagnose delivery issues without enabling full verbose logging.
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/api/notifications') || req.url.startsWith('/api/engagement')) {
+      console.log(`[BACKEND] ${req.method} ${req.url}`);
+    }
     next();
   });
 }
