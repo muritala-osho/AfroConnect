@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "com.afroconnect.app",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#1A0A2E",
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
