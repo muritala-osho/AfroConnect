@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
 import { useAuth } from '@/hooks/useAuth';
 import socketService from '@/services/socket';
@@ -58,6 +59,7 @@ export default function IncomingCallHandler() {
   const hapticIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoDismissRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pulseLoopRef      = useRef<any>(null);
+  const coldStartHandledRef = useRef(false);
 
   /* ── ringtone ── */
   const stopRingtone = useCallback(async () => {
@@ -207,36 +209,50 @@ export default function IncomingCallHandler() {
   // Only re-register if the user identity changes — NOT on every state change
   }, [(user as any)?._id || user?.id, token]);
 
+  /* ── Handle a notification tap response (shared logic) ── */
+  const handleNotificationResponse = useCallback(async (response: any) => {
+    const data = response?.notification?.request?.content?.data;
+    if (!data) return;
+
+    if (data?.type === 'call') {
+      await stopRingtone();
+      dismissModal();
+      navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
+        userId: data.callerId,
+        userName: data.callerName,
+        userPhoto: data.callerPhoto || '',
+        isIncoming: true,
+        callData: data.callData,
+        callerId: data.callerId,
+      });
+    } else if (data?.type === 'message') {
+      navigation.navigate('ChatDetail', {
+        userId: data.senderId,
+        userName: data.senderName,
+      });
+    } else if (data?.type === 'match') {
+      navigation.navigate('Discovery');
+    }
+  }, [stopRingtone, dismissModal, navigation]);
+
   /* ── Notification tap listener — separate effect, registered once ── */
   useEffect(() => {
+    // Cold-start: app was fully closed when user tapped the notification.
+    // getLastNotificationResponseAsync() returns the tap that opened the app.
+    // Guard with a ref so this only fires once even if dependencies change.
+    if (!coldStartHandledRef.current) {
+      coldStartHandledRef.current = true;
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (response) handleNotificationResponse(response);
+      });
+    }
+
     const unsubscribe = setupNotificationListeners(
       () => {}, // foreground receive — socket handles this
-      async (response) => {
-        const data = response.notification.request.content.data;
-        if (data?.type === 'call') {
-          // Stop any currently-playing ringtone before opening the call screen
-          await stopRingtone();
-          dismissModal();
-          navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
-            userId: data.callerId,
-            userName: data.callerName,
-            userPhoto: data.callerPhoto,
-            isIncoming: true,
-            callData: data.callData,
-            callerId: data.callerId,
-          });
-        } else if (data?.type === 'message') {
-          navigation.navigate('ChatDetail', {
-            userId: data.senderId,
-            userName: data.senderName,
-          });
-        } else if (data?.type === 'match') {
-          navigation.navigate('Discovery');
-        }
-      }
+      handleNotificationResponse,
     );
     return unsubscribe;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [handleNotificationResponse]);
 
   /* ── Accept ── */
   const handleAccept = useCallback(async () => {
