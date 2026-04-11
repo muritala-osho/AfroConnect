@@ -13,8 +13,8 @@
 
 const User  = require('../models/User');
 const Match = require('../models/Match');
-const { sendExpoPushNotification } = require('./pushNotifications');
-const { sendInactivityEmail }       = require('./emailService');
+const { sendSmartNotification } = require('./pushNotifications');
+const { sendInactivityEmail }   = require('./emailService');
 
 // ─── Feature Weights ──────────────────────────────────────────────────────────
 // Each weight represents how much that signal contributes to churn risk (0–1).
@@ -113,18 +113,14 @@ const TIER_2_MESSAGES = [
 const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const executeIntervention = async (user, score) => {
-  const hasPushToken = user.pushToken && user.settings?.pushNotifications !== false;
-
   if (score >= 0.80) {
     // Tier 3: Boost + Push + Email
-    if (hasPushToken) {
-      await sendExpoPushNotification(user.pushToken, {
-        title: '🚀 We\'ve given you a free Boost!',
-        body: 'Your profile is now boosted for 24 hours — enjoy the extra visibility!',
-        data: { screen: 'Discovery', boostGranted: true },
-        channelId: 'engagement',
-      });
-    }
+    await sendSmartNotification(user, {
+      title: '🚀 We\'ve given you a free Boost!',
+      body: 'Your profile is now boosted for 24 hours — enjoy the extra visibility!',
+      data: { screen: 'Discovery', boostGranted: true },
+      channelId: 'engagement',
+    }, 'system');
     await sendInactivityEmail(user.email, user.name);
 
     // Mark a free boost (app can check this field on next login)
@@ -133,15 +129,13 @@ const executeIntervention = async (user, score) => {
 
   } else if (score >= 0.65) {
     // Tier 2: Push + Email
-    if (hasPushToken) {
-      const msg = pickRandom(TIER_2_MESSAGES);
-      await sendExpoPushNotification(user.pushToken, {
-        title: msg.title,
-        body: msg.body,
-        data: { screen: 'Discovery' },
-        channelId: 'engagement',
-      });
-    }
+    const msg = pickRandom(TIER_2_MESSAGES);
+    await sendSmartNotification(user, {
+      title: msg.title,
+      body: msg.body,
+      data: { screen: 'Discovery' },
+      channelId: 'engagement',
+    }, 'system');
     if (user.settings?.emailNotifications !== false) {
       await sendInactivityEmail(user.email, user.name);
     }
@@ -149,19 +143,17 @@ const executeIntervention = async (user, score) => {
 
   } else {
     // Tier 1: Subtle push only
-    if (hasPushToken) {
-      const msg = pickRandom(TIER_1_MESSAGES);
-      await sendExpoPushNotification(user.pushToken, {
-        title: msg.title,
-        body: msg.body,
-        data: { screen: 'Discovery' },
-        channelId: 'engagement',
-      });
-    }
+    const msg = pickRandom(TIER_1_MESSAGES);
+    await sendSmartNotification(user, {
+      title: msg.title,
+      body: msg.body,
+      data: { screen: 'Discovery' },
+      channelId: 'engagement',
+    }, 'system');
     user.churnInterventionTier = 'push';
   }
 
-  user.churnScore             = score;
+  user.churnScore              = score;
   user.churnInterventionSentAt = new Date();
   await user.save();
 };
@@ -180,7 +172,7 @@ const runChurnPrediction = async () => {
       suspended: false,
       createdAt: { $lt: new Date(now - 3 * 24 * 60 * 60 * 1000) }, // account > 3 days old
     })
-      .select('name email pushToken lastActive createdAt swipedRight swipedLeft premium settings notificationEngagement churnInterventionSentAt churnInterventionTier freeBoostGrantedAt')
+      .select('name email pushToken pushNotificationsEnabled notificationPreferences muteSettings lastActive createdAt swipedRight swipedLeft premium settings notificationEngagement churnInterventionSentAt churnInterventionTier freeBoostGrantedAt')
       .lean(false)
       .limit(500); // process in batches
 

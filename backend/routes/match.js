@@ -201,6 +201,36 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     }
 
     await currentUser.save();
+
+    // Send like/superlike notification to target user (non-blocking, fire-and-forget).
+    // Only fires for one-way likes — mutual matches already return early above with
+    // their own "It's a Match!" notification.
+    if (action === 'like' || action === 'superlike') {
+      try {
+        const { sendSmartNotification } = require('../utils/pushNotifications');
+        const targetUserForNotif = await User.findById(targetUserId).select(
+          'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        if (targetUserForNotif) {
+          const isSuper = action === 'superlike';
+          sendSmartNotification(
+            targetUserForNotif,
+            {
+              title: isSuper ? '⭐ You got a Super Like!' : '💚 Someone liked you!',
+              body: isSuper
+                ? `${currentUser.name} Super Liked your profile — open AfroConnect to see!`
+                : 'Someone on AfroConnect liked your profile. Come see!',
+              data: { type: 'like', screen: 'Likes' },
+            },
+            'like',
+          ).catch(() => {});
+          console.log(`[Push] Like notification queued → user ${targetUserId} (${isSuper ? 'superlike' : 'like'})`);
+        }
+      } catch (likeNotifErr) {
+        console.error('[Push] Like notification error (non-critical):', likeNotifErr.message);
+      }
+    }
+
     // Invalidate who-likes-me cache for target user and my-matches for both
     await Promise.all([
       redis.del(`wholikesme:${targetUserId}:premium`),

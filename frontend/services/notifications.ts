@@ -238,6 +238,15 @@ async function setupAndroidChannels() {
     vibrationPattern: [0, 250, 250, 250],
     lightColor: '#FF6B9D',
   });
+
+  // Re-engagement / churn engine notifications
+  await Notifications.setNotificationChannelAsync('engagement', {
+    name: 'Activity & Updates',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#FF6B9D',
+    sound: 'default',
+  });
 }
 
 export async function sendLocalNotification(title: string, body: string, data?: any) {
