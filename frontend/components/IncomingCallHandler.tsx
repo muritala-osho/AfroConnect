@@ -82,6 +82,14 @@ export default function IncomingCallHandler() {
         await s.unloadAsync().catch(() => {});
       }
     } catch {}
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: true,
+      });
+    } catch {}
   }, []);
 
   const playRingtone = useCallback(async () => {

@@ -153,7 +153,11 @@ export const AGORA_HTML = `<!DOCTYPE html>
       joined = true;
 
       var audioConfig = {
-        encoderConfig: 'speech_standard',
+        encoderConfig: {
+          sampleRate: 48000,
+          stereo: false,
+          bitrate: 64,
+        },
         AEC: true, ANS: true, AGC: true,
       };
 
