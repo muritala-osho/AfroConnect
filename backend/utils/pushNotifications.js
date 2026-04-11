@@ -1,5 +1,8 @@
 const { Expo } = require('expo-server-sdk');
-const expo = new Expo();
+const expo = new Expo({
+  accessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
+  useFcmV1: true,
+});
 
 /**
  * Clears an invalid push token from the database so we stop sending to it.
