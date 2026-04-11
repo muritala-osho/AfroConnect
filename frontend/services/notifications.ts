@@ -129,7 +129,7 @@ export async function registerForPushNotificationsAsync() {
     const tokenChanged = token !== storedToken;
     console.log('[Notifications] Registering token with backend (changed:', tokenChanged, ')…');
 
-    const authToken = await AsyncStorage.getItem('token');
+    const authToken = await AsyncStorage.getItem('auth_token');
 
     if (!authToken) {
       console.warn('[Notifications] ⚠️  No auth token in storage — user may not be logged in yet. Skipping backend registration.');

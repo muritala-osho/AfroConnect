@@ -88,7 +88,7 @@ function AppContent() {
             console.log("User tapped notification:", response);
             // Track notification open for the timing engine
             try {
-              const token = await AsyncStorage.getItem("token");
+              const token = await AsyncStorage.getItem("auth_token");
               if (token) {
                 const screen = response?.notification?.request?.content?.data?.screen;
                 fetch(`${getApiBaseUrl()}/api/engagement/notification-opened`, {
