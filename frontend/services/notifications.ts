@@ -46,8 +46,10 @@ Notifications.setNotificationHandler({
   },
 });
 
-// Detect Expo Go — push notifications require a development or production build
-const isExpoGo = Constants.appOwnership === 'expo';
+// Detect Expo Go using the non-deprecated API (SDK 50+).
+// Constants.appOwnership is deprecated and returns null in SDK 50+.
+// executionEnvironment is 'storeClient' in Expo Go, 'bare' in dev/prod builds.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 export async function registerForPushNotificationsAsync() {
   console.log('\n[Notifications] ─── registerForPushNotificationsAsync ───');
@@ -100,7 +102,12 @@ export async function registerForPushNotificationsAsync() {
 
     console.log('[Notifications] Fetching Expo push token from Expo servers…');
     if (projectId && !isExpoGo) {
-      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      try {
+        token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+      } catch (tokenErr: any) {
+        console.warn('[Notifications] ⚠️  getExpoPushTokenAsync with projectId failed, retrying without it:', tokenErr?.message);
+        token = (await Notifications.getExpoPushTokenAsync()).data;
+      }
     } else {
       // In Expo Go or when projectId is missing: get token without projectId
       // This produces a valid test token you can use at expo.dev/notifications
