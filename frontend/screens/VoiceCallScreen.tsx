@@ -227,8 +227,8 @@ export default function VoiceCallScreen() {
       if (ringtoneRef.current) {
         const snd = ringtoneRef.current;
         ringtoneRef.current = null;
-        /* Fire-and-forget: send stop to native layer immediately without blocking */
-        snd.stopAsync().catch(() => {}).finally(() => snd.unloadAsync().catch(() => {}));
+        await snd.stopAsync().catch(() => {});
+        await snd.unloadAsync().catch(() => {});
       }
     } catch {}
     /* Reset audio session so mic is available for the call */
@@ -258,7 +258,7 @@ export default function VoiceCallScreen() {
         ? require("../assets/sounds/mixkit-waiting-ringtone-1354.wav")
         : require("../assets/sounds/phone-calling-1b.mp3");
       const { sound } = await Audio.Sound.createAsync(source, {
-        shouldPlay: true,
+        shouldPlay: false,
         isLooping: true,
         volume: 1.0,
       });
@@ -267,6 +267,14 @@ export default function VoiceCallScreen() {
         return;
       }
       ringtoneRef.current = sound;
+      /* Final guard: stopRingtone may have fired while the sound was being created */
+      if (!shouldRingRef.current) {
+        ringtoneRef.current = null;
+        await sound.stopAsync().catch(() => {});
+        await sound.unloadAsync().catch(() => {});
+        return;
+      }
+      await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
       console.error("Ringtone error:", err);
