@@ -122,60 +122,61 @@ export async function registerForPushNotificationsAsync() {
 
     await AsyncStorage.setItem('pushToken', token);
 
-    if (token !== storedToken) {
-      console.log('[Notifications] Token changed (or first time) — registering with backend…');
-      const authToken = await AsyncStorage.getItem('token');
+    // Always register with the backend on every launch.
+    // The backend upsert is idempotent — this ensures the token is saved
+    // even if a previous attempt failed (e.g. MongoDB was down, Expo Go
+    // was blocked, or the user's DB record predates token registration).
+    const tokenChanged = token !== storedToken;
+    console.log('[Notifications] Registering token with backend (changed:', tokenChanged, ')…');
 
-      if (!authToken) {
-        console.warn('[Notifications] ⚠️  No auth token in storage — user may not be logged in yet. Skipping backend registration.');
-        return token;
-      }
+    const authToken = await AsyncStorage.getItem('token');
 
-      const { getApiBaseUrl } = require('../constants/config');
-      const apiUrl = getApiBaseUrl();
-      const registerUrl = `${apiUrl}/api/notifications/register-token`;
-      console.log('[Notifications] Registering token at:', registerUrl);
+    if (!authToken) {
+      console.warn('[Notifications] ⚠️  No auth token in storage — user may not be logged in yet. Skipping backend registration.');
+      return token;
+    }
 
-      let registered = false;
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`[Notifications] Registration attempt ${attempt}/3…`);
-        try {
-          const res = await fetch(registerUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-            body: JSON.stringify({ pushToken: token }),
-          });
+    const { getApiBaseUrl } = require('../constants/config');
+    const apiUrl = getApiBaseUrl();
+    const registerUrl = `${apiUrl}/api/notifications/register-token`;
+    console.log('[Notifications] Registering token at:', registerUrl);
 
-          const responseText = await res.text();
-          console.log(`[Notifications] Attempt ${attempt} — status: ${res.status}, body: ${responseText}`);
+    let registered = false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      console.log(`[Notifications] Registration attempt ${attempt}/3…`);
+      try {
+        const res = await fetch(registerUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ pushToken: token }),
+        });
 
-          if (res.ok) {
-            console.log('[Notifications] ✅ Push token registered with backend successfully.');
-            registered = true;
-            break;
-          } else {
-            console.warn(`[Notifications] ⚠️  Registration attempt ${attempt} failed — HTTP ${res.status}: ${responseText}`);
-          }
-        } catch (fetchErr: any) {
-          console.error(`[Notifications] ❌ Registration attempt ${attempt} network error:`, fetchErr?.message || fetchErr);
+        const responseText = await res.text();
+        console.log(`[Notifications] Attempt ${attempt} — status: ${res.status}, body: ${responseText}`);
+
+        if (res.ok) {
+          console.log('[Notifications] ✅ Push token registered with backend successfully.');
+          registered = true;
+          break;
+        } else {
+          console.warn(`[Notifications] ⚠️  Registration attempt ${attempt} failed — HTTP ${res.status}: ${responseText}`);
         }
-        if (attempt < 3) {
-          const delay = 2000 * attempt;
-          console.log(`[Notifications] Retrying in ${delay}ms…`);
-          await new Promise(r => setTimeout(r, delay));
-        }
+      } catch (fetchErr: any) {
+        console.error(`[Notifications] ❌ Registration attempt ${attempt} network error:`, fetchErr?.message || fetchErr);
       }
+      if (attempt < 3) {
+        const delay = 2000 * attempt;
+        console.log(`[Notifications] Retrying in ${delay}ms…`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
 
-      if (!registered) {
-        console.error('[Notifications] ❌ Failed to register push token after 3 attempts. Clearing stored token so next launch retries.');
-        // Clear stored token so next app open retries registration
-        await AsyncStorage.removeItem('pushToken');
-      }
-    } else {
-      console.log('[Notifications] Token unchanged — skipping backend registration.');
+    if (!registered) {
+      console.error('[Notifications] ❌ Failed to register push token after 3 attempts. Clearing stored token so next launch retries.');
+      await AsyncStorage.removeItem('pushToken');
     }
   } catch (error: any) {
     console.error('[Notifications] ❌ Unexpected error during token setup:', error?.message || error);
