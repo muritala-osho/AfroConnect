@@ -378,9 +378,13 @@ const userSchema = new mongoose.Schema({
       default: 'system'
     }
   },
+  pushToken: {
+    type: String,
+    default: null,
+  },
   pushNotificationsEnabled: {
     type: Boolean,
-    default: true
+    default: true,
   },
   isAdmin: {
     type: Boolean,
