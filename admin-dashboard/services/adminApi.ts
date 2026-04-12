@@ -1,4 +1,5 @@
-const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+const _viteApiUrl = import.meta.env.VITE_API_URL?.replace(/\/+$/, '');
+const API_BASE = _viteApiUrl ? `${_viteApiUrl}/api` : '/api';
 
 const getToken = (): string | null => localStorage.getItem('afroconnect_token');
 
