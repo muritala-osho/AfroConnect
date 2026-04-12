@@ -1080,21 +1080,33 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     if (!selectedChat) return;
     setChatMenuVisible(false);
 
+    const userId = selectedChat.user.id;
+    const isMuting = !mutedChats.has(userId);
+
     const newMuted = new Set(mutedChats);
-    if (newMuted.has(selectedChat.user.id)) {
-      newMuted.delete(selectedChat.user.id);
+    if (isMuting) {
+      newMuted.add(userId);
     } else {
-      newMuted.add(selectedChat.user.id);
+      newMuted.delete(userId);
     }
     setMutedChats(newMuted);
     await saveLocalSettings(MUTED_KEY, newMuted);
     setConversations((prev) =>
       prev.map((c) =>
-        c.user.id === selectedChat.user.id
-          ? { ...c, isMuted: newMuted.has(c.user.id) }
-          : c,
+        c.user.id === userId ? { ...c, isMuted: newMuted.has(c.user.id) } : c,
       ),
     );
+
+    try {
+      if (isMuting) {
+        await post("/mute/user", { userId, muteAll: true }, token);
+      } else {
+        await del(`/mute/user/${userId}`, token);
+      }
+    } catch (e) {
+      console.log("Mute sync error (non-critical):", e);
+    }
+
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 

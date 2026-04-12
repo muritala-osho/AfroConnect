@@ -822,20 +822,25 @@ router.get('/broadcasts', protect, isAdmin, async (req, res) => {
 // @access  Private/Admin
 router.post('/broadcasts', protect, isAdmin, async (req, res) => {
   try {
+    const { sendSmartNotification } = require('../utils/pushNotifications');
     const { title, body, target = 'all', imageUrl, scheduled = false } = req.body;
 
     if (!title || !body) {
       return res.status(400).json({ success: false, message: 'Title and body are required' });
     }
 
-    // Count target audience
-    let audienceQuery = {};
+    // Build audience query — only users with a valid push token
+    let audienceQuery = { pushToken: { $exists: true, $ne: null }, pushNotificationsEnabled: { $ne: false } };
     if (target === 'male' || target === 'female') audienceQuery.gender = target;
     if (target === 'verified') audienceQuery.verified = true;
     if (target === 'platinum') audienceQuery['premiumInfo.plan'] = 'platinum';
     if (target === 'gold') audienceQuery['premiumInfo.plan'] = 'gold';
 
-    const reach = await User.countDocuments(audienceQuery);
+    const users = await User.find(audienceQuery)
+      .select('pushToken pushNotificationsEnabled muteSettings notificationPreferences')
+      .lean();
+
+    const reach = users.length;
 
     const campaign = {
       id: `bc-${Date.now()}`,
@@ -853,7 +858,33 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
     broadcastHistory.unshift(campaign);
     if (broadcastHistory.length > 100) broadcastHistory.pop();
 
+    // Respond immediately — fire notifications in the background
     res.json({ success: true, message: 'Broadcast dispatched successfully', campaign });
+
+    if (!scheduled) {
+      setImmediate(async () => {
+        let sent = 0;
+        for (const user of users) {
+          try {
+            const ok = await sendSmartNotification(
+              user,
+              {
+                title,
+                body,
+                data: { type: 'broadcast', screen: 'Home' },
+                channelId: 'default',
+              },
+              'system',
+            );
+            if (ok) sent++;
+          } catch (e) {
+            console.error('[Broadcast] Push error for user', user._id, e.message);
+          }
+        }
+        campaign.actualSent = sent;
+        console.log(`[Broadcast] "${title}" — sent ${sent}/${reach} notifications`);
+      });
+    }
   } catch (error) {
     console.error('Send broadcast error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
