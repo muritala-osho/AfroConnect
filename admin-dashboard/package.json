@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5000 --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "build": "node_modules/.bin/tsc --noEmit && node_modules/.bin/vite build",
     "preview": "vite preview"
   },
   "dependencies": {
