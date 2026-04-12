@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import socketService from '@/services/socket';
+import { getApiBaseUrl } from '@/constants/config';
 
 interface UnreadContextType {
   unreadCount: number;
@@ -50,6 +52,35 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
       syncOsBadge(0);
     }
   };
+
+  // Fetch the real unread count from the server on mount so the badge
+  // reflects actual DB state rather than starting from 0 every launch.
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchInitialUnread = async () => {
+      try {
+        const authToken = await AsyncStorage.getItem('auth_token');
+        if (!authToken) return;
+
+        const res = await fetch(`${getApiBaseUrl()}/api/chat/unread-count`, {
+          headers: { Authorization: `Bearer ${authToken}` },
+        });
+        if (!res.ok || cancelled) return;
+
+        const data = await res.json();
+        if (data.success && typeof data.count === 'number' && !cancelled) {
+          setUnreadCount(data.count);
+          syncOsBadge(data.count);
+        }
+      } catch {
+        // Network failure on startup — badge stays at 0, increments on next message
+      }
+    };
+
+    fetchInitialUnread();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const handleNewMessage = (_message: any) => {

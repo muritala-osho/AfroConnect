@@ -9,26 +9,23 @@ export const GlobalPlatform = Platform;
 
 
 export const getApiBaseUrl = (): string => {
-  // 1. Explicit env var — works in dev builds, EAS builds, and production
+  // Explicit env var — set EXPO_PUBLIC_API_URL in your .env file (or Render/EAS env vars).
+  // Example: EXPO_PUBLIC_API_URL=https://your-app.onrender.com
   if (process.env.EXPO_PUBLIC_API_URL) {
-    const url = process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, ''); // strip trailing slash
-    return url;
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, ''); // strip trailing slash
   }
 
-  // 2. Web (browser) — use current host
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location;
-    if (port === '3001') return '';
-    return `${protocol}//${hostname}:3001`;
-  }
-
-  // 3. Replit dev environment — available when Metro bundles inside Replit
+  // Replit dev environment — available when Metro bundles inside Replit
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }
 
-  // 4. Production fallback — Render backend (used when no .env is present, e.g. Expo Go)
-  return 'https://afroconnect-op7e.onrender.com';
+  // No URL configured — throw so the problem is immediately visible in logs
+  // rather than failing silently with wrong requests.
+  throw new Error(
+    '[Config] EXPO_PUBLIC_API_URL is not set. ' +
+    'Add it to your .env file: EXPO_PUBLIC_API_URL=https://your-backend-url.onrender.com'
+  );
 };
 
 // Log the resolved URL once at startup so it is visible in Metro/device logs

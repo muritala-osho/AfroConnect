@@ -186,6 +186,22 @@ router.delete("/delete-all", protect, async (req, res) => {
   }
 });
 
+// @route   GET /api/chat/unread-count
+// @desc    Total number of unseen messages across all conversations
+// @access  Private
+router.get("/unread-count", protect, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({
+      receiver: req.user._id,
+      seen: false,
+      deletedFor: { $ne: req.user._id },
+    });
+    res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 // @route   GET /api/chat/:matchId
 // @desc    Get messages for a match
 // @access  Private
