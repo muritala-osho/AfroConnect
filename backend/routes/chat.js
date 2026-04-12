@@ -400,9 +400,9 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
     // Update lastMessageAt on the Match so conversations sort correctly
     // Also mark hasFirstMessage so expiry countdown stops
-    await Match.findByIdAndUpdate(matchId, { 
-      lastMessageAt: new Date(),
-      $set: { hasFirstMessage: true }
+    const wasFirstMessage = !match.hasFirstMessage;
+    await Match.findByIdAndUpdate(matchId, {
+      $set: { lastMessageAt: new Date(), hasFirstMessage: true }
     });
 
     // Invalidate conversation caches for both users so next fetch is fresh
@@ -414,6 +414,14 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       const msgPayload = { message, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
+
+      // If this is the first message, notify both users' personal rooms so their
+      // Matches screen clears the expiry countdown immediately
+      if (wasFirstMessage) {
+        const firstMsgPayload = { matchId: matchId.toString() };
+        io.to(req.user._id.toString()).emit("match:first-message", firstMsgPayload);
+        io.to(receiver.toString()).emit("match:first-message", firstMsgPayload);
+      }
       // Tell the sender their message was delivered to receiver's device
       io.to(receiver.toString()).emit("chat:message-delivered", {
         messageId: message._id,

@@ -205,11 +205,23 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         )
       );
     };
+    // Dedicated event fired by the backend only on the very first message
+    const handleFirstMessage = (data: any) => {
+      const matchId = data?.matchId;
+      if (!matchId) return;
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === matchId ? { ...m, hasFirstMessage: true, expiresAt: null } : m
+        )
+      );
+    };
     socketService.on("chat:new-message", handleNewMessage);
     socketService.on("message:new", handleNewMessage);
+    socketService.on("match:first-message", handleFirstMessage);
     return () => {
       socketService.off("chat:new-message");
       socketService.off("message:new");
+      socketService.off("match:first-message");
     };
   }, []);
 
