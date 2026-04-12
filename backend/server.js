@@ -90,6 +90,8 @@ const io = socketIO(server, {
   maxHttpBufferSize: 1e6
 });
 
+app.set('io', io);
+
 // Optional Redis setup for socket scaling / shared state
 let redisClient;
 let redisPubClient;

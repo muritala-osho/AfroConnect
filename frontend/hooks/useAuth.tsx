@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
+import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useApi } from "./useApi";
 import socketService from "@/services/socket";
@@ -128,6 +129,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         socketService.connect(token);
         socketService.setUserOnline(uid);
+
+        // Listen for real-time ban/suspension notifications from the server
+        const handleBanned = (data: { reason?: string }) => {
+          Alert.alert(
+            'Account Suspended',
+            `Your account has been suspended${data?.reason ? `: ${data.reason}` : '.'}`,
+            [{ text: 'OK', onPress: () => clearAuthData() }],
+            { cancelable: false }
+          );
+        };
+        const handleSuspended = (data: { days?: number }) => {
+          Alert.alert(
+            'Account Temporarily Suspended',
+            `Your account has been suspended for ${data?.days ?? 'several'} day(s). You will be logged out now.`,
+            [{ text: 'OK', onPress: () => clearAuthData() }],
+            { cancelable: false }
+          );
+        };
+        socketService.on('user:banned', handleBanned);
+        socketService.on('user:suspended', handleSuspended);
+
+        return () => {
+          socketService.off('user:banned', handleBanned);
+          socketService.off('user:suspended', handleSuspended);
+        };
       } catch (err) {
         console.error('Socket connection failed:', err);
       }

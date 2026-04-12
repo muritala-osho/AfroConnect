@@ -162,6 +162,7 @@ export default function RootNavigator() {
             <Stack.Screen name="OTPVerification" component={OTPVerificationScreen} />
             <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: "modal" }} />
             <Stack.Screen name="SuccessStories" component={SuccessStoriesScreen} options={{ presentation: "modal" }} />
+            <Stack.Screen name="AppealBanned" component={AppealBannedScreen} />
           </>
         ) : !isProfileComplete ? (
           <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />

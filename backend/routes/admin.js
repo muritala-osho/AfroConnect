@@ -187,6 +187,24 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
     
     await user.save();
 
+    // Emit real-time socket event so the user is force-logged out instantly if active
+    try {
+      const ioInstance = req.app.get('io');
+      if (ioInstance) {
+        const userId = req.params.userId.toString();
+        if (banned) {
+          ioInstance.to(userId).emit('user:banned', {
+            reason: reason || 'Violation of community guidelines',
+            bannedAt: user.bannedAt
+          });
+        } else {
+          ioInstance.to(userId).emit('user:unbanned', {});
+        }
+      }
+    } catch (socketError) {
+      console.error('Failed to emit ban socket event:', socketError);
+    }
+
     // Send email notification
     try {
       const { sendBanNotificationEmail, sendUnbanNotificationEmail } = require('../utils/emailService');
@@ -699,6 +717,24 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
       user.suspendedUntil = null;
     }
     await user.save();
+
+    // Emit real-time socket event so the user is force-logged out instantly if active
+    try {
+      const ioInstance = req.app.get('io');
+      if (ioInstance) {
+        const userId = req.params.userId.toString();
+        if (suspended) {
+          ioInstance.to(userId).emit('user:suspended', {
+            suspendedUntil: user.suspendedUntil,
+            days
+          });
+        } else {
+          ioInstance.to(userId).emit('user:unsuspended', {});
+        }
+      }
+    } catch (socketError) {
+      console.error('Failed to emit suspend socket event:', socketError);
+    }
 
     res.json({
       success: true,
