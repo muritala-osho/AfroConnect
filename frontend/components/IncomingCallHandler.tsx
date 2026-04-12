@@ -217,6 +217,8 @@ export default function IncomingCallHandler() {
     if (data?.type === 'call') {
       await stopRingtone();
       dismissModal();
+      // Accept the call immediately so the caller's ringtone stops too
+      socketService.acceptCall({ callerId: data.callerId, callData: data.callData });
       navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
         userId: data.callerId,
         userName: data.callerName,
@@ -224,6 +226,7 @@ export default function IncomingCallHandler() {
         isIncoming: true,
         callData: data.callData,
         callerId: data.callerId,
+        callAccepted: true,
       });
     } else if (data?.type === 'message') {
       navigation.navigate('ChatDetail', {

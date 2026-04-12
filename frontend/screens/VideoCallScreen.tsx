@@ -499,7 +499,7 @@ export default function VideoCallScreen() {
       setStatus("connected");
       startGlobalTimer();
       showControls();
-      if (activeCallDataRef.current && Platform.OS === "web")
+      if (activeCallDataRef.current)
         joinAgoraVideo(activeCallDataRef.current);
     } else if (returnToCall) {
       setStatus("connected");

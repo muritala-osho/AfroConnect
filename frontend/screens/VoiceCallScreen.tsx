@@ -524,7 +524,7 @@ export default function VoiceCallScreen() {
     if (callAccepted) {
       setStatus("connected");
       startGlobalTimer();
-      if (activeCallDataRef.current && Platform.OS === "web")
+      if (activeCallDataRef.current)
         joinAgoraVoice(activeCallDataRef.current);
     } else if (returnToCall) {
       setStatus("connected");
