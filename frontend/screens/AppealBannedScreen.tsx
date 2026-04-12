@@ -60,7 +60,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/submit-appeal`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/auth/appeal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
