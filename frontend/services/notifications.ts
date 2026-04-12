@@ -105,8 +105,33 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
       try {
         token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
       } catch (tokenErr: any) {
-        console.warn('[Notifications] ⚠️  getExpoPushTokenAsync with projectId failed, retrying without it:', tokenErr?.message);
-        token = (await Notifications.getExpoPushTokenAsync()).data;
+        const errMsg = tokenErr?.message || String(tokenErr);
+        // Common GMS failure messages on Tecno / budget Android phones:
+        //   "SERVICE_NOT_AVAILABLE" — GMS is installed but outdated / not running
+        //   "MISSING_INSTANCEID_SERVICE" — GMS package is corrupt or incomplete
+        //   "Google Play services not available" — GMS missing entirely
+        if (
+          errMsg.includes('SERVICE_NOT_AVAILABLE') ||
+          errMsg.includes('MISSING_INSTANCEID') ||
+          errMsg.includes('Google Play services') ||
+          errMsg.includes('FirebaseApp') ||
+          errMsg.includes('GMS')
+        ) {
+          console.error(
+            '[Notifications] ❌ GMS (Google Play Services) error — this device may have outdated or missing GMS.',
+            '\n  Device brand:', Platform.OS === 'android' ? 'Android' : Platform.OS,
+            '\n  Error:', errMsg,
+            '\n  Fix: Update Google Play Services in the Play Store and disable battery optimisation for this app.'
+          );
+        } else {
+          console.warn('[Notifications] ⚠️  getExpoPushTokenAsync with projectId failed, retrying without it:', errMsg);
+        }
+        try {
+          token = (await Notifications.getExpoPushTokenAsync()).data;
+        } catch (retryErr: any) {
+          console.error('[Notifications] ❌ Retry also failed:', retryErr?.message || retryErr);
+          return;
+        }
       }
     } else {
       // In Expo Go or when projectId is missing: get token without projectId
