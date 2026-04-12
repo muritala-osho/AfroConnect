@@ -307,6 +307,21 @@ export const adminApi = {
     });
     return handleResponse(res);
   },
+
+  getUserDemographics: async () => {
+    const res = await fetch(`${API_BASE}/admin/user-demographics`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  getRevenueHistory: async () => {
+    const res = await fetch(`${API_BASE}/admin/revenue-history`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  getBoostsRevenue: async () => {
+    const res = await fetch(`${API_BASE}/admin/boosts-revenue`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;

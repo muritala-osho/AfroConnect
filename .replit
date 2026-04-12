@@ -52,13 +52,13 @@ args = "cd frontend && npm install --legacy-peer-deps && ./node_modules/.bin/exp
 name = "Admin Dashboard"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd admin-dashboard && npm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd admin-dashboard && npm install --legacy-peer-deps && npm run dev"
+waitForPort = 5000
 
 [[ports]]
 localPort = 3001
@@ -67,3 +67,7 @@ externalPort = 80
 [[ports]]
 localPort = 8081
 externalPort = 8081
+
+[[ports]]
+localPort = 5000
+externalPort = 80

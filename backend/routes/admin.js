@@ -1036,6 +1036,69 @@ router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/user-demographics
+// @desc    Gender + age distribution of all users
+// @access  Private/Admin
+router.get('/user-demographics', protect, isAdmin, async (req, res) => {
+  try {
+    const users = await User.find({}, 'gender age');
+    const genderMap = {};
+    const ageBuckets = { '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0 };
+
+    users.forEach(u => {
+      const g = (u.gender || 'other').toLowerCase();
+      genderMap[g] = (genderMap[g] || 0) + 1;
+      const a = u.age || 0;
+      if (a >= 18 && a <= 24) ageBuckets['18-24']++;
+      else if (a <= 34) ageBuckets['25-34']++;
+      else if (a <= 44) ageBuckets['35-44']++;
+      else if (a >= 45) ageBuckets['45+']++;
+    });
+
+    const genderData = Object.entries(genderMap).map(([name, value]) => ({ name, value }));
+    const ageData = Object.entries(ageBuckets).map(([name, value]) => ({ name, value }));
+
+    res.json({ success: true, demographics: { genderData, ageData, total: users.length } });
+  } catch (error) {
+    console.error('Demographics error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// @route   GET /api/admin/revenue-history
+// @desc    Last 30 days subscription revenue chart data
+// @access  Private/Admin
+router.get('/revenue-history', protect, isAdmin, async (req, res) => {
+  try {
+    const now = new Date();
+    const days = [];
+
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const start = new Date(d.setHours(0, 0, 0, 0));
+      const end   = new Date(d.setHours(23, 59, 59, 999));
+
+      const newPremium = await User.countDocuments({
+        'premium.isActive': true,
+        'premium.startedAt': { $gte: start, $lte: end },
+      });
+      const revenue = newPremium * 15;
+
+      days.push({
+        date: start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        revenue,
+        subscriptions: newPremium,
+      });
+    }
+
+    res.json({ success: true, revenueHistory: days });
+  } catch (error) {
+    console.error('Revenue history error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ─── SUPPORT TICKETS ────────────────────────────────────────────────────────
 
 const SupportTicket = require('../models/SupportTicket');
