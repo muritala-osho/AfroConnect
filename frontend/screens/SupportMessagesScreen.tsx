@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
 
   messagesList: { padding: 16, paddingBottom: 24 },
 
-  messageRow: { flexDirection: 'row', marginBottom: 12 },
+  messageRow: { flexDirection: 'row', marginBottom: 12, width: '100%' },
   messageRowUser: { justifyContent: 'flex-end' },
   messageRowStaff: { justifyContent: 'flex-start' },
 
