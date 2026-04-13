@@ -1,6 +1,14 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Admin Dashboard — full interactivity upgrade**:
+  - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
+  - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.
+  - `IDVerification.tsx`: Removed all mock data. Added refresh button, editable rejection reason field, proper error/empty states.
+  - `ContentModeration.tsx`: Removed all mock data. Error state with retry, clean empty states, no fallback to fake data.
+  - All views: No mock/fake data anywhere — backend failure shows error banner with Retry button instead of silently falling back to placeholder rows.
+  - Vite config: Removed security headers from dev server (they belong at the reverse-proxy/deployment layer, not dev) so Replit preview iframe works correctly.
+  - Workflow: Added `waitForPort: 5000` and `npm install --legacy-peer-deps` step so Replit correctly detects startup.
 - **Centralized Support System** — full implementation across all three layers:
   - `backend/models/SupportTicket.js`: Extended model — added `assignedTo`, `unreadByUser`, `unreadByAgent` fields; `pending` status; `agent` role in messages; `senderName`/`senderId` fields.
   - `backend/models/User.js`: Added `isSupportAgent` boolean field for support agent role.

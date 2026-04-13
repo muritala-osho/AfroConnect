@@ -1,68 +1,70 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Search, Filter, UserX, AlertTriangle, Eye, Sparkles, CheckCircle2, X, 
-  MapPin, Calendar, Mail, MessageSquare, History, ShieldAlert, Award, Heart,
-  Briefcase, GraduationCap, Info, Camera, Tag, Cigarette, Wine, HandMetal, Loader2
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Search, Filter, UserX, AlertTriangle, Eye, CheckCircle2, X,
+  MapPin, Calendar, History, ShieldAlert, Award, Heart,
+  Briefcase, GraduationCap, Camera, Tag, Cigarette, Wine,
+  Loader2, RefreshCw, Download, ChevronLeft, ChevronRight,
+  Trash2, PauseCircle, PlayCircle, AlertCircle,
 } from 'lucide-react';
-import { analyzeUserContent, ModerationResult } from '../services/geminiServices';
 import { adminApi } from '../services/adminApi';
 
 interface UserManagementProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
+const PAGE_SIZE = 25;
+
 const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'activity' | 'safety'>('bio');
-  const [aiAnalysis, setAiAnalysis] = useState<ModerationResult | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned' | 'warned'>('all');
-  const [confirmBanUser, setConfirmBanUser] = useState<any | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ user: any; type: 'ban' | 'unban' | 'delete' | 'suspend' | 'unsuspend' } | null>(null);
+  const [suspendDays, setSuspendDays] = useState(7);
 
-  const MOCK_USERS = [
-    { _id: 'm1', name: 'Amara Diallo', email: 'amara.diallo@example.com', location: { country: 'Ghana' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-01-15', photos: [] },
-    { _id: 'm2', name: 'Kwame Asante', email: 'kwame.asante@example.com', location: { country: 'Nigeria' }, banned: false, suspended: false, isVerified: false, createdAt: '2024-02-20', photos: [] },
-    { _id: 'm3', name: 'Fatima Osei', email: 'fatima.osei@example.com', location: { country: 'Kenya' }, banned: true, suspended: false, isVerified: true, createdAt: '2024-03-10', photos: [] },
-    { _id: 'm4', name: 'Marcus Mensah', email: 'marcus.mensah@example.com', location: { country: 'South Africa' }, banned: false, suspended: true, isVerified: false, createdAt: '2024-03-25', photos: [] },
-    { _id: 'm5', name: 'Nia Adeyemi', email: 'nia.adeyemi@example.com', location: { country: 'Senegal' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-04-02', photos: [] },
-    { _id: 'm6', name: 'Kofi Boateng', email: 'kofi.boateng@example.com', location: { country: 'Ghana' }, banned: false, suspended: false, isVerified: true, createdAt: '2024-04-10', photos: [] },
-    { _id: 'm7', name: 'Zara Kamara', email: 'zara.kamara@example.com', location: { country: 'Sierra Leone' }, banned: false, suspended: false, isVerified: false, createdAt: '2024-04-15', photos: [] },
-  ];
-
-  const fetchUsers = async () => {
-    setLoading(true);
+  const fetchUsers = useCallback(async (silent = false) => {
+    if (!silent) { setLoading(true); setError(null); }
     try {
-      const params: any = { limit: 50 };
+      const params: any = { page, limit: PAGE_SIZE };
       if (searchQuery) params.search = searchQuery;
       if (statusFilter !== 'all') params.status = statusFilter;
       const data = await adminApi.getUsers(params);
-      if (data.success && data.users?.length > 0) {
-        setUsers(data.users);
+      if (data.success) {
+        setUsers(data.users || []);
+        if (data.pagination) {
+          setTotalPages(data.pagination.pages || 1);
+          setTotalUsers(data.pagination.total || 0);
+        }
       } else {
-        setUsers(MOCK_USERS);
+        setError('Failed to load users from server.');
+        setUsers([]);
       }
-    } catch (err) {
-      console.error('Failed to fetch users — showing demo data:', err);
-      setUsers(MOCK_USERS);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to reach the backend. Check your API URL.');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, [statusFilter]);
+  }, [page, searchQuery, statusFilter]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchUsers();
-    }, 500);
+      setPage(1);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, statusFilter]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const mapUserStatus = (user: any) => {
     if (user.banned) return 'banned';
@@ -74,465 +76,528 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const handleUserClick = (user: any) => {
     setSelectedUser(user);
     setIsModalOpen(true);
-    setAiAnalysis(null);
     setActiveProfileTab('bio');
   };
 
-  const runAiModeration = async () => {
-    if (!selectedUser) return;
-    setIsAnalyzing(true);
+  const handleBanToggle = async (user: any, ban: boolean) => {
+    setActionLoading(user._id + (ban ? 'ban' : 'unban'));
     try {
-      const result = await analyzeUserContent(selectedUser.bio || '', ['Citizen behavior audit']);
-      setAiAnalysis(result);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const handleToggleBan = async () => {
-    if (!selectedUser) return;
-    const isBanned = selectedUser.banned;
-    try {
-      const data = await adminApi.banUser(selectedUser._id, !isBanned, 'Admin action from dashboard');
+      const data = await adminApi.banUser(user._id, ban, ban ? 'Banned by admin' : undefined);
       if (data.success) {
-        const updated = { ...selectedUser, banned: !isBanned };
-        setSelectedUser(updated);
-        setUsers(prev => prev.map(u => u._id === updated._id ? updated : u));
-        showToast?.(isBanned ? `${selectedUser.name}'s access has been restored.` : `${selectedUser.name} has been banned. User has been notified by email.`, isBanned ? 'success' : 'error');
+        const updated = { ...user, banned: ban };
+        setUsers(prev => prev.map(u => u._id === user._id ? updated : u));
+        if (selectedUser?._id === user._id) setSelectedUser(updated);
+        showToast?.(ban ? `${user.name} has been banned.` : `${user.name}'s access has been restored.`, ban ? 'error' : 'success');
       }
-    } catch (err) {
-      console.error('Ban toggle failed:', err);
-      showToast?.('Action failed. Try again.', 'error');
+    } catch (err: any) {
+      showToast?.(err?.message || 'Action failed. Try again.', 'error');
+    } finally {
+      setActionLoading(null);
+      setConfirmModal(null);
     }
   };
 
-  const handleConfirmBan = async (user: any) => {
-    setConfirmBanUser(null);
+  const handleSuspendToggle = async (user: any, suspend: boolean) => {
+    setActionLoading(user._id + (suspend ? 'suspend' : 'unsuspend'));
     try {
-      await adminApi.banUser(user._id, true, 'Permanently banned by admin');
-      setUsers(prev => prev.map(u => u._id === user._id ? { ...u, banned: true } : u));
-      if (selectedUser?._id === user._id) setSelectedUser((prev: any) => ({ ...prev, banned: true }));
-      showToast?.(`${user.name} has been permanently banned.`, 'error');
-    } catch (err) {
-      console.error('Ban failed:', err);
-      showToast?.('Action failed. Try again.', 'error');
+      const data = await adminApi.suspendUser(user._id, suspend, suspend ? suspendDays : undefined);
+      if (data.success) {
+        const updated = { ...user, suspended: suspend };
+        setUsers(prev => prev.map(u => u._id === user._id ? updated : u));
+        if (selectedUser?._id === user._id) setSelectedUser(updated);
+        showToast?.(suspend ? `${user.name} suspended for ${suspendDays} days.` : `${user.name}'s suspension lifted.`, 'success');
+      }
+    } catch (err: any) {
+      showToast?.(err?.message || 'Action failed. Try again.', 'error');
+    } finally {
+      setActionLoading(null);
+      setConfirmModal(null);
     }
+  };
+
+  const handleDelete = async (user: any) => {
+    setActionLoading(user._id + 'delete');
+    try {
+      const data = await adminApi.deleteUser(user._id);
+      if (data.success) {
+        setUsers(prev => prev.filter(u => u._id !== user._id));
+        if (selectedUser?._id === user._id) { setIsModalOpen(false); setSelectedUser(null); }
+        showToast?.(`${user.name}'s account has been permanently deleted.`, 'error');
+      }
+    } catch (err: any) {
+      showToast?.(err?.message || 'Delete failed. Try again.', 'error');
+    } finally {
+      setActionLoading(null);
+      setConfirmModal(null);
+    }
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmModal) return;
+    const { user, type } = confirmModal;
+    if (type === 'ban') await handleBanToggle(user, true);
+    else if (type === 'unban') await handleBanToggle(user, false);
+    else if (type === 'suspend') await handleSuspendToggle(user, true);
+    else if (type === 'unsuspend') await handleSuspendToggle(user, false);
+    else if (type === 'delete') await handleDelete(user);
+  };
+
+  const exportCSV = () => {
+    if (users.length === 0) return;
+    const headers = ['Name', 'Email', 'Status', 'Verified', 'Location', 'Joined'];
+    const rows = users.map(u => [
+      u.name || '',
+      u.email || '',
+      mapUserStatus(u),
+      u.verified ? 'Yes' : 'No',
+      u.location?.city || u.location?.country || '',
+      u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `users-page${page}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast?.(`Exported ${users.length} users to CSV.`, 'success');
+  };
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      active: 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+      warned: 'bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400',
+      suspended: 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400',
+      banned: 'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400',
+    };
+    return map[status] || map.active;
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Citizen Management</h1>
-          <p className="text-gray-500 dark:text-slate-400 font-medium">Overseeing {users.length} platform identities</p>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">User Management</h1>
+          <p className="text-gray-500 dark:text-slate-400 font-medium">
+            {loading ? 'Loading...' : `${totalUsers.toLocaleString()} total users`}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-cyan-500 transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search by name or email..." 
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+            <input
+              type="text"
+              placeholder="Search name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 pr-6 py-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl focus:ring-2 focus:ring-cyan-500 outline-none w-full md:w-72 shadow-sm transition-all text-sm font-medium dark:text-white"
+              className="pl-10 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-teal-500 outline-none w-56 text-sm dark:text-white"
             />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X size={14} />
+              </button>
+            )}
           </div>
           <div className="relative">
-            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-cyan-500" size={16} />
-            <select 
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-500" size={14} />
+            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="pl-10 pr-6 py-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-2xl hover:bg-gray-50 dark:hover:bg-slate-800 shadow-sm transition-all font-bold text-sm outline-none appearance-none cursor-pointer dark:text-slate-300"
+              className="pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none appearance-none cursor-pointer dark:text-slate-300 font-medium"
             >
-              <option value="all">All Citizens</option>
+              <option value="all">All Users</option>
               <option value="active">Active</option>
               <option value="warned">Warned</option>
               <option value="suspended">Suspended</option>
               <option value="banned">Banned</option>
             </select>
           </div>
+          <button
+            onClick={() => fetchUsers()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-semibold text-gray-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 transition-all"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            onClick={exportCSV}
+            disabled={users.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-xl text-sm font-semibold hover:bg-teal-700 transition-all disabled:opacity-40"
+          >
+            <Download size={14} />
+            Export CSV
+          </button>
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800 overflow-hidden">
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl text-sm text-rose-700 dark:text-rose-400">
+          <AlertCircle size={18} className="shrink-0" />
+          <span className="font-medium">{error}</span>
+          <button onClick={() => fetchUsers()} className="ml-auto underline text-xs">Retry</button>
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 size={32} className="animate-spin text-cyan-500" />
-            <span className="ml-3 text-sm font-bold text-slate-400">Loading citizens...</span>
+            <Loader2 size={28} className="animate-spin text-teal-500" />
+            <span className="ml-3 text-sm font-medium text-slate-400">Loading users...</span>
           </div>
         ) : users.length > 0 ? (
-          <table className="w-full text-left">
-            <thead className="bg-gray-50/50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-              <tr>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">Full Identity</th>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">Origin</th>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">Account State</th>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">Integrity Status</th>
-                <th className="px-8 py-5 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">Protocol</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-              {users.map((user) => {
-                const status = mapUserStatus(user);
-                return (
-                <tr 
-                  key={user._id} 
-                  className="hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 transition-colors group cursor-pointer"
-                  onClick={() => handleUserClick(user)}
-                >
-                  <td className="px-8 py-5">
-                    <div className="flex items-center">
-                      <img src={user.photos?.[0] || `https://ui-avatars.com/api/?name=${user.name}&background=14b8a6&color=fff`} className="h-12 w-12 rounded-2xl object-cover mr-4 ring-2 ring-gray-100 dark:ring-slate-800 group-hover:scale-105 transition-transform" alt={user.name} />
-                      <div>
-                        <div className="text-sm font-black text-gray-900 dark:text-white">{user.name}</div>
-                        <div className="text-xs text-gray-400 dark:text-slate-500 font-medium">{user.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-sm font-medium text-gray-600 dark:text-slate-400">{user.location?.city || user.location?.country || '—'}</td>
-                  <td className="px-8 py-5">
-                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
-                      status === 'active' ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' : 
-                      status === 'warned' ? 'bg-orange-100 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400' :
-                      status === 'suspended' ? 'bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400' : 
-                      'bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400'
-                    }`}>
-                      {status}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex items-center text-xs font-bold">
-                      {user.verified ? (
-                        <CheckCircle2 size={16} className="text-cyan-500 mr-2" />
-                      ) : (
-                        <AlertTriangle size={16} className="text-amber-500 mr-2" />
-                      )}
-                      <span className={user.verified ? 'text-cyan-600 dark:text-cyan-400' : 'text-amber-600 dark:text-amber-400'}>
-                        {user.verified ? 'VERIFIED' : 'UNVERIFIED'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center gap-2">
-                      <button 
-                        onClick={() => handleUserClick(user)}
-                        className="p-2.5 text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-500/10 rounded-xl hover:bg-cyan-100 dark:hover:bg-cyan-500/20 transition-all shadow-sm"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button 
-                        onClick={() => setConfirmBanUser(user)}
-                        className="p-2.5 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 rounded-xl hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all shadow-sm"
-                        title="Ban user"
-                      >
-                        <UserX size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        ) : (
-          <div className="p-20 text-center">
-            <div className="bg-gray-50 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-              <X size={24} className="text-gray-300" />
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50 dark:bg-slate-800/60 border-b border-gray-100 dark:border-slate-800">
+                  <tr>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">User</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Location</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Status</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Verified</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Joined</th>
+                    <th className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                  {users.map((user) => {
+                    const status = mapUserStatus(user);
+                    return (
+                      <tr key={user._id} className="hover:bg-teal-50/30 dark:hover:bg-teal-500/5 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={user.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'U')}&background=14b8a6&color=fff`}
+                              className="h-10 w-10 rounded-xl object-cover ring-1 ring-gray-100 dark:ring-slate-700 group-hover:scale-105 transition-transform"
+                              alt={user.name}
+                            />
+                            <div>
+                              <p className="text-sm font-bold text-gray-900 dark:text-white">{user.name}</p>
+                              <p className="text-xs text-gray-400 dark:text-slate-500">{user.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">
+                          {user.location?.city || user.location?.country || '—'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${statusBadge(status)}`}>
+                            {status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {user.verified ? (
+                            <CheckCircle2 size={16} className="text-teal-500" />
+                          ) : (
+                            <AlertTriangle size={16} className="text-amber-400" />
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-gray-400 dark:text-slate-500">
+                          {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleUserClick(user)}
+                              className="p-2 text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 rounded-lg hover:bg-teal-100 dark:hover:bg-teal-500/20 transition-all"
+                              title="View profile"
+                            >
+                              <Eye size={15} />
+                            </button>
+                            {user.suspended ? (
+                              <button
+                                onClick={() => setConfirmModal({ user, type: 'unsuspend' })}
+                                disabled={actionLoading !== null}
+                                className="p-2 text-amber-600 bg-amber-50 dark:bg-amber-500/10 rounded-lg hover:bg-amber-100 transition-all disabled:opacity-40"
+                                title="Lift suspension"
+                              >
+                                <PlayCircle size={15} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmModal({ user, type: 'suspend' })}
+                                disabled={user.banned || actionLoading !== null}
+                                className="p-2 text-amber-600 bg-amber-50 dark:bg-amber-500/10 rounded-lg hover:bg-amber-100 transition-all disabled:opacity-40"
+                                title="Suspend user"
+                              >
+                                <PauseCircle size={15} />
+                              </button>
+                            )}
+                            {user.banned ? (
+                              <button
+                                onClick={() => setConfirmModal({ user, type: 'unban' })}
+                                disabled={actionLoading !== null}
+                                className="p-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40"
+                                title="Restore access"
+                              >
+                                {actionLoading === user._id + 'unban' ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmModal({ user, type: 'ban' })}
+                                disabled={actionLoading !== null}
+                                className="p-2 text-rose-600 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-100 transition-all disabled:opacity-40"
+                                title="Ban user"
+                              >
+                                {actionLoading === user._id + 'ban' ? <Loader2 size={15} className="animate-spin" /> : <UserX size={15} />}
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setConfirmModal({ user, type: 'delete' })}
+                              disabled={actionLoading !== null}
+                              className="p-2 text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-40"
+                              title="Delete account"
+                            >
+                              {actionLoading === user._id + 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Citizen record not found</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Expand your search criteria or reset filters.</p>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 dark:border-slate-800">
+              <p className="text-xs text-gray-500 dark:text-slate-400 font-medium">
+                Page {page} of {totalPages} · {totalUsers.toLocaleString()} total
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                  className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-gray-600 dark:text-slate-300 hover:border-teal-400 transition-all disabled:opacity-40"
+                >
+                  <ChevronLeft size={14} /> Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                    const pageNum = start + i;
+                    if (pageNum > totalPages) return null;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setPage(pageNum)}
+                        className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${pageNum === page ? 'bg-teal-600 text-white' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages || loading}
+                  className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-xs font-semibold text-gray-600 dark:text-slate-300 hover:border-teal-400 transition-all disabled:opacity-40"
+                >
+                  Next <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : !error ? (
+          <div className="p-16 text-center">
+            <div className="bg-gray-50 dark:bg-slate-800 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4">
+              <X size={22} className="text-gray-300" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">No users found</h3>
+            <p className="text-sm text-gray-500 dark:text-slate-400 mt-1">Try adjusting your search or filter.</p>
           </div>
-        )}
+        ) : null}
       </div>
 
+      {/* User detail modal */}
       {isModalOpen && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-xl animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] w-full max-w-5xl max-h-[90vh] overflow-hidden shadow-2xl border border-white/10 flex flex-col">
-
-            <div className="relative h-80 bg-slate-900 shrink-0">
-               <div className="absolute inset-0 opacity-40 overflow-hidden">
-                 <img 
-                    src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${selectedUser.name}&background=14b8a6&color=fff`} 
-                    className="w-full h-full object-cover brightness-50" 
-                    alt="" 
-                 />
-               </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/20 to-transparent"></div>
-              <button 
+          <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-white/10 flex flex-col">
+            <div className="relative h-56 bg-slate-900 shrink-0">
+              <div className="absolute inset-0">
+                <img
+                  src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff`}
+                  className="w-full h-full object-cover brightness-40"
+                  alt=""
+                />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+              <button
                 onClick={() => setIsModalOpen(false)}
-                className="absolute top-8 right-8 text-white bg-black/40 hover:bg-black/60 p-3 rounded-2xl backdrop-blur-md transition-all z-20 border border-white/10"
+                className="absolute top-5 right-5 text-white bg-black/40 hover:bg-black/60 p-2.5 rounded-xl backdrop-blur-md transition-all z-20"
               >
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
 
-            <div className="px-12 relative flex-1 overflow-y-auto custom-scrollbar">
-              <div className="flex flex-col md:flex-row items-center md:items-end gap-10 -mt-32 mb-10 relative z-10">
-                <div className="relative shrink-0">
-                  <div className="p-2 bg-white dark:bg-slate-900 rounded-[3.5rem] shadow-2xl ring-1 ring-black/5">
-                    <img 
-                      src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${selectedUser.name}&background=14b8a6&color=fff&size=200`} 
-                      className="h-52 w-52 rounded-[3rem] object-cover" 
-                      alt={selectedUser.name} 
-                    />
-                  </div>
-                  <div className={`absolute bottom-6 right-6 h-7 w-7 rounded-full border-4 border-white dark:border-slate-900 shadow-lg ${!selectedUser.banned ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+            <div className="px-8 flex-1 overflow-y-auto custom-scrollbar">
+              <div className="flex flex-col md:flex-row items-start md:items-end gap-6 -mt-20 mb-8 relative z-10">
+                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-xl ring-1 ring-black/5 shrink-0">
+                  <img
+                    src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff&size=200`}
+                    className="h-36 w-36 rounded-xl object-cover"
+                    alt={selectedUser.name}
+                  />
                 </div>
-
-                <div className="flex-1 pb-4 text-center md:text-left">
-                  <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 mb-3">
-                    <h2 className="text-4xl font-black text-white drop-shadow-2xl">{selectedUser.name}{selectedUser.age ? `, ${selectedUser.age}` : ''}</h2>
+                <div className="flex-1 pb-2">
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <h2 className="text-2xl font-black text-white drop-shadow-lg">{selectedUser.name}</h2>
                     {selectedUser.verified && (
-                      <span className="bg-cyan-500 text-white px-5 py-2 rounded-full text-[10px] font-black flex items-center gap-1.5 uppercase tracking-widest shadow-lg shadow-cyan-500/30">
-                        <Award size={14} /> VERIFIED CITIZEN
+                      <span className="bg-teal-500 text-white px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 uppercase tracking-widest">
+                        <Award size={12} /> VERIFIED
                       </span>
                     )}
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusBadge(mapUserStatus(selectedUser))}`}>
+                      {mapUserStatus(selectedUser)}
+                    </span>
                   </div>
-                  <div className="flex flex-wrap justify-center md:justify-start gap-8 text-slate-100 font-bold text-sm">
-                    <span className="flex items-center gap-2 drop-shadow-md"><MapPin size={18} className="text-cyan-400" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
-                    <span className="flex items-center gap-2 drop-shadow-md"><Calendar size={18} className="text-cyan-400" /> {selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleDateString() : 'Unknown'}</span>
+                  <div className="flex flex-wrap gap-4 text-slate-200 text-sm">
+                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-400" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
+                    <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-400" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
                   </div>
                 </div>
-
-                <div className="flex gap-3 pb-4">
-                  <button 
-                    onClick={handleToggleBan}
-                    className={`px-10 py-5 text-xs font-black rounded-[2rem] transition-all uppercase tracking-widest shadow-2xl flex items-center gap-3 active:scale-95 ${
-                      selectedUser.banned 
-                        ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20' 
-                        : 'bg-rose-500 text-white hover:bg-rose-600 shadow-rose-500/20'
-                    }`}
+                <div className="flex gap-2 pb-2 flex-wrap">
+                  {selectedUser.suspended ? (
+                    <button
+                      onClick={() => setConfirmModal({ user: selectedUser, type: 'unsuspend' })}
+                      className="px-5 py-2.5 bg-amber-500 text-white text-xs font-black rounded-xl hover:bg-amber-600 transition-all flex items-center gap-2"
+                    >
+                      <PlayCircle size={15} /> Lift Suspension
+                    </button>
+                  ) : !selectedUser.banned && (
+                    <button
+                      onClick={() => setConfirmModal({ user: selectedUser, type: 'suspend' })}
+                      className="px-5 py-2.5 bg-amber-500 text-white text-xs font-black rounded-xl hover:bg-amber-600 transition-all flex items-center gap-2"
+                    >
+                      <PauseCircle size={15} /> Suspend
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setConfirmModal({ user: selectedUser, type: selectedUser.banned ? 'unban' : 'ban' })}
+                    className={`px-5 py-2.5 text-xs font-black rounded-xl transition-all flex items-center gap-2 ${selectedUser.banned ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-rose-500 hover:bg-rose-600 text-white'}`}
                   >
-                    {selectedUser.banned ? <CheckCircle2 size={18}/> : <UserX size={18}/>}
-                    {selectedUser.banned ? 'Restore Access' : 'Ban User'}
+                    {selectedUser.banned ? <><CheckCircle2 size={15} /> Restore Access</> : <><UserX size={15} /> Ban User</>}
+                  </button>
+                  <button
+                    onClick={() => setConfirmModal({ user: selectedUser, type: 'delete' })}
+                    className="px-5 py-2.5 bg-gray-700 text-white text-xs font-black rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2"
+                  >
+                    <Trash2 size={15} /> Delete
                   </button>
                 </div>
               </div>
 
-              <div className="flex border-b border-gray-100 dark:border-slate-800 mb-8 sticky top-0 bg-white dark:bg-slate-900 z-10 py-2">
+              <div className="flex border-b border-gray-100 dark:border-slate-800 mb-6 sticky top-0 bg-white dark:bg-slate-900 z-10">
                 {[
-                  { id: 'bio', label: 'Identity Profile', icon: <Eye size={16} /> },
-                  { id: 'activity', label: 'Audit Trail', icon: <History size={16} /> },
-                  { id: 'safety', label: 'Safety Index', icon: <ShieldAlert size={16} /> },
+                  { id: 'bio', label: 'Profile', icon: <Eye size={14} /> },
+                  { id: 'activity', label: 'Activity', icon: <History size={14} /> },
+                  { id: 'safety', label: 'Safety', icon: <ShieldAlert size={14} /> },
                 ].map(tab => (
                   <button
                     key={tab.id}
                     onClick={() => setActiveProfileTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-8 py-5 text-xs font-black uppercase tracking-widest transition-all border-b-4 ${
-                      activeProfileTab === tab.id 
-                      ? 'border-brand-500 text-brand-600 dark:text-brand-400' 
-                      : 'border-transparent text-slate-400 hover:text-slate-600'
-                    }`}
+                    className={`flex items-center gap-1.5 px-6 py-4 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeProfileTab === tab.id ? 'border-teal-500 text-teal-600 dark:text-teal-400' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
                   >
                     {tab.icon} {tab.label}
                   </button>
                 ))}
               </div>
 
-              <div className="pb-12">
+              <div className="pb-10">
                 {activeProfileTab === 'bio' && (
-                  <div className="space-y-12 animate-fadeIn">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                      <div className="lg:col-span-2 space-y-10">
-                        <div className="space-y-6">
-                           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                             <Camera size={14} /> Registered Media Gallery
-                           </h3>
-                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-                             {(selectedUser.photos || []).map((photo: string, i: number) => (
-                               <div key={i} className="aspect-[3/4] rounded-[2.5rem] overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm hover:scale-[1.03] transition-transform group cursor-zoom-in">
-                                 <img src={photo} className="w-full h-full object-cover transition-transform group-hover:scale-105 duration-500" alt={`Gallery ${i}`} />
-                               </div>
-                             ))}
-                           </div>
-                        </div>
-
-                        <div className="p-10 bg-slate-50 dark:bg-slate-800/40 rounded-[3rem] border border-gray-100 dark:border-slate-800/50">
-                          <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Official Bio</h3>
-                          <p className="text-xl font-medium text-slate-700 dark:text-slate-200 leading-relaxed italic">
-                            "{selectedUser.bio || 'No bio provided'}"
-                          </p>
-                        </div>
-
-                        <div className="space-y-6">
-                           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                             <Tag size={14} /> Personality Nodes
-                           </h3>
-                           <div className="flex flex-wrap gap-3">
-                             {(selectedUser.interests || []).map((interest: string, i: number) => (
-                               <span key={i} className="px-6 py-3 bg-white dark:bg-slate-800 text-brand-600 dark:text-brand-400 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-gray-100 dark:border-slate-700 shadow-sm">
-                                 {interest}
-                               </span>
-                             ))}
-                           </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-8">
-                        <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm space-y-8">
-                           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Platform Verification</h3>
-                           <div className="space-y-6">
-                             <div className="flex items-center gap-5">
-                               <div className="p-4 bg-cyan-50 dark:bg-cyan-500/10 text-cyan-500 rounded-2xl">
-                                 <Briefcase size={22} />
-                               </div>
-                               <div>
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Professional Rank</p>
-                                 <p className="text-base font-black dark:text-white leading-tight">{selectedUser.jobTitle || 'Unverified'}</p>
-                               </div>
-                             </div>
-                             <div className="flex items-center gap-5">
-                               <div className="p-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 rounded-2xl">
-                                 <GraduationCap size={22} />
-                               </div>
-                               <div>
-                                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Academic Record</p>
-                                 <p className="text-base font-black dark:text-white leading-tight">{selectedUser.education || 'Unverified'}</p>
-                               </div>
-                             </div>
-                           </div>
-                        </div>
-
-                        <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm space-y-8">
-                           <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Lifestyle Artifacts</h3>
-                           <div className="space-y-6">
-                             <div className="flex items-center justify-between group">
-                               <div className="flex items-center gap-4">
-                                 <Cigarette size={20} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
-                                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Smoking</span>
-                               </div>
-                               <span className="text-sm font-black dark:text-white">{selectedUser.lifestyle?.smoking || 'N/A'}</span>
-                             </div>
-                             <div className="flex items-center justify-between group">
-                               <div className="flex items-center gap-4">
-                                 <Wine size={20} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
-                                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Drinking</span>
-                               </div>
-                               <span className="text-sm font-black dark:text-white">{selectedUser.lifestyle?.drinking || 'N/A'}</span>
-                             </div>
-                             <div className="flex items-center justify-between group">
-                               <div className="flex items-center gap-4">
-                                 <HandMetal size={20} className="text-slate-300 group-hover:text-brand-500 transition-colors" />
-                                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Religion</span>
-                               </div>
-                               <span className="text-sm font-black dark:text-white">{selectedUser.lifestyle?.religion || 'N/A'}</span>
-                             </div>
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeProfileTab === 'activity' && (
-                  <div className="space-y-8 animate-fadeIn">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="p-10 bg-indigo-50 dark:bg-indigo-500/5 rounded-[3rem] border border-indigo-100 dark:border-indigo-500/20">
-                        <div className="flex items-center gap-4 mb-3 text-indigo-600">
-                          <MessageSquare size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Gender</span>
-                        </div>
-                        <p className="text-4xl font-black dark:text-white capitalize">{selectedUser.gender || '—'}</p>
-                      </div>
-                      <div className="p-10 bg-rose-50 dark:bg-rose-500/5 rounded-[3rem] border border-rose-100 dark:border-rose-500/20">
-                        <div className="flex items-center gap-4 mb-3 text-rose-600">
-                          <Heart size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Looking For</span>
-                        </div>
-                        <p className="text-4xl font-black dark:text-white capitalize">{selectedUser.lookingFor || '—'}</p>
-                      </div>
-                      <div className="p-10 bg-teal-50 dark:bg-teal-500/5 rounded-[3rem] border border-teal-100 dark:border-teal-500/20">
-                        <div className="flex items-center gap-4 mb-3 text-teal-600">
-                          <History size={24} />
-                          <span className="text-[10px] font-black uppercase tracking-widest">Joined</span>
-                        </div>
-                        <p className="text-2xl font-black dark:text-white">{selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : '—'}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeProfileTab === 'safety' && (
-                  <div className="space-y-10 animate-fadeIn">
-                    <div className="flex flex-col md:flex-row items-center justify-between p-10 bg-brand-50 dark:bg-brand-500/5 rounded-[3rem] border border-brand-100 dark:border-brand-500/20 gap-8">
+                  <div className="space-y-6 animate-fadeIn">
+                    {selectedUser.photos?.length > 0 && (
                       <div>
-                        <h4 className="text-lg font-black dark:text-white mb-2">Neural Integrity Audit</h4>
-                        <p className="text-sm text-slate-500 dark:text-slate-400 font-medium leading-relaxed max-w-xl">Deep analysis of behavioral artifacts, communication patterns, and semantic risk markers.</p>
-                      </div>
-                      {!aiAnalysis && !isAnalyzing && (
-                        <button 
-                          onClick={runAiModeration}
-                          className="px-10 py-5 bg-brand-500 text-white rounded-[2rem] font-black text-[10px] uppercase tracking-widest shadow-2xl hover:bg-brand-600 transition-all flex items-center gap-3 active:scale-95"
-                        >
-                          <Sparkles size={18} /> Initiate Scan
-                        </button>
-                      )}
-                    </div>
-
-                    {isAnalyzing ? (
-                      <div className="p-20 text-center space-y-6">
-                        <div className="animate-spin rounded-full h-16 w-16 border-[6px] border-brand-500 border-t-transparent mx-auto"></div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] animate-pulse">Synchronizing Weights...</p>
-                      </div>
-                    ) : aiAnalysis && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                        <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm">
-                          <div className="flex items-center justify-between mb-8">
-                             <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Risk Coefficient</h5>
-                             <span className={`px-6 py-2 rounded-2xl text-xs font-black ${aiAnalysis.riskScore > 50 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'}`}>
-                               {aiAnalysis.riskScore}%
-                             </span>
-                          </div>
-                          <div className="h-4 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden mb-8">
-                             <div 
-                               className={`h-full transition-all duration-1000 ${aiAnalysis.riskScore > 50 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                               style={{ width: `${aiAnalysis.riskScore}%` }}
-                             ></div>
-                          </div>
-                          <div className="p-8 bg-slate-50 dark:bg-slate-900 rounded-[2rem] text-sm font-medium text-slate-600 dark:text-slate-300 leading-relaxed border border-gray-100 dark:border-slate-800">
-                            {aiAnalysis.reasoning}
-                          </div>
-                        </div>
-                        <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm">
-                          <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-8">Detected Anomalies</h5>
-                          {aiAnalysis.flaggedContent.length > 0 ? (
-                            <div className="space-y-4">
-                              {aiAnalysis.flaggedContent.map((content, i) => (
-                                <div key={i} className="flex items-center gap-4 p-5 bg-rose-500/5 text-rose-600 rounded-2xl text-sm font-bold border border-rose-500/10">
-                                  <AlertTriangle size={18} /> {content}
-                                </div>
-                              ))}
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Camera size={12} /> Photos</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                          {selectedUser.photos.map((photo: string, i: number) => (
+                            <div key={i} className="aspect-square rounded-xl overflow-hidden border border-gray-100 dark:border-slate-800">
+                              <img src={photo} className="w-full h-full object-cover" alt={`Photo ${i + 1}`} />
                             </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center h-64 text-center opacity-40">
-                              <CheckCircle2 size={48} className="text-emerald-500 mb-4" />
-                              <p className="text-xs font-black uppercase tracking-widest">Clear Integrity Status</p>
-                            </div>
-                          )}
+                          ))}
                         </div>
                       </div>
                     )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <div className="p-10 bg-white dark:bg-slate-800 rounded-[3rem] border border-gray-100 dark:border-slate-800 shadow-sm flex items-center justify-between">
-                          <div>
-                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Account Status</p>
-                             <p className="text-5xl font-black text-rose-500 leading-none">{selectedUser.banned ? 'BANNED' : selectedUser.warnings || 0}</p>
-                          </div>
-                          <ShieldAlert size={48} className="text-rose-500 opacity-20" />
-                       </div>
-                       <button 
-                         onClick={() => setConfirmBanUser(selectedUser)}
-                         className="p-10 bg-rose-500/5 hover:bg-rose-500/10 rounded-[3rem] border border-rose-500/20 text-rose-600 flex items-center justify-between transition-all group"
-                       >
-                         <div className="text-left">
-                            <p className="text-[10px] font-black uppercase tracking-widest mb-2">Management Tier</p>
-                            <p className="text-2xl font-black group-hover:translate-x-1 transition-transform">Permanently Ban User</p>
-                         </div>
-                         <UserX size={48} className="opacity-30 group-hover:scale-110 transition-transform" />
-                       </button>
+                    {selectedUser.bio && (
+                      <div className="p-6 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Bio</p>
+                        <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">"{selectedUser.bio}"</p>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Briefcase size={10} /> Job</p>
+                        <p className="text-sm font-bold dark:text-white">{selectedUser.jobTitle || '—'}</p>
+                      </div>
+                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><GraduationCap size={10} /> Education</p>
+                        <p className="text-sm font-bold dark:text-white">{selectedUser.education || '—'}</p>
+                      </div>
+                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Heart size={10} /> Relationship Goal</p>
+                        <p className="text-sm font-bold dark:text-white">{selectedUser.relationshipGoal || '—'}</p>
+                      </div>
+                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Wine size={10} /> Lifestyle</p>
+                        <p className="text-sm font-bold dark:text-white">{selectedUser.lifestyle?.drinking || '—'}</p>
+                      </div>
+                    </div>
+                    {selectedUser.interests?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Tag size={12} /> Interests</p>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedUser.interests.map((interest: string, i: number) => (
+                            <span key={i} className="px-3 py-1.5 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 rounded-lg text-xs font-bold">
+                              {interest}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {activeProfileTab === 'activity' && (
+                  <div className="space-y-4 animate-fadeIn">
+                    <div className="grid grid-cols-2 gap-4">
+                      {[
+                        { label: 'Last Active', value: selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString() : '—' },
+                        { label: 'Joined', value: selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : '—' },
+                        { label: 'Premium', value: selectedUser.premium?.isActive ? 'Active' : 'Free' },
+                        { label: 'Online Now', value: selectedUser.online ? 'Yes' : 'No' },
+                      ].map(item => (
+                        <div key={item.label} className="p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{item.label}</p>
+                          <p className="text-sm font-bold dark:text-white">{item.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">User ID</p>
+                      <p className="text-xs font-mono text-slate-500 break-all">{selectedUser._id}</p>
+                    </div>
+                  </div>
+                )}
+                {activeProfileTab === 'safety' && (
+                  <div className="space-y-4 animate-fadeIn">
+                    {[
+                      { label: 'Account Status', value: mapUserStatus(selectedUser).toUpperCase(), color: mapUserStatus(selectedUser) === 'active' ? 'text-emerald-600' : 'text-rose-600' },
+                      { label: 'Warnings', value: String(selectedUser.warnings || 0), color: 'text-amber-600' },
+                      { label: 'Ban Reason', value: selectedUser.banReason || '—', color: 'dark:text-white' },
+                      { label: 'Banned At', value: selectedUser.bannedAt ? new Date(selectedUser.bannedAt).toLocaleString() : '—', color: 'dark:text-white' },
+                    ].map(item => (
+                      <div key={item.label} className="flex items-center justify-between p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
+                        <p className={`text-sm font-bold ${item.color}`}>{item.value}</p>
+                      </div>
+                    ))}
+                    <div className="p-5 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 rounded-2xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Cigarette size={14} className="text-amber-500" />
+                        <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-widest">Lifestyle Flags</p>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Smoking: {selectedUser.lifestyle?.smoking || 'N/A'} · Drinking: {selectedUser.lifestyle?.drinking || 'N/A'}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -542,31 +607,65 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
         </div>
       )}
 
-      {confirmBanUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-xl animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-2xl max-w-sm w-full p-10 text-center border border-rose-100 dark:border-rose-500/20">
-            <div className="h-20 w-20 bg-rose-100 dark:bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <UserX size={36} className="text-rose-500" />
+      {/* Confirm action modal */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-white/10 p-8">
+            <div className={`h-14 w-14 rounded-2xl flex items-center justify-center mx-auto mb-5 ${
+              confirmModal.type === 'delete' ? 'bg-rose-100 dark:bg-rose-500/10' :
+              confirmModal.type === 'ban' ? 'bg-rose-100 dark:bg-rose-500/10' :
+              confirmModal.type === 'suspend' ? 'bg-amber-100 dark:bg-amber-500/10' :
+              'bg-emerald-100 dark:bg-emerald-500/10'
+            }`}>
+              {confirmModal.type === 'delete' ? <Trash2 size={24} className="text-rose-500" /> :
+               confirmModal.type === 'ban' ? <UserX size={24} className="text-rose-500" /> :
+               confirmModal.type === 'suspend' ? <PauseCircle size={24} className="text-amber-500" /> :
+               <CheckCircle2 size={24} className="text-emerald-500" />}
             </div>
-            <h3 className="text-xl font-black dark:text-white mb-3">Permanently Ban User?</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-2">
-              You are about to permanently ban <strong className="text-gray-800 dark:text-white">{confirmBanUser.name}</strong>.
+            <h3 className="text-lg font-black text-center dark:text-white mb-2">
+              {confirmModal.type === 'delete' ? 'Delete Account' :
+               confirmModal.type === 'ban' ? 'Ban User' :
+               confirmModal.type === 'unban' ? 'Restore Access' :
+               confirmModal.type === 'suspend' ? 'Suspend User' :
+               'Lift Suspension'}
+            </h3>
+            <p className="text-sm text-center text-gray-500 dark:text-slate-400 mb-6">
+              {confirmModal.type === 'delete' ? `Permanently delete ${confirmModal.user.name}'s account? This cannot be undone.` :
+               confirmModal.type === 'ban' ? `Ban ${confirmModal.user.name} from the platform?` :
+               confirmModal.type === 'unban' ? `Restore full access for ${confirmModal.user.name}?` :
+               confirmModal.type === 'suspend' ? `Suspend ${confirmModal.user.name} for how many days?` :
+               `Remove ${confirmModal.user.name}'s suspension?`}
             </p>
-            <p className="text-xs text-slate-400 mb-8">
-              They will be notified by email and lose access immediately.
-            </p>
+            {confirmModal.type === 'suspend' && (
+              <div className="mb-6">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Suspension Duration</label>
+                <select
+                  value={suspendDays}
+                  onChange={e => setSuspendDays(Number(e.target.value))}
+                  className="w-full px-4 py-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none dark:text-white"
+                >
+                  {[1, 3, 7, 14, 30, 90].map(d => <option key={d} value={d}>{d} day{d > 1 ? 's' : ''}</option>)}
+                </select>
+              </div>
+            )}
             <div className="flex gap-3">
               <button
-                onClick={() => setConfirmBanUser(null)}
-                className="flex-1 py-4 rounded-2xl bg-gray-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-xs uppercase tracking-widest hover:bg-gray-100 transition-all"
+                onClick={() => setConfirmModal(null)}
+                className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-200 transition-all"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleConfirmBan(confirmBanUser)}
-                className="flex-1 py-4 rounded-2xl bg-rose-500 text-white font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20"
+                onClick={handleConfirmAction}
+                disabled={actionLoading !== null}
+                className={`flex-1 py-3 rounded-xl text-sm font-black text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  confirmModal.type === 'delete' || confirmModal.type === 'ban' ? 'bg-rose-500 hover:bg-rose-600' :
+                  confirmModal.type === 'suspend' ? 'bg-amber-500 hover:bg-amber-600' :
+                  'bg-emerald-500 hover:bg-emerald-600'
+                }`}
               >
-                Ban User
+                {actionLoading ? <Loader2 size={15} className="animate-spin" /> : null}
+                Confirm
               </button>
             </div>
           </div>
