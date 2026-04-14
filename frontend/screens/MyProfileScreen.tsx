@@ -216,8 +216,8 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const photo = user?.photos?.[photoIndex];
     if (!photo) return;
 
-    if (user?.photos?.length === 1) {
-      showAlert(t('error'), "You must have at least one photo on your profile.", [{ text: t('ok'), style: 'default' }], 'alert-circle');
+    if ((user?.photos?.length ?? 0) <= 4) {
+      showAlert(t('error'), "You need at least 4 photos on your profile. Add more before deleting this one.", [{ text: t('ok'), style: 'default' }], 'alert-circle');
       return;
     }
 

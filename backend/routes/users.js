@@ -635,9 +635,9 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid photo index' });
     }
     
-    // Don't allow deleting all photos
-    if (user.photos.length === 1) {
-      return res.status(400).json({ success: false, message: 'You must have at least one photo' });
+    // Enforce 4-photo minimum
+    if (user.photos.length <= 4) {
+      return res.status(400).json({ success: false, message: 'You need at least 4 photos on your profile. Add more before deleting this one.' });
     }
     
     // Remove photo
