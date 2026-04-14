@@ -5,6 +5,7 @@ import {
 import { Users, Heart, MessageSquare, TrendingUp, AlertCircle, Globe, Loader2, RefreshCw } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { adminApi } from '../services/adminApi';
+import LiveActivityFeed from './LiveActivityFeed';
 
 interface Stats {
   totalUsers: number;
@@ -175,6 +176,8 @@ const DashboardHome: React.FC = () => {
               </div>
             ))}
           </div>
+
+          <LiveActivityFeed />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-gray-100 dark:border-slate-800">

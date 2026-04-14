@@ -13,11 +13,6 @@ interface BroadcastsProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-const MOCK_HISTORY: NotificationCampaign[] = [
-  { id: '1', title: "Happy Valentine's Day! ❤️", body: "Love is in the air. Check out who's looking for a match today!", target: 'all', status: 'sent', timestamp: '2 days ago', reach: 124500, openRate: '12.4%' },
-  { id: '2', title: 'New Premium Features Released 🚀', body: 'Upgrade to Platinum now to see who likes you instantly.', target: 'platinum', status: 'sent', timestamp: '1 week ago', reach: 98200, openRate: '8.2%' },
-  { id: '3', title: 'Weekend Boost is LIVE ⚡', body: 'Get 2x visibility for the next 24 hours. Don\'t miss out!', target: 'all', status: 'sent', timestamp: '2 weeks ago', reach: 145000, openRate: '15.1%' },
-];
 
 const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const [campaignTitle, setCampaignTitle] = useState('');
@@ -44,10 +39,10 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
             openRate: b.openRate || '—',
           })));
         } else {
-          setHistory(MOCK_HISTORY);
+          setHistory([]);
         }
       } catch {
-        setHistory(MOCK_HISTORY);
+        setHistory([]);
       }
     };
     fetchHistory();
@@ -332,7 +327,17 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
-              {history.map((item) => (
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-10 py-16 text-center">
+                    <div className="flex flex-col items-center opacity-40">
+                      <History size={36} className="text-slate-300 mb-3" />
+                      <p className="text-sm font-black text-slate-400">No campaigns sent yet</p>
+                      <p className="text-xs text-slate-400 mt-1 font-medium">Dispatched campaigns will appear here</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : history.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
                   <td className="px-10 py-6">
                     <p className="text-sm font-black dark:text-white mb-1">{item.title}</p>
