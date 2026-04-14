@@ -322,6 +322,20 @@ export const adminApi = {
     const res = await fetch(`${API_BASE}/admin/boosts-revenue`, { headers: authHeaders() });
     return handleResponse(res);
   },
+
+  updateAdminProfile: async (payload: { name?: string; email?: string; avatar?: string }) => {
+    const res = await fetch(`${API_BASE}/admin/profile`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  getRecentActivity: async () => {
+    const res = await fetch(`${API_BASE}/admin/recent-activity`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;

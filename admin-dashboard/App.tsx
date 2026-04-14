@@ -18,6 +18,8 @@ import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
+import { AuthProvider } from './contexts/AuthContext';
+import AccessDenied from './components/AccessDenied';
 
 const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn'];
 
@@ -142,7 +144,8 @@ const App: React.FC = () => {
         setLoginLoading(false);
         return;
       }
-      const role = isAdmin ? AdminRole.SUPER_ADMIN : AdminRole.SUPPORT;
+      const isModerator = data.user?.isModerator || data.user?.role === 'moderator';
+      const role = isAdmin ? AdminRole.SUPER_ADMIN : isModerator ? AdminRole.MODERATOR : AdminRole.SUPPORT;
       setLoginAttempts(0);
       setAuth({
         isAuthenticated: true,
@@ -264,6 +267,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <AuthProvider auth={auth}>
     <div className="flex h-screen bg-gray-50 dark:bg-slate-950 overflow-hidden transition-colors duration-300">
       <Sidebar
         activeTab={activeTab}
@@ -324,17 +328,12 @@ const App: React.FC = () => {
             {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
             {ALL_TABS.includes(activeTab) && !canAccessTab(activeTab) && (
-              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-12 bg-white dark:bg-slate-900 rounded-[3rem] border-2 border-dashed border-rose-100 dark:border-rose-900 animate-fadeIn">
-                <ShieldCheck size={48} className="text-rose-400 mb-4" />
-                <h3 className="text-2xl font-black text-gray-900 dark:text-white mb-3">Access Denied</h3>
-                <p className="text-gray-500 dark:text-slate-400 mb-8">You do not have permission to view this section.</p>
-                <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className="px-8 py-3 bg-teal-600 text-white font-bold rounded-2xl hover:bg-teal-700 transition-all"
-                >
-                  Return to Dashboard
-                </button>
-              </div>
+              <AccessDenied
+                currentRole={auth.user?.role}
+                requiredRoles={NAV_ITEMS.find(n => n.id === activeTab)?.roles}
+                section={NAV_ITEMS.find(n => n.id === activeTab)?.label}
+                onBack={() => setActiveTab('dashboard')}
+              />
             )}
 
             {!ALL_TABS.includes(activeTab) && (
@@ -371,6 +370,7 @@ const App: React.FC = () => {
         </div>
       )}
     </div>
+    </AuthProvider>
   );
 };
 

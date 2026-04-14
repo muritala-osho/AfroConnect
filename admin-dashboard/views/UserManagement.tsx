@@ -7,6 +7,7 @@ import {
   Trash2, PauseCircle, PlayCircle, AlertCircle,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
+import PermissionGuard from '../components/PermissionGuard';
 
 interface UserManagementProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
@@ -342,14 +343,16 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                                 {actionLoading === user._id + 'ban' ? <Loader2 size={15} className="animate-spin" /> : <UserX size={15} />}
                               </button>
                             )}
-                            <button
-                              onClick={() => setConfirmModal({ user, type: 'delete' })}
-                              disabled={actionLoading !== null}
-                              className="p-2 text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-40"
-                              title="Delete account"
-                            >
-                              {actionLoading === user._id + 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
-                            </button>
+                            <PermissionGuard action="delete_user" lockLabel="Super Admin only">
+                              <button
+                                onClick={() => setConfirmModal({ user, type: 'delete' })}
+                                disabled={actionLoading !== null}
+                                className="p-2 text-gray-400 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-40"
+                                title="Delete account"
+                              >
+                                {actionLoading === user._id + 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                              </button>
+                            </PermissionGuard>
                           </div>
                         </td>
                       </tr>
@@ -478,12 +481,14 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                   >
                     {selectedUser.banned ? <><CheckCircle2 size={15} /> Restore Access</> : <><UserX size={15} /> Ban User</>}
                   </button>
-                  <button
-                    onClick={() => setConfirmModal({ user: selectedUser, type: 'delete' })}
-                    className="px-5 py-2.5 bg-gray-700 text-white text-xs font-black rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2"
-                  >
-                    <Trash2 size={15} /> Delete
-                  </button>
+                  <PermissionGuard action="delete_user" lockLabel="Super Admin only">
+                    <button
+                      onClick={() => setConfirmModal({ user: selectedUser, type: 'delete' })}
+                      className="px-5 py-2.5 bg-gray-700 text-white text-xs font-black rounded-xl hover:bg-gray-800 transition-all flex items-center gap-2"
+                    >
+                      <Trash2 size={15} /> Delete
+                    </button>
+                  </PermissionGuard>
                 </div>
               </div>
 
