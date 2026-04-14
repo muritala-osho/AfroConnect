@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 import PermissionGuard from '../components/PermissionGuard';
+import { SkeletonTableRow } from '../components/Skeleton';
 
 interface UserManagementProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
@@ -242,9 +243,19 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
 
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm">
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 size={28} className="animate-spin text-teal-500" />
-            <span className="ml-3 text-sm font-medium text-slate-400">Loading users...</span>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 dark:bg-slate-800/60 border-b border-gray-100 dark:border-slate-800">
+                <tr>
+                  {['User', 'Location', 'Status', 'Verified', 'Joined', 'Actions'].map(h => (
+                    <th key={h} className="px-6 py-4 text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-800">
+                {[1,2,3,4,5,6,7,8].map(i => <SkeletonTableRow key={i} cols={6} />)}
+              </tbody>
+            </table>
           </div>
         ) : users.length > 0 ? (
           <>

@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-import { Users, Heart, MessageSquare, TrendingUp, AlertCircle, Globe, Loader2, RefreshCw } from 'lucide-react';
+import { Users, Heart, MessageSquare, TrendingUp, AlertCircle, Globe, RefreshCw } from 'lucide-react';
 import StatCard from '../components/StatCard';
+import { SkeletonStatCard } from '../components/Skeleton';
 import { adminApi } from '../services/adminApi';
 import LiveActivityFeed from './LiveActivityFeed';
 
@@ -130,9 +131,8 @@ const DashboardHome: React.FC = () => {
       )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <Loader2 size={36} className="animate-spin text-cyan-500 mb-4" />
-          <span className="text-sm font-bold text-slate-400">Loading system metrics...</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1,2,3,4].map(i => <SkeletonStatCard key={i} />)}
         </div>
       ) : (
         <>
