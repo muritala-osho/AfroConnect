@@ -233,22 +233,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/verifications
-// @desc    Get pending verification requests
-// @access  Private/Admin
-router.get('/verifications', protect, isAdmin, async (req, res) => {
-  try {
-    const users = await User.find({ verificationStatus: 'pending' })
-      .select('name email photos verificationPhoto verificationRequestDate')
-      .sort({ verificationRequestDate: -1 })
-      .limit(50);
-
-    res.json({ success: true, verifications: users });
-  } catch (error) {
-    console.error('Get verifications error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+// (merged into the full /verifications route below)
 
 // @route   PUT /api/admin/verifications/:userId
 // @desc    Approve or reject verification
@@ -478,40 +463,7 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
 // @route   GET /api/admin/stats
 // @desc    Get platform statistics
 // @access  Private/Admin
-// @route   GET /api/admin/analytics
-// @desc    Get platform analytics (profile views, match rate)
-// @access  Private/Admin
-router.get('/analytics', protect, isAdmin, async (req, res) => {
-  try {
-    const Activity = require('../models/Activity');
-    
-    // Profile views this month
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    const profileViews = await Activity.countDocuments({
-      type: 'profile_view',
-      timestamp: { $gte: startOfMonth }
-    });
-
-    // Match rate across platform
-    const totalMatches = await Match.countDocuments({ status: 'active' });
-    const totalUsers = await User.countDocuments();
-    const avgMatchRate = totalUsers > 0 ? ((totalMatches / totalUsers) * 100).toFixed(1) : 0;
-
-    res.json({
-      success: true,
-      analytics: {
-        profileViewsMonth: profileViews,
-        totalMatches,
-        totalUsers,
-        avgMatchRate
-      }
-    });
-  } catch (error) {
-    console.error('Analytics error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+// (merged into the comprehensive /analytics route below)
 
 // @route   GET /api/admin/subscriptions-revenue
 // @desc    Get subscription analytics and revenue
@@ -541,33 +493,7 @@ router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/activity-monitoring
-// @desc    Get user activity metrics
-// @access  Private/Admin
-router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
-  try {
-    const now = new Date();
-    const last24h = new Date(now - 24 * 60 * 60 * 1000);
-    const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
-
-    const active24h = await User.countDocuments({ lastActive: { $gte: last24h } });
-    const active7d = await User.countDocuments({ lastActive: { $gte: last7d } });
-    const messages24h = await Message.countDocuments({ createdAt: { $gte: last24h } });
-
-    res.json({
-      success: true,
-      activity: {
-        active24h,
-        active7d,
-        messages24h,
-        onlineNow: await User.countDocuments({ online: true })
-      }
-    });
-  } catch (error) {
-    console.error('Activity error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
+// (merged into the comprehensive /activity-monitoring route below)
 
 // @route   GET /api/admin/stories-moderation
 // @desc    Get flagged stories for moderation
@@ -596,7 +522,7 @@ router.get('/stories-moderation', protect, isAdmin, async (req, res) => {
 // @access  Private/Admin
 router.get('/boosts-revenue', protect, isAdmin, async (req, res) => {
   try {
-    const users = await User.find().select('boosts premiumInfo');
+    const users = await User.find().select('boosts premium');
     let totalBoosts = 0;
     let usersWithBoosts = 0;
 
@@ -869,8 +795,8 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
     let audienceQuery = { pushToken: { $exists: true, $ne: null }, pushNotificationsEnabled: { $ne: false } };
     if (target === 'male' || target === 'female') audienceQuery.gender = target;
     if (target === 'verified') audienceQuery.verified = true;
-    if (target === 'platinum') audienceQuery['premiumInfo.plan'] = 'platinum';
-    if (target === 'gold') audienceQuery['premiumInfo.plan'] = 'gold';
+    if (target === 'platinum') audienceQuery['premium.plan'] = 'platinum';
+    if (target === 'gold') audienceQuery['premium.plan'] = 'gold';
 
     const users = await User.find(audienceQuery)
       .select('pushToken pushNotificationsEnabled muteSettings notificationPreferences')
@@ -965,42 +891,60 @@ router.put('/settings', protect, isAdmin, (req, res) => {
 });
 
 // @route   GET /api/admin/analytics
-// @desc    Get detailed analytics data
+// @desc    Full platform analytics — daily activity, totals, match rate, profile views
 // @access  Private/Admin
 router.get('/analytics', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
-    const days = [];
 
+    // ── Last 7 days day-by-day data ──────────────────────────────────────────
+    const days = [];
     for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const start = new Date(date.setHours(0, 0, 0, 0));
-      const end = new Date(date.setHours(23, 59, 59, 999));
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const start = new Date(d); start.setHours(0, 0, 0, 0);
+      const end   = new Date(d); end.setHours(23, 59, 59, 999);
 
       const [newUsers, activeUsers] = await Promise.all([
-        User.countDocuments({ createdAt: { $gte: start, $lte: end } }),
+        User.countDocuments({ createdAt:  { $gte: start, $lte: end } }),
         User.countDocuments({ lastActive: { $gte: start, $lte: end } }),
       ]);
 
       days.push({
         name: start.toLocaleDateString('en-US', { weekday: 'short' }),
         newUsers,
-        active: activeUsers,
-        matches: Math.floor(activeUsers * 0.25),
+        active:   activeUsers,
+        matches:  Math.floor(activeUsers * 0.25),
         messages: Math.floor(activeUsers * 2.1),
       });
     }
 
-    const totalUsers = await User.countDocuments();
-    const verifiedUsers = await User.countDocuments({ verified: true });
-    const premiumUsers = await User.countDocuments({ 'premiumInfo.isActive': true });
+    // ── Aggregated totals ────────────────────────────────────────────────────
+    const [totalUsers, verifiedUsers, premiumUsers, totalMatches] = await Promise.all([
+      User.countDocuments(),
+      User.countDocuments({ verified: true }),
+      User.countDocuments({ 'premium.isActive': true }),
+      Match.countDocuments({ status: 'active' }),
+    ]);
+
+    // ── Profile views this month ─────────────────────────────────────────────
+    let profileViewsMonth = 0;
+    try {
+      const Activity = require('../models/Activity');
+      const startOfMonth = new Date(); startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
+      profileViewsMonth = await Activity.countDocuments({ type: 'profile_view', timestamp: { $gte: startOfMonth } });
+    } catch (_) { /* Activity model may not exist in all deployments */ }
+
+    const avgMatchRate = totalUsers > 0 ? ((totalMatches / totalUsers) * 100).toFixed(1) : 0;
 
     res.json({
       success: true,
       analytics: {
         dailyData: days,
         totals: { totalUsers, verifiedUsers, premiumUsers },
+        profileViewsMonth,
+        totalMatches,
+        avgMatchRate,
       },
     });
   } catch (error) {
