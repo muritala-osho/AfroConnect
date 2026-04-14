@@ -40,7 +40,7 @@ export interface Report {
 }
 
 export interface SubscriptionData {
-  plan: 'basic' | 'gold' | 'platinum';
+  plan: 'free' | 'premium';
   revenue: number;
   date: string;
 }
@@ -60,10 +60,7 @@ export type BroadcastTarget =
   | 'male'
   | 'female'
   | 'verified'
-  | 'platinum'
-  | 'gold'
-  | 'lagos'
-  | 'london';
+  | 'premium';
 
 export interface NotificationCampaign {
   id: string;
