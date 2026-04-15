@@ -14,6 +14,7 @@ import {
   Gavel,
   TrendingDown,
   Headphones,
+  ScrollText,
 } from 'lucide-react';
 import { AdminRole, PushTemplate } from './types';
 
@@ -31,6 +32,7 @@ export const NAV_ITEMS = [
   { id: 'analytics',    label: 'Intelligence',        icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
   { id: 'broadcasts',   label: 'Broadcasts',          icon: <Megaphone size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'profile',      label: 'My Profile',          icon: <UserCircle size={20} />,      roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
+  { id: 'audit',        label: 'Audit Log',           icon: <ScrollText size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'settings',     label: 'System Core',         icon: <Settings size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
 ];
 

@@ -6,6 +6,28 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
+const AuditLog = require('../models/AuditLog');
+
+const logAudit = async (req, action, category, severity, targetUser, details, metadata) => {
+  try {
+    await AuditLog.create({
+      action,
+      category,
+      severity: severity || 'medium',
+      adminId:    req.user._id,
+      adminName:  req.user.name,
+      adminEmail: req.user.email,
+      targetUserId:    targetUser?._id  || null,
+      targetUserName:  targetUser?.name || null,
+      targetUserEmail: targetUser?.email || null,
+      details:  details  || null,
+      metadata: metadata || null,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
+  } catch (e) {
+    console.error('[AuditLog] Failed to write audit entry:', e.message);
+  }
+};
 
 // Admin auth middleware
 const isAdmin = async (req, res, next) => {
@@ -94,6 +116,11 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
         } catch (e) { console.error('Ban email failed:', e.message); }
       }
     }
+
+    await logAudit(req, 'RESOLVE_REPORT', 'MODERATION', action === 'ban' ? 'critical' : 'medium',
+      reportedUser || null,
+      `Report resolved with action: ${action}. ${notes ? 'Notes: ' + notes : ''}`,
+      { reportId: req.params.reportId, action });
 
     res.json({
       success: true,
@@ -218,6 +245,9 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
       console.error('Failed to send ban/unban notification email:', emailError);
       // Continue anyway - ban was still processed
     }
+
+    await logAudit(req, banned ? 'BAN_USER' : 'UNBAN_USER', 'USER_MANAGEMENT', banned ? 'critical' : 'medium', user,
+      banned ? `User banned. Reason: ${reason || 'Violation of community guidelines'}` : 'User ban lifted');
 
     res.json({
       success: true,
@@ -378,6 +408,10 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
       // Continue anyway - appeal was still processed
     }
 
+    await logAudit(req, action === 'approve' ? 'APPROVE_APPEAL' : 'REJECT_APPEAL', 'APPEAL',
+      action === 'approve' ? 'high' : 'medium', user,
+      `Appeal ${action}d. ${adminResponse ? 'Response: ' + adminResponse : ''}`);
+
     res.json({ 
       success: true, 
       message: action === 'approve' ? 'Appeal approved, user unbanned, and notified' : 'Appeal rejected and user notified',
@@ -424,6 +458,8 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
     user.verificationApprovedAt = new Date();
     await user.save();
 
+    await logAudit(req, 'APPROVE_VERIFICATION', 'VERIFICATION', 'medium', user, `ID verification approved for ${user.name}`);
+
     res.json({
       success: true,
       message: 'User verified successfully',
@@ -449,6 +485,9 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
     user.verificationStatus = 'rejected';
     user.verificationRejectionReason = reason || 'Photos do not meet requirements';
     await user.save();
+
+    await logAudit(req, 'REJECT_VERIFICATION', 'VERIFICATION', 'medium', user,
+      `ID verification rejected. Reason: ${reason || 'Photos do not meet requirements'}`);
 
     res.json({
       success: true,
@@ -662,6 +701,9 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
       console.error('Failed to emit suspend socket event:', socketError);
     }
 
+    await logAudit(req, suspended ? 'SUSPEND_USER' : 'UNSUSPEND_USER', 'USER_MANAGEMENT', 'high', user,
+      suspended ? `User suspended for ${days} days` : 'User suspension lifted');
+
     res.json({
       success: true,
       message: suspended ? `User suspended for ${days} days` : 'User suspension lifted',
@@ -681,6 +723,7 @@ router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    await logAudit(req, 'DELETE_USER', 'USER_MANAGEMENT', 'critical', user, `User account permanently deleted: ${user.name} (${user.email})`);
     await User.findByIdAndDelete(req.params.userId);
     res.json({ success: true, message: 'User account permanently deleted' });
   } catch (error) {
@@ -753,6 +796,10 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
       }
     }
 
+    await logAudit(req, action === 'reject' ? 'REMOVE_CONTENT' : 'APPROVE_CONTENT', 'MODERATION',
+      action === 'reject' ? 'medium' : 'low', null,
+      `Flagged content ${action}d. Content ID: ${req.params.contentId}`);
+
     res.json({
       success: true,
       message: action === 'approve' ? 'Content approved' : 'Content rejected and removed',
@@ -819,6 +866,10 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
 
     broadcastHistory.unshift(campaign);
     if (broadcastHistory.length > 100) broadcastHistory.pop();
+
+    await logAudit(req, 'SEND_BROADCAST', 'BROADCAST', 'high', null,
+      `Broadcast sent: "${title}". Target: ${target}. Reach: ${reach} users.`,
+      { title, body, target, reach, scheduled });
 
     // Respond immediately — fire notifications in the background
     res.json({ success: true, message: 'Broadcast dispatched successfully', campaign });

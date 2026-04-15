@@ -373,6 +373,8 @@ app.use('/api/legal', legalRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/block', blockRoutes);
 app.use('/api/admin', adminRoutes);
+const auditLogRoutes = require('./routes/auditLog');
+app.use('/api/admin/audit-log', auditLogRoutes);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/api/stories', storiesRoutes);

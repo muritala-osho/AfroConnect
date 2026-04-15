@@ -16,6 +16,7 @@ import SupportDesk from './views/SupportDesk';
 import AgentDashboard from './views/AgentDashboard';
 import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
+import AuditLog from './views/AuditLog';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search } from 'lucide-react';
@@ -23,7 +24,7 @@ import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn', 'audit'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -35,7 +36,7 @@ const PAGE_TITLES: Record<string, string> = {
   payments: 'Finances & Revenue', reports: 'Safety Reports', content: 'Content Moderation',
   support: 'Support Desk', agent: 'My Tickets', settings: 'System Settings',
   verification: 'ID Verification', broadcasts: 'Broadcasts', appeals: 'Appeals',
-  churn: 'Churn Intelligence', profile: 'My Profile',
+  churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
 };
 
 interface PendingCounts { reports: number; verifications: number; tickets: number }
@@ -419,6 +420,7 @@ const App: React.FC = () => {
                 {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}
                 {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
                 {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
+                {activeTab === 'audit'        && canAccessTab('audit')        && <AuditLog />}
                 {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
                 {ALL_TABS.includes(activeTab) && !canAccessTab(activeTab) && (
