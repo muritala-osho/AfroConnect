@@ -375,6 +375,8 @@ app.use('/api/block', blockRoutes);
 app.use('/api/admin', adminRoutes);
 const auditLogRoutes = require('./routes/auditLog');
 app.use('/api/admin/audit-log', auditLogRoutes);
+const scheduledBroadcastRoutes = require('./routes/scheduledBroadcasts');
+app.use('/api/admin/scheduled-broadcasts', scheduledBroadcastRoutes);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/api/stories', storiesRoutes);
@@ -937,6 +939,8 @@ const startServer = () => {
     console.log(`📡 Backend API ready`);
     const { startScheduledJobs } = require('./utils/scheduledJobs');
     startScheduledJobs();
+    const { startBroadcastScheduler } = require('./jobs/broadcastScheduler');
+    startBroadcastScheduler();
   });
 
   serverInstance.on('error', (e) => {
