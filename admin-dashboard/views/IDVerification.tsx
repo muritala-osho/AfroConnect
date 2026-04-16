@@ -63,7 +63,10 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
     `https://ui-avatars.com/api/?name=${encodeURIComponent(req.name || 'U')}&size=400&background=14b8a6&color=fff`;
 
   const getSelfiePhoto = (req: any): string | null =>
-    req.selfiePhoto || req.verificationPhoto || req.idPhoto || null;
+    req.selfiePhoto?.url || (typeof req.selfiePhoto === 'string' ? req.selfiePhoto : null)
+    || req.verificationPhoto?.url || (typeof req.verificationPhoto === 'string' ? req.verificationPhoto : null)
+    || req.idPhoto?.url || (typeof req.idPhoto === 'string' ? req.idPhoto : null)
+    || null;
 
   return (
     <div className="space-y-6 animate-fadeIn">
