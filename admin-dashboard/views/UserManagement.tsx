@@ -31,6 +31,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ user: any; type: 'ban' | 'unban' | 'delete' | 'suspend' | 'unsuspend' } | null>(null);
   const [suspendDays, setSuspendDays] = useState(7);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -427,26 +428,24 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
       {isModalOpen && selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-950/70 backdrop-blur-xl animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-white/10 flex flex-col">
-            <div className="relative h-56 bg-slate-900 shrink-0">
-              <div className="absolute inset-0">
-                <img
-                  src={selectedUser.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff`}
-                  className="w-full h-full object-cover brightness-40"
-                  alt=""
-                />
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent" />
+            {/* Modal header bar */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100 dark:border-slate-800 shrink-0">
+              <h2 className="text-lg font-black dark:text-white">User Profile</h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="absolute top-5 right-5 text-white bg-black/40 hover:bg-black/60 p-2.5 rounded-xl backdrop-blur-md transition-all z-20"
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-white bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 p-2.5 rounded-xl transition-all"
               >
                 <X size={20} />
               </button>
             </div>
 
             <div className="px-8 flex-1 overflow-y-auto custom-scrollbar">
-              <div className="flex flex-col md:flex-row items-start md:items-end gap-6 -mt-20 mb-8 relative z-10">
-                <div className="p-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-xl ring-1 ring-black/5 shrink-0">
+              <div className="flex flex-col md:flex-row items-start gap-6 mt-6 mb-8">
+                <div
+                  className="p-1.5 bg-white dark:bg-slate-800 rounded-2xl shadow-xl ring-1 ring-black/5 shrink-0 cursor-pointer hover:ring-teal-400 transition-all"
+                  onClick={() => { const url = selectedUser.photos?.[0]?.url; if (url) setLightboxPhoto(url); }}
+                  title="Click to enlarge"
+                >
                   <img
                     src={selectedUser.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff&size=200`}
                     className="h-36 w-36 rounded-xl object-cover"
@@ -455,7 +454,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                 </div>
                 <div className="flex-1 pb-2">
                   <div className="flex flex-wrap items-center gap-3 mb-2">
-                    <h2 className="text-2xl font-black text-white drop-shadow-lg">{selectedUser.name}</h2>
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white">{selectedUser.name}</h2>
                     {selectedUser.verified && (
                       <span className="bg-teal-500 text-white px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1 uppercase tracking-widest">
                         <Award size={12} /> VERIFIED
@@ -465,9 +464,11 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                       {mapUserStatus(selectedUser)}
                     </span>
                   </div>
-                  <div className="flex flex-wrap gap-4 text-slate-200 text-sm">
-                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-400" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
-                    <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-400" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                  <div className="flex flex-wrap gap-4 text-gray-500 dark:text-slate-400 text-sm">
+                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
+                    <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-500" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                    {selectedUser.age && <span className="flex items-center gap-1.5"><span className="text-teal-500 text-xs font-bold">Age</span> {selectedUser.age}</span>}
+                    {selectedUser.email && <span className="text-xs text-gray-400">{selectedUser.email}</span>}
                   </div>
                 </div>
                 <div className="flex gap-2 pb-2 flex-wrap">
@@ -522,42 +523,70 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
               <div className="pb-10">
                 {activeProfileTab === 'bio' && (
                   <div className="space-y-6 animate-fadeIn">
+                    {/* All photos - clickable */}
                     {selectedUser.photos?.length > 0 && (
                       <div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Camera size={12} /> Photos</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Camera size={12} /> Photos ({selectedUser.photos.length})</p>
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                          {selectedUser.photos.map((photo: string, i: number) => (
-                            <div key={i} className="aspect-square rounded-xl overflow-hidden border border-gray-100 dark:border-slate-800">
-                              <img src={photo} className="w-full h-full object-cover" alt={`Photo ${i + 1}`} />
-                            </div>
-                          ))}
+                          {selectedUser.photos.map((photo: any, i: number) => {
+                            const url = photo?.url || (typeof photo === 'string' ? photo : null);
+                            if (!url) return null;
+                            return (
+                              <div
+                                key={i}
+                                className="aspect-square rounded-xl overflow-hidden border-2 border-gray-100 dark:border-slate-700 cursor-pointer hover:border-teal-400 transition-all group relative"
+                                onClick={() => setLightboxPhoto(url)}
+                              >
+                                <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={`Photo ${i + 1}`} />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                                  <Eye size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                                </div>
+                                {photo?.privacy && (
+                                  <span className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider">{photo.privacy}</span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
+
+                    {/* Bio */}
                     {selectedUser.bio && (
-                      <div className="p-6 bg-gray-50 dark:bg-slate-800 rounded-2xl">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Bio</p>
+                      <div className="p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Bio</p>
                         <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">"{selectedUser.bio}"</p>
                       </div>
                     )}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Briefcase size={10} /> Job</p>
-                        <p className="text-sm font-bold dark:text-white">{selectedUser.jobTitle || '—'}</p>
-                      </div>
-                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><GraduationCap size={10} /> Education</p>
-                        <p className="text-sm font-bold dark:text-white">{selectedUser.education || '—'}</p>
-                      </div>
-                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Heart size={10} /> Relationship Goal</p>
-                        <p className="text-sm font-bold dark:text-white">{selectedUser.relationshipGoal || '—'}</p>
-                      </div>
-                      <div className="p-5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-100 dark:border-slate-700">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1"><Wine size={10} /> Lifestyle</p>
-                        <p className="text-sm font-bold dark:text-white">{selectedUser.lifestyle?.drinking || '—'}</p>
-                      </div>
+
+                    {/* Core details */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { label: 'Job / Title', value: selectedUser.jobTitle, icon: <Briefcase size={10} /> },
+                        { label: 'Education', value: selectedUser.education, icon: <GraduationCap size={10} /> },
+                        { label: 'Relationship Goal', value: selectedUser.relationshipGoal, icon: <Heart size={10} /> },
+                        { label: 'Ethnicity', value: selectedUser.ethnicity, icon: null },
+                        { label: 'Religion', value: selectedUser.religion, icon: null },
+                        { label: 'Height', value: selectedUser.height ? `${selectedUser.height} cm` : null, icon: null },
+                        { label: 'Drinking', value: selectedUser.lifestyle?.drinking, icon: <Wine size={10} /> },
+                        { label: 'Smoking', value: selectedUser.lifestyle?.smoking, icon: <Cigarette size={10} /> },
+                        { label: 'Has Kids', value: selectedUser.hasKids != null ? (selectedUser.hasKids ? 'Yes' : 'No') : null, icon: null },
+                        { label: 'Wants Kids', value: selectedUser.wantsKids, icon: null },
+                        { label: 'Language', value: Array.isArray(selectedUser.languages) ? selectedUser.languages.join(', ') : selectedUser.language, icon: null },
+                        { label: 'Zodiac', value: selectedUser.zodiac, icon: null },
+                        { label: 'Hometown', value: selectedUser.hometown, icon: <MapPin size={10} /> },
+                        { label: 'Phone', value: selectedUser.phone, icon: null },
+                        { label: 'Gender', value: selectedUser.gender, icon: null },
+                        { label: 'Sexual Orientation', value: selectedUser.sexualOrientation, icon: null },
+                      ].map(item => item.value ? (
+                        <div key={item.label} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1">{item.icon} {item.label}</p>
+                          <p className="text-sm font-semibold dark:text-white">{item.value}</p>
+                        </div>
+                      ) : null)}
                     </div>
+
+                    {/* Interests */}
                     {selectedUser.interests?.length > 0 && (
                       <div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Tag size={12} /> Interests</p>
@@ -566,6 +595,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                             <span key={i} className="px-3 py-1.5 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 rounded-lg text-xs font-bold">
                               {interest}
                             </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Prompts */}
+                    {selectedUser.prompts?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Prompts</p>
+                        <div className="space-y-2">
+                          {selectedUser.prompts.map((p: any, i: number) => (
+                            <div key={i} className="p-4 bg-gray-50 dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700">
+                              <p className="text-[10px] font-black text-slate-400 mb-1">{p.question}</p>
+                              <p className="text-sm dark:text-white">{p.answer}</p>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -623,7 +667,27 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
         </div>
       )}
 
-      {/* Confirm action modal */}
+      {/* Photo lightbox */}
+      {lightboxPhoto && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-fadeIn"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <button
+            onClick={() => setLightboxPhoto(null)}
+            className="absolute top-5 right-5 text-white bg-white/10 hover:bg-white/20 p-2.5 rounded-xl transition-all z-10"
+          >
+            <X size={22} />
+          </button>
+          <img
+            src={lightboxPhoto}
+            className="max-w-[90vw] max-h-[90vh] rounded-2xl object-contain shadow-2xl"
+            alt="Full size photo"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {confirmModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm shadow-2xl border border-white/10 p-8">
