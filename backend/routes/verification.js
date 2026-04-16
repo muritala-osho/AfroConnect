@@ -53,11 +53,22 @@ router.post('/request', protect, upload.fields([
       stream.end(files.selfiePhoto[0].buffer);
     });
 
+    // Parse pose challenge if provided
+    let poseChallenge = null;
+    if (req.body.poseChallenge) {
+      try {
+        poseChallenge = typeof req.body.poseChallenge === 'string'
+          ? JSON.parse(req.body.poseChallenge)
+          : req.body.poseChallenge;
+      } catch (e) { /* ignore parse errors */ }
+    }
+
     user.verificationStatus = 'pending';
     user.selfiePhoto = {
       url: selfieResult.secure_url,
       publicId: selfieResult.public_id,
-      submittedAt: new Date()
+      submittedAt: new Date(),
+      ...(poseChallenge ? { poseChallenge } : {})
     };
     user.verificationRequestDate = new Date();
     await user.save();

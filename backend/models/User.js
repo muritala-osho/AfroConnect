@@ -179,7 +179,12 @@ const userSchema = new mongoose.Schema({
   selfiePhoto: {
     url: String,
     publicId: String,
-    submittedAt: Date
+    submittedAt: Date,
+    poseChallenge: {
+      id: String,
+      instruction: String,
+      emoji: String
+    }
   },
   verificationRequestDate: {
     type: Date,

@@ -129,7 +129,11 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                       <p className="text-sm font-black dark:text-white">{req.name}</p>
                       <p className="text-[10px] text-slate-400 font-medium">{req.email}</p>
                       {getSelfiePhoto(req) ? (
-                        <p className="text-[10px] text-teal-500 font-semibold mt-0.5">Selfie submitted</p>
+                        <p className="text-[10px] text-teal-500 font-semibold mt-0.5">
+                          {req.selfiePhoto?.poseChallenge
+                            ? `${req.selfiePhoto.poseChallenge.emoji} Pose: ${req.selfiePhoto.poseChallenge.id.replace(/_/g,' ')}`
+                            : 'Selfie submitted'}
+                        </p>
                       ) : (
                         <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No selfie photo</p>
                       )}
@@ -167,6 +171,18 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 </div>
                 <span className="text-[10px] font-black px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-lg uppercase tracking-widest">Pending</span>
               </div>
+
+              {/* Pose challenge that was assigned */}
+              {selectedRequest.selfiePhoto?.poseChallenge && (
+                <div className="flex items-center gap-3 p-4 rounded-2xl border-2 border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10">
+                  <span className="text-3xl">{selectedRequest.selfiePhoto.poseChallenge.emoji}</span>
+                  <div>
+                    <p className="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-0.5">Assigned Pose Challenge</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white">{selectedRequest.selfiePhoto.poseChallenge.instruction}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Verify the selfie below matches this pose</p>
+                  </div>
+                </div>
+              )}
 
               {/* Side-by-side photos */}
               <div className="grid grid-cols-2 gap-4">
