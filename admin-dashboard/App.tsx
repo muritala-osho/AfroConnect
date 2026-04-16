@@ -195,7 +195,7 @@ const App: React.FC = () => {
           name: data.user.name,
           role,
           email: data.user.email,
-          avatar: data.user.photos?.[0] || undefined,
+          avatar: data.user.photos?.[0]?.url || undefined,
         },
       });
       if (!isAdmin && isAgent) setActiveTab('agent');

@@ -279,7 +279,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <img
-                              src={user.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'U')}&background=14b8a6&color=fff`}
+                              src={user.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'U')}&background=14b8a6&color=fff`}
                               className="h-10 w-10 rounded-xl object-cover ring-1 ring-gray-100 dark:ring-slate-700 group-hover:scale-105 transition-transform"
                               alt={user.name}
                             />
@@ -430,7 +430,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
             <div className="relative h-56 bg-slate-900 shrink-0">
               <div className="absolute inset-0">
                 <img
-                  src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff`}
+                  src={selectedUser.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff`}
                   className="w-full h-full object-cover brightness-40"
                   alt=""
                 />
@@ -448,7 +448,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
               <div className="flex flex-col md:flex-row items-start md:items-end gap-6 -mt-20 mb-8 relative z-10">
                 <div className="p-1.5 bg-white dark:bg-slate-900 rounded-2xl shadow-xl ring-1 ring-black/5 shrink-0">
                   <img
-                    src={selectedUser.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff&size=200`}
+                    src={selectedUser.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedUser.name || 'U')}&background=14b8a6&color=fff&size=200`}
                     className="h-36 w-36 rounded-xl object-cover"
                     alt={selectedUser.name}
                   />

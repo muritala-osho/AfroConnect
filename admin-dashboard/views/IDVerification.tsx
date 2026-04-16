@@ -111,7 +111,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 >
                   <div className="flex items-center gap-3">
                     <img
-                      src={req.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.name || 'U')}&background=14b8a6&color=fff`}
+                      src={req.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(req.name || 'U')}&background=14b8a6&color=fff`}
                       className="h-11 w-11 rounded-xl object-cover ring-1 ring-white dark:ring-slate-700"
                       alt=""
                     />
@@ -154,7 +154,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Profile Photo</p>
                   <div className="relative group aspect-square">
                     <img
-                      src={selectedRequest.photos?.[0] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRequest.name)}&size=400`}
+                      src={selectedRequest.photos?.[0]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRequest.name)}&size=400`}
                       className="w-full h-full object-cover rounded-2xl border-2 border-gray-100 dark:border-slate-700"
                       alt="Profile"
                     />
@@ -167,7 +167,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                   <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">Submitted ID / Selfie</p>
                   <div className="relative group aspect-square">
                     <img
-                      src={selectedRequest.verificationPhoto || selectedRequest.idPhoto || selectedRequest.selfiePhoto || selectedRequest.photos?.[1] || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRequest.name)}&size=400&background=f43f5e&color=fff`}
+                      src={selectedRequest.verificationPhoto || selectedRequest.idPhoto || selectedRequest.selfiePhoto || selectedRequest.photos?.[1]?.url || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedRequest.name)}&size=400&background=f43f5e&color=fff`}
                       className="w-full h-full object-cover rounded-2xl border-2 border-rose-200 dark:border-rose-500/30"
                       alt="ID"
                     />
