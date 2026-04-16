@@ -941,6 +941,9 @@ const startServer = () => {
     startScheduledJobs();
     const { startBroadcastScheduler } = require('./jobs/broadcastScheduler');
     startBroadcastScheduler();
+    // Pre-warm face AI models so the first validate-pose request isn't slow
+    const { loadModels } = require('./utils/poseValidator');
+    loadModels().then(() => console.log('🤖 Face AI models ready')).catch(() => {});
   });
 
   serverInstance.on('error', (e) => {

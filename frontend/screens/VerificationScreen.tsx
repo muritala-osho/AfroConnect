@@ -76,11 +76,13 @@ export default function VerificationScreen() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Steps: 'main' | 'pose' | 'camera' | 'review'
-  const [step, setStep] = useState<'main' | 'pose' | 'camera' | 'review'>('main');
+  // Steps: 'main' | 'pose' | 'camera' | 'validating' | 'review'
+  const [step, setStep] = useState<'main' | 'pose' | 'camera' | 'validating' | 'review'>('main');
   const [challengePose, setChallengePose] = useState<Pose | null>(null);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
+  const validationAnim = useRef(new Animated.Value(0)).current;
 
   // Pulse animation for pose card
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -137,14 +139,59 @@ export default function VerificationScreen() {
   const takePhoto = async () => {
     if (!cameraRef.current) return;
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
-      if (photo) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setCapturedPhoto(photo.uri);
-        setStep('review');
-      }
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      if (!photo) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setCapturedPhoto(photo.uri);
+      setValidationError(null);
+      setStep('validating');
+      await validatePose(photo.uri);
     } catch (e) {
       Alert.alert('Error', 'Failed to capture photo. Please try again.');
+    }
+  };
+
+  const validatePose = async (photoUri: string) => {
+    if (!token || !challengePose) {
+      setStep('review');
+      return;
+    }
+    try {
+      // Run pose animation
+      Animated.timing(validationAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+
+      const formData = new FormData();
+      formData.append('photo', { uri: photoUri, type: 'image/jpeg', name: 'pose.jpg' } as any);
+      formData.append('poseId', challengePose.id);
+
+      const response = await fetch(`${getApiBaseUrl()}/api/verification/validate-pose`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (data.matched) {
+        // Pose confirmed — brief success pause then go to review
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        await new Promise(r => setTimeout(r, 900));
+        validationAnim.setValue(0);
+        setStep('review');
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setValidationError(data.noFace
+          ? data.reason
+          : data.reason || 'Pose not matched. Please try again.');
+        await new Promise(r => setTimeout(r, 400));
+        validationAnim.setValue(0);
+        setStep('camera');
+      }
+    } catch (e) {
+      // Network error — let them through, admin reviews manually
+      await new Promise(r => setTimeout(r, 500));
+      validationAnim.setValue(0);
+      setStep('review');
     }
   };
 
@@ -291,6 +338,31 @@ export default function VerificationScreen() {
     );
   }
 
+  // ─── VALIDATING SCREEN ───────────────────────────────────────────────────────
+  if (step === 'validating') {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <LinearGradient
+          colors={challengePose ? [challengePose.color + '15', 'transparent'] : [theme.primary + '15', 'transparent']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.validatingCard}>
+          <ActivityIndicator size="large" color={challengePose?.color || theme.primary} style={{ marginBottom: 20 }} />
+          <ThemedText style={[styles.validatingTitle, { color: theme.text }]}>Checking your pose...</ThemedText>
+          <ThemedText style={[styles.validatingSubtitle, { color: theme.textSecondary }]}>
+            AI is analysing your selfie. This takes a few seconds.
+          </ThemedText>
+          {challengePose && (
+            <View style={[styles.validatingPoseBadge, { backgroundColor: challengePose.color + '15', borderColor: challengePose.color + '30' }]}>
+              <ThemedText style={styles.validatingPoseEmoji}>{challengePose.emoji}</ThemedText>
+              <ThemedText style={[styles.validatingPoseText, { color: challengePose.color }]}>{challengePose.instruction}</ThemedText>
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  }
+
   // ─── CAMERA SCREEN ───────────────────────────────────────────────────────────
   if (step === 'camera') {
     return (
@@ -310,6 +382,14 @@ export default function VerificationScreen() {
             <View style={{ width: 44 }} />
           </View>
         </LinearGradient>
+
+        {/* Validation failure banner */}
+        {validationError && (
+          <View style={styles.validationErrorBanner}>
+            <Ionicons name="close-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
+            <ThemedText style={styles.validationErrorText}>{validationError}</ThemedText>
+          </View>
+        )}
 
         {/* Live pose reminder — shown prominently so user can reference it */}
         {challengePose && (
@@ -694,6 +774,22 @@ const styles = StyleSheet.create({
   reviewInfoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   reviewInfoIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   reviewInfoText: { flex: 1, fontSize: 13, lineHeight: 19 },
+
+  // ─── Validating styles ────────────────────────────────────────────────────
+  validatingCard: { alignItems: 'center', paddingHorizontal: 32 },
+  validatingTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center', marginBottom: 10 },
+  validatingSubtitle: { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24 },
+  validatingPoseBadge: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 16, borderWidth: 1, paddingHorizontal: 20, paddingVertical: 12 },
+  validatingPoseEmoji: { fontSize: 28 },
+  validatingPoseText: { fontSize: 15, fontWeight: '700' },
+
+  // ─── Validation error banner ──────────────────────────────────────────────
+  validationErrorBanner: {
+    position: 'absolute', top: 110, left: 16, right: 16, zIndex: 20,
+    backgroundColor: 'rgba(220,38,38,0.92)', borderRadius: 12,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10,
+  },
+  validationErrorText: { color: '#FFF', fontSize: 13, fontWeight: '600', flex: 1, lineHeight: 18 },
 
   retakeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, marginBottom: 4 },
   retakeBtnText: { fontSize: 15, fontWeight: '600' },
