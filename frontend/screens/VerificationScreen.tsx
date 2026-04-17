@@ -18,20 +18,14 @@ import { getApiBaseUrl } from '@/constants/config';
 
 const { width: SW } = Dimensions.get('window');
 
-const STEP_DEFS = [
-  { key: 'blink', emoji: '😉', title: 'Blink eyes',       hint: 'Look at the camera and blink once' },
-  { key: 'left',  emoji: '👈', title: 'Turn head left',   hint: 'Slowly turn your head to the left' },
-  { key: 'right', emoji: '👉', title: 'Turn head right',  hint: 'Now slowly turn your head to the right' },
-];
+const MIN_RECORD_SECONDS = 5;
+const MAX_RECORD_SECONDS = 7;
 
-function shuffleStepDefs() {
-  const arr = [...STEP_DEFS];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr.map((s, index) => ({ ...s, index }));
-}
+const STEPS = [
+  { key: 'blink', emoji: '😉', icon: 'eye-outline'                as const, title: 'Blink eyes',      desc: 'Look at the camera and blink once' },
+  { key: 'left',  emoji: '👈', icon: 'arrow-back-circle-outline'  as const, title: 'Turn head left',  desc: 'Slowly turn your head to the left' },
+  { key: 'right', emoji: '👉', icon: 'arrow-forward-circle-outline' as const, title: 'Turn head right', desc: 'Then slowly turn your head to the right' },
+];
 
 const PROMPT_LOTTIE = {
   v: '5.7.4', fr: 30, ip: 0, op: 60, w: 180, h: 180,
@@ -66,24 +60,6 @@ interface VerificationResult {
   reason?: string;
 }
 
-interface LandmarkMetrics {
-  centered: boolean;
-  landmarksReady: boolean;
-  distance: 'tooFar' | 'good' | 'tooClose';
-  yaw: number;
-  eyeScore: number;
-  prompt: string;
-}
-
-const INITIAL_METRICS: LandmarkMetrics = {
-  centered: false,
-  landmarksReady: false,
-  distance: 'good',
-  yaw: 0,
-  eyeScore: 1,
-  prompt: 'Position your face in the oval',
-};
-
 function Corner({ top, bottom, left, right, color }: any) {
   return (
     <View style={{
@@ -98,7 +74,7 @@ function Corner({ top, bottom, left, right, color }: any) {
   );
 }
 
-function PromptIcon({ stepKey }: { stepKey: string }) {
+function StepIcon({ stepKey }: { stepKey: string }) {
   const stroke = '#10B981';
   return (
     <View style={styles.promptIcon}>
@@ -128,38 +104,28 @@ export default function VerificationScreen() {
   const { token, user } = useAuth();
 
   const [screen, setScreen] = useState<'intro' | 'camera' | 'analyzing' | 'result'>('intro');
-  const [verificationStep, setVerificationStep] = useState(0);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [faceStatus, setFaceStatus] = useState('Position your face in the oval');
-  const [landmarkMetrics, setLandmarkMetrics] = useState<LandmarkMetrics>(INITIAL_METRICS);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [canSubmit, setCanSubmit] = useState(false);
+  const [videoUri, setVideoUri] = useState<string | null>(null);
   const [result, setResult] = useState<VerificationResult | null>(null);
-  const [faceDetected, setFaceDetected] = useState(false);
-  const [insight, setInsight] = useState({ leftEye: 1, rightEye: 1, yaw: 0 });
-  const [showInsight, setShowInsight] = useState(false);
-  const [orderedSteps, setOrderedSteps] = useState(() => shuffleStepDefs());
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const orderedStepsRef = useRef(orderedSteps);
-  const firstTurnDirRef = useRef<number | null>(null);
-  const eyeBarAnim  = useRef(new Animated.Value(1)).current;
-  const cameraRef              = useRef<any>(null);
-  const recordingPromiseRef    = useRef<Promise<{ uri: string }> | null>(null);
-  const recordingStartedAtRef  = useRef(0);
-  const uploadStartedRef       = useRef(false);
-  const blinkOpenSeenRef       = useRef(false);
-  const stepRef                = useRef(0);
-  const screenRef              = useRef<string>('intro');
-  const advanceGuardRef        = useRef(false);
-  const pulseAnim              = useRef(new Animated.Value(1)).current;
-  const fadeAnim               = useRef(new Animated.Value(0)).current;
-  const slideAnim              = useRef(new Animated.Value(24)).current;
-  const scanAnim               = useRef(new Animated.Value(0)).current;
+  const cameraRef             = useRef<any>(null);
+  const recordingPromiseRef   = useRef<Promise<{ uri: string }> | null>(null);
+  const recordingStartedAtRef = useRef(0);
+  const uploadStartedRef      = useRef(false);
+  const timerRef              = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pulseAnim             = useRef(new Animated.Value(1)).current;
+  const fadeAnim              = useRef(new Animated.Value(0)).current;
+  const slideAnim             = useRef(new Animated.Value(24)).current;
+  const scanAnim              = useRef(new Animated.Value(0)).current;
+  const recPulse              = useRef(new Animated.Value(1)).current;
 
   useEffect(() => { if (!permission) requestPermission(); }, [permission, requestPermission]);
-  useEffect(() => { stepRef.current = verificationStep; }, [verificationStep]);
-  useEffect(() => { screenRef.current = screen; }, [screen]);
-  useEffect(() => { orderedStepsRef.current = orderedSteps; }, [orderedSteps]);
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -189,26 +155,44 @@ export default function VerificationScreen() {
     return () => loop.stop();
   }, [screen]);
 
-  const uploadVerificationVideo = useCallback(async (videoUri: string) => {
+  useEffect(() => {
+    if (!recording) return;
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(recPulse, { toValue: 1.3, duration: 600, useNativeDriver: true }),
+      Animated.timing(recPulse, { toValue: 1,   duration: 600, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [recording]);
+
+  const stopAndSaveVideo = useCallback(async () => {
+    if (uploadStartedRef.current) return;
+    uploadStartedRef.current = true;
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    setScreen('analyzing');
     try {
-      const formData = new FormData();
-      formData.append('userId', user?.id || '');
-      formData.append('video', { uri: videoUri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
-      formData.append('challengeOrder', JSON.stringify(orderedStepsRef.current.map(s => s.key)));
-
-      const resp = await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-        body: formData,
-      });
-
-      const data = await resp.json();
-      if (!resp.ok || !data.success) throw new Error(data.message || 'Video upload failed. Please try again.');
-
-      setResult({ submitted: true, status: 'pending', videoUrl: data.videoUrl });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (cameraRef.current && recordingPromiseRef.current) {
+        cameraRef.current.stopRecording();
+        const video = await recordingPromiseRef.current;
+        if (!video?.uri) throw new Error('No video recorded. Please try again.');
+        const formData = new FormData();
+        formData.append('userId', user?.id || '');
+        formData.append('video', { uri: video.uri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
+        const resp = await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok || !data.success) throw new Error(data.message || 'Video upload failed. Please try again.');
+        setResult({ submitted: true, status: 'pending', videoUrl: data.videoUrl });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        throw new Error('Recording did not start. Please try again.');
+      }
     } catch (error: any) {
-      setResult({ submitted: false, status: 'failed', reason: error?.message || 'Connection error. Please try again.' });
+      setResult({ submitted: false, status: 'failed', reason: error?.message || 'Could not save verification video.' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setScreen('result');
@@ -216,51 +200,29 @@ export default function VerificationScreen() {
     }
   }, [token, user?.id]);
 
-  const stopRecordingAndUpload = useCallback(async () => {
-    if (uploadStartedRef.current) return;
-    uploadStartedRef.current = true;
-    setScreen('analyzing');
-    setFaceStatus('All steps completed. Saving your video…');
-
-    try {
-      const elapsed = Date.now() - recordingStartedAtRef.current;
-      if (elapsed < 3000) await new Promise(resolve => setTimeout(resolve, 3000 - elapsed));
-
-      if (cameraRef.current && recordingPromiseRef.current) {
-        cameraRef.current.stopRecording();
-        const video = await recordingPromiseRef.current;
-        if (!video?.uri) throw new Error('No video was recorded. Please try again.');
-        await uploadVerificationVideo(video.uri);
-      } else {
-        throw new Error('Recording did not start. Please try again.');
-      }
-    } catch (error: any) {
-      setResult({ submitted: false, status: 'failed', reason: error?.message || 'Could not save verification video.' });
-      setScreen('result');
-      setRecording(false);
-    }
-  }, [uploadVerificationVideo]);
-
-  const advanceStep = useCallback((detectedStep: number) => {
-    if (stepRef.current !== detectedStep || detectedStep >= 3 || advanceGuardRef.current) return;
-    advanceGuardRef.current = true;
-    console.log(`[Liveness] Step ${detectedStep} COMPLETED ✓`);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const next = detectedStep + 1;
-    stepRef.current = next;
-    setVerificationStep(next);
-    setTimeout(() => { advanceGuardRef.current = false; }, 800);
-    if (next >= 3) stopRecordingAndUpload();
-  }, [stopRecordingAndUpload]);
-
   const startRecording = useCallback(() => {
     if (!cameraRef.current || recordingPromiseRef.current || uploadStartedRef.current) return;
     setRecording(true);
+    setRecordSeconds(0);
+    setCanSubmit(false);
+    setCurrentStep(0);
     recordingStartedAtRef.current = Date.now();
     recordingPromiseRef.current = cameraRef.current.recordAsync();
     recordingPromiseRef.current?.catch(() => null);
-    console.log('[Liveness] Recording started');
-  }, []);
+
+    timerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStartedAtRef.current) / 1000);
+      setRecordSeconds(elapsed);
+      if (elapsed === 1) setCurrentStep(0);
+      if (elapsed === 3) setCurrentStep(1);
+      if (elapsed === 5) { setCurrentStep(2); setCanSubmit(true); }
+    }, 500);
+
+    autoStopRef.current = setTimeout(() => {
+      setCanSubmit(true);
+      setTimeout(() => stopAndSaveVideo(), 500);
+    }, MAX_RECORD_SECONDS * 1000);
+  }, [stopAndSaveVideo]);
 
   useEffect(() => {
     if (screen !== 'camera' || !permission?.granted || !cameraReady) return;
@@ -269,162 +231,42 @@ export default function VerificationScreen() {
 
   useEffect(() => {
     return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
       if (recordingPromiseRef.current && cameraRef.current && !uploadStartedRef.current) {
         try { cameraRef.current.stopRecording(); } catch {}
       }
     };
   }, []);
 
-  const onFacesDetected = useCallback(({ faces }: { faces: any[] }) => {
-    if (screenRef.current !== 'camera') return;
-
-    if (!faces || faces.length === 0) {
-      setFaceDetected(false);
-      setFaceStatus('No face detected — look at the camera');
-      console.log('[Liveness] No face detected');
-      return;
-    }
-
-    const face = faces[0];
-    const currentStep = stepRef.current;
-    if (currentStep >= 3) return;
-
-    console.log('[Liveness] Face detected — landmarks count: face data present');
-
-    const fW = SW;
-    const fH = SW * 1.4;
-    const centerX   = ((face?.bounds?.origin?.x || 0) + (face?.bounds?.size?.width  || 0) / 2) / fW;
-    const centerY   = ((face?.bounds?.origin?.y || 0) + (face?.bounds?.size?.height || 0) / 2) / fH;
-    const widthRatio = (face?.bounds?.size?.width || 0) / fW;
-
-    const centered  = centerX > 0.25 && centerX < 0.75 && centerY > 0.15 && centerY < 0.85;
-    const distance  = widthRatio < 0.18 ? 'tooFar' : widthRatio > 0.78 ? 'tooClose' : 'good';
-
-    const hasEyeProbs = typeof face?.leftEyeOpenProbability === 'number' &&
-                        typeof face?.rightEyeOpenProbability === 'number';
-    const hasYaw      = typeof face?.yawAngle === 'number';
-    const landmarksReady = hasEyeProbs || hasYaw;
-
-    const yaw      = hasYaw ? Number(face.yawAngle) : 0;
-    const leftEye  = hasEyeProbs ? face.leftEyeOpenProbability  : 1;
-    const rightEye = hasEyeProbs ? face.rightEyeOpenProbability : 1;
-    const eyeScore = Math.min(leftEye, rightEye);
-
-    setInsight({ leftEye, rightEye, yaw });
-    Animated.timing(eyeBarAnim, {
-      toValue: eyeScore,
-      duration: 80,
-      useNativeDriver: false,
-    }).start();
-
-    console.log(`[Liveness] step=${currentStep} centered=${centered} dist=${distance} hasEyeProbs=${hasEyeProbs} hasYaw=${hasYaw} yaw=${yaw.toFixed(1)} leftEye=${leftEye.toFixed(2)} rightEye=${rightEye.toFixed(2)}`);
-
-    setFaceDetected(true);
-    setLandmarkMetrics({ centered, landmarksReady, distance, yaw, eyeScore, prompt: 'Face locked. Follow the prompt.' });
-
-    if (!centered) {
-      setFaceStatus('Center your face inside the oval');
-      return;
-    }
-    if (distance === 'tooFar') {
-      setFaceStatus('Move a little closer');
-      return;
-    }
-    if (distance === 'tooClose') {
-      setFaceStatus('Move slightly back');
-      return;
-    }
-
-    const stepKey = orderedStepsRef.current[currentStep]?.key;
-    console.log(`[Liveness] step=${currentStep} key=${stepKey} yaw=${yaw.toFixed(1)} L=${leftEye.toFixed(2)} R=${rightEye.toFixed(2)}`);
-
-    if (stepKey === 'blink') {
-      if (!hasEyeProbs) {
-        setFaceStatus('Hold still — detecting eye movement…');
-        return;
-      }
-      if (leftEye > 0.5 && rightEye > 0.5) blinkOpenSeenRef.current = true;
-      if (blinkOpenSeenRef.current && leftEye < 0.35 && rightEye < 0.35) {
-        console.log(`[Liveness] ✓ BLINK detected! L=${leftEye.toFixed(2)} R=${rightEye.toFixed(2)}`);
-        advanceStep(currentStep);
-      } else {
-        setFaceStatus(blinkOpenSeenRef.current ? 'Blink now!' : 'Eyes open — ready to blink');
-      }
-      return;
-    }
-
-    if (stepKey === 'left' || stepKey === 'right') {
-      if (!hasYaw) {
-        setFaceStatus('Hold still — detecting head position…');
-        return;
-      }
-      const hint = orderedStepsRef.current[currentStep]?.hint || 'Turn your head';
-      const isFirstTurn = firstTurnDirRef.current === null;
-
-      if (isFirstTurn) {
-        if (Math.abs(yaw) > 15) {
-          firstTurnDirRef.current = Math.sign(yaw) || 1;
-          console.log(`[Liveness] ✓ HEAD TURN (${stepKey}) yaw=${yaw.toFixed(1)}`);
-          advanceStep(currentStep);
-        } else {
-          setFaceStatus(hint);
-        }
-      } else {
-        const turnedOpposite = Math.sign(yaw) === -firstTurnDirRef.current && Math.abs(yaw) > 15;
-        console.log(`[Liveness] Head turn step 2 — yaw=${yaw.toFixed(1)} firstDir=${firstTurnDirRef.current} opposite=${turnedOpposite}`);
-        if (turnedOpposite) {
-          console.log(`[Liveness] ✓ HEAD TURN OPPOSITE (${stepKey}) yaw=${yaw.toFixed(1)}`);
-          advanceStep(currentStep);
-        } else {
-          setFaceStatus(hint);
-        }
-      }
-    }
-  }, [advanceStep]);
-
   const restart = () => {
-    const fresh = shuffleStepDefs();
-    blinkOpenSeenRef.current        = false;
-    firstTurnDirRef.current         = null;
-    stepRef.current                 = 0;
-    uploadStartedRef.current        = false;
-    advanceGuardRef.current         = false;
-    recordingPromiseRef.current     = null;
-    orderedStepsRef.current         = fresh;
-    setOrderedSteps(fresh);
-    setVerificationStep(0);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (autoStopRef.current) clearTimeout(autoStopRef.current);
+    uploadStartedRef.current   = false;
+    recordingPromiseRef.current = null;
     setResult(null);
-    setScreen('camera');
     setRecording(false);
-    setFaceDetected(false);
-    setInsight({ leftEye: 1, rightEye: 1, yaw: 0 });
-    eyeBarAnim.setValue(1);
-    setFaceStatus('Position your face in the oval');
-    setLandmarkMetrics(INITIAL_METRICS);
+    setRecordSeconds(0);
+    setCanSubmit(false);
+    setCurrentStep(0);
+    setVideoUri(null);
+    setScreen('camera');
   };
+
+  const timerColor = recordSeconds >= MIN_RECORD_SECONDS ? '#10B981' : recordSeconds >= 3 ? '#f59e0b' : '#ef4444';
 
   // ─── INTRO ────────────────────────────────────────────────────────────────
   if (screen === 'intro') {
-    const steps = [
-      { icon: 'eye-outline'               as const, label: 'Blink your eyes',   desc: 'Look at the camera and blink once naturally' },
-      { icon: 'arrow-back-circle-outline' as const, label: 'Turn head left',    desc: 'Slowly turn your head to the left' },
-      { icon: 'arrow-forward-circle-outline' as const, label: 'Turn head right', desc: 'Then slowly turn your head to the right' },
-    ];
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
 
-          {/* ── Gradient header ── */}
           <LinearGradient
             colors={['#10B981', '#059669', '#0D9488']}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
           >
-            <Pressable
-              style={styles.headerBackBtn}
-              onPress={() => navigation.goBack()}
-              hitSlop={12}
-            >
+            <Pressable style={styles.headerBackBtn} onPress={() => navigation.goBack()} hitSlop={12}>
               <Ionicons name="arrow-back" size={22} color="#fff" />
             </Pressable>
 
@@ -442,19 +284,17 @@ export default function VerificationScreen() {
             </Animated.View>
           </LinearGradient>
 
-          {/* ── Body ── */}
           <Animated.View style={[styles.bodyPad, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
 
-            {/* Steps card */}
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
               <View style={styles.cardHeader}>
                 <View style={styles.cardIconBadge}>
-                  <Ionicons name="list-outline" size={16} color="#10B981" />
+                  <Ionicons name="videocam-outline" size={16} color="#10B981" />
                 </View>
                 <ThemedText style={[styles.cardTitle, { color: theme.text }]}>What you will do</ThemedText>
               </View>
-              {steps.map((s, i) => (
-                <View key={s.label} style={[styles.stepRow, i < steps.length - 1 && styles.stepRowDivider]}>
+              {STEPS.map((s, i) => (
+                <View key={s.key} style={[styles.stepRow, i < STEPS.length - 1 && styles.stepRowDivider]}>
                   <View style={styles.stepNumBadge}>
                     <ThemedText style={styles.stepNumText}>{i + 1}</ThemedText>
                   </View>
@@ -462,20 +302,40 @@ export default function VerificationScreen() {
                     <Ionicons name={s.icon} size={20} color="#10B981" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <ThemedText style={[styles.stepLabel, { color: theme.text }]}>{s.label}</ThemedText>
+                    <ThemedText style={[styles.stepLabel, { color: theme.text }]}>{s.title}</ThemedText>
                     <ThemedText style={[styles.stepDesc,  { color: theme.textSecondary }]}>{s.desc}</ThemedText>
                   </View>
                 </View>
               ))}
             </View>
 
-            {/* Tips */}
+            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.cardIconBadge, { backgroundColor: '#3B82F620' }]}>
+                  <Ionicons name="time-outline" size={16} color="#3B82F6" />
+                </View>
+                <ThemedText style={[styles.cardTitle, { color: theme.text }]}>How it works</ThemedText>
+              </View>
+              {[
+                { icon: 'videocam' as const, color: '#10B981', bg: '#10B98120', text: 'A short 5–7 second video will be recorded' },
+                { icon: 'eye-outline' as const, color: '#8B5CF6', bg: '#8B5CF620', text: 'Follow the on-screen instructions while recording' },
+                { icon: 'cloud-upload-outline' as const, color: '#3B82F6', bg: '#3B82F620', text: 'Your video is submitted securely for admin review' },
+              ].map((item, i) => (
+                <View key={i} style={[styles.howRow, i > 0 && { marginTop: 10 }]}>
+                  <View style={[styles.howIconCircle, { backgroundColor: item.bg }]}>
+                    <Ionicons name={item.icon} size={18} color={item.color} />
+                  </View>
+                  <ThemedText style={[styles.howText, { color: theme.textSecondary }]}>{item.text}</ThemedText>
+                </View>
+              ))}
+            </View>
+
             <View style={[styles.tipRow, { backgroundColor: '#10B98110', borderColor: '#10B98130' }]}>
               <Ionicons name="sunny-outline" size={18} color="#10B981" />
               <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
                 Be in a{' '}
                 <ThemedText style={{ fontWeight: '800', color: theme.text }}>well-lit area</ThemedText>
-                {' '}and hold your phone at face level. The process takes about 15 seconds.
+                {' '}and hold your phone at face level for best results.
               </ThemedText>
             </View>
 
@@ -488,7 +348,6 @@ export default function VerificationScreen() {
               </ThemedText>
             </View>
 
-            {/* CTA */}
             <Pressable
               style={styles.ctaBtn}
               onPress={() => {
@@ -504,6 +363,7 @@ export default function VerificationScreen() {
                 <ThemedText style={styles.ctaBtnText}>Start Verification</ThemedText>
               </LinearGradient>
             </Pressable>
+
           </Animated.View>
         </ScrollView>
       </View>
@@ -512,8 +372,7 @@ export default function VerificationScreen() {
 
   // ─── CAMERA ───────────────────────────────────────────────────────────────
   if (screen === 'camera') {
-    const activeStep = orderedSteps[Math.min(verificationStep, 2)];
-    const ovalColor  = '#10B981';
+    const step = STEPS[Math.min(currentStep, 2)];
 
     return (
       <View style={styles.cameraFull}>
@@ -523,236 +382,109 @@ export default function VerificationScreen() {
           facing="front"
           mode="video"
           mute
-          onCameraReady={() => {
-            console.log('[Liveness] Camera ready');
-            setCameraReady(true);
-          }}
-          onFacesDetected={onFacesDetected}
-          faceDetectorSettings={{
-            mode: 'fast',
-            detectLandmarks: 'all',
-            runClassifications: 'all',
-            minDetectionInterval: 100,
-            tracking: true,
-          }}
+          onCameraReady={() => setCameraReady(true)}
         />
 
         {/* Top bar */}
-        <LinearGradient colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.0)']} style={[styles.camTop, { paddingTop: insets.top + 6 }]}>
+        <LinearGradient colors={['rgba(0,0,0,0.80)', 'rgba(0,0,0,0.0)']} style={[styles.camTop, { paddingTop: insets.top + 6 }]}>
           <View style={styles.camHeader}>
             <Pressable style={styles.camBackBtn} onPress={() => navigation.goBack()}>
               <Ionicons name="arrow-back" size={20} color="#FFF" />
             </Pressable>
             <ThemedText style={styles.camTitle}>Face Verification</ThemedText>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              <Pressable
-                style={[styles.insightBtn, showInsight && styles.insightBtnActive]}
-                onPress={() => setShowInsight(v => !v)}
-              >
-                <Ionicons name="analytics-outline" size={14} color={showInsight ? '#10B981' : '#ffffff99'} />
-                <ThemedText style={[styles.insightBtnText, showInsight && { color: '#10B981' }]}>Insight</ThemedText>
-              </Pressable>
-              <View style={[styles.recPill, { borderColor: recording ? '#ef444460' : '#ffffff30' }]}>
-                <View style={[styles.recDot, { backgroundColor: recording ? '#ef4444' : '#64748b' }]} />
-                <ThemedText style={styles.recText}>{recording ? 'REC' : 'READY'}</ThemedText>
-              </View>
+            <View style={styles.recPill}>
+              <Animated.View style={[styles.recDot, { backgroundColor: recording ? '#ef4444' : '#64748b', transform: [{ scale: recPulse }] }]} />
+              <ThemedText style={styles.recText}>{recording ? 'REC' : 'READY'}</ThemedText>
             </View>
           </View>
         </LinearGradient>
+
+        {/* Timer ring */}
+        <View style={styles.timerWrap} pointerEvents="none">
+          <View style={[styles.timerRing, { borderColor: timerColor + '80' }]}>
+            <ThemedText style={[styles.timerNum, { color: timerColor }]}>
+              {recordSeconds}s
+            </ThemedText>
+            <ThemedText style={styles.timerLabel}>/ 7s</ThemedText>
+          </View>
+        </View>
 
         {/* Face oval */}
         <View style={styles.ovalWrapper} pointerEvents="none">
-          <View style={[styles.faceOval, { borderColor: (faceDetected ? '#10B981' : '#ffffff80') + 'CC' }]}>
-            <Corner top={-2}  left={-2}  color={faceDetected ? ovalColor : '#ffffff80'} />
-            <Corner top={-2}  right={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
-            <Corner bottom={-2} left={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
-            <Corner bottom={-2} right={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
-          </View>
-          <View style={styles.statusPillWrap}>
-            <ThemedText style={styles.statusPillText}>{faceStatus}</ThemedText>
-          </View>
-
-          {/* Eye openness meter — shown only during blink step */}
-          {verificationStep === 0 && faceDetected && (
-            <View style={styles.eyeMeterWrap}>
-              <View style={styles.eyeMeterRow}>
-                <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.70)" />
-                <ThemedText style={styles.eyeMeterLabel}>L</ThemedText>
-                <View style={styles.eyeTrack}>
-                  <Animated.View
-                    style={[
-                      styles.eyeFill,
-                      {
-                        width: eyeBarAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                        }),
-                        backgroundColor: eyeBarAnim.interpolate({
-                          inputRange: [0, 0.35, 0.5, 1],
-                          outputRange: ['#ef4444', '#ef4444', '#f59e0b', '#10B981'],
-                        }),
-                      },
-                    ]}
-                  />
-                </View>
-                <ThemedText style={styles.eyeMeterPct}>
-                  {Math.round(insight.leftEye * 100)}%
-                </ThemedText>
-              </View>
-              <View style={styles.eyeMeterRow}>
-                <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.70)" />
-                <ThemedText style={styles.eyeMeterLabel}>R</ThemedText>
-                <View style={styles.eyeTrack}>
-                  <Animated.View
-                    style={[
-                      styles.eyeFill,
-                      {
-                        width: eyeBarAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                        }),
-                        backgroundColor: eyeBarAnim.interpolate({
-                          inputRange: [0, 0.35, 0.5, 1],
-                          outputRange: ['#ef4444', '#ef4444', '#f59e0b', '#10B981'],
-                        }),
-                      },
-                    ]}
-                  />
-                </View>
-                <ThemedText style={styles.eyeMeterPct}>
-                  {Math.round(insight.rightEye * 100)}%
-                </ThemedText>
-              </View>
-              <ThemedText style={styles.eyeMeterHint}>
-                {insight.leftEye < 0.35 && insight.rightEye < 0.35 ? '✓ Blink registered!' : 'Close your eyes to blink'}
-              </ThemedText>
-            </View>
-          )}
-
-          {/* Head yaw indicator — shown during head turn steps */}
-          {(verificationStep === 1 || verificationStep === 2) && faceDetected && (
-            <View style={styles.yawMeterWrap}>
-              <ThemedText style={styles.yawLabel}>Head angle</ThemedText>
-              <View style={styles.yawTrack}>
-                <View style={styles.yawCenter} />
-                <View
-                  style={[
-                    styles.yawThumb,
-                    {
-                      left: `${Math.min(Math.max(50 + insight.yaw * 1.5, 5), 95)}%`,
-                      backgroundColor: Math.abs(insight.yaw) > 15 ? '#10B981' : '#f59e0b',
-                    },
-                  ]}
-                />
-              </View>
-              <ThemedText style={styles.yawValue}>
-                {insight.yaw > 0 ? `↑ ${insight.yaw.toFixed(0)}° right` : insight.yaw < 0 ? `↑ ${Math.abs(insight.yaw).toFixed(0)}° left` : 'Center'}
-              </ThemedText>
-            </View>
-          )}
-        </View>
-
-        {/* Live insight overlay */}
-        {showInsight && (
-          <View style={styles.insightPanel} pointerEvents="none">
-            <ThemedText style={styles.insightTitle}>Live Detection</ThemedText>
-            <View style={styles.insightGrid}>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Face</ThemedText>
-                <ThemedText style={[styles.insightVal, { color: faceDetected ? '#10B981' : '#ef4444' }]}>
-                  {faceDetected ? 'YES' : 'NO'}
-                </ThemedText>
-              </View>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Centered</ThemedText>
-                <ThemedText style={[styles.insightVal, { color: landmarkMetrics.centered ? '#10B981' : '#f59e0b' }]}>
-                  {landmarkMetrics.centered ? 'YES' : 'NO'}
-                </ThemedText>
-              </View>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Left eye</ThemedText>
-                <ThemedText style={[styles.insightVal, { color: insight.leftEye < 0.35 ? '#ef4444' : '#10B981' }]}>
-                  {Math.round(insight.leftEye * 100)}%
-                </ThemedText>
-              </View>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Right eye</ThemedText>
-                <ThemedText style={[styles.insightVal, { color: insight.rightEye < 0.35 ? '#ef4444' : '#10B981' }]}>
-                  {Math.round(insight.rightEye * 100)}%
-                </ThemedText>
-              </View>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Yaw</ThemedText>
-                <ThemedText style={[styles.insightVal, { color: Math.abs(insight.yaw) > 15 ? '#10B981' : '#f59e0b' }]}>
-                  {insight.yaw.toFixed(1)}°
-                </ThemedText>
-              </View>
-              <View style={styles.insightCell}>
-                <ThemedText style={styles.insightKey}>Step</ThemedText>
-                <ThemedText style={styles.insightVal}>
-                  {verificationStep < 3 ? orderedSteps[verificationStep].key : 'done'}
-                </ThemedText>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Action card */}
-        <View style={styles.actionCardWrap} pointerEvents="none">
-          <View style={styles.actionCard}>
-            {/* Progress bar */}
-            <View style={styles.progressRow}>
-              {orderedSteps.map(item => (
-                <View
-                  key={item.key}
-                  style={[
-                    styles.progressSeg,
-                    verificationStep > item.index  && styles.progressSegDone,
-                    verificationStep === item.index && styles.progressSegActive,
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              {verificationStep === 3 ? (
-                <View style={styles.doneCircle}>
-                  <Ionicons name="checkmark" size={28} color="#10B981" />
-                </View>
-              ) : (
-                <PromptIcon stepKey={activeStep.key} />
-              )}
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.actionTitle}>
-                  {verificationStep === 3 ? 'All done!' : activeStep.title}
-                </ThemedText>
-                <ThemedText style={styles.actionHint}>
-                  {verificationStep === 3 ? 'Saving your recording now…' : activeStep.hint}
-                </ThemedText>
-                <View style={styles.signalRow}>
-                  <View style={[styles.signalPill, landmarkMetrics.centered     && styles.signalOn]}>
-                    <ThemedText style={styles.signalText}>Centered</ThemedText>
-                  </View>
-                  <View style={[styles.signalPill, landmarkMetrics.landmarksReady && styles.signalOn]}>
-                    <ThemedText style={styles.signalText}>Landmarks</ThemedText>
-                  </View>
-                  <View style={[styles.signalPill, faceDetected && styles.signalOn]}>
-                    <ThemedText style={styles.signalText}>Face</ThemedText>
-                  </View>
-                  <View style={[styles.signalPill, recording && styles.signalRec]}>
-                    <ThemedText style={styles.signalText}>Live</ThemedText>
-                  </View>
-                </View>
-              </View>
-              <Ionicons name="scan" size={22} color="#10B981" />
-            </View>
+          <View style={[styles.faceOval, { borderColor: recording ? '#10B981CC' : '#ffffff80' }]}>
+            <Corner top={-2}    left={-2}  color={recording ? '#10B981' : '#ffffff80'} />
+            <Corner top={-2}    right={-2} color={recording ? '#10B981' : '#ffffff80'} />
+            <Corner bottom={-2} left={-2}  color={recording ? '#10B981' : '#ffffff80'} />
+            <Corner bottom={-2} right={-2} color={recording ? '#10B981' : '#ffffff80'} />
           </View>
         </View>
 
-        {/* Bottom hint */}
-        <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.82)']} style={[styles.camBottom, { paddingBottom: insets.bottom + 28 }]}>
-          <ThemedText style={styles.captureLbl}>Steps are sequential: blink → left → right</ThemedText>
-          <ThemedText style={styles.captureHint}>Recording starts automatically and stops after all steps pass.</ThemedText>
-        </LinearGradient>
+        {/* Instructions + submit */}
+        <View style={[styles.bottomCard, { paddingBottom: insets.bottom + 16 }]}>
+
+          {/* Current step prompt */}
+          <View style={styles.stepPromptRow}>
+            <StepIcon stepKey={step.key} />
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.stepPromptTitle}>{step.title}</ThemedText>
+              <ThemedText style={styles.stepPromptHint}>{step.desc}</ThemedText>
+            </View>
+          </View>
+
+          {/* Step dots */}
+          <View style={styles.stepDots}>
+            {STEPS.map((s, i) => (
+              <View
+                key={s.key}
+                style={[
+                  styles.stepDot,
+                  i < currentStep  && styles.stepDotDone,
+                  i === currentStep && styles.stepDotActive,
+                ]}
+              />
+            ))}
+          </View>
+
+          {/* Static steps list */}
+          <View style={styles.stepsList}>
+            {STEPS.map((s, i) => (
+              <View key={s.key} style={styles.stepsListRow}>
+                <View style={[styles.stepsListIcon, i < currentStep && { backgroundColor: '#10B98130' }]}>
+                  {i < currentStep
+                    ? <Ionicons name="checkmark" size={12} color="#10B981" />
+                    : <ThemedText style={styles.stepsListNum}>{i + 1}</ThemedText>
+                  }
+                </View>
+                <ThemedText style={[
+                  styles.stepsListLabel,
+                  i < currentStep  && { color: '#10B981' },
+                  i === currentStep && { color: '#fff', fontWeight: '900' },
+                  i > currentStep  && { color: 'rgba(255,255,255,0.45)' },
+                ]}>
+                  {s.emoji} {s.title}
+                </ThemedText>
+              </View>
+            ))}
+          </View>
+
+          {/* Submit button */}
+          {canSubmit ? (
+            <Pressable
+              style={styles.submitBtn}
+              onPress={stopAndSaveVideo}
+            >
+              <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.submitBtnGrad}>
+                <Ionicons name="cloud-upload" size={20} color="#fff" />
+                <ThemedText style={styles.submitBtnText}>Submit Video</ThemedText>
+              </LinearGradient>
+            </Pressable>
+          ) : (
+            <View style={styles.waitRow}>
+              <ActivityIndicator size="small" color="#10B981" />
+              <ThemedText style={styles.waitText}>Recording… {MIN_RECORD_SECONDS - recordSeconds}s until ready</ThemedText>
+            </View>
+          )}
+        </View>
       </View>
     );
   }
@@ -792,7 +524,6 @@ export default function VerificationScreen() {
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <LinearGradient colors={[color + '12', 'transparent']} style={StyleSheet.absoluteFill} />
 
-        {/* Header bar */}
         <View style={[styles.resultTopBar, { paddingTop: insets.top + 12 }]}>
           <ThemedText style={[styles.resultTopTitle, { color: theme.text }]}>Verification</ThemedText>
         </View>
@@ -800,7 +531,6 @@ export default function VerificationScreen() {
         <ScrollView contentContainerStyle={[styles.bodyPad, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], alignItems: 'center' }}>
 
-            {/* Result icon */}
             <Animated.View style={[styles.resultRing, { borderColor: color + '40', backgroundColor: color + '12', transform: [{ scale: pulseAnim }] }]}>
               <LinearGradient colors={[color, color + 'BB']} style={styles.resultInner}>
                 <Ionicons name={ok ? 'shield-checkmark' : 'alert-circle'} size={44} color="#FFF" />
@@ -816,7 +546,6 @@ export default function VerificationScreen() {
                 : result.reason || 'Please try recording your verification again.'}
             </ThemedText>
 
-            {/* Completed steps card */}
             <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, width: '100%' }]}>
               <View style={styles.cardHeader}>
                 <View style={[styles.cardIconBadge, { backgroundColor: ok ? '#10B98120' : '#ef444420' }]}>
@@ -824,10 +553,10 @@ export default function VerificationScreen() {
                 </View>
                 <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Completed sequence</ThemedText>
               </View>
-              {['Blink eyes', 'Turn head left', 'Turn head right'].map(item => (
-                <View key={item} style={styles.completedRow}>
+              {STEPS.map(s => (
+                <View key={s.key} style={styles.completedRow}>
                   <Ionicons name="checkmark-circle" size={16} color={ok ? '#10B981' : '#94a3b8'} />
-                  <ThemedText style={[styles.completedText, { color: theme.textSecondary }]}>{item}</ThemedText>
+                  <ThemedText style={[styles.completedText, { color: theme.textSecondary }]}>{s.title}</ThemedText>
                 </View>
               ))}
             </View>
@@ -859,262 +588,113 @@ export default function VerificationScreen() {
 const styles = StyleSheet.create({
   container:   { flex: 1 },
 
-  // ── Intro header ──
-  gradientHeader: {
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-  },
+  gradientHeader: { paddingHorizontal: 20, paddingBottom: 40 },
   headerBackBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.20)',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
-  headerIconWrap: {
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
-  },
+  headerIconWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   headerIconRing: {
     position: 'absolute', width: 108, height: 108, borderRadius: 54,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.30)',
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.30)', backgroundColor: 'rgba(255,255,255,0.10)',
   },
   headerIconInner: {
     width: 84, height: 84, borderRadius: 42,
-    backgroundColor: 'rgba(255,255,255,0.20)',
-    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.20)', alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 26, fontWeight: '900', color: '#fff',
-    textAlign: 'center', letterSpacing: -0.3,
-  },
-  headerSub: {
-    fontSize: 14, color: 'rgba(255,255,255,0.82)',
-    textAlign: 'center', marginTop: 6, lineHeight: 20, maxWidth: 280,
-  },
+  headerTitle: { fontSize: 26, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: -0.3 },
+  headerSub:   { fontSize: 14, color: 'rgba(255,255,255,0.82)', textAlign: 'center', marginTop: 6, lineHeight: 20, maxWidth: 280 },
 
-  // ── Body ──
   bodyPad: { paddingHorizontal: 20, paddingTop: 24, gap: 14 },
 
-  // ── Card ──
-  card: {
-    borderRadius: 20, padding: 18, borderWidth: 1,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  card: { borderRadius: 20, padding: 18, borderWidth: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
-  cardIconBadge: {
-    width: 30, height: 30, borderRadius: 10,
-    backgroundColor: '#10B98120',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  cardIconBadge: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#10B98120', alignItems: 'center', justifyContent: 'center' },
   cardTitle: { fontSize: 15, fontWeight: '800' },
 
-  // ── Step rows ──
   stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   stepRowDivider: { borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
-  stepNumBadge: {
-    width: 26, height: 26, borderRadius: 13,
-    backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center',
-  },
-  stepNumText: { color: '#fff', fontSize: 12, fontWeight: '900' },
-  stepIconCircle: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center',
-  },
+  stepNumBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
+  stepNumText:  { color: '#fff', fontSize: 12, fontWeight: '900' },
+  stepIconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center' },
   stepLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
   stepDesc:  { fontSize: 12, lineHeight: 17 },
 
-  // ── Tips ──
-  tipRow: {
-    borderRadius: 14, padding: 14, borderWidth: 1,
-    flexDirection: 'row', gap: 10, alignItems: 'flex-start',
-  },
+  howRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  howIconCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  howText: { flex: 1, fontSize: 13, lineHeight: 18 },
+
+  tipRow: { borderRadius: 14, padding: 14, borderWidth: 1, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   tipText: { flex: 1, fontSize: 13, lineHeight: 19 },
 
-  // ── CTA button ──
   ctaBtn:     { borderRadius: 18, overflow: 'hidden', marginTop: 4 },
-  ctaBtnGrad: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 10, paddingVertical: 18,
-  },
+  ctaBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },
   ctaBtnText: { color: '#fff', fontSize: 17, fontWeight: '900' },
 
-  // ── Camera ──
   cameraFull: { flex: 1, backgroundColor: '#000' },
   camTop: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 24 },
-  camHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 16,
-  },
-  camBackBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center',
-  },
+  camHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
+  camBackBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
   camTitle: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-  recPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 7,
-    borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1,
-  },
-  recDot: { width: 7, height: 7, borderRadius: 4 },
+  recPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1, borderColor: 'rgba(239,68,68,0.40)' },
+  recDot: { width: 8, height: 8, borderRadius: 4 },
   recText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  ovalWrapper: {
-    position: 'absolute', inset: 0,
-    alignItems: 'center', justifyContent: 'center', zIndex: 5,
-  },
-  faceOval: {
-    width: 210, height: 280, borderRadius: 105,
-    borderWidth: 2.5, borderStyle: 'dashed',
-  },
-  statusPillWrap: {
-    marginTop: 14, backgroundColor: 'rgba(0,0,0,0.50)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999,
-    borderWidth: 1, borderColor: 'rgba(16,185,129,0.35)',
-  },
-  statusPillText: {
-    color: 'rgba(255,255,255,0.90)', fontSize: 12, fontWeight: '700',
-  },
-  actionCardWrap: { position: 'absolute', bottom: 175, left: 16, right: 16, zIndex: 20 },
-  actionCard: {
-    backgroundColor: 'rgba(0,0,0,0.78)', borderRadius: 20, padding: 16,
-    borderWidth: 1, borderColor: 'rgba(16,185,129,0.30)',
-  },
-  actionTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', marginBottom: 2 },
-  actionHint:  { color: 'rgba(255,255,255,0.60)', fontSize: 12 },
-  promptIcon:  { width: 58, height: 58, alignItems: 'center', justifyContent: 'center' },
-  doneCircle: {
-    width: 58, height: 58, borderRadius: 29,
-    backgroundColor: 'rgba(16,185,129,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'rgba(16,185,129,0.50)',
-  },
-  signalRow:  { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
-  signalPill: {
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.10)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-  },
-  signalOn: {
-    backgroundColor: 'rgba(16,185,129,0.22)', borderColor: 'rgba(16,185,129,0.55)',
-  },
-  signalRec: {
-    backgroundColor: 'rgba(239,68,68,0.22)', borderColor: 'rgba(239,68,68,0.55)',
-  },
-  signalText: { color: 'rgba(255,255,255,0.80)', fontSize: 9, fontWeight: '900', letterSpacing: 0.4 },
-  progressRow: { flexDirection: 'row', gap: 6, marginBottom: 14 },
-  progressSeg: { flex: 1, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.20)' },
-  progressSegActive: { backgroundColor: '#10B981' },
-  progressSegDone:   { backgroundColor: '#059669' },
-  camBottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10,
-    paddingTop: 40, alignItems: 'center', gap: 6, paddingHorizontal: 24,
-  },
-  captureLbl:  { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  captureHint: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontWeight: '600', textAlign: 'center' },
 
-  // ── Insight toggle button ──
-  insightBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
-  },
-  insightBtnActive: {
-    borderColor: 'rgba(16,185,129,0.60)', backgroundColor: 'rgba(16,185,129,0.12)',
-  },
-  insightBtnText: { color: 'rgba(255,255,255,0.60)', fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+  timerWrap: { position: 'absolute', top: 120, right: 20, zIndex: 10 },
+  timerRing: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
+  timerNum: { fontSize: 18, fontWeight: '900', lineHeight: 22 },
+  timerLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 9, fontWeight: '700' },
 
-  // ── Eye openness meter ──
-  eyeMeterWrap: {
-    marginTop: 12, width: 200,
-    backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 10, gap: 7,
-    borderWidth: 1, borderColor: 'rgba(16,185,129,0.30)',
-    alignItems: 'stretch',
-  },
-  eyeMeterRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  eyeMeterLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', width: 10 },
-  eyeTrack: {
-    flex: 1, height: 6, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden',
-  },
-  eyeFill: { height: 6, borderRadius: 3 },
-  eyeMeterPct: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '800', width: 30, textAlign: 'right' },
-  eyeMeterHint: {
-    color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700',
-    textAlign: 'center', marginTop: 2,
+  ovalWrapper: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  faceOval: { width: 210, height: 280, borderRadius: 105, borderWidth: 2.5, borderStyle: 'dashed' },
+
+  bottomCard: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
+    backgroundColor: 'rgba(0,0,0,0.82)', paddingHorizontal: 20, paddingTop: 20,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    borderTopWidth: 1, borderColor: 'rgba(16,185,129,0.25)',
   },
 
-  // ── Yaw indicator ──
-  yawMeterWrap: {
-    marginTop: 12, width: 200,
-    backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 10,
-    borderWidth: 1, borderColor: 'rgba(16,185,129,0.30)',
-    alignItems: 'center', gap: 6,
-  },
-  yawLabel: { color: 'rgba(255,255,255,0.70)', fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
-  yawTrack: {
-    width: '100%', height: 6, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.12)', position: 'relative',
-  },
-  yawCenter: {
-    position: 'absolute', left: '50%', top: -2,
-    width: 2, height: 10, borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    transform: [{ translateX: -1 }],
-  },
-  yawThumb: {
-    position: 'absolute', top: -3, width: 12, height: 12,
-    borderRadius: 6, marginLeft: -6,
-  },
-  yawValue: { color: 'rgba(255,255,255,0.80)', fontSize: 11, fontWeight: '800' },
+  stepPromptRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
+  stepPromptTitle: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  stepPromptHint: { color: 'rgba(255,255,255,0.55)', fontSize: 13, marginTop: 2 },
+  promptIcon: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center' },
 
-  // ── Live insight panel ──
-  insightPanel: {
-    position: 'absolute', top: 130, right: 14, zIndex: 30,
-    backgroundColor: 'rgba(0,0,0,0.82)', borderRadius: 16,
-    padding: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.35)',
-    minWidth: 150,
-  },
-  insightTitle: {
-    color: '#10B981', fontSize: 10, fontWeight: '900',
-    letterSpacing: 0.8, marginBottom: 8, textTransform: 'uppercase',
-  },
-  insightGrid: { gap: 6 },
-  insightCell: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
-  insightKey: { color: 'rgba(255,255,255,0.50)', fontSize: 11, fontWeight: '600' },
-  insightVal: { color: '#fff', fontSize: 11, fontWeight: '900' },
+  stepDots: { flexDirection: 'row', gap: 6, marginBottom: 14 },
+  stepDot: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.18)' },
+  stepDotActive: { backgroundColor: '#10B981' },
+  stepDotDone:   { backgroundColor: '#059669' },
 
-  // ── Analyzing ──
-  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  stepsList: { gap: 8, marginBottom: 16 },
+  stepsListRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepsListIcon: { width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  stepsListNum: { color: 'rgba(255,255,255,0.50)', fontSize: 10, fontWeight: '900' },
+  stepsListLabel: { fontSize: 13, fontWeight: '700' },
+
+  submitBtn:     { borderRadius: 16, overflow: 'hidden' },
+  submitBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
+  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+
+  waitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14 },
+  waitText: { color: 'rgba(255,255,255,0.60)', fontSize: 13, fontWeight: '600' },
+
+  centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   analyzeFrame: {
-    width: SW * 0.60, height: SW * 0.65, borderRadius: 20,
-    overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+    width: SW * 0.65, height: SW * 0.65, borderRadius: 24,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center', position: 'relative',
   },
-  scanLine: {
-    position: 'absolute', left: 0, right: 0, height: 2,
-    backgroundColor: '#10B981', opacity: 0.85,
-  },
-  analyzeTitle: { fontSize: 20, fontWeight: '900', marginTop: 24, textAlign: 'center' },
-  analyzeSub:   { fontSize: 13, textAlign: 'center', marginTop: 8, lineHeight: 20, opacity: 0.75 },
+  scanLine: { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#10B981', opacity: 0.7 },
+  analyzeTitle: { fontSize: 22, fontWeight: '900', textAlign: 'center', marginTop: 20 },
+  analyzeSub:   { fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20, maxWidth: 280 },
 
-  // ── Result ──
-  resultTopBar: {
-    paddingHorizontal: 20, paddingBottom: 8,
-    alignItems: 'center',
-  },
-  resultTopTitle: { fontSize: 17, fontWeight: '800' },
-  resultRing: {
-    width: 120, height: 120, borderRadius: 60,
-    borderWidth: 2, alignItems: 'center', justifyContent: 'center',
-    marginBottom: 20, marginTop: 8,
-  },
-  resultInner: {
-    width: 88, height: 88, borderRadius: 44,
-    alignItems: 'center', justifyContent: 'center',
-  },
+  resultTopBar: { alignItems: 'center', paddingBottom: 12 },
+  resultTopTitle: { fontSize: 18, fontWeight: '900' },
+  resultRing: { width: 130, height: 130, borderRadius: 65, borderWidth: 3, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  resultInner: { width: 96, height: 96, borderRadius: 48, alignItems: 'center', justifyContent: 'center' },
   resultTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
-  resultSub:   { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 300, marginBottom: 20 },
-  completedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  completedText: { fontSize: 13 },
+  resultSub:   { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24, maxWidth: 300 },
+
+  completedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.05)' },
+  completedText: { fontSize: 14, fontWeight: '600' },
 });

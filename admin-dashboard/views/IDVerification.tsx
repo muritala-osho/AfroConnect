@@ -1,61 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle, XCircle, Clock, ShieldCheck, AlertCircle,
-  Eye, ZoomIn, Loader2, RefreshCw, X, Cpu, UserCheck,
-  ScanFace, ShieldAlert, ListOrdered,
+  Eye, ZoomIn, Loader2, RefreshCw, X, Video, UserCheck,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
-import FaceVerification from '../components/FaceVerification';
-
-// ── Helper: render a score pill ──────────────────────────────────────────────
-const ScorePill: React.FC<{
-  label: string;
-  score: number | null | undefined;
-  passed: boolean | null | undefined;
-  passPct?: number;
-  icon: React.ReactNode;
-}> = ({ label, score, passed, passPct = 35, icon }) => {
-  if (score == null) return null;
-  const pct       = Math.round(score * 100);
-  const isPass    = passed ?? pct >= passPct;
-  const barColor  = isPass ? 'bg-emerald-500' : 'bg-rose-500';
-  const textColor = isPass ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
-  const bgColor   = isPass
-    ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
-    : 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30';
-
-  return (
-    <div className={`flex-1 p-3 rounded-2xl border ${bgColor}`}>
-      <div className="flex items-center gap-2 mb-2">
-        <span className={textColor}>{icon}</span>
-        <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>{label}</span>
-        <span className={`ml-auto text-xs font-black ${textColor}`}>
-          {pct}% {isPass ? '✓' : '✗'}
-        </span>
-      </div>
-      <div className="h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${Math.min(pct, 100)}%` }} />
-      </div>
-      <p className={`text-[9px] mt-1 font-semibold ${textColor} opacity-70`}>
-        threshold {passPct}% — {isPass ? 'PASS' : 'FAIL'}
-      </p>
-    </div>
-  );
-};
 
 interface IDVerificationProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
 const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
-  const [verifications, setVerifications]   = useState<any[]>([]);
-  const [loading, setLoading]               = useState(true);
-  const [error, setError]                   = useState<string | null>(null);
+  const [verifications, setVerifications]     = useState<any[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [error, setError]                     = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
-  const [actionLoading, setActionLoading]   = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('Photos do not match or do not meet requirements');
-  const [lightboxPhoto, setLightboxPhoto]   = useState<string | null>(null);
-  const [aiResult, setAiResult]             = useState<{ verified: boolean; similarity: number } | null>(null);
+  const [actionLoading, setActionLoading]     = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('Video does not meet our requirements');
+  const [lightboxPhoto, setLightboxPhoto]     = useState<string | null>(null);
 
   const fetchVerifications = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -86,7 +47,6 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
       if (data.success) {
         setVerifications(prev => prev.filter(v => (v._id || v.id) !== userId));
         setSelectedRequest(null);
-        setAiResult(null);
         showToast?.(
           approve ? 'User verified successfully.' : 'Verification rejected.',
           approve ? 'success' : 'error',
@@ -99,22 +59,11 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
     }
   };
 
-  const selectRequest = (req: any) => {
-    setSelectedRequest(req);
-    setAiResult(null);
-  };
-
   const getRequestId   = (req: any) => req._id || req.id;
 
   const getProfilePhoto = (req: any): string =>
     req.photos?.[0]?.url || req.photos?.[0] ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(req.name || 'U')}&size=400&background=14b8a6&color=fff`;
-
-  const getSelfiePhoto = (req: any): string | null =>
-    req.selfiePhoto?.url || (typeof req.selfiePhoto === 'string' ? req.selfiePhoto : null)
-    || req.verificationPhoto?.url || (typeof req.verificationPhoto === 'string' ? req.verificationPhoto : null)
-    || req.idPhoto?.url   || (typeof req.idPhoto   === 'string' ? req.idPhoto   : null)
-    || null;
 
   const getVerificationVideo = (req: any): string | null =>
     req.verificationVideo?.url || req.verificationVideoUrl || null;
@@ -126,11 +75,11 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            ID Verification
+            Verification Requests
           </h1>
           <p className="text-gray-500 dark:text-slate-400 font-medium flex items-center gap-2 mt-0.5">
-            <Cpu size={14} className="text-teal-500" />
-            Backend AI face verification · liveness detection · 85% similarity threshold
+            <Video size={14} className="text-teal-500" />
+            Review submitted verification videos and approve or reject
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -164,7 +113,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
         <div className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
           <h2 className="text-lg font-bold mb-5 dark:text-white flex items-center gap-2">
             <ShieldCheck size={18} className="text-teal-500" />
-            Verification Queue
+            Pending Queue
           </h2>
 
           {loading ? (
@@ -176,7 +125,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
               {verifications.map((req) => (
                 <div
                   key={getRequestId(req)}
-                  onClick={() => selectRequest(req)}
+                  onClick={() => setSelectedRequest(req)}
                   className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between group ${
                     selectedRequest && getRequestId(selectedRequest) === getRequestId(req)
                       ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/30'
@@ -193,11 +142,12 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                       <p className="text-sm font-black dark:text-white">{req.name}</p>
                       <p className="text-[10px] text-slate-400 font-medium">{req.email}</p>
                       {getVerificationVideo(req) ? (
-                        <p className="text-[10px] text-teal-500 font-semibold mt-0.5">
-                          Verification video submitted · ready for review
+                        <p className="text-[10px] text-teal-500 font-semibold mt-0.5 flex items-center gap-1">
+                          <Video size={10} />
+                          Verification video submitted
                         </p>
                       ) : (
-                        <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No verification video on record</p>
+                        <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No video on record</p>
                       )}
                     </div>
                   </div>
@@ -214,8 +164,8 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
           ) : !error ? (
             <div className="text-center py-16">
               <CheckCircle size={40} className="mx-auto text-emerald-400 mb-3" />
-              <p className="text-sm font-bold text-slate-400">All verifications complete!</p>
-              <p className="text-xs text-slate-400 mt-1">No pending submissions right now.</p>
+              <p className="text-sm font-bold text-slate-400">All clear!</p>
+              <p className="text-xs text-slate-400 mt-1">No pending verification requests right now.</p>
             </div>
           ) : null}
         </div>
@@ -227,7 +177,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
               <ZoomIn size={56} className="text-slate-300 mb-4" />
               <h3 className="text-lg font-bold dark:text-white">Review Workspace</h3>
               <p className="text-xs text-slate-400 max-w-xs mx-auto mt-2">
-                Select a pending submission to run automated AI face verification.
+                Select a pending submission from the queue to review their verification video.
               </p>
             </div>
           ) : (
@@ -235,179 +185,97 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
 
               {/* ── User header ── */}
               <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-black dark:text-white">{selectedRequest.name}</h3>
-                  <p className="text-xs text-slate-400">{selectedRequest.email}</p>
+                <div className="flex items-center gap-3">
+                  <img
+                    src={getProfilePhoto(selectedRequest)}
+                    className="h-12 w-12 rounded-2xl object-cover ring-2 ring-teal-100 dark:ring-teal-500/20"
+                    alt=""
+                  />
+                  <div>
+                    <h3 className="text-lg font-black dark:text-white">{selectedRequest.name}</h3>
+                    <p className="text-xs text-slate-400">{selectedRequest.email}</p>
+                    {selectedRequest.verificationRequestDate && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        Submitted {new Date(selectedRequest.verificationRequestDate).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <span className="text-[10px] font-black px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-lg uppercase tracking-widest">
                   Pending
                 </span>
               </div>
 
-              {/* ── Liveness badge + challenge order ── */}
-              {getVerificationVideo(selectedRequest) && (
-                <div className="flex items-start gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
-                  <span className="text-2xl shrink-0">🛡️</span>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Liveness Video</p>
-                    {selectedRequest.verificationVideo?.challengeOrder?.length > 0 ? (
-                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                        <ListOrdered size={12} className="text-emerald-500 shrink-0" />
-                        {(selectedRequest.verificationVideo.challengeOrder as string[]).map((step, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-600 rounded-lg text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest"
-                          >
-                            <span>{i + 1}.</span>
-                            <span>{step === 'blink' ? '😉 Blink' : step === 'left' ? '👈 Left' : '👉 Right'}</span>
-                          </span>
-                        ))}
+              {/* ── Profile photos ── */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                  Profile Photos
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {(selectedRequest.photos || []).map((photo: any, i: number) => {
+                    const url = photo?.url || (typeof photo === 'string' ? photo : null);
+                    if (!url) return null;
+                    return (
+                      <div
+                        key={i}
+                        className="aspect-square rounded-xl overflow-hidden border-2 border-gray-100 dark:border-slate-700 cursor-pointer hover:border-teal-400 transition-colors group relative"
+                        onClick={() => setLightboxPhoto(url)}
+                      >
+                        <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={`Photo ${i + 1}`} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
+                          <Eye size={13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                        {i === 0 && (
+                          <div className="absolute bottom-1 left-1 px-1.5 py-0.5 bg-teal-500/90 rounded text-[8px] text-white font-black uppercase">
+                            Main
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-sm font-bold text-gray-900 dark:text-white">
-                        Camera-detected liveness challenges completed
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* ── InsightFace AI scores ── */}
-              {(selectedRequest.verificationVideo?.antiSpoofScore != null ||
-                selectedRequest.verificationVideo?.faceMatchScore != null) && (
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                    <Cpu size={11} className="text-teal-500" />
-                    InsightFace AI Analysis
-                  </p>
-                  <div className="flex gap-3">
-                    <ScorePill
-                      label="Anti-Spoof"
-                      score={selectedRequest.verificationVideo?.antiSpoofScore}
-                      passed={selectedRequest.verificationVideo?.antiSpoofReal}
-                      passPct={42}
-                      icon={<ShieldAlert size={13} />}
-                    />
-                    <ScorePill
-                      label="Face Match"
-                      score={selectedRequest.verificationVideo?.faceMatchScore}
-                      passed={selectedRequest.verificationVideo?.faceMatchVerified}
-                      passPct={35}
-                      icon={<ScanFace size={13} />}
-                    />
-                  </div>
-                  {selectedRequest.verificationVideo?.faceMatchAt && (
-                    <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
-                      Analysed {new Date(selectedRequest.verificationVideo.faceMatchAt).toLocaleString()}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* ── Side-by-side photos ── */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Profile photo */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-                    Profile Photo
-                  </p>
-                  <div
-                    className="relative group aspect-square cursor-pointer"
-                    onClick={() => setLightboxPhoto(getProfilePhoto(selectedRequest))}
-                  >
-                    <img
-                      src={getProfilePhoto(selectedRequest)}
-                      className="w-full h-full object-cover rounded-2xl border-2 border-gray-200 dark:border-slate-700 group-hover:border-teal-400 transition-colors"
-                      alt="Profile"
-                    />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all rounded-2xl flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-1 text-white">
-                        <ZoomIn size={24} className="drop-shadow-lg" />
-                        <span className="text-[10px] font-black tracking-widest uppercase">Expand</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Verification video */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">
-                    Verification Video
-                  </p>
-                  {getVerificationVideo(selectedRequest) ? (
-                    <div className="relative aspect-square overflow-hidden rounded-2xl border-2 border-rose-200 dark:border-rose-500/40 bg-black">
-                      <video
-                        src={getVerificationVideo(selectedRequest)!}
-                        className="w-full h-full object-cover"
-                        controls
-                        playsInline
-                        preload="metadata"
-                      />
-                    </div>
-                  ) : (
-                    <div className="aspect-square rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5 flex flex-col items-center justify-center gap-2 text-amber-500">
-                      <AlertCircle size={28} className="opacity-60" />
-                      <p className="text-xs font-bold text-center px-4">No verification video submitted</p>
+                    );
+                  })}
+                  {(!selectedRequest.photos || selectedRequest.photos.length === 0) && (
+                    <div className="col-span-4 py-6 text-center text-slate-400 text-xs bg-gray-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
+                      No profile photos on record
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* ── Additional profile photos ── */}
-              {selectedRequest.photos?.length > 1 && (
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                    All Profile Photos
-                  </p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {selectedRequest.photos.map((photo: any, i: number) => {
-                      const url = photo?.url || (typeof photo === 'string' ? photo : null);
-                      if (!url) return null;
-                      return (
-                        <div
-                          key={i}
-                          className="aspect-square rounded-xl overflow-hidden border border-gray-100 dark:border-slate-700 cursor-pointer hover:border-teal-400 transition-colors group relative"
-                          onClick={() => setLightboxPhoto(url)}
-                        >
-                          <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform" alt={`Photo ${i + 1}`} />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                            <Eye size={13} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* ── Verification video ── */}
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                  <Video size={11} className="text-teal-500" />
+                  Verification Video
+                </p>
+                {getVerificationVideo(selectedRequest) ? (
+                  <div className="relative overflow-hidden rounded-2xl border-2 border-teal-200 dark:border-teal-500/30 bg-black">
+                    <video
+                      src={getVerificationVideo(selectedRequest)!}
+                      className="w-full max-h-72 object-cover"
+                      controls
+                      playsInline
+                      preload="metadata"
+                    />
+                    <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 bg-black/60 rounded-lg">
+                      <div className="w-2 h-2 rounded-full bg-teal-400" />
+                      <span className="text-[10px] text-white font-black uppercase tracking-widest">Liveness Video</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="aspect-video rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5 flex flex-col items-center justify-center gap-2 text-amber-500">
+                    <AlertCircle size={28} className="opacity-60" />
+                    <p className="text-xs font-bold text-center px-4">No verification video submitted</p>
+                  </div>
+                )}
+              </div>
 
-              {/* ── Backend AI Face Verification ── */}
-              <FaceVerification
-                userId={getRequestId(selectedRequest)}
-                selfieUrl={getSelfiePhoto(selectedRequest)}
-                onResult={(res) => {
-                  setAiResult({ verified: res.verified, similarity: res.similarity });
-                  if (!res.liveness.passed) {
-                    showToast?.('Liveness check failed — review photos carefully.', 'error');
-                  } else if (!res.verified) {
-                    showToast?.(
-                      `AI: faces don't match (${(res.similarity * 100).toFixed(0)}% similarity, threshold 85%).`,
-                      'error',
-                    );
-                  } else {
-                    showToast?.('AI: faces match — user automatically verified!', 'success');
-                  }
-                }}
-              />
-
-              {/* ── Admin guidelines ── */}
+              {/* ── Review guide ── */}
               <div className="p-4 bg-teal-50 dark:bg-teal-500/5 rounded-2xl border border-teal-100 dark:border-teal-500/20">
                 <div className="flex items-start gap-2">
                   <UserCheck size={15} className="text-teal-500 mt-0.5 shrink-0" />
                   <p className="text-xs text-teal-700 dark:text-teal-400 leading-relaxed">
-                    <strong>Review guide:</strong> Compare the profile photo with the verification video. Verify bone structure,
-                    eye shape, and skin tone match. Confirm the challenge sequence shown above is visible in the video.
-                    The <strong>Anti-Spoof</strong> score (≥ 42% = real person) and <strong>Face Match</strong> score (≥ 35% = same face)
-                    are computed automatically by InsightFace ArcFace. Even if both pass, you may reject if you spot signs of spoofing or AI generation.
+                    <strong>Review guide:</strong> Watch the video and confirm the person followed all instructions — blink eyes, turn head left, turn head right.
+                    Compare their face with the profile photos to ensure they match. Approve only if the person is real, clearly visible, and matches their profile.
                   </p>
                 </div>
               </div>
@@ -415,7 +283,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
               {/* ── Rejection reason ── */}
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                  Rejection Reason
+                  Rejection Reason (used if rejecting)
                 </label>
                 <textarea
                   value={rejectionReason}
@@ -430,7 +298,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 <button
                   onClick={() => handleAction(getRequestId(selectedRequest), false)}
                   disabled={actionLoading}
-                  className="flex-1 py-3 bg-rose-50 text-rose-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-rose-100 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-500/20 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   {actionLoading ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
                   Reject
@@ -444,6 +312,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                   Approve & Verify
                 </button>
               </div>
+
             </div>
           )}
         </div>

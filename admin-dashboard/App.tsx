@@ -35,7 +35,7 @@ const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard', users: 'User Management', analytics: 'Analytics',
   payments: 'Finances & Revenue', reports: 'Safety Reports', content: 'Content Moderation',
   support: 'Support Desk', agent: 'My Tickets', settings: 'System Settings',
-  verification: 'ID Verification', broadcasts: 'Broadcasts', appeals: 'Appeals',
+  verification: 'Verification Requests', broadcasts: 'Broadcasts', appeals: 'Appeals',
   churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
 };
 
