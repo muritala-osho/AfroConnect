@@ -23,6 +23,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
+import { useMaintenance } from "@/context/MaintenanceContext";
 
 const { width } = Dimensions.get("window");
 
@@ -103,10 +104,16 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { theme, themeMode } = useTheme();
   const { login } = useAuth();
   const { showAlert, AlertComponent } = useThemedAlert();
+  const { checkHealth } = useMaintenance();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Check API health when the screen mounts — triggers MaintenanceOverlay if down
+  useEffect(() => {
+    checkHealth();
+  }, []);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -167,7 +174,17 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         );
         return;
       } else {
-        showAlert("Sign In Failed", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
+        // Network / connection error → check if backend is down
+        const isNetworkError =
+          errorMsg.toLowerCase().includes("network") ||
+          errorMsg.toLowerCase().includes("fetch") ||
+          errorMsg.toLowerCase().includes("connection") ||
+          error.name === "TypeError";
+        if (isNetworkError) {
+          checkHealth(); // will trigger MaintenanceOverlay if API is down
+        } else {
+          showAlert("Sign In Failed", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
+        }
       }
     } finally {
       setLoading(false);

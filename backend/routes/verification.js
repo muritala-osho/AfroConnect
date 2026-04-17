@@ -235,6 +235,84 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
   }
 });
 
+// ─── POST /me/verify-face ─────────────────────────────────────────────────────
+// Mobile-user endpoint.  Accepts a live selfie, compares it to the user's
+// first profile photo, and returns { verified, similarity }.
+// If similarity ≥ 0.85 the user record is updated immediately.
+router.post('/me/verify-face', protect, upload.fields([
+  { name: 'photo', maxCount: 1 },
+]), async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('name photos verified verificationStatus selfiePhoto');
+
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.verified && user.verificationStatus === 'approved') {
+      return res.json({ success: true, verified: true, similarity: 1, alreadyVerified: true });
+    }
+
+    const files = req.files;
+    if (!files?.photo?.[0]) {
+      return res.status(400).json({ success: false, message: 'Photo is required' });
+    }
+
+    const profilePhotoUrl =
+      user.photos?.[0]?.url ||
+      (typeof user.photos?.[0] === 'string' ? user.photos[0] : null);
+
+    if (!profilePhotoUrl) {
+      return res.status(422).json({ success: false, message: 'Please add a profile photo first.' });
+    }
+
+    const { compareFaces } = require('../utils/faceVerifier');
+    const result = await compareFaces(files.photo[0].buffer, profilePhotoUrl, 0.85);
+
+    if (result.verified) {
+      // Upload selfie to Cloudinary and record it
+      let selfieUrl = null;
+      try {
+        const selfieResult = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'afroconnect_verifications/selfies' },
+            (error, r) => (error ? reject(error) : resolve(r))
+          );
+          stream.end(files.photo[0].buffer);
+        });
+        selfieUrl = selfieResult.secure_url;
+      } catch (_) {}
+
+      await User.findByIdAndUpdate(req.user._id, {
+        verified: true,
+        verificationStatus: 'approved',
+        verificationApprovedAt: new Date(),
+        verificationRejectionReason: null,
+        ...(selfieUrl ? {
+          selfiePhoto: { url: selfieUrl, submittedAt: new Date() },
+        } : {}),
+      });
+
+      try {
+        const io = req.app.get('io');
+        if (io) io.to(req.user._id.toString()).emit('user:verified', {
+          userId: req.user._id.toString(), verified: true, verificationStatus: 'approved',
+        });
+      } catch (_) {}
+    }
+
+    return res.json({
+      success:    true,
+      verified:   result.verified,
+      similarity: result.similarity,
+      liveness:   result.liveness,
+      ...(result.error ? { reason: result.error } : {}),
+    });
+  } catch (error) {
+    console.error('[me/verify-face] Error:', error.message);
+    return res.status(500).json({ success: false, message: 'Verification failed. Please try again.' });
+  }
+});
+
 // ─── POST /verify-face/by-url ─────────────────────────────────────────────────
 // Admin-facing: compare user's stored selfie URL vs profile photo.
 // Body: { userId }  (no file upload — uses selfie already on record)
