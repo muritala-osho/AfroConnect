@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  View, StyleSheet, Animated, Pressable, Dimensions,
-} from 'react-native';
+import { StyleSheet, Animated, Pressable, Dimensions, View } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,7 +7,6 @@ import { useMaintenance } from '@/context/MaintenanceContext';
 import { BlurView } from 'expo-blur';
 
 const { width: SW } = Dimensions.get('window');
-
 const RETRY_DELAY_MS = 15_000;
 
 export default function MaintenanceOverlay() {
@@ -40,12 +37,12 @@ export default function MaintenanceOverlay() {
 
   useEffect(() => {
     if (!isMaintenance) return;
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1,    duration: 1000, useNativeDriver: true }),
-      ])
-    ).start();
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulseAnim, { toValue: 1.08, duration: 1200, useNativeDriver: true }),
+      Animated.timing(pulseAnim, { toValue: 1,    duration: 1200, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
   }, [isMaintenance]);
 
   const startCountdown = () => {
@@ -83,37 +80,64 @@ export default function MaintenanceOverlay() {
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]} pointerEvents="box-none">
-      <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-      <Animated.View style={[styles.card, { transform: [{ translateY: slideAnim }] }]}>
-        <LinearGradient colors={['#1E1B4B', '#312E81', '#1E1B4B']} style={styles.cardGradient}>
-          <View style={[styles.blob, styles.blobTL, { backgroundColor: '#6366F180' }]} />
-          <View style={[styles.blob, styles.blobBR, { backgroundColor: '#818CF830' }]} />
+      <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
 
+      <Animated.View style={[styles.card, { transform: [{ translateY: slideAnim }] }]}>
+        <LinearGradient
+          colors={['#052e16', '#064e3b', '#052e16']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.cardGrad}
+        >
+          {/* Glow blobs */}
+          <View style={[styles.blob, styles.blobTL]} />
+          <View style={[styles.blob, styles.blobBR]} />
+
+          {/* Icon */}
           <Animated.View style={[styles.iconWrap, { transform: [{ scale: pulseAnim }] }]}>
-            <Ionicons name="construct-outline" size={52} color="#818CF8" />
+            <View style={styles.iconRing} />
+            <View style={styles.iconInner}>
+              <Ionicons name="construct" size={40} color="#10B981" />
+            </View>
           </Animated.View>
 
-          <ThemedText style={styles.title}>We're Under Maintenance</ThemedText>
+          {/* Text */}
+          <ThemedText style={styles.title}>Under Maintenance</ThemedText>
           <ThemedText style={styles.subtitle}>
-            AfroConnect is temporarily offline for scheduled maintenance. We'll be back very shortly — thank you for your patience.
+            AfroConnect is temporarily offline for scheduled maintenance.{'\n'}
+            We'll be back shortly — thank you for your patience.
           </ThemedText>
 
+          {/* Status pill */}
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
             <ThemedText style={styles.statusText}>Maintenance in progress</ThemedText>
           </View>
 
-          <Pressable style={[styles.retryBtn, checking && styles.retryBtnDisabled]} onPress={retry} disabled={checking}>
-            <LinearGradient colors={['#6366F1', '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.retryBtnInner}>
+          {/* Divider */}
+          <View style={styles.divider} />
+
+          {/* Retry button */}
+          <Pressable
+            style={[styles.retryBtn, checking && { opacity: 0.65 }]}
+            onPress={retry}
+            disabled={checking}
+          >
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.retryBtnInner}
+            >
               <Animated.View style={{ transform: [{ rotate: checking ? spin : '0deg' }] }}>
                 <Ionicons name="refresh" size={18} color="#FFF" />
               </Animated.View>
-              <ThemedText style={styles.retryBtnText}>{checking ? 'Checking…' : 'Try Again'}</ThemedText>
+              <ThemedText style={styles.retryBtnText}>
+                {checking ? 'Checking…' : 'Try Again'}
+              </ThemedText>
             </LinearGradient>
           </Pressable>
 
           {!checking && (
-            <ThemedText style={styles.countdownText}>Auto-retrying in {countdown}s</ThemedText>
+            <ThemedText style={styles.countdown}>Auto-retrying in {countdown}s</ThemedText>
           )}
         </LinearGradient>
       </Animated.View>
@@ -130,98 +154,73 @@ const styles = StyleSheet.create({
   },
   card: {
     width: SW - 40,
-    maxWidth: 380,
-    borderRadius: 32,
+    maxWidth: 360,
+    borderRadius: 28,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.55,
     shadowRadius: 40,
     elevation: 30,
   },
-  cardGradient: {
-    padding: 36,
+  cardGrad: {
+    padding: 32,
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
     overflow: 'hidden',
   },
   blob: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    opacity: 0.6,
+    position: 'absolute', width: 180, height: 180, borderRadius: 90, opacity: 0.5,
   },
-  blobTL: { top: -60, left: -60 },
-  blobBR: { bottom: -60, right: -60 },
-  iconWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-    backgroundColor: '#6366F120',
+  blobTL: { top: -70, left: -70, backgroundColor: '#10B98140' },
+  blobBR: { bottom: -70, right: -70, backgroundColor: '#05966930' },
+
+  iconWrap:  { alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  iconRing: {
+    position: 'absolute', width: 100, height: 100, borderRadius: 50,
+    borderWidth: 1.5, borderColor: 'rgba(16,185,129,0.30)',
+    backgroundColor: 'rgba(16,185,129,0.08)',
   },
+  iconInner: {
+    width: 76, height: 76, borderRadius: 38,
+    backgroundColor: 'rgba(16,185,129,0.18)',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(16,185,129,0.35)',
+  },
+
   title: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#F1F5F9',
-    textAlign: 'center',
-    letterSpacing: -0.3,
+    fontSize: 22, fontWeight: '900', color: '#F0FDF4',
+    textAlign: 'center', letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 14,
-    color: 'rgba(148,163,184,0.90)',
-    textAlign: 'center',
-    lineHeight: 21,
-    maxWidth: 280,
+    fontSize: 14, color: 'rgba(187,247,208,0.75)',
+    textAlign: 'center', lineHeight: 21, maxWidth: 280,
   },
+
   statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginTop: 4,
-    backgroundColor: '#6366F115',
-    borderColor: '#6366F140',
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20, borderWidth: 1,
+    backgroundColor: 'rgba(16,185,129,0.10)',
+    borderColor: 'rgba(16,185,129,0.35)',
+    marginTop: 2,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#818CF8',
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
+  statusText: { fontSize: 12, fontWeight: '700', color: '#6EE7B7' },
+
+  divider: {
+    width: '100%', height: 1,
+    backgroundColor: 'rgba(16,185,129,0.15)', marginVertical: 4,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#A5B4FC',
-  },
-  retryBtn: {
-    width: '100%',
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  retryBtnDisabled: { opacity: 0.65 },
+
+  retryBtn:      { width: '100%', borderRadius: 16, overflow: 'hidden' },
   retryBtnInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 10, paddingVertical: 15,
   },
-  retryBtnText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  countdownText: {
-    fontSize: 11,
-    color: 'rgba(148,163,184,0.55)',
-    fontWeight: '600',
+  retryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+
+  countdown: {
+    fontSize: 11, color: 'rgba(167,243,208,0.45)', fontWeight: '600',
   },
 });
