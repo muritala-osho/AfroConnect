@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  View, StyleSheet, Pressable, ScrollView, ActivityIndicator,
+  View, StyleSheet, Pressable, ScrollView,
+  ActivityIndicator, Animated,
 } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -15,52 +16,72 @@ import { getApiBaseUrl } from '@/constants/config';
 
 const MIN_RECORD_SECONDS = 30;
 const MAX_RECORD_SECONDS = 35;
+const BRAND            = '#10B981';
+const BRAND_DARK       = '#059669';
+const SCREEN_BG        = '#0D0D0D';
+const CARD_BG          = '#1A1A1A';
+const CARD_BG2         = '#141414';
 
 const STEPS = [
-  { key: 'blink', emoji: '😉', icon: 'eye-outline'                  as const, title: 'Blink your eyes',   desc: 'Look at the camera and blink naturally' },
-  { key: 'left',  emoji: '👈', icon: 'arrow-back-circle-outline'    as const, title: 'Turn head left',    desc: 'Slowly turn your head to the left' },
-  { key: 'right', emoji: '👉', icon: 'arrow-forward-circle-outline' as const, title: 'Turn head right',   desc: 'Then slowly turn your head to the right' },
+  { key: 'blink', emoji: '😉', icon: 'eye-outline'                  as const, label: 'Blink your eyes' },
+  { key: 'left',  emoji: '👈', icon: 'arrow-back-circle-outline'    as const, label: 'Turn head left'  },
+  { key: 'right', emoji: '👉', icon: 'arrow-forward-circle-outline' as const, label: 'Turn head right' },
 ];
 
-interface VerificationResult {
-  submitted: boolean;
-  status: 'pending' | 'failed';
-  videoUrl?: string;
-  reason?: string;
-}
+type ScreenState =
+  | 'loading'
+  | 'intro'
+  | 'camera_idle'
+  | 'camera_recording'
+  | 'result'
+  | 'status_pending'
+  | 'status_rejected';
 
-function Corner({ top, bottom, left, right, color }: any) {
+// ─── Pulse ring component ─────────────────────────────────────────────────────
+function PulseRing({ color = BRAND }: { color?: string }) {
+  const scale   = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(scale,   { toValue: 1.5, duration: 900, useNativeDriver: true }),
+          Animated.timing(scale,   { toValue: 1,   duration: 900, useNativeDriver: true }),
+        ]),
+        Animated.sequence([
+          Animated.timing(opacity, { toValue: 0,   duration: 900, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.6, duration: 900, useNativeDriver: true }),
+        ]),
+      ])
+    ).start();
+  }, []);
+
   return (
-    <View style={{
-      position: 'absolute', width: 26, height: 26,
-      top, bottom, left, right,
-      borderColor: color,
-      borderTopWidth:    top    !== undefined ? 3 : 0,
-      borderBottomWidth: bottom !== undefined ? 3 : 0,
-      borderLeftWidth:   left   !== undefined ? 3 : 0,
-      borderRightWidth:  right  !== undefined ? 3 : 0,
+    <Animated.View style={{
+      position: 'absolute', width: 80, height: 80, borderRadius: 40,
+      borderWidth: 2, borderColor: color,
+      transform: [{ scale }], opacity,
     }} />
   );
 }
 
-type ScreenState = 'loading' | 'intro' | 'camera' | 'uploading' | 'result' | 'status_pending' | 'status_rejected';
-
 export default function VerificationScreen() {
-  const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+  const insets   = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { token, user } = useAuth();
 
-  const [screen, setScreen] = useState<ScreenState>('loading');
-  const [permission, requestPermission] = useCameraPermissions();
-  const [cameraReady, setCameraReady] = useState(false);
-  const [recording, setRecording] = useState(false);
-  const [recordSeconds, setRecordSeconds] = useState(0);
-  const [canSubmit, setCanSubmit] = useState(false);
-  const [result, setResult] = useState<VerificationResult | null>(null);
-  const [torchOn, setTorchOn] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-  const [requestDate, setRequestDate] = useState<string | null>(null);
+  const [screen,         setScreen]         = useState<ScreenState>('loading');
+  const [permission,     requestPermission] = useCameraPermissions();
+  const [cameraReady,    setCameraReady]    = useState(false);
+  const [recording,      setRecording]      = useState(false);
+  const [recordSeconds,  setRecordSeconds]  = useState(0);
+  const [canSubmit,      setCanSubmit]      = useState(false);
+  const [torchOn,        setTorchOn]        = useState(false);
+  const [rejectionReason,setRejectionReason]= useState<string | null>(null);
+  const [requestDate,    setRequestDate]    = useState<string | null>(null);
+  const [submitting,     setSubmitting]     = useState(false);
 
   const cameraRef             = useRef<any>(null);
   const recordingPromiseRef   = useRef<Promise<{ uri: string }> | null>(null);
@@ -69,9 +90,9 @@ export default function VerificationScreen() {
   const timerRef              = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Check verification status on mount ──────────────────────────────────
+  // ── Check existing status on mount ──────────────────────────────────────────
   useEffect(() => {
-    const checkStatus = async () => {
+    (async () => {
       try {
         const resp = await fetch(`${getApiBaseUrl()}/verification/status`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -84,7 +105,7 @@ export default function VerificationScreen() {
             setScreen('status_pending');
           } else if (s === 'rejected') {
             setRejectionReason(data.data?.rejectionReason || null);
-            setRequestDate(data.data?.requestDate || null);
+            setRequestDate(data.data?.requestDate  || null);
             setScreen('status_rejected');
           } else {
             setScreen('intro');
@@ -95,28 +116,57 @@ export default function VerificationScreen() {
       } catch {
         setScreen('intro');
       }
-    };
-    checkStatus();
+    })();
   }, [token]);
 
   useEffect(() => {
     if (!permission) requestPermission();
-  }, [permission, requestPermission]);
+  }, [permission]);
 
+  // ── Cleanup on unmount ───────────────────────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      if (timerRef.current)   clearInterval(timerRef.current);
+      if (autoStopRef.current) clearTimeout(autoStopRef.current);
+      if (recordingPromiseRef.current && cameraRef.current && !uploadStartedRef.current) {
+        try { cameraRef.current.stopRecording(); } catch {}
+      }
+    };
+  }, []);
+
+  // ── Start recording (manual tap) ─────────────────────────────────────────────
+  const startRecording = useCallback(() => {
+    if (!cameraRef.current || recordingPromiseRef.current || uploadStartedRef.current || !cameraReady) return;
+    setRecording(true);
+    setRecordSeconds(0);
+    setCanSubmit(false);
+    setScreen('camera_recording');
+    recordingStartedAtRef.current = Date.now();
+    recordingPromiseRef.current = cameraRef.current.recordAsync({ maxDuration: MAX_RECORD_SECONDS });
+    recordingPromiseRef.current?.catch(() => null);
+
+    timerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - recordingStartedAtRef.current) / 1000);
+      setRecordSeconds(elapsed);
+      if (elapsed >= MIN_RECORD_SECONDS) setCanSubmit(true);
+    }, 500);
+
+    autoStopRef.current = setTimeout(() => stopAndSaveVideo(), MAX_RECORD_SECONDS * 1000);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }, [cameraReady]);
+
+  // ── Submit — instant result, background upload ───────────────────────────────
   const stopAndSaveVideo = useCallback(() => {
     if (uploadStartedRef.current) return;
     uploadStartedRef.current = true;
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current)    clearInterval(timerRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     setTorchOn(false);
     setRecording(false);
-
-    // Show pending immediately — upload runs in background
-    setResult({ submitted: true, status: 'pending' });
+    setSubmitting(true);
     setScreen('result');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Background upload — fire and forget
     (async () => {
       try {
         if (cameraRef.current && recordingPromiseRef.current) {
@@ -133,382 +183,124 @@ export default function VerificationScreen() {
           });
         }
       } catch {
-        // Silent — user already sees pending, admin will review when upload lands
+        // silent — user already sees pending
+      } finally {
+        setSubmitting(false);
       }
     })();
   }, [token, user?.id]);
 
-  const startRecording = useCallback(() => {
-    if (!cameraRef.current || recordingPromiseRef.current || uploadStartedRef.current) return;
-    setRecording(true);
-    setRecordSeconds(0);
-    setCanSubmit(false);
-    recordingStartedAtRef.current = Date.now();
-    recordingPromiseRef.current = cameraRef.current.recordAsync({ maxDuration: MAX_RECORD_SECONDS });
-    recordingPromiseRef.current?.catch(() => null);
-
-    timerRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - recordingStartedAtRef.current) / 1000);
-      setRecordSeconds(elapsed);
-      if (elapsed >= MIN_RECORD_SECONDS) setCanSubmit(true);
-    }, 500);
-
-    autoStopRef.current = setTimeout(() => {
-      stopAndSaveVideo();
-    }, MAX_RECORD_SECONDS * 1000);
-  }, [stopAndSaveVideo]);
-
-  useEffect(() => {
-    if (screen !== 'camera' || !permission?.granted || !cameraReady) return;
-    startRecording();
-  }, [screen, permission?.granted, cameraReady, startRecording]);
-
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-      if (autoStopRef.current) clearTimeout(autoStopRef.current);
-      if (recordingPromiseRef.current && cameraRef.current && !uploadStartedRef.current) {
-        try { cameraRef.current.stopRecording(); } catch {}
-      }
-    };
-  }, []);
-
-  const startFresh = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
+  // ── Reset to try again ───────────────────────────────────────────────────────
+  const tryAgain = () => {
+    if (timerRef.current)    clearInterval(timerRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     uploadStartedRef.current    = false;
     recordingPromiseRef.current = null;
-    setResult(null);
     setRecording(false);
     setRecordSeconds(0);
     setCanSubmit(false);
     setTorchOn(false);
     setCameraReady(false);
-    setScreen('camera');
+    setScreen('camera_idle');
   };
 
   const timerPct   = Math.min((recordSeconds / MIN_RECORD_SECONDS) * 100, 100);
-  const timerColor = recordSeconds >= MIN_RECORD_SECONDS ? '#10B981'
-    : recordSeconds >= 15 ? '#f59e0b'
-    : '#ef4444';
+  const secsLeft   = Math.max(0, MIN_RECORD_SECONDS - recordSeconds);
+  const timerColor = recordSeconds >= MIN_RECORD_SECONDS ? BRAND : recordSeconds >= 15 ? '#f59e0b' : '#ef4444';
 
-  // ── LOADING ───────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // LOADING
+  // ════════════════════════════════════════════════════════════════════════════
   if (screen === 'loading') {
     return (
-      <View style={[styles.container, styles.centerContent, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color="#10B981" />
-        <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>Checking status…</ThemedText>
+      <View style={[s.fill, s.center, { backgroundColor: SCREEN_BG }]}>
+        <ActivityIndicator size="large" color={BRAND} />
+        <ThemedText style={s.loadingText}>Checking status…</ThemedText>
       </View>
     );
   }
 
-  // ── STATUS: PENDING ───────────────────────────────────────────────────────
-  if (screen === 'status_pending') {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <LinearGradient
-          colors={['#f59e0b', '#d97706']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
-        >
-          <Pressable style={styles.headerBackBtn} onPress={() => navigation.goBack()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </Pressable>
-          <View style={{ alignItems: 'center' }}>
-            <View style={styles.headerIconWrap}>
-              <View style={[styles.headerIconRing, { borderColor: 'rgba(255,255,255,0.28)' }]} />
-              <View style={[styles.headerIconInner, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-                <Ionicons name="time-outline" size={44} color="#fff" />
-              </View>
-            </View>
-            <ThemedText style={styles.headerTitle}>Under Review</ThemedText>
-            <ThemedText style={styles.headerSub}>
-              Your verification video has been submitted and is being reviewed by our team
-            </ThemedText>
-          </View>
-        </LinearGradient>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: insets.bottom + 32 }}>
-
-          {/* Status card */}
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: '#f59e0b30' }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIconBadge, { backgroundColor: '#f59e0b20' }]}>
-                <Ionicons name="hourglass-outline" size={16} color="#f59e0b" />
-              </View>
-              <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Review in Progress</ThemedText>
-            </View>
-            {requestDate && (
-              <View style={styles.statusInfoRow}>
-                <Ionicons name="calendar-outline" size={15} color={theme.textSecondary as string} />
-                <ThemedText style={[styles.statusInfoText, { color: theme.textSecondary }]}>
-                  Submitted on {new Date(requestDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                </ThemedText>
-              </View>
-            )}
-            <View style={styles.statusInfoRow}>
-              <Ionicons name="person-outline" size={15} color={theme.textSecondary as string} />
-              <ThemedText style={[styles.statusInfoText, { color: theme.textSecondary }]}>
-                A team member will review your video manually
-              </ThemedText>
-            </View>
-            <View style={styles.statusInfoRow}>
-              <Ionicons name="notifications-outline" size={15} color={theme.textSecondary as string} />
-              <ThemedText style={[styles.statusInfoText, { color: theme.textSecondary }]}>
-                You will be notified once the review is complete
-              </ThemedText>
-            </View>
-          </View>
-
-          {/* What happens next */}
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIconBadge, { backgroundColor: '#10B98120' }]}>
-                <Ionicons name="list-outline" size={16} color="#10B981" />
-              </View>
-              <ThemedText style={[styles.cardTitle, { color: theme.text }]}>What happens next</ThemedText>
-            </View>
-            {[
-              { icon: 'checkmark-circle-outline' as const, color: '#10B981', text: 'If approved — your verified badge is added instantly' },
-              { icon: 'close-circle-outline' as const, color: '#ef4444', text: 'If rejected — you will see the reason and can resubmit' },
-              { icon: 'time-outline' as const, color: '#f59e0b', text: 'Reviews typically complete within 24 hours' },
-            ].map((item, i) => (
-              <View key={i} style={[styles.howRow, i > 0 && { marginTop: 12 }]}>
-                <View style={[styles.howIconCircle, { backgroundColor: item.color + '18' }]}>
-                  <Ionicons name={item.icon} size={18} color={item.color} />
-                </View>
-                <ThemedText style={[styles.howText, { color: theme.textSecondary }]}>{item.text}</ThemedText>
-              </View>
-            ))}
-          </View>
-
-          <View style={[styles.tipRow, { backgroundColor: '#f59e0b10', borderColor: '#f59e0b30' }]}>
-            <Ionicons name="information-circle-outline" size={18} color="#f59e0b" />
-            <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
-              Please do not resubmit while your current video is under review. This may delay the process.
-            </ThemedText>
-          </View>
-
-          <Pressable style={styles.ctaBtn} onPress={() => navigation.goBack()}>
-            <LinearGradient colors={['#f59e0b', '#d97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaBtnGrad}>
-              <Ionicons name="arrow-back" size={20} color="#fff" />
-              <ThemedText style={styles.ctaBtnText}>Back to Profile</ThemedText>
-            </LinearGradient>
-          </Pressable>
-
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // ── STATUS: REJECTED ──────────────────────────────────────────────────────
-  if (screen === 'status_rejected') {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <LinearGradient
-          colors={['#ef4444', '#dc2626']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
-        >
-          <Pressable style={styles.headerBackBtn} onPress={() => navigation.goBack()} hitSlop={12}>
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </Pressable>
-          <View style={{ alignItems: 'center' }}>
-            <View style={styles.headerIconWrap}>
-              <View style={[styles.headerIconRing, { borderColor: 'rgba(255,255,255,0.28)' }]} />
-              <View style={[styles.headerIconInner, { backgroundColor: 'rgba(255,255,255,0.18)' }]}>
-                <Ionicons name="close-circle-outline" size={44} color="#fff" />
-              </View>
-            </View>
-            <ThemedText style={styles.headerTitle}>Verification Rejected</ThemedText>
-            <ThemedText style={styles.headerSub}>
-              Unfortunately your verification was not approved. You can read the reason below and try again.
-            </ThemedText>
-          </View>
-        </LinearGradient>
-
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 20, gap: 14, paddingBottom: insets.bottom + 32 }}>
-
-          {/* Rejection reason */}
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: '#ef444430' }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIconBadge, { backgroundColor: '#ef444420' }]}>
-                <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
-              </View>
-              <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Reason for Rejection</ThemedText>
-            </View>
-            <View style={[styles.rejectionBox, { backgroundColor: '#ef444408', borderColor: '#ef444425' }]}>
-              <ThemedText style={[styles.rejectionText, { color: theme.text }]}>
-                {rejectionReason || 'Your verification video did not meet our requirements.'}
-              </ThemedText>
-            </View>
-            {requestDate && (
-              <View style={[styles.statusInfoRow, { marginTop: 12 }]}>
-                <Ionicons name="calendar-outline" size={14} color={theme.textSecondary as string} />
-                <ThemedText style={[styles.statusInfoText, { color: theme.textSecondary }]}>
-                  Reviewed on {new Date(requestDate).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
-                </ThemedText>
-              </View>
-            )}
-          </View>
-
-          {/* Tips to resubmit */}
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.cardIconBadge, { backgroundColor: '#10B98120' }]}>
-                <Ionicons name="refresh-circle-outline" size={16} color="#10B981" />
-              </View>
-              <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Tips for resubmission</ThemedText>
-            </View>
-            {[
-              { icon: 'sunny-outline' as const, color: '#f59e0b', text: 'Record in a well-lit room — avoid dark environments' },
-              { icon: 'videocam-outline' as const, color: '#10B981', text: 'Hold the phone steady at face level' },
-              { icon: 'eye-outline' as const, color: '#8B5CF6', text: 'Clearly perform each step — blink, turn left, turn right' },
-              { icon: 'person-outline' as const, color: '#3B82F6', text: 'Make sure your full face is clearly visible throughout' },
-            ].map((item, i) => (
-              <View key={i} style={[styles.howRow, i > 0 && { marginTop: 12 }]}>
-                <View style={[styles.howIconCircle, { backgroundColor: item.color + '18' }]}>
-                  <Ionicons name={item.icon} size={18} color={item.color} />
-                </View>
-                <ThemedText style={[styles.howText, { color: theme.textSecondary }]}>{item.text}</ThemedText>
-              </View>
-            ))}
-          </View>
-
-          {/* CTA */}
-          <Pressable style={styles.ctaBtn} onPress={startFresh}>
-            <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaBtnGrad}>
-              <Ionicons name="videocam" size={20} color="#fff" />
-              <ThemedText style={styles.ctaBtnText}>Record New Video</ThemedText>
-            </LinearGradient>
-          </Pressable>
-
-          <Pressable
-            style={[styles.ctaBtn, { marginTop: -4 }]}
-            onPress={() => navigation.goBack()}
-          >
-            <View style={[styles.ctaBtnGrad, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]}>
-              <Ionicons name="arrow-back" size={20} color={theme.textSecondary as string} />
-              <ThemedText style={[styles.ctaBtnText, { color: theme.textSecondary }]}>Back to Profile</ThemedText>
-            </View>
-          </Pressable>
-
-        </ScrollView>
-      </View>
-    );
-  }
-
-  // ─── INTRO ────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════════════
+  // INTRO
+  // ════════════════════════════════════════════════════════════════════════════
   if (screen === 'intro') {
     return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
 
-          <LinearGradient
-            colors={['#10B981', '#059669', '#0D9488']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={[styles.gradientHeader, { paddingTop: insets.top + 12 }]}
-          >
-            <Pressable style={styles.headerBackBtn} onPress={() => navigation.goBack()} hitSlop={12}>
-              <Ionicons name="arrow-back" size={22} color="#fff" />
+          {/* Header */}
+          <View style={[s.introHeader, { paddingTop: insets.top + 24 }]}>
+            <Pressable style={s.backBtn} onPress={() => navigation.goBack()} hitSlop={12}>
+              <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.7)" />
             </Pressable>
-            <View style={{ alignItems: 'center' }}>
-              <View style={styles.headerIconWrap}>
-                <View style={styles.headerIconRing} />
-                <View style={styles.headerIconInner}>
-                  <Ionicons name="shield-checkmark" size={44} color="#fff" />
-                </View>
-              </View>
-              <ThemedText style={styles.headerTitle}>Face Verification</ThemedText>
-              <ThemedText style={styles.headerSub}>
-                Earn your verified badge and build trust with other members
-              </ThemedText>
+            <View style={s.shieldWrap}>
+              <LinearGradient colors={[BRAND, BRAND_DARK]} style={s.shieldCircle}>
+                <Ionicons name="shield-checkmark" size={36} color="#fff" />
+              </LinearGradient>
             </View>
-          </LinearGradient>
+            <ThemedText style={s.introTitle}>Get Verified</ThemedText>
+            <ThemedText style={s.introSub}>
+              Quick video to confirm it's really you
+            </ThemedText>
+          </View>
 
-          <View style={styles.bodyPad}>
+          <View style={{ paddingHorizontal: 20, gap: 16 }}>
 
-            {/* Steps card */}
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardHeader}>
-                <View style={styles.cardIconBadge}>
-                  <Ionicons name="videocam-outline" size={16} color="#10B981" />
+            {/* Instruction card */}
+            <View style={[s.card, { backgroundColor: CARD_BG }]}>
+              <View style={s.cardRow}>
+                <View style={[s.cardIcon, { backgroundColor: BRAND + '20' }]}>
+                  <Ionicons name="videocam-outline" size={18} color={BRAND} />
                 </View>
-                <ThemedText style={[styles.cardTitle, { color: theme.text }]}>What you will do</ThemedText>
+                <ThemedText style={s.cardTitle}>What to do in the video</ThemedText>
               </View>
-              {STEPS.map((s, i) => (
-                <View key={s.key} style={[styles.stepRow, i < STEPS.length - 1 && styles.stepRowDivider]}>
-                  <View style={styles.stepNumBadge}>
-                    <ThemedText style={styles.stepNumText}>{i + 1}</ThemedText>
+              {STEPS.map((step, i) => (
+                <View key={step.key} style={[s.stepRow, i > 0 && { marginTop: 14 }]}>
+                  <View style={[s.stepDot, { backgroundColor: BRAND }]}>
+                    <ThemedText style={s.stepDotNum}>{i + 1}</ThemedText>
                   </View>
-                  <View style={styles.stepIconCircle}>
-                    <Ionicons name={s.icon} size={20} color="#10B981" />
+                  <View style={[s.stepIcon, { backgroundColor: CARD_BG2 }]}>
+                    <Ionicons name={step.icon} size={18} color={BRAND} />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText style={[styles.stepLabel, { color: theme.text }]}>{s.title}</ThemedText>
-                    <ThemedText style={[styles.stepDesc, { color: theme.textSecondary }]}>{s.desc}</ThemedText>
-                  </View>
+                  <ThemedText style={s.stepLabel}>{step.label}</ThemedText>
                 </View>
               ))}
             </View>
 
-            {/* How it works */}
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBadge, { backgroundColor: '#3B82F620' }]}>
-                  <Ionicons name="information-circle-outline" size={16} color="#3B82F6" />
+            {/* Tips */}
+            <View style={[s.card, { backgroundColor: CARD_BG }]}>
+              <View style={s.cardRow}>
+                <View style={[s.cardIcon, { backgroundColor: '#f59e0b20' }]}>
+                  <Ionicons name="sunny-outline" size={18} color="#f59e0b" />
                 </View>
-                <ThemedText style={[styles.cardTitle, { color: theme.text }]}>How it works</ThemedText>
+                <ThemedText style={s.cardTitle}>Tips for best results</ThemedText>
               </View>
               {[
-                { icon: 'videocam-outline' as const, color: '#10B981', bg: '#10B98120', text: 'A 30-second video will be recorded' },
-                { icon: 'list-outline' as const, color: '#8B5CF6', bg: '#8B5CF620', text: 'Follow the 3 on-screen instructions during recording' },
-                { icon: 'cloud-upload-outline' as const, color: '#3B82F6', bg: '#3B82F620', text: 'Video is submitted securely for admin review' },
-                { icon: 'checkmark-circle-outline' as const, color: '#10B981', bg: '#10B98120', text: 'Approval adds the verified badge to your profile' },
-              ].map((item, i) => (
-                <View key={i} style={[styles.howRow, i > 0 && { marginTop: 12 }]}>
-                  <View style={[styles.howIconCircle, { backgroundColor: item.bg }]}>
-                    <Ionicons name={item.icon} size={18} color={item.color} />
-                  </View>
-                  <ThemedText style={[styles.howText, { color: theme.textSecondary }]}>{item.text}</ThemedText>
+                { icon: 'flashlight-outline' as const, c: '#f59e0b', t: 'Dark room? Use the torch button on camera' },
+                { icon: 'person-outline'     as const, c: BRAND,     t: 'Keep your face fully visible throughout' },
+                { icon: 'lock-closed-outline'as const, c: '#8B5CF6', t: 'Video is private — admin review only' },
+              ].map((tip, i) => (
+                <View key={i} style={[s.tipRow, i > 0 && { marginTop: 10 }]}>
+                  <Ionicons name={tip.icon} size={16} color={tip.c} />
+                  <ThemedText style={s.tipText}>{tip.t}</ThemedText>
                 </View>
               ))}
             </View>
 
-            <View style={[styles.tipRow, { backgroundColor: '#f59e0b10', borderColor: '#f59e0b30' }]}>
-              <Ionicons name="flashlight-outline" size={18} color="#f59e0b" />
-              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
-                In a dark room? Use the <ThemedText style={{ fontWeight: '800', color: theme.text }}>torch button</ThemedText> on the camera screen to light up your face.
-              </ThemedText>
-            </View>
-
-            <View style={[styles.tipRow, { backgroundColor: '#10B98110', borderColor: '#10B98130' }]}>
-              <Ionicons name="sunny-outline" size={18} color="#10B981" />
-              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
-                Be in a <ThemedText style={{ fontWeight: '800', color: theme.text }}>well-lit area</ThemedText> and hold your phone at face level for best results.
-              </ThemedText>
-            </View>
-
-            <View style={[styles.tipRow, { backgroundColor: '#3B82F610', borderColor: '#3B82F630' }]}>
-              <Ionicons name="lock-closed-outline" size={18} color="#3B82F6" />
-              <ThemedText style={[styles.tipText, { color: theme.textSecondary }]}>
-                Your video is <ThemedText style={{ fontWeight: '800', color: theme.text }}>never shared publicly</ThemedText> — admin review only.
-              </ThemedText>
-            </View>
-
+            {/* CTA */}
             <Pressable
-              style={styles.ctaBtn}
+              style={s.ctaWrap}
               onPress={() => {
                 if (!permission?.granted) {
-                  requestPermission().then(res => { if (res.granted) setScreen('camera'); });
+                  requestPermission().then(r => { if (r.granted) setScreen('camera_idle'); });
                 } else {
-                  setScreen('camera');
+                  setScreen('camera_idle');
                 }
               }}
             >
-              <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaBtnGrad}>
+              <LinearGradient colors={[BRAND, BRAND_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
                 <Ionicons name="videocam" size={20} color="#fff" />
-                <ThemedText style={styles.ctaBtnText}>Start Verification</ThemedText>
+                <ThemedText style={s.ctaBtnText}>Open Camera</ThemedText>
               </LinearGradient>
             </Pressable>
 
@@ -518,194 +310,307 @@ export default function VerificationScreen() {
     );
   }
 
-  // ─── CAMERA ───────────────────────────────────────────────────────────────
-  if (screen === 'camera') {
+  // ════════════════════════════════════════════════════════════════════════════
+  // CAMERA — IDLE (waiting for user to tap record)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'camera_idle') {
     return (
-      <View style={styles.cameraFull}>
-        <CameraView
-          ref={cameraRef}
-          style={StyleSheet.absoluteFill}
-          facing="front"
-          mode="video"
-          mute
-          enableTorch={torchOn}
-          onCameraReady={() => setCameraReady(true)}
-        />
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
 
         {/* Top bar */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.85)', 'transparent']}
-          style={[styles.camTop, { paddingTop: insets.top + 8 }]}
-        >
-          <View style={styles.camHeader}>
-            <Pressable style={styles.camBackBtn} onPress={() => navigation.goBack()}>
-              <Ionicons name="arrow-back" size={20} color="#FFF" />
-            </Pressable>
-            <ThemedText style={styles.camTitle}>Face Verification</ThemedText>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {/* Torch toggle */}
-              <Pressable
-                style={[styles.torchBtn, torchOn && styles.torchBtnOn]}
-                onPress={() => setTorchOn(v => !v)}
-              >
-                <Ionicons
-                  name={torchOn ? 'flashlight' : 'flashlight-outline'}
-                  size={16}
-                  color={torchOn ? '#fbbf24' : '#ffffff99'}
-                />
-              </Pressable>
-              {/* REC pill */}
-              <View style={[styles.recPill, { borderColor: recording ? 'rgba(239,68,68,0.55)' : 'rgba(255,255,255,0.2)' }]}>
-                <View style={[styles.recDot, { backgroundColor: recording ? '#ef4444' : '#64748b' }]} />
-                <ThemedText style={styles.recText}>{recording ? 'REC' : 'READY'}</ThemedText>
+        <View style={[s.camTopBar, { paddingTop: insets.top + 12 }]}>
+          <Pressable style={s.camBack} onPress={() => navigation.goBack()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.7)" />
+          </Pressable>
+          <ThemedText style={s.camBarTitle}>Get Verified</ThemedText>
+          <Pressable style={[s.torchBtn, torchOn && s.torchBtnOn]} onPress={() => setTorchOn(v => !v)}>
+            <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={16} color={torchOn ? '#fbbf24' : 'rgba(255,255,255,0.5)'} />
+          </Pressable>
+        </View>
+
+        {/* Camera view */}
+        <View style={s.cameraBox}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="front"
+            mode="video"
+            mute
+            enableTorch={torchOn}
+            onCameraReady={() => setCameraReady(true)}
+          />
+          {/* Face oval guide */}
+          <View style={s.ovalGuide}>
+            <View style={s.ovalInner} />
+          </View>
+        </View>
+
+        {/* Instruction card below camera */}
+        <View style={[s.idleCard, { backgroundColor: CARD_BG }]}>
+          <ThemedText style={s.idleCardTitle}>While recording, please:</ThemedText>
+          {STEPS.map((step, i) => (
+            <View key={step.key} style={[s.idleStepRow, i > 0 && { marginTop: 10 }]}>
+              <View style={[s.idleStepIcon, { backgroundColor: BRAND + '18' }]}>
+                <Ionicons name={step.icon} size={14} color={BRAND} />
               </View>
+              <ThemedText style={s.idleStepText}>
+                {step.emoji}  {step.label}
+              </ThemedText>
             </View>
-          </View>
-        </LinearGradient>
+          ))}
+        </View>
 
-        {/* Timer badge */}
-        <View style={styles.timerWrap} pointerEvents="none">
-          <View style={[styles.timerBadge, { borderColor: timerColor + '60' }]}>
-            <ThemedText style={[styles.timerNum, { color: timerColor }]}>{recordSeconds}s</ThemedText>
-            <ThemedText style={styles.timerSub}>/ 30s</ThemedText>
+        {/* Record button */}
+        <View style={[s.recordBtnWrap, { paddingBottom: insets.bottom + 28 }]}>
+          <Pressable
+            onPress={startRecording}
+            disabled={!cameraReady}
+            style={s.recordBtnOuter}
+          >
+            {cameraReady && <PulseRing color={BRAND} />}
+            <LinearGradient colors={[BRAND, BRAND_DARK]} style={s.recordBtnInner}>
+              <Ionicons name="radio-button-on" size={28} color="#fff" />
+            </LinearGradient>
+          </Pressable>
+          <ThemedText style={s.recordHint}>
+            {cameraReady ? 'Tap to start recording' : 'Starting camera…'}
+          </ThemedText>
+        </View>
+
+      </View>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // CAMERA — RECORDING
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'camera_recording') {
+    return (
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
+
+        {/* Top bar */}
+        <View style={[s.camTopBar, { paddingTop: insets.top + 12 }]}>
+          <View style={s.recPill}>
+            <View style={s.recDot} />
+            <ThemedText style={s.recText}>REC</ThemedText>
+          </View>
+          <ThemedText style={[s.timerText, { color: timerColor }]}>{recordSeconds}s / 30s</ThemedText>
+          <Pressable style={[s.torchBtn, torchOn && s.torchBtnOn]} onPress={() => setTorchOn(v => !v)}>
+            <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={16} color={torchOn ? '#fbbf24' : 'rgba(255,255,255,0.5)'} />
+          </Pressable>
+        </View>
+
+        {/* Camera view */}
+        <View style={s.cameraBox}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing="front"
+            mode="video"
+            mute
+            enableTorch={torchOn}
+          />
+          <View style={s.ovalGuide}>
+            <View style={[s.ovalInner, { borderColor: BRAND + 'CC' }]} />
           </View>
         </View>
 
-        {/* Face oval */}
-        <View style={styles.ovalWrapper} pointerEvents="none">
-          <View style={[styles.faceOval, { borderColor: recording ? '#10B981BB' : 'rgba(255,255,255,0.55)' }]}>
-            <Corner top={-2}    left={-2}  color={recording ? '#10B981' : 'rgba(255,255,255,0.55)'} />
-            <Corner top={-2}    right={-2} color={recording ? '#10B981' : 'rgba(255,255,255,0.55)'} />
-            <Corner bottom={-2} left={-2}  color={recording ? '#10B981' : 'rgba(255,255,255,0.55)'} />
-            <Corner bottom={-2} right={-2} color={recording ? '#10B981' : 'rgba(255,255,255,0.55)'} />
-          </View>
+        {/* Progress bar */}
+        <View style={s.progressOuter}>
+          <View style={[s.progressFill, { width: `${timerPct}%`, backgroundColor: timerColor }]} />
         </View>
 
-        {/* Bottom panel */}
-        <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 20 }]}>
-
-          {/* Static instruction heading */}
-          <ThemedText style={styles.panelHeading}>While recording, please:</ThemedText>
-
-          {/* Static steps — no highlighting, no ticking */}
-          <View style={styles.stepsList}>
-            {STEPS.map((s, i) => (
-              <View key={s.key} style={styles.stepsRow}>
-                <View style={styles.stepsIconCircle}>
-                  <Ionicons name={s.icon} size={16} color="#10B981" />
-                </View>
-                <ThemedText style={styles.stepsLabel}>
-                  {s.emoji}  {s.title}
-                </ThemedText>
+        {/* Steps reminder */}
+        <View style={[s.recStepsCard, { backgroundColor: CARD_BG }]}>
+          <ThemedText style={s.recStepsHeading}>Do these now:</ThemedText>
+          {STEPS.map((step, i) => (
+            <View key={step.key} style={[s.idleStepRow, i > 0 && { marginTop: 8 }]}>
+              <View style={[s.idleStepIcon, { backgroundColor: BRAND + '18' }]}>
+                <Ionicons name={step.icon} size={14} color={BRAND} />
               </View>
-            ))}
-          </View>
+              <ThemedText style={s.idleStepText}>{step.emoji}  {step.label}</ThemedText>
+            </View>
+          ))}
+        </View>
 
-          {/* Time progress bar */}
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${timerPct}%`, backgroundColor: timerColor }]} />
-          </View>
-
-          {/* Submit / waiting */}
+        {/* Submit / waiting */}
+        <View style={[s.submitArea, { paddingBottom: insets.bottom + 24 }]}>
           {canSubmit ? (
-            <Pressable style={styles.submitBtn} onPress={stopAndSaveVideo}>
-              <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.submitBtnGrad}>
+            <Pressable style={s.ctaWrap} onPress={stopAndSaveVideo}>
+              <LinearGradient colors={[BRAND, BRAND_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
                 <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
-                <ThemedText style={styles.submitBtnText}>Submit Video</ThemedText>
+                <ThemedText style={s.ctaBtnText}>Submit Video</ThemedText>
               </LinearGradient>
             </Pressable>
           ) : (
-            <View style={styles.waitRow}>
-              <ActivityIndicator size="small" color="#10B981" />
-              <ThemedText style={styles.waitText}>
-                {recording ? `Recording… ${Math.max(0, MIN_RECORD_SECONDS - recordSeconds)}s remaining` : 'Starting camera…'}
+            <View style={s.waitRow}>
+              <ActivityIndicator size="small" color={BRAND} />
+              <ThemedText style={s.waitText}>Recording… {secsLeft}s until you can submit</ThemedText>
+            </View>
+          )}
+        </View>
+
+      </View>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // RESULT — submitted (pending)
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'result') {
+    return (
+      <View style={[s.fill, s.center, { backgroundColor: SCREEN_BG, paddingHorizontal: 28 }]}>
+        <View style={[s.statusIconWrap, { borderColor: BRAND + '30', backgroundColor: BRAND + '10' }]}>
+          <LinearGradient colors={[BRAND, BRAND_DARK]} style={s.statusIconInner}>
+            <Ionicons name="time-outline" size={40} color="#fff" />
+          </LinearGradient>
+        </View>
+
+        <ThemedText style={s.statusTitle}>Submitted!</ThemedText>
+        <ThemedText style={s.statusSub}>
+          Your video is being sent for review. This usually takes a few minutes.
+        </ThemedText>
+
+        {submitting && (
+          <View style={s.uploadingPill}>
+            <ActivityIndicator size="small" color={BRAND} />
+            <ThemedText style={s.uploadingText}>Uploading in background…</ThemedText>
+          </View>
+        )}
+
+        <Pressable style={[s.ctaWrap, { width: '100%', marginTop: 36 }]} onPress={() => navigation.goBack()}>
+          <LinearGradient colors={[BRAND, BRAND_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
+            <Ionicons name="checkmark-circle" size={20} color="#fff" />
+            <ThemedText style={s.ctaBtnText}>Back to Profile</ThemedText>
+          </LinearGradient>
+        </Pressable>
+      </View>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STATUS — PENDING
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'status_pending') {
+    return (
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
+        <View style={[s.statusTopBar, { paddingTop: insets.top + 16 }]}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.6)" />
+          </Pressable>
+        </View>
+
+        <View style={[s.fill, s.center, { paddingHorizontal: 28 }]}>
+
+          <View style={[s.statusIconWrap, { borderColor: '#f59e0b30', backgroundColor: '#f59e0b10' }]}>
+            <LinearGradient colors={['#f59e0b', '#d97706']} style={s.statusIconInner}>
+              <Ionicons name="hourglass-outline" size={40} color="#fff" />
+            </LinearGradient>
+            <ActivityIndicator size="small" color="#f59e0b" style={{ marginTop: 12 }} />
+          </View>
+
+          <ThemedText style={s.statusTitle}>Verification in Review</ThemedText>
+          <ThemedText style={s.statusSub}>
+            We're checking your video. This usually takes a few minutes to a few hours.
+          </ThemedText>
+
+          {requestDate && (
+            <View style={[s.datePill, { backgroundColor: CARD_BG }]}>
+              <Ionicons name="calendar-outline" size={14} color="rgba(255,255,255,0.4)" />
+              <ThemedText style={s.datePillText}>
+                Submitted {new Date(requestDate).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
               </ThemedText>
             </View>
           )}
 
-        </View>
-      </View>
-    );
-  }
-
-  // ─── UPLOADING ────────────────────────────────────────────────────────────
-  if (screen === 'uploading') {
-    return (
-      <View style={[styles.container, styles.centerContent, { backgroundColor: theme.background }]}>
-        <View style={[styles.uploadIconWrap, { backgroundColor: '#10B98115', borderColor: '#10B98130' }]}>
-          <Ionicons name="cloud-upload-outline" size={52} color="#10B981" />
-        </View>
-        <ThemedText style={[styles.uploadTitle, { color: theme.text }]}>Uploading your video…</ThemedText>
-        <ThemedText style={[styles.uploadSub, { color: theme.textSecondary }]}>
-          Submitting securely for admin review. This only takes a moment.
-        </ThemedText>
-        <ActivityIndicator size="large" color="#10B981" style={{ marginTop: 24 }} />
-      </View>
-    );
-  }
-
-  // ─── RESULT ───────────────────────────────────────────────────────────────
-  if (screen === 'result' && result) {
-    const ok    = result.status === 'pending';
-    const color = ok ? '#10B981' : '#ef4444';
-
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.resultTopBar, { paddingTop: insets.top + 16 }]}>
-          <ThemedText style={[styles.resultTopTitle, { color: theme.text }]}>Verification</ThemedText>
-        </View>
-
-        <ScrollView contentContainerStyle={[styles.bodyPad, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
-          <View style={{ alignItems: 'center' }}>
-
-            <View style={[styles.resultIconWrap, { backgroundColor: color + '15', borderColor: color + '35' }]}>
-              <LinearGradient colors={[color, color + 'CC']} style={styles.resultIconInner}>
-                <Ionicons name={ok ? 'shield-checkmark' : 'alert-circle'} size={44} color="#fff" />
-              </LinearGradient>
-            </View>
-
-            <ThemedText style={[styles.resultTitle, { color }]}>
-              {ok ? 'Video Submitted' : 'Upload Failed'}
-            </ThemedText>
-            <ThemedText style={[styles.resultSub, { color: theme.textSecondary }]}>
-              {ok
-                ? 'Your verification video is pending admin review. Your badge will update once approved.'
-                : result.reason || 'Something went wrong. Please try again.'}
-            </ThemedText>
-
-            <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.border, width: '100%' }]}>
-              <View style={styles.cardHeader}>
-                <View style={[styles.cardIconBadge, { backgroundColor: ok ? '#10B98120' : '#ef444420' }]}>
-                  <Ionicons name={ok ? 'checkmark-circle-outline' : 'close-circle-outline'} size={16} color={ok ? '#10B981' : '#ef4444'} />
-                </View>
-                <ThemedText style={[styles.cardTitle, { color: theme.text }]}>
-                  {ok ? 'Completed sequence' : 'Steps attempted'}
-                </ThemedText>
+          <View style={[s.infoCard, { backgroundColor: CARD_BG, marginTop: 24 }]}>
+            {[
+              { icon: 'checkmark-circle-outline' as const, c: BRAND,     t: 'Approved → verified badge on your profile' },
+              { icon: 'close-circle-outline'     as const, c: '#ef4444', t: 'Rejected → reason shown so you can retry' },
+              { icon: 'notifications-outline'    as const, c: '#8B5CF6', t: 'You will be notified of the outcome' },
+            ].map((row, i) => (
+              <View key={i} style={[s.infoRow, i > 0 && { marginTop: 12 }]}>
+                <Ionicons name={row.icon} size={18} color={row.c} />
+                <ThemedText style={s.infoRowText}>{row.t}</ThemedText>
               </View>
-              {STEPS.map(s => (
-                <View key={s.key} style={styles.completedRow}>
-                  <Ionicons name="checkmark-circle" size={17} color={ok ? '#10B981' : '#94a3b8'} />
-                  <ThemedText style={[styles.completedText, { color: theme.textSecondary }]}>{s.title}</ThemedText>
-                </View>
-              ))}
-            </View>
-
-            {ok ? (
-              <Pressable style={styles.ctaBtn} onPress={() => navigation.goBack()}>
-                <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaBtnGrad}>
-                  <Ionicons name="checkmark-circle" size={20} color="#fff" />
-                  <ThemedText style={styles.ctaBtnText}>Back to Profile</ThemedText>
-                </LinearGradient>
-              </Pressable>
-            ) : (
-              <Pressable style={styles.ctaBtn} onPress={startFresh}>
-                <LinearGradient colors={['#10B981', '#059669']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.ctaBtnGrad}>
-                  <Ionicons name="refresh" size={20} color="#fff" />
-                  <ThemedText style={styles.ctaBtnText}>Try Again</ThemedText>
-                </LinearGradient>
-              </Pressable>
-            )}
+            ))}
           </View>
+
+          <Pressable style={[s.ctaWrap, { width: '100%', marginTop: 28 }]} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={['#f59e0b', '#d97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
+              <Ionicons name="arrow-back" size={18} color="#fff" />
+              <ThemedText style={s.ctaBtnText}>Back to Profile</ThemedText>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // STATUS — REJECTED
+  // ════════════════════════════════════════════════════════════════════════════
+  if (screen === 'status_rejected') {
+    return (
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
+        <View style={[s.statusTopBar, { paddingTop: insets.top + 16 }]}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.6)" />
+          </Pressable>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[s.center, { paddingHorizontal: 28, paddingBottom: insets.bottom + 40, flexGrow: 1 }]}
+        >
+          <View style={[s.statusIconWrap, { borderColor: '#ef444430', backgroundColor: '#ef444410' }]}>
+            <LinearGradient colors={['#ef4444', '#dc2626']} style={s.statusIconInner}>
+              <Ionicons name="close-circle-outline" size={40} color="#fff" />
+            </LinearGradient>
+          </View>
+
+          <ThemedText style={s.statusTitle}>Verification Failed</ThemedText>
+          <ThemedText style={s.statusSub}>
+            We couldn't confirm your identity from the video. Please check the reason below and try again.
+          </ThemedText>
+
+          {rejectionReason && (
+            <View style={[s.reasonCard, { backgroundColor: '#ef444408', borderColor: '#ef444425' }]}>
+              <View style={s.reasonHeader}>
+                <Ionicons name="alert-circle-outline" size={16} color="#ef4444" />
+                <ThemedText style={s.reasonHeaderText}>Reason</ThemedText>
+              </View>
+              <ThemedText style={s.reasonText}>{rejectionReason}</ThemedText>
+            </View>
+          )}
+
+          {/* Retry tips */}
+          <View style={[s.infoCard, { backgroundColor: CARD_BG, marginTop: 16 }]}>
+            <ThemedText style={[s.recStepsHeading, { marginBottom: 12 }]}>Tips to pass next time</ThemedText>
+            {[
+              { icon: 'sunny-outline'     as const, c: '#f59e0b', t: 'Use good lighting — avoid being backlit' },
+              { icon: 'eye-outline'       as const, c: BRAND,     t: 'Clearly blink then slowly turn your head' },
+              { icon: 'phone-portrait-outline' as const, c: '#8B5CF6', t: 'Hold phone steady at face height' },
+              { icon: 'person-outline'    as const, c: '#3B82F6', t: 'Full face must be visible the whole time' },
+            ].map((tip, i) => (
+              <View key={i} style={[s.infoRow, i > 0 && { marginTop: 10 }]}>
+                <Ionicons name={tip.icon} size={16} color={tip.c} />
+                <ThemedText style={s.infoRowText}>{tip.t}</ThemedText>
+              </View>
+            ))}
+          </View>
+
+          {/* Try again */}
+          <Pressable style={[s.ctaWrap, { width: '100%', marginTop: 24 }]} onPress={tryAgain}>
+            <LinearGradient colors={[BRAND, BRAND_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
+              <Ionicons name="videocam" size={20} color="#fff" />
+              <ThemedText style={s.ctaBtnText}>Try Again</ThemedText>
+            </LinearGradient>
+          </Pressable>
+
+          <Pressable style={{ marginTop: 12 }} onPress={() => navigation.goBack()}>
+            <ThemedText style={s.ghostBtn}>Back to Profile</ThemedText>
+          </Pressable>
         </ScrollView>
       </View>
     );
@@ -714,146 +619,124 @@ export default function VerificationScreen() {
   return null;
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
+// ─────────────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  fill:   { flex: 1 },
+  center: { alignItems: 'center', justifyContent: 'center' },
 
-  // ── Loading ──
-  loadingText: { marginTop: 14, fontSize: 14, fontWeight: '600' },
+  loadingText: { color: 'rgba(255,255,255,0.5)', fontSize: 14, marginTop: 14 },
 
-  // ── Status info rows ──
-  statusInfoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 10 },
-  statusInfoText: { flex: 1, fontSize: 13, lineHeight: 19 },
-
-  // ── Rejection box ──
-  rejectionBox: { borderRadius: 12, padding: 14, borderWidth: 1 },
-  rejectionText: { fontSize: 14, lineHeight: 21, fontWeight: '500' },
-
-  // ── Header ──
-  gradientHeader: { paddingHorizontal: 20, paddingBottom: 40 },
-  headerBackBtn: {
+  // ── Intro ──────────────────────────────────────────────────────────────────
+  introHeader: {
+    alignItems: 'center', paddingHorizontal: 20, paddingBottom: 32,
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 24,
+    backgroundColor: '#ffffff12',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 28,
   },
-  headerIconWrap: { alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  headerIconRing: {
-    position: 'absolute', width: 108, height: 108, borderRadius: 54,
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.28)', backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  headerIconInner: {
-    width: 84, height: 84, borderRadius: 42,
-    backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 26, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: -0.5 },
-  headerSub:   { fontSize: 14, color: 'rgba(255,255,255,0.82)', textAlign: 'center', marginTop: 8, lineHeight: 20, maxWidth: 290 },
+  shieldWrap:   { marginBottom: 20 },
+  shieldCircle: { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  introTitle:   { color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: -0.5, marginBottom: 8 },
+  introSub:     { color: 'rgba(255,255,255,0.5)', fontSize: 15, textAlign: 'center', lineHeight: 22 },
 
-  // ── Body ──
-  bodyPad: { paddingHorizontal: 20, paddingTop: 20, gap: 14 },
+  card: { borderRadius: 20, padding: 20 },
+  cardRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
+  cardIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  cardTitle:{ color: '#fff', fontSize: 15, fontWeight: '800' },
 
-  // ── Card ──
-  card: { borderRadius: 20, padding: 18, borderWidth: 1 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
-  cardIconBadge: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#10B98120', alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
+  stepRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepDot:   { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  stepDotNum:{ color: '#fff', fontSize: 11, fontWeight: '900' },
+  stepIcon:  { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  stepLabel: { color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: '600', flex: 1 },
 
-  // ── Step rows ──
-  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 11 },
-  stepRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: 'rgba(0,0,0,0.07)' },
-  stepNumBadge: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#10B981', alignItems: 'center', justifyContent: 'center' },
-  stepNumText:  { color: '#fff', fontSize: 12, fontWeight: '900' },
-  stepIconCircle: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center' },
-  stepLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
-  stepDesc:  { fontSize: 12, lineHeight: 17 },
+  tipRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  tipText: { color: 'rgba(255,255,255,0.55)', fontSize: 13, flex: 1, lineHeight: 19 },
 
-  // ── How it works ──
-  howRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  howIconCircle: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  howText: { flex: 1, fontSize: 13, lineHeight: 19 },
-
-  // ── Tips ──
-  tipRow: { borderRadius: 14, padding: 14, borderWidth: 1, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  tipText: { flex: 1, fontSize: 13, lineHeight: 19 },
-
-  // ── CTA ──
-  ctaBtn:     { borderRadius: 18, overflow: 'hidden' },
-  ctaBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
+  ctaWrap: { borderRadius: 18, overflow: 'hidden' },
+  ctaBtn:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 17 },
   ctaBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
 
-  // ── Camera ──
-  cameraFull: { flex: 1, backgroundColor: '#000' },
-  camTop: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 28 },
-  camHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  camBackBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.50)', alignItems: 'center', justifyContent: 'center' },
-  camTitle:   { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: -0.3 },
-
-  torchBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.50)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center', justifyContent: 'center',
+  // ── Camera top bar ──────────────────────────────────────────────────────────
+  camTopBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingBottom: 14,
+    backgroundColor: SCREEN_BG,
   },
-  torchBtnOn: {
-    backgroundColor: 'rgba(251,191,36,0.20)', borderColor: '#fbbf24',
+  camBack:    { width: 38, height: 38, borderRadius: 19, backgroundColor: '#ffffff10', alignItems: 'center', justifyContent: 'center' },
+  camBarTitle:{ color: '#fff', fontSize: 16, fontWeight: '800' },
+  torchBtn:   { width: 38, height: 38, borderRadius: 19, backgroundColor: '#ffffff10', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  torchBtnOn: { backgroundColor: 'rgba(251,191,36,0.18)', borderColor: '#fbbf24' },
+
+  recPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#ef444420', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  recDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444' },
+  recText: { color: '#ef4444', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  timerText:{ fontSize: 15, fontWeight: '900' },
+
+  // ── Camera box ──────────────────────────────────────────────────────────────
+  cameraBox: {
+    marginHorizontal: 18, height: 350, borderRadius: 24,
+    overflow: 'hidden', backgroundColor: '#111',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-
-  recPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.55)', borderWidth: 1,
-  },
-  recDot:  { width: 8, height: 8, borderRadius: 4 },
-  recText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-
-  timerWrap:  { position: 'absolute', top: 112, right: 18, zIndex: 10 },
-  timerBadge: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.60)', alignItems: 'center' },
-  timerNum:   { fontSize: 20, fontWeight: '900', lineHeight: 24 },
-  timerSub:   { color: 'rgba(255,255,255,0.40)', fontSize: 9, fontWeight: '700', marginTop: 1 },
-
-  ovalWrapper: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  faceOval:    { width: 210, height: 278, borderRadius: 105, borderWidth: 2, borderStyle: 'dashed' },
-
-  bottomPanel: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20,
-    backgroundColor: 'rgba(5,10,20,0.90)',
-    paddingHorizontal: 20, paddingTop: 18,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
-    borderTopWidth: 1, borderColor: 'rgba(16,185,129,0.20)',
+  ovalGuide: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  ovalInner: {
+    width: 170, height: 230, borderRadius: 85,
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', borderStyle: 'dashed',
   },
 
-  panelHeading: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 },
+  // ── Idle bottom ──────────────────────────────────────────────────────────────
+  idleCard: {
+    marginHorizontal: 18, marginTop: 14,
+    borderRadius: 18, padding: 18,
+  },
+  idleCardTitle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
+  idleStepRow:   { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  idleStepIcon:  { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  idleStepText:  { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '600', flex: 1 },
 
-  progressTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)', marginBottom: 14, overflow: 'hidden' },
+  recordBtnWrap: { alignItems: 'center', marginTop: 20 },
+  recordBtnOuter:{ alignItems: 'center', justifyContent: 'center', width: 80, height: 80 },
+  recordBtnInner:{ width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center' },
+  recordHint:    { color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 12, fontWeight: '500' },
+
+  // ── Recording ────────────────────────────────────────────────────────────────
+  progressOuter: { height: 4, backgroundColor: 'rgba(255,255,255,0.1)', marginTop: 14, marginHorizontal: 18, borderRadius: 2, overflow: 'hidden' },
   progressFill:  { height: 4, borderRadius: 2 },
 
-  stepsList: { gap: 10, marginBottom: 14 },
-  stepsRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepsIconCircle: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: '#10B98118', borderWidth: 1, borderColor: '#10B98140',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  stepsLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  recStepsCard: { marginHorizontal: 18, marginTop: 12, borderRadius: 18, padding: 16 },
+  recStepsHeading: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
 
-  submitBtn:     { borderRadius: 16, overflow: 'hidden' },
-  submitBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '900' },
+  submitArea: { paddingHorizontal: 18, marginTop: 14 },
+  waitRow: { flexDirection: 'row', alignItems: 'center', gap: 10, justifyContent: 'center' },
+  waitText:{ color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600' },
 
-  waitRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 14 },
-  waitText: { color: 'rgba(255,255,255,0.55)', fontSize: 13, fontWeight: '600', flex: 1 },
+  // ── Status shared ────────────────────────────────────────────────────────────
+  statusTopBar: { paddingHorizontal: 20, paddingBottom: 8 },
+  statusIconWrap:  { width: 120, height: 120, borderRadius: 60, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  statusIconInner: { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center' },
+  statusTitle: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 20, marginBottom: 10, textAlign: 'center' },
+  statusSub:   { color: 'rgba(255,255,255,0.5)', fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 300 },
 
-  // ── Uploading ──
-  centerContent:  { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 36 },
-  uploadIconWrap: { width: 110, height: 110, borderRadius: 55, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
-  uploadTitle:    { fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
-  uploadSub:      { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 290 },
+  datePill: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8, marginTop: 16 },
+  datePillText: { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
 
-  // ── Result ──
-  resultTopBar:    { alignItems: 'center', paddingBottom: 8 },
-  resultTopTitle:  { fontSize: 18, fontWeight: '900' },
-  resultIconWrap:  { width: 124, height: 124, borderRadius: 62, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20, marginTop: 8 },
-  resultIconInner: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center' },
-  resultTitle: { fontSize: 24, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
-  resultSub:   { fontSize: 14, textAlign: 'center', lineHeight: 21, marginBottom: 24, maxWidth: 300 },
+  infoCard: { borderRadius: 18, padding: 18, width: '100%' },
+  infoRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  infoRowText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, flex: 1, lineHeight: 19 },
 
-  completedRow:  { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: 'rgba(0,0,0,0.06)' },
-  completedText: { fontSize: 14, fontWeight: '600' },
+  // ── Result ───────────────────────────────────────────────────────────────────
+  uploadingPill: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18, backgroundColor: BRAND + '15', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10 },
+  uploadingText: { color: BRAND, fontSize: 13, fontWeight: '600' },
+
+  // ── Rejected ─────────────────────────────────────────────────────────────────
+  reasonCard: { borderRadius: 16, padding: 16, borderWidth: 1, width: '100%', marginTop: 20 },
+  reasonHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  reasonHeaderText: { color: '#ef4444', fontSize: 13, fontWeight: '800' },
+  reasonText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, lineHeight: 21 },
+
+  ghostBtn: { color: 'rgba(255,255,255,0.35)', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
 });
