@@ -176,10 +176,17 @@ export default function PremiumScreen({ navigation }: any) {
   };
 
   const formatPrice = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-    }).format(amount / 100);
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currency.toUpperCase(),
+      }).format(amount / 100);
+    } catch {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(amount / 100);
+    }
   };
 
   const getDisplayPrice = (tier: PriceTier): string => {
