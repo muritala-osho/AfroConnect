@@ -14,8 +14,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { getApiBaseUrl } from '@/constants/config';
 
-const MIN_RECORD_SECONDS = 30;
-const MAX_RECORD_SECONDS = 35;
+const MIN_RECORD_SECONDS = 5;
+const MAX_RECORD_SECONDS = 120;
 const BRAND            = '#10B981';
 const BRAND_DARK       = '#059669';
 const SCREEN_BG        = '#0D0D0D';
@@ -155,8 +155,8 @@ export default function VerificationScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   }, [cameraReady]);
 
-  // ── Submit — instant result, background upload ───────────────────────────────
-  const stopAndSaveVideo = useCallback(() => {
+  // ── Submit — stop recording first, then switch screen & upload ──────────────
+  const stopAndSaveVideo = useCallback(async () => {
     if (uploadStartedRef.current) return;
     uploadStartedRef.current = true;
     if (timerRef.current)    clearInterval(timerRef.current);
@@ -164,26 +164,46 @@ export default function VerificationScreen() {
     setTorchOn(false);
     setRecording(false);
     setSubmitting(true);
-    setScreen('result');
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    let videoUri: string | null = null;
+
+    try {
+      if (cameraRef.current && recordingPromiseRef.current) {
+        cameraRef.current.stopRecording();
+        const video = await recordingPromiseRef.current;
+        videoUri = video?.uri || null;
+      }
+    } catch (err) {
+      console.error('[Verification] Failed to stop recording:', err);
+    }
+
+    // Switch to result screen AFTER we have the URI so camera stays mounted
+    setScreen('result');
+
+    if (!videoUri) {
+      console.error('[Verification] No video URI — upload skipped');
+      setSubmitting(false);
+      return;
+    }
+
+    // Upload in background
     (async () => {
       try {
-        if (cameraRef.current && recordingPromiseRef.current) {
-          cameraRef.current.stopRecording();
-          const video = await recordingPromiseRef.current;
-          if (!video?.uri) return;
-          const formData = new FormData();
-          formData.append('userId', user?.id || '');
-          formData.append('video', { uri: video.uri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
-          await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-            body: formData,
-          });
+        const formData = new FormData();
+        formData.append('userId', user?.id || '');
+        formData.append('video', { uri: videoUri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
+        const resp = await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+          body: formData,
+        });
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '');
+          console.error('[Verification] Upload failed:', resp.status, body);
         }
-      } catch {
-        // silent — user already sees pending
+      } catch (err) {
+        console.error('[Verification] Upload error:', err);
       } finally {
         setSubmitting(false);
       }
@@ -206,7 +226,7 @@ export default function VerificationScreen() {
 
   const timerPct   = Math.min((recordSeconds / MIN_RECORD_SECONDS) * 100, 100);
   const secsLeft   = Math.max(0, MIN_RECORD_SECONDS - recordSeconds);
-  const timerColor = recordSeconds >= MIN_RECORD_SECONDS ? BRAND : recordSeconds >= 15 ? '#f59e0b' : '#ef4444';
+  const timerColor = recordSeconds >= MIN_RECORD_SECONDS ? BRAND : recordSeconds >= 3 ? '#f59e0b' : '#ef4444';
 
   // ════════════════════════════════════════════════════════════════════════════
   // LOADING
@@ -394,7 +414,7 @@ export default function VerificationScreen() {
             <View style={s.recDot} />
             <ThemedText style={s.recText}>REC</ThemedText>
           </View>
-          <ThemedText style={[s.timerText, { color: timerColor }]}>{recordSeconds}s / 30s</ThemedText>
+          <ThemedText style={[s.timerText, { color: timerColor }]}>{recordSeconds}s</ThemedText>
           <Pressable style={[s.torchBtn, torchOn && s.torchBtnOn]} onPress={() => setTorchOn(v => !v)}>
             <Ionicons name={torchOn ? 'flashlight' : 'flashlight-outline'} size={16} color={torchOn ? '#fbbf24' : 'rgba(255,255,255,0.5)'} />
           </Pressable>
@@ -445,7 +465,7 @@ export default function VerificationScreen() {
           ) : (
             <View style={s.waitRow}>
               <ActivityIndicator size="small" color={BRAND} />
-              <ThemedText style={s.waitText}>Recording… {secsLeft}s until you can submit</ThemedText>
+              <ThemedText style={s.waitText}>Recording… submit available in {secsLeft}s</ThemedText>
             </View>
           )}
         </View>
@@ -455,35 +475,61 @@ export default function VerificationScreen() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
-  // RESULT — submitted (pending)
+  // RESULT — submitted (pending with 24-hour messaging)
   // ════════════════════════════════════════════════════════════════════════════
   if (screen === 'result') {
     return (
-      <View style={[s.fill, s.center, { backgroundColor: SCREEN_BG, paddingHorizontal: 28 }]}>
-        <View style={[s.statusIconWrap, { borderColor: BRAND + '30', backgroundColor: BRAND + '10' }]}>
-          <LinearGradient colors={[BRAND, BRAND_DARK]} style={s.statusIconInner}>
-            <Ionicons name="time-outline" size={40} color="#fff" />
-          </LinearGradient>
+      <View style={[s.fill, { backgroundColor: SCREEN_BG }]}>
+        <View style={[s.statusTopBar, { paddingTop: insets.top + 16 }]}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.6)" />
+          </Pressable>
         </View>
 
-        <ThemedText style={s.statusTitle}>Submitted!</ThemedText>
-        <ThemedText style={s.statusSub}>
-          Your video is being sent for review. This usually takes a few minutes.
-        </ThemedText>
+        <View style={[s.fill, s.center, { paddingHorizontal: 28 }]}>
 
-        {submitting && (
-          <View style={s.uploadingPill}>
-            <ActivityIndicator size="small" color={BRAND} />
-            <ThemedText style={s.uploadingText}>Uploading in background…</ThemedText>
+          <View style={[s.statusIconWrap, { borderColor: '#f59e0b30', backgroundColor: '#f59e0b10' }]}>
+            <LinearGradient colors={['#f59e0b', '#d97706']} style={s.statusIconInner}>
+              <ThemedText style={{ fontSize: 36 }}>⏳</ThemedText>
+            </LinearGradient>
+            {submitting && (
+              <ActivityIndicator size="small" color="#f59e0b" style={{ marginTop: 12 }} />
+            )}
           </View>
-        )}
 
-        <Pressable style={[s.ctaWrap, { width: '100%', marginTop: 36 }]} onPress={() => navigation.goBack()}>
-          <LinearGradient colors={[BRAND, BRAND_DARK]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
-            <Ionicons name="checkmark-circle" size={20} color="#fff" />
-            <ThemedText style={s.ctaBtnText}>Back to Profile</ThemedText>
-          </LinearGradient>
-        </Pressable>
+          <ThemedText style={s.statusTitle}>Verification Pending</ThemedText>
+          <ThemedText style={s.statusSub}>
+            Your video has been submitted! Within the next 24 hours, our team will review it and you'll be notified of the outcome.
+          </ThemedText>
+
+          {submitting && (
+            <View style={[s.uploadingPill, { borderColor: '#f59e0b30', backgroundColor: '#f59e0b10' }]}>
+              <ActivityIndicator size="small" color="#f59e0b" />
+              <ThemedText style={[s.uploadingText, { color: '#f59e0b' }]}>Uploading video…</ThemedText>
+            </View>
+          )}
+
+          <View style={[s.infoCard, { backgroundColor: CARD_BG, marginTop: 24 }]}>
+            {[
+              { icon: 'time-outline'              as const, c: '#f59e0b', t: 'Review takes up to 24 hours' },
+              { icon: 'checkmark-circle-outline'  as const, c: BRAND,     t: 'Approved → verified badge on your profile' },
+              { icon: 'close-circle-outline'      as const, c: '#ef4444', t: 'Rejected → reason shown so you can retry' },
+              { icon: 'notifications-outline'     as const, c: '#8B5CF6', t: 'You will be notified of the outcome' },
+            ].map((row, i) => (
+              <View key={i} style={[s.infoRow, i > 0 && { marginTop: 12 }]}>
+                <Ionicons name={row.icon} size={18} color={row.c} />
+                <ThemedText style={s.infoRowText}>{row.t}</ThemedText>
+              </View>
+            ))}
+          </View>
+
+          <Pressable style={[s.ctaWrap, { width: '100%', marginTop: 28 }]} onPress={() => navigation.goBack()}>
+            <LinearGradient colors={['#f59e0b', '#d97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={s.ctaBtn}>
+              <Ionicons name="arrow-back" size={18} color="#fff" />
+              <ThemedText style={s.ctaBtnText}>Back to Profile</ThemedText>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </View>
     );
   }
