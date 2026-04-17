@@ -154,9 +154,7 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                       <p className="text-[10px] text-slate-400 font-medium">{req.email}</p>
                       {getSelfiePhoto(req) ? (
                         <p className="text-[10px] text-teal-500 font-semibold mt-0.5">
-                          {req.selfiePhoto?.poseChallenge
-                            ? `${req.selfiePhoto.poseChallenge.emoji} ${req.selfiePhoto.poseChallenge.id.replace(/_/g, ' ')}`
-                            : 'Selfie submitted · ready for AI check'}
+                          Live selfie submitted · ready for AI check
                         </p>
                       ) : (
                         <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No selfie on record</p>
@@ -206,14 +204,14 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 </span>
               </div>
 
-              {/* ── Pose challenge tag ── */}
-              {selectedRequest.selfiePhoto?.poseChallenge && (
-                <div className="flex items-center gap-3 p-3 rounded-2xl border-2 border-violet-200 dark:border-violet-500/30 bg-violet-50 dark:bg-violet-500/10">
-                  <span className="text-2xl">{selectedRequest.selfiePhoto.poseChallenge.emoji}</span>
+              {/* ── Liveness badge ── */}
+              {getSelfiePhoto(selectedRequest) && (
+                <div className="flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
+                  <span className="text-2xl">🛡️</span>
                   <div>
-                    <p className="text-[10px] font-black text-violet-500 uppercase tracking-widest mb-0.5">Liveness Action</p>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Live Selfie</p>
                     <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      {selectedRequest.selfiePhoto.poseChallenge.instruction}
+                      Look Left · Look Right · Smile — camera-detected liveness
                     </p>
                   </div>
                 </div>

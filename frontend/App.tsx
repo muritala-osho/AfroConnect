@@ -15,6 +15,8 @@ import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
 import { UnreadProvider } from "@/context/UnreadContext";
 import { CallProvider } from "@/contexts/CallContext";
+import { MaintenanceProvider } from "@/context/MaintenanceContext";
+import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
 import FloatingCallBar from "@/components/FloatingCallBar";
 import {
@@ -140,6 +142,7 @@ function AppContent() {
             <IncomingCallHandler />
             <FloatingCallBar />
           </NavigationContainer>
+          <MaintenanceOverlay />
           <StatusBar style={isDark ? "light" : "dark"} />
         </CallProvider>
       </KeyboardProvider>
@@ -153,12 +156,14 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <LanguageProvider>
-            <AuthProvider>
-              <UnreadProvider>
-                <LanguageSync />
-                <AppContent />
-              </UnreadProvider>
-            </AuthProvider>
+            <MaintenanceProvider>
+              <AuthProvider>
+                <UnreadProvider>
+                  <LanguageSync />
+                  <AppContent />
+                </UnreadProvider>
+              </AuthProvider>
+            </MaintenanceProvider>
           </LanguageProvider>
         </ThemeProvider>
       </SafeAreaProvider>

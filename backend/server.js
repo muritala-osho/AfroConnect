@@ -350,6 +350,15 @@ const logRoutes = () => {
 };
 
 app.get('/health', (req, res) => {
+  const settings = adminRoutes.getSettings ? adminRoutes.getSettings() : {};
+  if (settings.maintenanceMode) {
+    return res.status(503).json({
+      status: 'maintenance',
+      maintenance: true,
+      message: 'AfroConnect is under maintenance.',
+      timestamp: Date.now(),
+    });
+  }
   res.json({
     status: 'ok',
     uptime: process.uptime(),

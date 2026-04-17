@@ -1,6 +1,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { getApiBaseUrl } from '@/constants/config';
+import { useMaintenance } from '@/context/MaintenanceContext';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;
 
@@ -14,9 +15,11 @@ interface ApiResponse<T> {
 export function useApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const loadingRef = useRef(false);
-  const errorRef = useRef<string | null>(null);
+  const errorRef   = useRef<string | null>(null);
+
+  const { setMaintenance, setOffline } = useMaintenance();
 
   const request = useCallback(async <T,>(
     endpoint: string,
@@ -36,11 +39,26 @@ export function useApi() {
         },
       });
 
+      // ── Maintenance mode detection ─────────────────────────────────────────
+      if (response.status === 503) {
+        const data = await response.json().catch(() => ({}));
+        if (data.maintenance) {
+          setMaintenance(true);
+          const err = 'Platform is under maintenance.';
+          setError(err);
+          return { success: false, error: err, message: err };
+        }
+      }
+
+      // Clear maintenance/offline flags on any successful response
+      setMaintenance(false);
+      setOffline(false);
+
       const contentType = response.headers.get('content-type');
       if (contentType && !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Non-JSON response received:', text.substring(0, 200));
-        throw new Error('Server returned an invalid response (not JSON). The backend might be down or waking up.');
+        throw new Error('Server returned an invalid response. The backend might be down or restarting.');
       }
 
       const jsonData = await response.json();
@@ -51,15 +69,27 @@ export function useApi() {
 
       loadingRef.current = false;
       setLoading(false);
-      
+
       const responseData = jsonData.data !== undefined ? jsonData.data : jsonData;
-      
-      return { 
-        success: jsonData.success ?? true, 
+
+      return {
+        success: jsonData.success ?? true,
         data: responseData as T,
-        message: jsonData.message 
+        message: jsonData.message,
       };
     } catch (err: any) {
+      // ── Offline / network-unreachable detection ────────────────────────────
+      const isNetworkError = (
+        err.message?.includes('Network request failed') ||
+        err.message?.includes('Failed to fetch') ||
+        err.name === 'AbortError' ||
+        err.message?.includes('timeout') ||
+        err.message?.toLowerCase().includes('network')
+      );
+      if (isNetworkError) {
+        setOffline(true);
+      }
+
       const errorMessage = err.message || 'Network error';
       errorRef.current = errorMessage;
       setError(errorMessage);
@@ -67,12 +97,12 @@ export function useApi() {
       setLoading(false);
       return { success: false, error: errorMessage, message: errorMessage };
     }
-  }, []);
+  }, [setMaintenance, setOffline]);
 
   const get = useCallback(<T,>(endpoint: string, paramsOrToken?: Record<string, any> | string, token?: string) => {
     let url = endpoint;
     let authToken: string | undefined = token;
-    
+
     if (typeof paramsOrToken === 'string') {
       authToken = paramsOrToken;
     } else if (paramsOrToken && typeof paramsOrToken === 'object' && Object.keys(paramsOrToken).length > 0) {
@@ -82,7 +112,7 @@ export function useApi() {
         .join('&');
       url = `${endpoint}?${queryString}`;
     }
-    
+
     return request<T>(url, {
       method: 'GET',
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
