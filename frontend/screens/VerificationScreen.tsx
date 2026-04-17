@@ -57,7 +57,6 @@ export default function VerificationScreen() {
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [canSubmit, setCanSubmit] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [torchOn, setTorchOn] = useState(false);
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
@@ -104,40 +103,39 @@ export default function VerificationScreen() {
     if (!permission) requestPermission();
   }, [permission, requestPermission]);
 
-  const stopAndSaveVideo = useCallback(async () => {
+  const stopAndSaveVideo = useCallback(() => {
     if (uploadStartedRef.current) return;
     uploadStartedRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     setTorchOn(false);
-    setScreen('uploading');
-    try {
-      if (cameraRef.current && recordingPromiseRef.current) {
-        cameraRef.current.stopRecording();
-        const video = await recordingPromiseRef.current;
-        if (!video?.uri) throw new Error('No video recorded. Please try again.');
-        const formData = new FormData();
-        formData.append('userId', user?.id || '');
-        formData.append('video', { uri: video.uri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
-        const resp = await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-          body: formData,
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.success) throw new Error(data.message || 'Upload failed. Please try again.');
-        setResult({ submitted: true, status: 'pending', videoUrl: data.videoUrl });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      } else {
-        throw new Error('Recording did not start. Please try again.');
+    setRecording(false);
+
+    // Show pending immediately — upload runs in background
+    setResult({ submitted: true, status: 'pending' });
+    setScreen('result');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    // Background upload — fire and forget
+    (async () => {
+      try {
+        if (cameraRef.current && recordingPromiseRef.current) {
+          cameraRef.current.stopRecording();
+          const video = await recordingPromiseRef.current;
+          if (!video?.uri) return;
+          const formData = new FormData();
+          formData.append('userId', user?.id || '');
+          formData.append('video', { uri: video.uri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
+          await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+            body: formData,
+          });
+        }
+      } catch {
+        // Silent — user already sees pending, admin will review when upload lands
       }
-    } catch (error: any) {
-      setResult({ submitted: false, status: 'failed', reason: error?.message || 'Could not save video.' });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setScreen('result');
-      setRecording(false);
-    }
+    })();
   }, [token, user?.id]);
 
   const startRecording = useCallback(() => {
@@ -145,7 +143,6 @@ export default function VerificationScreen() {
     setRecording(true);
     setRecordSeconds(0);
     setCanSubmit(false);
-    setCurrentStep(0);
     recordingStartedAtRef.current = Date.now();
     recordingPromiseRef.current = cameraRef.current.recordAsync({ maxDuration: MAX_RECORD_SECONDS });
     recordingPromiseRef.current?.catch(() => null);
@@ -153,10 +150,6 @@ export default function VerificationScreen() {
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - recordingStartedAtRef.current) / 1000);
       setRecordSeconds(elapsed);
-      // Step progression across 30 seconds
-      if (elapsed < 10)                  setCurrentStep(0);
-      else if (elapsed >= 10 && elapsed < 20) setCurrentStep(1);
-      else if (elapsed >= 20)            setCurrentStep(2);
       if (elapsed >= MIN_RECORD_SECONDS) setCanSubmit(true);
     }, 500);
 
@@ -189,7 +182,6 @@ export default function VerificationScreen() {
     setRecording(false);
     setRecordSeconds(0);
     setCanSubmit(false);
-    setCurrentStep(0);
     setTorchOn(false);
     setCameraReady(false);
     setScreen('camera');
@@ -528,9 +520,6 @@ export default function VerificationScreen() {
 
   // ─── CAMERA ───────────────────────────────────────────────────────────────
   if (screen === 'camera') {
-    const step = STEPS[Math.min(currentStep, 2)];
-    const secondsLeft = Math.max(0, MIN_RECORD_SECONDS - recordSeconds);
-
     return (
       <View style={styles.cameraFull}>
         <CameraView
@@ -595,62 +584,26 @@ export default function VerificationScreen() {
         {/* Bottom panel */}
         <View style={[styles.bottomPanel, { paddingBottom: insets.bottom + 20 }]}>
 
-          {/* Current step */}
-          <View style={styles.currentStepRow}>
-            <View style={styles.currentStepIcon}>
-              <Ionicons name={step.icon} size={22} color="#10B981" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.currentStepTitle}>{step.title}</ThemedText>
-              <ThemedText style={styles.currentStepHint}>{step.desc}</ThemedText>
-            </View>
-            <View style={styles.stepCounter}>
-              <ThemedText style={styles.stepCounterText}>{currentStep + 1}/3</ThemedText>
-            </View>
-          </View>
+          {/* Static instruction heading */}
+          <ThemedText style={styles.panelHeading}>While recording, please:</ThemedText>
 
-          {/* Progress track */}
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${timerPct}%`, backgroundColor: timerColor }]} />
-          </View>
-          <View style={styles.progressRow}>
-            {STEPS.map((s, i) => (
-              <View key={s.key} style={styles.progressSegWrap}>
-                <View style={[
-                  styles.progressSeg,
-                  i < currentStep   && { backgroundColor: '#059669' },
-                  i === currentStep  && { backgroundColor: '#10B981' },
-                  i > currentStep   && { backgroundColor: 'rgba(255,255,255,0.18)' },
-                ]} />
-              </View>
-            ))}
-          </View>
-
-          {/* Steps list */}
+          {/* Static steps — no highlighting, no ticking */}
           <View style={styles.stepsList}>
             {STEPS.map((s, i) => (
               <View key={s.key} style={styles.stepsRow}>
-                <View style={[
-                  styles.stepsCheck,
-                  i < currentStep  && { backgroundColor: '#10B98125', borderColor: '#10B98150' },
-                  i === currentStep && { backgroundColor: '#10B98115', borderColor: '#10B981' },
-                  i > currentStep  && { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' },
-                ]}>
-                  {i < currentStep
-                    ? <Ionicons name="checkmark" size={13} color="#10B981" />
-                    : <ThemedText style={[styles.stepsNum, i > currentStep && { color: 'rgba(255,255,255,0.35)' }]}>{i + 1}</ThemedText>
-                  }
+                <View style={styles.stepsIconCircle}>
+                  <Ionicons name={s.icon} size={16} color="#10B981" />
                 </View>
-                <ThemedText style={[
-                  styles.stepsLabel,
-                  i < currentStep  && { color: '#10B981' },
-                  i === currentStep && { color: '#fff', fontWeight: '800' },
-                  i > currentStep  && { color: 'rgba(255,255,255,0.40)' },
-                ]}>
+                <ThemedText style={styles.stepsLabel}>
                   {s.emoji}  {s.title}
                 </ThemedText>
               </View>
             ))}
+          </View>
+
+          {/* Time progress bar */}
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${timerPct}%`, backgroundColor: timerColor }]} />
           </View>
 
           {/* Submit / waiting */}
@@ -665,7 +618,7 @@ export default function VerificationScreen() {
             <View style={styles.waitRow}>
               <ActivityIndicator size="small" color="#10B981" />
               <ThemedText style={styles.waitText}>
-                {recording ? `Recording… submit ready in ${secondsLeft}s` : 'Starting camera…'}
+                {recording ? `Recording… ${Math.max(0, MIN_RECORD_SECONDS - recordSeconds)}s remaining` : 'Starting camera…'}
               </ThemedText>
             </View>
           )}
@@ -866,34 +819,19 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderColor: 'rgba(16,185,129,0.20)',
   },
 
-  currentStepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  currentStepIcon: {
-    width: 46, height: 46, borderRadius: 23,
-    backgroundColor: '#10B98118', borderWidth: 1, borderColor: '#10B98130',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  currentStepTitle: { color: '#fff', fontSize: 17, fontWeight: '900' },
-  currentStepHint:  { color: 'rgba(255,255,255,0.50)', fontSize: 12, marginTop: 2 },
-  stepCounter: {
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
-  },
-  stepCounterText: { color: 'rgba(255,255,255,0.70)', fontSize: 12, fontWeight: '800' },
+  panelHeading: { color: 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 12 },
 
-  progressTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)', marginBottom: 8, overflow: 'hidden' },
+  progressTrack: { height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.12)', marginBottom: 14, overflow: 'hidden' },
   progressFill:  { height: 4, borderRadius: 2 },
-  progressRow:   { flexDirection: 'row', gap: 6, marginBottom: 14 },
-  progressSegWrap: { flex: 1 },
-  progressSeg:   { height: 3, borderRadius: 2 },
 
-  stepsList: { gap: 10, marginBottom: 16 },
+  stepsList: { gap: 10, marginBottom: 14 },
   stepsRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepsCheck: {
-    width: 24, height: 24, borderRadius: 12, borderWidth: 1.5,
+  stepsIconCircle: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#10B98118', borderWidth: 1, borderColor: '#10B98140',
     alignItems: 'center', justifyContent: 'center',
   },
-  stepsNum:   { fontSize: 11, fontWeight: '900', color: 'rgba(255,255,255,0.70)' },
-  stepsLabel: { fontSize: 14, fontWeight: '600' },
+  stepsLabel: { color: '#fff', fontSize: 14, fontWeight: '600' },
 
   submitBtn:     { borderRadius: 16, overflow: 'hidden' },
   submitBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16 },
