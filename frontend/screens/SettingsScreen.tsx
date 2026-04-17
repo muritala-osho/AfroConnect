@@ -251,7 +251,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           <SettingItem 
             icon="check-circle" 
             label="Photo Verification" 
-            value={(user as any)?.verified ? 'Verified' : ''} 
+            value={
+              (user as any)?.verified ? 'Verified'
+              : (user as any)?.verificationStatus === 'pending' ? 'Under Review'
+              : (user as any)?.verificationStatus === 'rejected' ? 'Rejected'
+              : ''
+            }
             onPress={() => navigation.navigate('Verification' as any)} 
           />
           <SettingItem 
