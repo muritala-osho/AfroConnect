@@ -117,14 +117,14 @@ export default function MaintenanceOverlay() {
 
           {/* Title */}
           <ThemedText style={styles.title}>
-            {isMaint ? 'We're Under Maintenance' : 'No Connection'}
+            {isMaint ? "We're Under Maintenance" : 'No Connection'}
           </ThemedText>
 
           {/* Subtitle */}
           <ThemedText style={styles.subtitle}>
             {isMaint
-              ? 'AfroConnect is temporarily offline for scheduled maintenance. We'll be back very shortly — thank you for your patience.'
-              : 'We can't reach our servers right now. Please check your internet connection and try again.'}
+              ? "AfroConnect is temporarily offline for scheduled maintenance. We'll be back very shortly — thank you for your patience."
+              : "We can't reach our servers right now. Please check your internet connection and try again."}
           </ThemedText>
 
           {/* Status pill */}
