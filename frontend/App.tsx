@@ -19,6 +19,7 @@ import { MaintenanceProvider } from "@/context/MaintenanceContext";
 import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
 import FloatingCallBar from "@/components/FloatingCallBar";
+import UpdateBanner from "@/components/UpdateBanner";
 import {
   registerForPushNotificationsAsync,
   setupNotificationListeners,
@@ -143,6 +144,7 @@ function AppContent() {
             <FloatingCallBar />
           </NavigationContainer>
           <MaintenanceOverlay />
+          <UpdateBanner />
           <StatusBar style={isDark ? "light" : "dark"} />
         </CallProvider>
       </KeyboardProvider>

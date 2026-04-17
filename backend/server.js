@@ -338,6 +338,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'AfroConnect API is running' });
 });
 
+/*
+ * ── App version check ──────────────────────────────────────────────────────
+ * Update `latestVersion` here whenever you release a new build.
+ * Set `minimumVersion` to force-block older builds that are incompatible.
+ * Set `forceUpdate: true` to show an un-dismissible modal instead of a banner.
+ */
+app.get('/api/app-version', (req, res) => {
+  res.json({
+    latestVersion:  '1.0.0',
+    minimumVersion: '1.0.0',
+    forceUpdate:    false,
+    message:        'A new version of AfroConnect is available with improvements and bug fixes.',
+    androidUrl:     'https://play.google.com/store/apps/details?id=com.afroconnect',
+    iosUrl:         'https://apps.apple.com/app/afroconnect/id0000000000',
+  });
+});
+
 // DEBUG: Log all registered routes after they are defined
 const logRoutes = () => {
   if (app._router && app._router.stack) {
