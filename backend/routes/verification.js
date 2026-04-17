@@ -6,7 +6,10 @@ const User = require('../models/User');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+});
 
 // Admin auth middleware
 const isAdmin = async (req, res, next) => {
@@ -20,32 +23,6 @@ const isAdmin = async (req, res, next) => {
 };
 
 const emailService = require('../utils/emailService');
-
-// Validate pose BEFORE uploading — no Cloudinary, just AI check
-router.post('/validate-pose', protect, upload.fields([
-  { name: 'photo', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { poseId } = req.body;
-    const files = req.files;
-
-    if (!files?.photo?.[0]) {
-      return res.status(400).json({ success: false, message: 'Photo required' });
-    }
-    if (!poseId) {
-      return res.status(400).json({ success: false, message: 'poseId required' });
-    }
-
-    const { validatePoseFromBuffer } = require('../utils/poseValidator');
-    const result = await validatePoseFromBuffer(files.photo[0].buffer, poseId);
-
-    return res.json({ success: true, ...result });
-  } catch (error) {
-    console.error('Pose validation error:', error.message);
-    // On unexpected error, let it pass through (don't block the user)
-    return res.json({ success: true, matched: true, noFace: false, reason: 'Validation unavailable — admin will review', details: {} });
-  }
-});
 
 // Submit verification request with selfie photo only
 router.post('/request', protect, upload.fields([
@@ -79,22 +56,11 @@ router.post('/request', protect, upload.fields([
       stream.end(files.selfiePhoto[0].buffer);
     });
 
-    // Parse pose challenge if provided
-    let poseChallenge = null;
-    if (req.body.poseChallenge) {
-      try {
-        poseChallenge = typeof req.body.poseChallenge === 'string'
-          ? JSON.parse(req.body.poseChallenge)
-          : req.body.poseChallenge;
-      } catch (e) { /* ignore parse errors */ }
-    }
-
     user.verificationStatus = 'pending';
     user.selfiePhoto = {
       url: selfieResult.secure_url,
       publicId: selfieResult.public_id,
       submittedAt: new Date(),
-      ...(poseChallenge ? { poseChallenge } : {})
     };
     user.verificationRequestDate = new Date();
     await user.save();
@@ -239,6 +205,174 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
   } catch (error) {
     console.error('Rejection error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ─── POST /verify-face/by-url ─────────────────────────────────────────────────
+// Admin-facing: compare user's stored selfie URL vs profile photo.
+// Body: { userId }  (no file upload — uses selfie already on record)
+router.post('/verify-face/by-url', protect, isAdmin, async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+
+    const user = await User.findById(userId).select('name photos selfiePhoto verified verificationStatus');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const profilePhotoUrl =
+      user.photos?.[0]?.url ||
+      (typeof user.photos?.[0] === 'string' ? user.photos[0] : null);
+
+    const selfieUrl =
+      user.selfiePhoto?.url ||
+      (typeof user.selfiePhoto === 'string' ? user.selfiePhoto : null);
+
+    if (!profilePhotoUrl) {
+      return res.status(422).json({ success: false, message: 'User has no profile photo' });
+    }
+    if (!selfieUrl) {
+      return res.status(422).json({ success: false, message: 'User has no selfie on record' });
+    }
+
+    // Fetch selfie into a buffer
+    const { default: nodeFetch } = await import('node-fetch').catch(() => ({ default: null }));
+    let selfieBuffer;
+    if (nodeFetch) {
+      const resp = await nodeFetch(selfieUrl, { timeout: 15000 });
+      selfieBuffer = Buffer.from(await resp.arrayBuffer());
+    } else {
+      // Fallback: native https/http fetch
+      const https = require('https');
+      const http  = require('http');
+      const { URL } = require('url');
+      selfieBuffer = await new Promise((resolve, reject) => {
+        const parsed  = new URL(selfieUrl);
+        const client  = parsed.protocol === 'https:' ? https : http;
+        const chunks  = [];
+        const req2    = client.get(selfieUrl, (r) => {
+          r.on('data', (c) => chunks.push(c));
+          r.on('end',  () => resolve(Buffer.concat(chunks)));
+        });
+        req2.on('error', reject);
+        req2.setTimeout(15000, () => { req2.destroy(); reject(new Error('Timeout')); });
+      });
+    }
+
+    const { compareFaces } = require('../utils/faceVerifier');
+    const result = await compareFaces(selfieBuffer, profilePhotoUrl, 0.85);
+
+    if (result.verified) {
+      await User.findByIdAndUpdate(userId, {
+        verified: true,
+        verificationStatus: 'approved',
+        verificationApprovedAt: new Date(),
+        verificationApprovedBy: req.user._id,
+        verificationRejectionReason: null,
+      });
+      try {
+        const io = req.app.get('io');
+        if (io) io.to(userId).emit('user:verified', { userId, verified: true, verificationStatus: 'approved' });
+      } catch (_) {}
+    }
+
+    return res.json({
+      success:    true,
+      verified:   result.verified,
+      similarity: result.similarity,
+      distance:   result.distance,
+      liveness:   result.liveness,
+      ...(result.error ? { error: result.error } : {}),
+    });
+  } catch (error) {
+    console.error('[verify-face/by-url] Error:', error.message);
+    return res.status(500).json({ success: false, message: 'Face verification failed', error: error.message });
+  }
+});
+
+// ─── POST /verify-face ────────────────────────────────────────────────────────
+// Automated face verification + liveness check.
+// Accepts:  multipart/form-data  { image: File, userId: string }
+// Returns:  { success, verified, similarity, liveness, error? }
+// Requires: admin token
+router.post('/verify-face', protect, isAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Selfie image is required' });
+    }
+
+    const user = await User.findById(userId).select('name photos selfiePhoto verified verificationStatus');
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Resolve profile photo URL
+    const profilePhotoUrl =
+      user.photos?.[0]?.url ||
+      (typeof user.photos?.[0] === 'string' ? user.photos[0] : null);
+
+    if (!profilePhotoUrl) {
+      return res.status(422).json({
+        success: false,
+        message: 'User has no profile photo to compare against',
+      });
+    }
+
+    // Resolve selfie URL (from user record or use the uploaded image directly)
+    const selfieUrl =
+      user.selfiePhoto?.url ||
+      (typeof user.selfiePhoto === 'string' ? user.selfiePhoto : null);
+
+    // Use uploaded image buffer for the live selfie comparison
+    const selfieBuffer = req.file.buffer;
+
+    const { compareFaces } = require('../utils/faceVerifier');
+    const result = await compareFaces(selfieBuffer, profilePhotoUrl, 0.85);
+
+    // Update user record when verification passes
+    if (result.verified) {
+      await User.findByIdAndUpdate(userId, {
+        verified: true,
+        verificationStatus: 'approved',
+        verificationApprovedAt: new Date(),
+        verificationApprovedBy: req.user._id,
+        verificationRejectionReason: null,
+      });
+
+      // Real-time socket push
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          io.to(userId).emit('user:verified', {
+            userId,
+            verified: true,
+            verificationStatus: 'approved',
+          });
+        }
+      } catch (_) {}
+    }
+
+    return res.json({
+      success:    true,
+      verified:   result.verified,
+      similarity: result.similarity,
+      distance:   result.distance,
+      liveness:   result.liveness,
+      ...(result.error ? { error: result.error } : {}),
+    });
+  } catch (error) {
+    console.error('[verify-face] Error:', error.message);
+    return res.status(500).json({
+      success:  false,
+      message:  'Face verification failed',
+      error:    error.message,
+    });
   }
 });
 

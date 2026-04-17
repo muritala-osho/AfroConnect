@@ -146,6 +146,26 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  verifyFace: async (userId: string): Promise<{
+    success: boolean;
+    verified: boolean;
+    similarity: number;
+    distance?: number;
+    liveness: { passed: boolean; issues: string[] };
+    error?: string;
+    message?: string;
+  }> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/verification/verify-face/by-url`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    });
+    return handleResponse(res);
+  },
+
   deleteStory: async (storyId: string) => {
     const res = await fetch(`${API_BASE}/admin/stories/${storyId}`, {
       method: 'DELETE',
@@ -205,6 +225,22 @@ export const adminApi = {
 
   getAppSettings: async () => {
     const res = await fetch(`${API_BASE}/admin/settings`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  activateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  deactivateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch/deactivate`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
     return handleResponse(res);
   },
 
