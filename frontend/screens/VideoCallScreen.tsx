@@ -25,7 +25,19 @@ import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
-import WebView from "react-native-webview";
+
+import {
+  createAgoraRtcEngine,
+  IRtcEngine,
+  RtcSurfaceView,
+  VideoSourceType,
+  ChannelProfileType,
+  ClientRoleType,
+  VideoMirrorModeType,
+  RenderModeType,
+  OrientationMode,
+  DegradationPreference,
+} from "react-native-agora";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
@@ -140,13 +152,14 @@ export default function VideoCallScreen() {
     callAccepted ? "connected" : "connecting",
   );
   const [activeCallData, setActiveCallData] = useState<any>(incomingCallData || null);
-  const [isMuted, setIsMuted]         = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [isMuted, setIsMuted]             = useState(false);
+  const [isCameraOff, setIsCameraOff]     = useState(false);
+  const [isSpeakerOn, setIsSpeakerOn]     = useState(true);
   const [hasRemoteVideo, setHasRemoteVideo] = useState(false);
-  const [webviewReady, setWebviewReady]     = useState(false);
+  const [remoteUid, setRemoteUid]         = useState<number | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [networkQuality, setNetworkQuality] = useState(0);
+  const [engineReady,   setEngineReady]    = useState(false);
 
   /* ── Animated values ── */
   const fadeAnim      = useRef(new Animated.Value(0)).current;
@@ -160,9 +173,8 @@ export default function VideoCallScreen() {
   const ringtoneRef       = useRef<Audio.Sound | null>(null);
   const shouldRingRef     = useRef(false);
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const webViewRef        = useRef<WebView | null>(null);
+  const engineRef         = useRef<IRtcEngine | null>(null);
   const agoraJoined       = useRef(false);
-  const pendingJoinRef    = useRef<object | null>(null);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
   const controlsTimer     = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -200,11 +212,9 @@ export default function VideoCallScreen() {
       if (ringtoneRef.current) {
         const snd = ringtoneRef.current;
         ringtoneRef.current = null;
-        /* Fire-and-forget: send stop to native layer immediately without blocking */
         snd.stopAsync().catch(() => {}).finally(() => snd.unloadAsync().catch(() => {}));
       }
     } catch {}
-    /* Reset audio session so mic and camera work for the call */
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -231,7 +241,7 @@ export default function VideoCallScreen() {
         ? require("../assets/sounds/mixkit-waiting-ringtone-1354.wav")
         : require("../assets/sounds/phone-calling-1b.mp3");
       const { sound } = await Audio.Sound.createAsync(source, {
-        shouldPlay: false,   // don't auto-play; check ref first to avoid audio leak
+        shouldPlay: false,
         isLooping: true,
         volume: 1.0,
       });
@@ -241,7 +251,6 @@ export default function VideoCallScreen() {
         return;
       }
       ringtoneRef.current = sound;
-      /* Final guard: stopRingtone may have fired while the sound was being created */
       if (!shouldRingRef.current) {
         ringtoneRef.current = null;
         await sound.stopAsync().catch(() => {});
@@ -256,19 +265,83 @@ export default function VideoCallScreen() {
     }
   }, [isIncoming, stopRingtone]);
 
-  /* ── WebView bridge ── */
-  const sendToWebView = useCallback((msg: object) => {
-    webViewRef.current?.postMessage(JSON.stringify(msg));
+  /* ── Init native Agora engine ── */
+  const initEngine = useCallback((callDataObj: any) => {
+    if (engineRef.current || Platform.OS === "web") return;
+    try {
+      const engine = createAgoraRtcEngine();
+      engineRef.current = engine;
+
+      engine.initialize({
+        appId: callDataObj.appId,
+        channelProfile: ChannelProfileType.ChannelProfileCommunication,
+      });
+
+      engine.enableVideo();
+      engine.enableAudio();
+      engine.setDefaultAudioRouteToSpeakerphone(true);
+
+      engine.setVideoEncoderConfiguration({
+        dimensions:           { width: 1280, height: 720 },
+        frameRate:            30,
+        bitrate:              2000,
+        orientationMode:      OrientationMode.OrientationModeAdaptive,
+        degradationPreference: DegradationPreference.MaintainQuality,
+        mirrorMode:           VideoMirrorModeType.VideoMirrorModeEnabled,
+      });
+
+      engine.addListener("onUserJoined", (_conn, uid) => {
+        setRemoteUid(uid);
+        setHasRemoteVideo(true);
+      });
+
+      engine.addListener("onUserOffline", (_conn, _uid, _reason) => {
+        setRemoteUid(null);
+        setHasRemoteVideo(false);
+        if (callStatusRef.current === "connected") {
+          handleEngineEndCall();
+        }
+      });
+
+      engine.addListener("onNetworkQuality", (_conn, uid, txQ, rxQ) => {
+        if (uid === 0) setNetworkQuality(Math.max(txQ, rxQ));
+      });
+
+      engine.addListener("onRemoteVideoStateChanged", (_conn, _uid, state) => {
+        setHasRemoteVideo(state === 2);
+      });
+
+      engine.startPreview();
+      setEngineReady(true);
+    } catch (e) {
+      console.error("[VideoCall] Engine init error:", e);
+    }
   }, []);
 
-  /* ── Join Agora video ── */
+  /* ── Internal end-call triggered from engine events ── */
+  const handleEngineEndCall = useCallback(() => {
+    try { engineRef.current?.leaveChannel(); } catch {}
+    setStatus("ended");
+    stopGlobalTimer();
+    clearCall();
+    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 600);
+  }, [navigation, setStatus, stopGlobalTimer, clearCall]);
+
+  /* ── Join Agora channel ── */
   const joinAgoraVideo = useCallback(
     async (callDataObj: any) => {
       if (agoraJoined.current) return;
       agoraJoined.current = true;
 
+      if (Platform.OS === "web") {
+        agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, callDataObj.token, callDataObj.uid || 0);
+        return;
+      }
+
+      if (!engineRef.current) initEngine(callDataObj);
+
       let joinToken = callDataObj.token;
-      let joinUid = callDataObj.uid || 0;
+      let joinUid   = callDataObj.uid || 0;
 
       if (isIncoming && authToken) {
         try {
@@ -279,58 +352,53 @@ export default function VideoCallScreen() {
           );
           if (res.success && res.data?.token) {
             joinToken = res.data.token;
-            joinUid = 0;
+            joinUid   = 0;
           }
         } catch {
           console.log("Video token fallback");
         }
       }
 
-      if (Platform.OS === "web") {
-        agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
-        return;
-      }
-
-      const msg = {
-        action: "join",
-        appId: callDataObj.appId,
-        channel: callDataObj.channelName,
-        token: joinToken,
-        uid: joinUid,
-        callType: "video",
-      };
-
-      /* Send immediately if WebView is ready, otherwise queue */
-      if (webViewRef.current) {
-        webViewRef.current.postMessage(JSON.stringify(msg));
-      } else {
-        pendingJoinRef.current = msg;
+      try {
+        engineRef.current?.joinChannel(joinToken || null, callDataObj.channelName, joinUid, {
+          clientRoleType:       ClientRoleType.ClientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          publishCameraTrack:     true,
+          autoSubscribeAudio:     true,
+          autoSubscribeVideo:     true,
+        });
+      } catch (e) {
+        console.error("[VideoCall] joinChannel error:", e);
       }
     },
-    [isIncoming, authToken, get],
+    [isIncoming, authToken, get, initEngine],
   );
 
   /* ── End call ── */
   const handleEndCall = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const wasConnected = callStatusRef.current === "connected";
     const dur = activeCall?.duration || 0;
     setStatus("ended");
     await stopRingtone();
     stopGlobalTimer();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     if (controlsTimer.current) clearTimeout(controlsTimer.current);
-    if (Platform.OS === "web") agoraService.leave();
-    else sendToWebView({ action: "leave" });
+
+    if (Platform.OS === "web") {
+      agoraService.leave();
+    } else {
+      try { engineRef.current?.leaveChannel(); } catch {}
+    }
+
     socketService.endCall({
       targetUserId: isIncoming ? callerId : userId,
       callType: "video",
       duration: dur,
-      wasAnswered: wasConnected,
+      wasAnswered: callStatusRef.current === "connected" || dur > 0,
     });
     clearCall();
     setTimeout(() => navigation.canGoBack() && navigation.goBack(), 600);
-  }, [callerId, userId, isIncoming, stopRingtone, sendToWebView, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
+  }, [callerId, userId, isIncoming, stopRingtone, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
 
   /* ── Minimize ── */
   const handleMinimize = useCallback(() => {
@@ -339,7 +407,21 @@ export default function VideoCallScreen() {
     if (navigation.canGoBack()) navigation.goBack();
   }, [minimizeCall, navigation]);
 
-  /* ── Unified back press handler (UI button + Android hardware back) ── */
+  /* ── Decline incoming ── */
+  const handleDecline = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    await stopRingtone();
+    if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+    socketService.declineCall({ callerId, callType: "video" });
+    if (authToken && isIncoming) {
+      post("/call/decline", { callerId, type: "video" }, authToken).catch(() => {});
+    }
+    setStatus("declined");
+    clearCall();
+    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
+  }, [callerId, isIncoming, authToken, post, stopRingtone, clearCall, navigation, setStatus]);
+
+  /* ── Unified back press handler ── */
   const handleBackPress = useCallback(() => {
     const status = callStatusRef.current;
     if (status === "connected") {
@@ -375,31 +457,17 @@ export default function VideoCallScreen() {
     if (activeCallData) joinAgoraVideo(activeCallData);
   }, [callerId, activeCallData, stopRingtone, joinAgoraVideo, startGlobalTimer, setStatus, showControls]);
 
-  /* ── Decline incoming ── */
-  const handleDecline = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    await stopRingtone();
-    if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
-    socketService.declineCall({ callerId, callType: "video" });
-    if (authToken && isIncoming) {
-      post("/call/decline", { callerId, type: "video" }, authToken).catch(() => {});
-    }
-    setStatus("declined");
-    clearCall();
-    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
-  }, [callerId, isIncoming, authToken, post, stopRingtone, clearCall, navigation, setStatus]);
-
   /* ── Toggle mute ── */
   const toggleMute = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsMuted((prev) => {
       const next = !prev;
       if (Platform.OS === "web") agoraService.toggleMute(next);
-      else sendToWebView({ action: "mute", muted: next });
+      else engineRef.current?.muteLocalAudioStream(next);
       return next;
     });
     showControls();
-  }, [sendToWebView, showControls]);
+  }, [showControls]);
 
   /* ── Toggle camera ── */
   const toggleCamera = useCallback(() => {
@@ -407,19 +475,19 @@ export default function VideoCallScreen() {
     setIsCameraOff((prev) => {
       const next = !prev;
       if (Platform.OS === "web") agoraService.toggleCamera(next);
-      else sendToWebView({ action: "camera", off: next });
+      else engineRef.current?.muteLocalVideoStream(next);
       return next;
     });
     showControls();
-  }, [sendToWebView, showControls]);
+  }, [showControls]);
 
   /* ── Flip camera ── */
   const flipCamera = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (Platform.OS === "web") agoraService.switchCamera();
-    else sendToWebView({ action: "switch-camera" });
+    else engineRef.current?.switchCamera();
     showControls();
-  }, [sendToWebView, showControls]);
+  }, [showControls]);
 
   /* ── Toggle speaker ── */
   const toggleSpeaker = useCallback(async () => {
@@ -434,9 +502,9 @@ export default function VideoCallScreen() {
         playThroughEarpieceAndroid: !next,
       });
     } catch {}
-    if (Platform.OS !== "web") sendToWebView({ action: "speaker", on: next });
+    if (Platform.OS !== "web") engineRef.current?.setEnableSpeakerphone(next);
     showControls();
-  }, [isSpeakerOn, showControls, sendToWebView]);
+  }, [isSpeakerOn, showControls]);
 
   /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
@@ -451,6 +519,9 @@ export default function VideoCallScreen() {
         const cd = response.data.callData;
         setActiveCallData(cd);
         activeCallDataRef.current = cd;
+
+        if (Platform.OS !== "web") initEngine(cd);
+
         setStatus("ringing");
 
         const photoVal = user?.photos?.[0];
@@ -475,13 +546,25 @@ export default function VideoCallScreen() {
     } catch {
       setStatus("failed");
     }
-  }, [authToken, userId, post, user, navigation, setStatus, clearCall]);
+  }, [authToken, userId, post, user, navigation, setStatus, clearCall, initEngine]);
+
+  /* ── Release engine on unmount ── */
+  const releaseEngine = useCallback(() => {
+    if (!engineRef.current || Platform.OS === "web") return;
+    try {
+      engineRef.current.removeAllListeners();
+      engineRef.current.leaveChannel();
+      engineRef.current.release();
+      engineRef.current = null;
+      agoraJoined.current = false;
+      setEngineReady(false);
+    } catch {}
+  }, []);
 
   /* ── Setup effect ── */
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 450, useNativeDriver: true }).start();
 
-    /* Tell the FloatingCallBar we are on a call screen — hide it */
     setIsOnCallScreen(true);
     maximizeCall();
 
@@ -499,14 +582,12 @@ export default function VideoCallScreen() {
       setStatus("connected");
       startGlobalTimer();
       showControls();
-      if (activeCallDataRef.current)
-        joinAgoraVideo(activeCallDataRef.current);
+      if (activeCallDataRef.current) joinAgoraVideo(activeCallDataRef.current);
     } else if (returnToCall) {
       setStatus("connected");
       showControls();
     } else if (isIncoming) {
       setStatus("ringing");
-      /* Auto-decline if not answered within 60 seconds */
       ringingTimeout.current = setTimeout(async () => {
         if (callStatusRef.current === "ringing") {
           await stopRingtone();
@@ -545,7 +626,7 @@ export default function VideoCallScreen() {
     socketService.onCallEnded(async () => {
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
-      else sendToWebView({ action: "leave" });
+      else { try { engineRef.current?.leaveChannel(); } catch {} }
       setStatus("ended");
       stopGlobalTimer();
       clearCall();
@@ -561,6 +642,7 @@ export default function VideoCallScreen() {
       socketService.off("call:declined");
       socketService.off("call:busy");
       socketService.off("call:ended");
+      releaseEngine();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -572,7 +654,7 @@ export default function VideoCallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
-  /* ── Set audio mode for active call (enables AEC on iOS to prevent echo) ── */
+  /* ── Audio mode for active call ── */
   useEffect(() => {
     if (callStatus !== "connected") return;
     Audio.setAudioModeAsync({
@@ -581,7 +663,7 @@ export default function VideoCallScreen() {
       staysActiveInBackground: true,
       playThroughEarpieceAndroid: false,
     }).catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
   /* ── Pulse ring animation ── */
@@ -607,37 +689,22 @@ export default function VideoCallScreen() {
     }
   }, [callStatus]);
 
-  /* ── WebView ready → flush pending join or join if already connected ── */
-  useEffect(() => {
-    if (!webviewReady) return;
-    /* Flush any queued join message */
-    if (pendingJoinRef.current) {
-      webViewRef.current?.postMessage(JSON.stringify(pendingJoinRef.current));
-      pendingJoinRef.current = null;
-      return;
-    }
-    if (
-      (callStatus === "connected" || callAccepted) &&
-      activeCallDataRef.current &&
-      !agoraJoined.current
-    ) {
-      joinAgoraVideo(activeCallDataRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webviewReady]);
-
   /* ── Free-tier 5-min limit ── */
   useEffect(() => {
     if (user?.premium?.isActive || callStatus !== "connected") return;
     if (duration === 240) {
       Alert.alert(
         "1 Minute Remaining",
-        "Free video calls are limited to 5 minutes. Upgrade to Premium for unlimited calls.",
-        [{ text: "OK" }],
+        "Free calls are limited to 5 minutes. Upgrade to Premium for unlimited calls.",
+        [
+          { text: "Continue", style: "cancel" },
+          { text: "Upgrade", style: "default", onPress: () => {} },
+        ],
       );
     }
     if (duration >= 300) handleEndCall();
-  }, [duration, callStatus, user, handleEndCall]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, callStatus]);
 
   /* ── Derived state ── */
   const isConnected  = callStatus === "connected";
@@ -645,10 +712,7 @@ export default function VideoCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
-  /* Show WebView full-screen once connected, OR for the outgoing caller
-     while connecting/ringing so they see their own camera immediately. */
   const showVideo    = (isConnected || (!isIncoming && (callStatus === "connecting" || callStatus === "ringing"))) && Platform.OS !== "web";
-  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -679,7 +743,7 @@ export default function VideoCallScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background: blurred avatar + dark overlay — visible until call connects */}
+      {/* Background blurred avatar — visible until video starts */}
       {!showVideo && (
         <>
           <SafeImage
@@ -694,51 +758,47 @@ export default function VideoCallScreen() {
         </>
       )}
 
-      {/* Single always-mounted WebView — stays alive through the whole call.
-          Hidden (0×0) pre-call so it can load + join; full-screen once connected.
-          Never unmounts, so agoraJoined stays valid and video streams persist. */}
-      {Platform.OS !== "web" && (
-        <WebView
-          ref={webViewRef}
-          source={{ uri: agoraUrl }}
-          style={
-            showVideo
-              ? StyleSheet.absoluteFillObject
-              : { width: 0, height: 0, position: "absolute" }
-          }
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          mediaCapturePermissionGrantType="grant"
-          javaScriptEnabled
-          domStorageEnabled
-          scrollEnabled={false}
-          bounces={false}
-          onLoad={() => setWebviewReady(true)}
-          onMessage={(e) => {
-            try {
-              const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "sdk-ready")             console.log("Video: Agora SDK ready");
-              if (d.type === "joined")                console.log("Video joined:", d.uid);
-              if (d.type === "local-video-started")   console.log("Local video ready");
-              if (d.type === "remote-video-started")  setHasRemoteVideo(true);
-              if (d.type === "remote-video-stopped")  setHasRemoteVideo(false);
-              if (d.type === "networkQuality")        setNetworkQuality(d.level ?? 0);
-              if (d.type === "remote-user-left") {
-                setHasRemoteVideo(false);
-                if (callStatusRef.current === "connected") handleEndCall();
-              }
-              if (d.type === "error")                 console.warn("Video WebView error:", d.message);
-            } catch {}
-          }}
-        />
+      {/* ── NATIVE VIDEO VIEWS (iOS / Android) ── */}
+      {Platform.OS !== "web" && engineReady && (
+
+        <>
+          {/* Remote video — full-screen, shown when connected and remote joined */}
+          {isConnected && hasRemoteVideo && remoteUid !== null && (
+            <RtcSurfaceView
+              canvas={{
+                uid: remoteUid,
+                renderMode: RenderModeType.RenderModeHidden,
+              }}
+              style={StyleSheet.absoluteFillObject}
+            />
+          )}
+
+          {/* Local self-view */}
+          {showVideo && !isCameraOff && (
+            <RtcSurfaceView
+              canvas={{
+                uid: 0,
+                sourceType: VideoSourceType.VideoSourceCamera,
+                renderMode: RenderModeType.RenderModeHidden,
+                mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
+              }}
+              style={isConnected && hasRemoteVideo ? s.localPip : StyleSheet.absoluteFillObject}
+            />
+          )}
+
+          {/* Camera-off placeholder in PiP */}
+          {isConnected && hasRemoteVideo && isCameraOff && (
+            <View style={[s.localPip, s.camOffPip]}>
+              <Ionicons name="videocam-off" size={18} color="rgba(255,255,255,0.5)" />
+            </View>
+          )}
+        </>
       )}
 
       {/* ── UI OVERLAY ── */}
       <Animated.View style={[s.overlay, { opacity: fadeAnim }]} pointerEvents="box-none">
 
-        {/* Tap anywhere to show controls — only active when controls are hidden,
-            so WebView touch events (self-view drag) pass through freely when
-            controls are already visible */}
+        {/* Tap to show controls */}
         {isConnected && !controlsVisible && (
           <Pressable style={StyleSheet.absoluteFillObject} onPress={showControls} />
         )}
@@ -753,11 +813,7 @@ export default function VideoCallScreen() {
             style={s.topGrad}
           >
             <View style={[s.topRow, { paddingTop: insets.top + 16 }]}>
-              <Pressable
-                style={s.topBtn}
-                hitSlop={12}
-                onPress={handleBackPress}
-              >
+              <Pressable style={s.topBtn} hitSlop={12} onPress={handleBackPress}>
                 <Ionicons
                   name={isConnected ? "chevron-down" : "arrow-back"}
                   size={22}
@@ -782,7 +838,6 @@ export default function VideoCallScreen() {
                 </View>
               </View>
 
-              {/* Right side placeholder — always same width as back button to keep name centered */}
               {isConnected && isCameraOff ? (
                 <View style={s.camOffBadge}>
                   <Ionicons name="videocam-off" size={14} color="#fff" />
@@ -797,13 +852,18 @@ export default function VideoCallScreen() {
         {/* ── AVATAR (when no remote video or not connected) ── */}
         {(!isConnected || !hasRemoteVideo) && (
           <View style={s.avatarCenter}>
-            <View
-              style={[
-                s.avatarFrame,
-                isConnected && s.avatarFrameConnected,
-                isTerminal && s.avatarFrameTerminal,
-              ]}
-            >
+            <View style={[
+              s.avatarFrame,
+              isConnected && s.avatarFrameConnected,
+              isTerminal && s.avatarFrameTerminal,
+            ]}>
+              {(callStatus === "ringing" || callStatus === "connecting") && (
+                <>
+                  <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 20} />
+                  <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 40} />
+                  <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 60} />
+                </>
+              )}
               <SafeImage
                 source={{ uri: userPhoto || "https://via.placeholder.com/200" }}
                 style={s.avatarImg}
@@ -818,7 +878,6 @@ export default function VideoCallScreen() {
               </View>
             )}
 
-            {/* E2E badge while waiting */}
             {(callStatus === "ringing" || callStatus === "connecting") && (
               <View style={s.e2eBadge}>
                 <Ionicons name="lock-closed" size={10} color="#34d399" />
@@ -842,12 +901,7 @@ export default function VideoCallScreen() {
               <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
                   <Pressable style={[s.bigBtn, s.redBtn]} onPress={handleDecline}>
-                    <Ionicons
-                      name="call"
-                      size={30}
-                      color="#fff"
-                      style={{ transform: [{ rotate: "135deg" }] }}
-                    />
+                    <Ionicons name="call" size={30} color="#fff" style={{ transform: [{ rotate: "135deg" }] }} />
                   </Pressable>
                   <Text style={s.bigBtnLabel}>Decline</Text>
                 </View>
@@ -863,48 +917,19 @@ export default function VideoCallScreen() {
             {/* CONNECTED: full controls */}
             {isConnected && (
               <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
-                <VidBtn
-                  icon={isMuted ? "mic-off" : "mic"}
-                  label={isMuted ? "Unmute" : "Mute"}
-                  active={isMuted}
-                  onPress={toggleMute}
-                />
-                <VidBtn
-                  icon={isCameraOff ? "videocam-off" : "videocam"}
-                  label={isCameraOff ? "Cam On" : "Cam Off"}
-                  active={isCameraOff}
-                  onPress={toggleCamera}
-                />
-                <VidBtn
-                  icon="camera-reverse"
-                  label="Flip"
-                  onPress={flipCamera}
-                />
-                <VidBtn
-                  icon={isSpeakerOn ? "volume-high" : "ear"}
-                  label={isSpeakerOn ? "Speaker" : "Earpiece"}
-                  active={!isSpeakerOn}
-                  onPress={toggleSpeaker}
-                />
-                {/* End call */}
+                <VidBtn icon={isMuted ? "mic-off" : "mic"} label={isMuted ? "Unmute" : "Mute"} active={isMuted} onPress={toggleMute} />
+                <VidBtn icon={isCameraOff ? "videocam-off" : "videocam"} label={isCameraOff ? "Cam On" : "Cam Off"} active={isCameraOff} onPress={toggleCamera} />
+                <VidBtn icon="camera-reverse" label="Flip" onPress={flipCamera} />
+                <VidBtn icon={isSpeakerOn ? "volume-high" : "ear"} label={isSpeakerOn ? "Speaker" : "Earpiece"} active={!isSpeakerOn} onPress={toggleSpeaker} />
                 <View style={vb.wrap}>
                   <Animated.View style={{ transform: [{ scale: endBtnScale }] }}>
                     <Pressable
                       style={[s.bigBtn, s.redBtn]}
                       onPress={handleEndCall}
-                      onPressIn={() =>
-                        Animated.spring(endBtnScale, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()
-                      }
-                      onPressOut={() =>
-                        Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()
-                      }
+                      onPressIn={() => Animated.spring(endBtnScale, { toValue: 0.88, useNativeDriver: true, tension: 220, friction: 8 }).start()}
+                      onPressOut={() => Animated.spring(endBtnScale, { toValue: 1, useNativeDriver: true, tension: 220, friction: 8 }).start()}
                     >
-                      <Ionicons
-                        name="call"
-                        size={26}
-                        color="#fff"
-                        style={{ transform: [{ rotate: "135deg" }] }}
-                      />
+                      <Ionicons name="call" size={26} color="#fff" style={{ transform: [{ rotate: "135deg" }] }} />
                     </Pressable>
                   </Animated.View>
                   <Text style={vb.label}>End</Text>
@@ -917,12 +942,7 @@ export default function VideoCallScreen() {
               <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
                   <Pressable style={[s.bigBtn, s.redBtn]} onPress={handleEndCall}>
-                    <Ionicons
-                      name="call"
-                      size={30}
-                      color="#fff"
-                      style={{ transform: [{ rotate: "135deg" }] }}
-                    />
+                    <Ionicons name="call" size={30} color="#fff" style={{ transform: [{ rotate: "135deg" }] }} />
                   </Pressable>
                   <Text style={s.bigBtnLabel}>Cancel</Text>
                 </View>
@@ -933,10 +953,7 @@ export default function VideoCallScreen() {
             {isTerminal && (
               <View style={[s.ctrlRow, { paddingBottom: insets.bottom + 28 }]}>
                 <View style={s.ctrlItem}>
-                  <Pressable
-                    style={s.bigBtn}
-                    onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}
-                  >
+                  <Pressable style={s.bigBtn} onPress={() => { clearCall(); navigation.canGoBack() && navigation.goBack(); }}>
                     <Ionicons name="close" size={28} color="#fff" />
                   </Pressable>
                   <Text style={s.bigBtnLabel}>Close</Text>
@@ -957,7 +974,6 @@ const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: "#000" },
   overlay: { ...StyleSheet.absoluteFillObject },
 
-  /* Top overlay */
   topOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 10 },
   topGrad:    { paddingBottom: 40 },
   topRow: {
@@ -967,137 +983,97 @@ const s = StyleSheet.create({
     paddingBottom: 12,
   },
   topBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   topInfo: { flex: 1, alignItems: "center", paddingHorizontal: 8 },
   topName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#fff",
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    fontSize: 16, fontWeight: "700", color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.6)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
-  topStatus: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.65)",
-    marginTop: 2,
-    fontVariant: ["tabular-nums"],
-  },
+  topStatus: { fontSize: 13, color: "rgba(255,255,255,0.65)", marginTop: 2, fontVariant: ["tabular-nums"] },
   camOffBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: "rgba(220,38,38,0.70)",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   qualityBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    backgroundColor: "rgba(251,191,36,0.18)",
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.35)",
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8,
+    backgroundColor: "rgba(251,191,36,0.18)", borderWidth: 1, borderColor: "rgba(251,191,36,0.35)",
   },
   qualityText: { fontSize: 10, color: "#fbbf24", fontWeight: "600" },
 
-  /* Avatar center (fallback) — padded so it centers between header and controls */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 100,   /* clear top overlay (header + gradient) */
-    paddingBottom: 160, /* clear bottom overlay (controls + gradient) */
+    alignItems: "center", justifyContent: "center",
+    paddingTop: 100, paddingBottom: 160,
   },
   avatarFrame: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    overflow: "hidden",
-    borderWidth: 3,
-    borderColor: "rgba(52,211,153,0.50)",
-    shadowColor: "#10b981",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 24,
-    elevation: 16,
+    width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2,
+    overflow: "hidden", borderWidth: 3, borderColor: "rgba(52,211,153,0.50)",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#10b981", shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6, shadowRadius: 24, elevation: 16,
   },
   avatarFrameConnected: { borderColor: "rgba(255,255,255,0.30)" },
   avatarFrameTerminal:  { borderColor: "rgba(248,113,113,0.40)" },
   avatarImg: { width: "100%", height: "100%" },
 
   errorPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 14,
-    backgroundColor: "rgba(248,113,113,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.28)",
+    flexDirection: "row", alignItems: "center", gap: 6, marginTop: 14,
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14,
+    backgroundColor: "rgba(248,113,113,0.12)", borderWidth: 1, borderColor: "rgba(248,113,113,0.28)",
   },
   errorText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
   e2eBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: "rgba(52,211,153,0.10)",
-    borderWidth: 1,
-    borderColor: "rgba(52,211,153,0.25)",
+    flexDirection: "row", alignItems: "center", gap: 5, marginTop: 12,
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
+    backgroundColor: "rgba(52,211,153,0.10)", borderWidth: 1, borderColor: "rgba(52,211,153,0.25)",
   },
   e2eText: { fontSize: 11, color: "rgba(52,211,153,0.80)", fontWeight: "500" },
 
-  /* Bottom overlay */
   bottomOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 10 },
   bottomGrad:    { paddingTop: 60 },
 
-  ctrlRow: {
-    flexDirection: "row",
-    justifyContent: "space-evenly",
-    alignItems: "flex-end",
-    paddingHorizontal: 16,
-  },
+  ctrlRow: { flexDirection: "row", justifyContent: "space-evenly", alignItems: "flex-end", paddingHorizontal: 16 },
   ctrlItem: { alignItems: "center", gap: 6 },
 
   bigBtn: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 60, height: 60, borderRadius: 30,
     backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "center", justifyContent: "center",
   },
   redBtn: {
     backgroundColor: "#dc2626",
-    shadowColor: "#dc2626",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowColor: "#dc2626", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55, shadowRadius: 12, elevation: 10,
   },
   greenBtn: {
     backgroundColor: "#10b981",
-    shadowColor: "#10b981",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowColor: "#10b981", shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55, shadowRadius: 12, elevation: 10,
   },
   bigBtnLabel: { fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: "500" },
+
+  /* Native video PiP (self-view when remote is present) */
+  localPip: {
+    position: "absolute",
+    bottom: 170,
+    right: 16,
+    width: 110,
+    height: 150,
+    borderRadius: 14,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.35)",
+    zIndex: 5,
+  },
+  camOffPip: {
+    backgroundColor: "#111",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });
