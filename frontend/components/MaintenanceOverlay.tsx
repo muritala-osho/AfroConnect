@@ -8,29 +8,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMaintenance } from '@/context/MaintenanceContext';
 import { BlurView } from 'expo-blur';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
 
-const RETRY_DELAY_MS = 15_000; // auto-retry every 15s
+const RETRY_DELAY_MS = 15_000;
 
 export default function MaintenanceOverlay() {
-  const { isMaintenance, isOffline, checkHealth } = useMaintenance();
-  const visible = isMaintenance || isOffline;
+  const { isMaintenance, checkHealth } = useMaintenance();
 
-  const fadeAnim    = useRef(new Animated.Value(0)).current;
-  const slideAnim   = useRef(new Animated.Value(40)).current;
-  const pulseAnim   = useRef(new Animated.Value(1)).current;
-  const spinAnim    = useRef(new Animated.Value(0)).current;
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const spinAnim  = useRef(new Animated.Value(0)).current;
 
   const [checking, setChecking]   = useState(false);
   const [countdown, setCountdown] = useState(RETRY_DELAY_MS / 1000);
-  const countdownRef              = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fade + slide in / out
   useEffect(() => {
-    if (visible) {
+    if (isMaintenance) {
       Animated.parallel([
-        Animated.timing(fadeAnim,  { toValue: 1,  duration: 350, useNativeDriver: true }),
-        Animated.spring(slideAnim, { toValue: 0,  useNativeDriver: true, damping: 18, stiffness: 130 }),
+        Animated.timing(fadeAnim,  { toValue: 1, duration: 350, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, damping: 18, stiffness: 130 }),
       ]).start();
       startCountdown();
     } else {
@@ -38,28 +36,24 @@ export default function MaintenanceOverlay() {
       clearCountdown();
     }
     return () => clearCountdown();
-  }, [visible]);
+  }, [isMaintenance]);
 
-  // Pulse the icon
   useEffect(() => {
-    if (!visible) return;
+    if (!isMaintenance) return;
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, useNativeDriver: true }),
         Animated.timing(pulseAnim, { toValue: 1,    duration: 1000, useNativeDriver: true }),
       ])
     ).start();
-  }, [visible]);
+  }, [isMaintenance]);
 
   const startCountdown = () => {
     clearCountdown();
     setCountdown(RETRY_DELAY_MS / 1000);
     countdownRef.current = setInterval(() => {
       setCountdown(prev => {
-        if (prev <= 1) {
-          retry();
-          return RETRY_DELAY_MS / 1000;
-        }
+        if (prev <= 1) { retry(); return RETRY_DELAY_MS / 1000; }
         return prev - 1;
       });
     }, 1000);
@@ -73,7 +67,6 @@ export default function MaintenanceOverlay() {
   const retry = async () => {
     if (checking) return;
     setChecking(true);
-    // Spin animation while checking
     Animated.loop(
       Animated.timing(spinAnim, { toValue: 1, duration: 800, useNativeDriver: true })
     ).start();
@@ -84,82 +77,43 @@ export default function MaintenanceOverlay() {
     startCountdown();
   };
 
-  if (!visible) return null;
+  if (!isMaintenance) return null;
 
   const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  const isMaint = isMaintenance;
 
   return (
     <Animated.View style={[styles.overlay, { opacity: fadeAnim }]} pointerEvents="box-none">
       <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
-
       <Animated.View style={[styles.card, { transform: [{ translateY: slideAnim }] }]}>
-        <LinearGradient
-          colors={isMaint ? ['#1E1B4B', '#312E81', '#1E1B4B'] : ['#1A1A2E', '#16213E', '#1A1A2E']}
-          style={styles.cardGradient}
-        >
-          {/* Decorative glow blobs */}
-          <View style={[styles.blob, styles.blobTL, { backgroundColor: isMaint ? '#6366F180' : '#0EA5E980' }]} />
-          <View style={[styles.blob, styles.blobBR, { backgroundColor: isMaint ? '#818CF830' : '#06B6D430' }]} />
+        <LinearGradient colors={['#1E1B4B', '#312E81', '#1E1B4B']} style={styles.cardGradient}>
+          <View style={[styles.blob, styles.blobTL, { backgroundColor: '#6366F180' }]} />
+          <View style={[styles.blob, styles.blobBR, { backgroundColor: '#818CF830' }]} />
 
-          {/* Icon */}
-          <Animated.View style={[
-            styles.iconWrap,
-            { backgroundColor: isMaint ? '#6366F120' : '#0EA5E920', transform: [{ scale: pulseAnim }] },
-          ]}>
-            <Ionicons
-              name={isMaint ? 'construct-outline' : 'cloud-offline-outline'}
-              size={52}
-              color={isMaint ? '#818CF8' : '#38BDF8'}
-            />
+          <Animated.View style={[styles.iconWrap, { transform: [{ scale: pulseAnim }] }]}>
+            <Ionicons name="construct-outline" size={52} color="#818CF8" />
           </Animated.View>
 
-          {/* Title */}
-          <ThemedText style={styles.title}>
-            {isMaint ? "We're Under Maintenance" : 'No Connection'}
-          </ThemedText>
-
-          {/* Subtitle */}
+          <ThemedText style={styles.title}>We're Under Maintenance</ThemedText>
           <ThemedText style={styles.subtitle}>
-            {isMaint
-              ? "AfroConnect is temporarily offline for scheduled maintenance. We'll be back very shortly — thank you for your patience."
-              : "We can't reach our servers right now. Please check your internet connection and try again."}
+            AfroConnect is temporarily offline for scheduled maintenance. We'll be back very shortly — thank you for your patience.
           </ThemedText>
 
-          {/* Status pill */}
-          <View style={[styles.statusPill, { backgroundColor: isMaint ? '#6366F115' : '#0EA5E915', borderColor: isMaint ? '#6366F140' : '#0EA5E940' }]}>
-            <View style={[styles.statusDot, { backgroundColor: isMaint ? '#818CF8' : '#38BDF8' }]} />
-            <ThemedText style={[styles.statusText, { color: isMaint ? '#A5B4FC' : '#7DD3FC' }]}>
-              {isMaint ? 'Maintenance in progress' : 'Offline'}
-            </ThemedText>
+          <View style={styles.statusPill}>
+            <View style={styles.statusDot} />
+            <ThemedText style={styles.statusText}>Maintenance in progress</ThemedText>
           </View>
 
-          {/* Retry button */}
-          <Pressable
-            style={[styles.retryBtn, checking && styles.retryBtnDisabled]}
-            onPress={retry}
-            disabled={checking}
-          >
-            <LinearGradient
-              colors={isMaint ? ['#6366F1', '#4F46E5'] : ['#0EA5E9', '#0284C7']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.retryBtnInner}
-            >
+          <Pressable style={[styles.retryBtn, checking && styles.retryBtnDisabled]} onPress={retry} disabled={checking}>
+            <LinearGradient colors={['#6366F1', '#4F46E5']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.retryBtnInner}>
               <Animated.View style={{ transform: [{ rotate: checking ? spin : '0deg' }] }}>
                 <Ionicons name="refresh" size={18} color="#FFF" />
               </Animated.View>
-              <ThemedText style={styles.retryBtnText}>
-                {checking ? 'Checking…' : 'Try Again'}
-              </ThemedText>
+              <ThemedText style={styles.retryBtnText}>{checking ? 'Checking…' : 'Try Again'}</ThemedText>
             </LinearGradient>
           </Pressable>
 
-          {/* Auto-retry countdown */}
           {!checking && (
-            <ThemedText style={styles.countdownText}>
-              Auto-retrying in {countdown}s
-            </ThemedText>
+            <ThemedText style={styles.countdownText}>Auto-retrying in {countdown}s</ThemedText>
           )}
         </LinearGradient>
       </Animated.View>
@@ -200,7 +154,6 @@ const styles = StyleSheet.create({
   },
   blobTL: { top: -60, left: -60 },
   blobBR: { bottom: -60, right: -60 },
-
   iconWrap: {
     width: 96,
     height: 96,
@@ -208,6 +161,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+    backgroundColor: '#6366F120',
   },
   title: {
     fontSize: 22,
@@ -232,15 +186,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     marginTop: 4,
+    backgroundColor: '#6366F115',
+    borderColor: '#6366F140',
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: '#818CF8',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#A5B4FC',
   },
   retryBtn: {
     width: '100%',

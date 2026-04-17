@@ -19,7 +19,7 @@ export function useApi() {
   const loadingRef = useRef(false);
   const errorRef   = useRef<string | null>(null);
 
-  const { setMaintenance, setOffline } = useMaintenance();
+  const { setMaintenance } = useMaintenance();
 
   const request = useCallback(async <T,>(
     endpoint: string,
@@ -50,9 +50,8 @@ export function useApi() {
         }
       }
 
-      // Clear maintenance/offline flags on any successful response
+      // Clear maintenance flag on any successful response
       setMaintenance(false);
-      setOffline(false);
 
       const contentType = response.headers.get('content-type');
       if (contentType && !contentType.includes('application/json')) {
@@ -78,18 +77,6 @@ export function useApi() {
         message: jsonData.message,
       };
     } catch (err: any) {
-      // ── Offline / network-unreachable detection ────────────────────────────
-      const isNetworkError = (
-        err.message?.includes('Network request failed') ||
-        err.message?.includes('Failed to fetch') ||
-        err.name === 'AbortError' ||
-        err.message?.includes('timeout') ||
-        err.message?.toLowerCase().includes('network')
-      );
-      if (isNetworkError) {
-        setOffline(true);
-      }
-
       const errorMessage = err.message || 'Network error';
       errorRef.current = errorMessage;
       setError(errorMessage);
@@ -97,7 +84,7 @@ export function useApi() {
       setLoading(false);
       return { success: false, error: errorMessage, message: errorMessage };
     }
-  }, [setMaintenance, setOffline]);
+  }, [setMaintenance]);
 
   const get = useCallback(<T,>(endpoint: string, paramsOrToken?: Record<string, any> | string, token?: string) => {
     let url = endpoint;
