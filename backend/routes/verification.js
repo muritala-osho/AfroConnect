@@ -37,7 +37,7 @@ const isAdmin = async (req, res, next) => {
 
 const emailService  = require('../utils/emailService');
 const { analyzePose } = require('../utils/faceVerifier');
-const { checkAntispoof, isServiceAvailable } = require('../utils/insightClient');
+const { checkAntispoof, compareFacesInsight, isServiceAvailable } = require('../utils/insightClient');
 const { execFile } = require('child_process');
 const os = require('os');
 
@@ -80,33 +80,77 @@ async function extractFramesBase64(videoBuffer, mimeType) {
   return frames;
 }
 
-// ─── Background anti-spoof run ────────────────────────────────────────────────
+// ─── Fetch a URL and return it as a base64 string ────────────────────────────
+
+async function fetchImageBase64(url) {
+  const https = require('https');
+  const http  = require('http');
+  const { URL } = require('url');
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === 'https:' ? https : http;
+    const chunks = [];
+    const req = client.get(url, { timeout: 15_000 }, (res) => {
+      res.on('data', (c) => chunks.push(c));
+      res.on('end',  () => resolve(Buffer.concat(chunks).toString('base64')));
+    });
+    req.on('error',   reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('fetchImageBase64 timeout')); });
+  });
+}
+
+// ─── Background AI analysis: anti-spoof + face similarity ────────────────────
 // Called after responding to the client so it never delays the upload response.
 
 async function runAntiSpoofBackground(userId, videoBuffer, mimeType) {
   try {
     const available = await isServiceAvailable();
     if (!available) {
-      console.log('[antispoof] InsightFace service unavailable — skipping');
+      console.log('[insight-bg] InsightFace service unavailable — skipping');
       return;
     }
 
     const frames = await extractFramesBase64(videoBuffer, mimeType);
     if (!frames.length) {
-      console.log('[antispoof] No frames extracted — skipping');
+      console.log('[insight-bg] No frames extracted — skipping');
       return;
     }
 
-    const result = await checkAntispoof(frames);
-    console.log(`[antispoof] userId=${userId} score=${result.score} real=${result.real} frames=${frames.length}`);
+    // ── 1. Passive liveness / anti-spoof ──────────────────────────────────────
+    const spoofResult = await checkAntispoof(frames);
+    console.log(`[insight-bg] antispoof userId=${userId} score=${spoofResult.score} real=${spoofResult.real}`);
 
-    await User.findByIdAndUpdate(userId, {
-      'verificationVideo.antiSpoofScore': result.score,
-      'verificationVideo.antiSpoofReal':  result.real,
+    const update = {
+      'verificationVideo.antiSpoofScore': spoofResult.score,
+      'verificationVideo.antiSpoofReal':  spoofResult.real,
       'verificationVideo.antiSpoofAt':    new Date(),
-    });
+    };
+
+    // ── 2. ArcFace face similarity: video frame vs profile photo ──────────────
+    try {
+      const user = await User.findById(userId).select('photos');
+      const profilePhotoUrl =
+        user?.photos?.[0]?.url ||
+        (typeof user?.photos?.[0] === 'string' ? user.photos[0] : null);
+
+      if (profilePhotoUrl && frames[0]) {
+        const profileBase64 = await fetchImageBase64(profilePhotoUrl);
+        const matchResult   = await compareFacesInsight(profileBase64, frames[0]);
+        console.log(`[insight-bg] faceMatch userId=${userId} score=${matchResult.similarity} verified=${matchResult.verified}`);
+
+        update['verificationVideo.faceMatchScore']    = matchResult.similarity ?? matchResult.cosine ?? 0;
+        update['verificationVideo.faceMatchVerified'] = matchResult.verified ?? false;
+        update['verificationVideo.faceMatchAt']       = new Date();
+      } else {
+        console.log('[insight-bg] No profile photo — skipping face match');
+      }
+    } catch (matchErr) {
+      console.warn('[insight-bg] Face match failed:', matchErr.message);
+    }
+
+    await User.findByIdAndUpdate(userId, update);
   } catch (err) {
-    console.error('[antispoof] Background run failed:', err.message);
+    console.error('[insight-bg] Background run failed:', err.message);
   }
 }
 

@@ -191,10 +191,17 @@ const userSchema = new mongoose.Schema({
     default: null
   },
   verificationVideo: {
-    url: { type: String, default: null },
-    publicId: { type: String, default: null },
-    storedAt: { type: Date, default: null },
-    storage: { type: String, enum: ['cloudinary', 'local'], default: null }
+    url:               { type: String,  default: null },
+    publicId:          { type: String,  default: null },
+    storedAt:          { type: Date,    default: null },
+    storage:           { type: String,  enum: ['cloudinary', 'local'], default: null },
+    challengeOrder:    { type: [String], default: null },
+    antiSpoofScore:    { type: Number,  default: null },
+    antiSpoofReal:     { type: Boolean, default: null },
+    antiSpoofAt:       { type: Date,    default: null },
+    faceMatchScore:    { type: Number,  default: null },
+    faceMatchVerified: { type: Boolean, default: null },
+    faceMatchAt:       { type: Date,    default: null },
   },
   verificationRequestDate: {
     type: Date,

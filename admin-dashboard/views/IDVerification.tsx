@@ -2,9 +2,46 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle, XCircle, Clock, ShieldCheck, AlertCircle,
   Eye, ZoomIn, Loader2, RefreshCw, X, Cpu, UserCheck,
+  ScanFace, ShieldAlert, ListOrdered,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 import FaceVerification from '../components/FaceVerification';
+
+// ── Helper: render a score pill ──────────────────────────────────────────────
+const ScorePill: React.FC<{
+  label: string;
+  score: number | null | undefined;
+  passed: boolean | null | undefined;
+  passPct?: number;
+  icon: React.ReactNode;
+}> = ({ label, score, passed, passPct = 35, icon }) => {
+  if (score == null) return null;
+  const pct       = Math.round(score * 100);
+  const isPass    = passed ?? pct >= passPct;
+  const barColor  = isPass ? 'bg-emerald-500' : 'bg-rose-500';
+  const textColor = isPass ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400';
+  const bgColor   = isPass
+    ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+    : 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30';
+
+  return (
+    <div className={`flex-1 p-3 rounded-2xl border ${bgColor}`}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={textColor}>{icon}</span>
+        <span className={`text-[10px] font-black uppercase tracking-widest ${textColor}`}>{label}</span>
+        <span className={`ml-auto text-xs font-black ${textColor}`}>
+          {pct}% {isPass ? '✓' : '✗'}
+        </span>
+      </div>
+      <div className="h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${barColor} transition-all`} style={{ width: `${Math.min(pct, 100)}%` }} />
+      </div>
+      <p className={`text-[9px] mt-1 font-semibold ${textColor} opacity-70`}>
+        threshold {passPct}% — {isPass ? 'PASS' : 'FAIL'}
+      </p>
+    </div>
+  );
+};
 
 interface IDVerificationProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
@@ -207,16 +244,63 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 </span>
               </div>
 
-              {/* ── Liveness badge ── */}
+              {/* ── Liveness badge + challenge order ── */}
               {getVerificationVideo(selectedRequest) && (
-                <div className="flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
-                  <span className="text-2xl">🛡️</span>
-                  <div>
+                <div className="flex items-start gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
+                  <span className="text-2xl shrink-0">🛡️</span>
+                  <div className="min-w-0">
                     <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Liveness Video</p>
-                    <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      Blink · Turn Left · Turn Right — camera-detected liveness
-                    </p>
+                    {selectedRequest.verificationVideo?.challengeOrder?.length > 0 ? (
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        <ListOrdered size={12} className="text-emerald-500 shrink-0" />
+                        {(selectedRequest.verificationVideo.challengeOrder as string[]).map((step, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-600 rounded-lg text-[10px] font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-widest"
+                          >
+                            <span>{i + 1}.</span>
+                            <span>{step === 'blink' ? '😉 Blink' : step === 'left' ? '👈 Left' : '👉 Right'}</span>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm font-bold text-gray-900 dark:text-white">
+                        Camera-detected liveness challenges completed
+                      </p>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {/* ── InsightFace AI scores ── */}
+              {(selectedRequest.verificationVideo?.antiSpoofScore != null ||
+                selectedRequest.verificationVideo?.faceMatchScore != null) && (
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                    <Cpu size={11} className="text-teal-500" />
+                    InsightFace AI Analysis
+                  </p>
+                  <div className="flex gap-3">
+                    <ScorePill
+                      label="Anti-Spoof"
+                      score={selectedRequest.verificationVideo?.antiSpoofScore}
+                      passed={selectedRequest.verificationVideo?.antiSpoofReal}
+                      passPct={42}
+                      icon={<ShieldAlert size={13} />}
+                    />
+                    <ScorePill
+                      label="Face Match"
+                      score={selectedRequest.verificationVideo?.faceMatchScore}
+                      passed={selectedRequest.verificationVideo?.faceMatchVerified}
+                      passPct={35}
+                      icon={<ScanFace size={13} />}
+                    />
+                  </div>
+                  {selectedRequest.verificationVideo?.faceMatchAt && (
+                    <p className="text-[9px] text-slate-400 mt-1.5 font-medium">
+                      Analysed {new Date(selectedRequest.verificationVideo.faceMatchAt).toLocaleString()}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -321,8 +405,9 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                   <UserCheck size={15} className="text-teal-500 mt-0.5 shrink-0" />
                   <p className="text-xs text-teal-700 dark:text-teal-400 leading-relaxed">
                     <strong>Review guide:</strong> Compare the profile photo with the verification video. Verify bone structure,
-                    eye shape, and skin tone match, and check the required blink, left turn, and right turn are visible. Even if the AI
-                    passes, you may reject if you see signs of spoofing or AI generation.
+                    eye shape, and skin tone match. Confirm the challenge sequence shown above is visible in the video.
+                    The <strong>Anti-Spoof</strong> score (≥ 42% = real person) and <strong>Face Match</strong> score (≥ 35% = same face)
+                    are computed automatically by InsightFace ArcFace. Even if both pass, you may reject if you spot signs of spoofing or AI generation.
                   </p>
                 </div>
               </div>

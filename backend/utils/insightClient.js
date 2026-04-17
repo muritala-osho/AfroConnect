@@ -3,52 +3,43 @@
  * ----------------
  * Thin Node.js HTTP client for the InsightFace Python microservice.
  *
- * The service runs on INSIGHTFACE_PORT (default 5050) and exposes:
+ * Configuration (via environment variables):
+ *   INSIGHTFACE_URL   – Full base URL, e.g. https://insightface.myserver.com
+ *                       Set this in your .env for deployed environments.
+ *   INSIGHTFACE_HOST  – Hostname fallback (default: localhost)
+ *   INSIGHTFACE_PORT  – Port fallback    (default: 6800)
+ *
+ * The service exposes:
  *   POST /antispoofing  – passive liveness check
  *   POST /compare       – ArcFace face similarity
  *   GET  /health        – readiness probe
  *
- * If the service is unavailable, all calls resolve with graceful fallbacks
- * so the main verification flow is never hard-blocked by an AI hiccup.
+ * All calls resolve with graceful fallbacks if the service is unavailable.
  */
 
-const http = require('http');
+const BASE_URL = process.env.INSIGHTFACE_URL
+  ? process.env.INSIGHTFACE_URL.replace(/\/+$/, '')
+  : `http://${process.env.INSIGHTFACE_HOST || 'localhost'}:${parseInt(process.env.INSIGHTFACE_PORT || '6800', 10)}`;
 
-const HOST = process.env.INSIGHTFACE_HOST || 'localhost';
-const PORT = parseInt(process.env.INSIGHTFACE_PORT || '6800', 10);
 const TIMEOUT_MS = 30_000;
 
-// ─── Internal HTTP helper ─────────────────────────────────────────────────────
+// ─── Internal fetch helper ────────────────────────────────────────────────────
 
-function post(path, body) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(body);
-    const options = {
-      hostname: HOST,
-      port:     PORT,
-      path,
-      method:   'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(payload),
-      },
-      timeout: TIMEOUT_MS,
-    };
-
-    const req = http.request(options, (res) => {
-      let data = '';
-      res.on('data',  (chunk) => { data += chunk; });
-      res.on('end',   () => {
-        try   { resolve(JSON.parse(data)); }
-        catch { reject(new Error('InsightFace: invalid JSON response')); }
-      });
+async function post(path, body) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(body),
+      signal:  controller.signal,
     });
-
-    req.on('timeout', () => { req.destroy(); reject(new Error('InsightFace: request timed out')); });
-    req.on('error',   reject);
-    req.write(payload);
-    req.end();
-  });
+    const json = await res.json();
+    return json;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -57,25 +48,16 @@ function post(path, body) {
  * Quick health check — resolves true/false without throwing.
  */
 async function isServiceAvailable() {
-  return new Promise((resolve) => {
-    const req = http.get(
-      { hostname: HOST, port: PORT, path: '/health', timeout: 4_000 },
-      (res) => {
-        let data = '';
-        res.on('data', (c) => { data += c; });
-        res.on('end',  () => {
-          try {
-            const json = JSON.parse(data);
-            resolve(json.status === 'ok');
-          } catch {
-            resolve(false);
-          }
-        });
-      }
-    );
-    req.on('error',   () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-  });
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5_000);
+    const res = await fetch(`${BASE_URL}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    const json = await res.json();
+    return json.status === 'ok';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -108,7 +90,7 @@ async function compareFacesInsight(image1Base64, image2Base64) {
     console.log(`[InsightFace] compare cosine=${result.cosine} similarity=${result.similarity} verified=${result.verified}`);
     return result;
   } catch (err) {
-    console.warn(`[InsightFace] compareFaces failed (${err.message}) — falling back to faceVerifier`);
+    console.warn(`[InsightFace] compareFaces failed (${err.message}) — falling back`);
     return { similarity: 0, cosine: 0, verified: false, error: err.message };
   }
 }
