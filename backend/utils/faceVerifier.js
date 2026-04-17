@@ -251,4 +251,75 @@ async function compareFaces(selfieBuffer, profilePhotoUrl, verifyThreshold = 0.8
   }
 }
 
-module.exports = { compareFaces, loadModels };
+/**
+ * analyzePose — lightweight frame analysis for liveness HUD.
+ *
+ * Uses 68-point landmarks to estimate head yaw angle and smile intensity
+ * without a network call to an external service.
+ *
+ * yawAngle convention (mirrors expo-face-detector / MLKit):
+ *   negative = user looking to THEIR left  (nose drifts left in image coords)
+ *   positive = user looking to THEIR right (nose drifts right in image coords)
+ *   NOTE: for a front-facing camera the image is mirrored, so "left in image" = user's left.
+ *
+ * smileScore: 0-1, where > 0.60 is a clear smile.
+ *
+ * @param {Buffer} imageBuffer — raw JPEG/PNG bytes
+ * @returns {{ faceDetected: boolean, yawAngle: number, smileScore: number }}
+ */
+async function analyzePose(imageBuffer) {
+  const ok = await loadModels();
+  if (!ok) return { faceDetected: false, yawAngle: 0, smileScore: 0 };
+
+  let tensor = null;
+  try {
+    const img = await bufferToTensor(imageBuffer, 320);
+    tensor     = img.tensor;
+
+    const detection = await faceapi
+      .detectSingleFace(tensor, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.40 }))
+      .withFaceLandmarks();
+
+    if (!detection) return { faceDetected: false, yawAngle: 0, smileScore: 0 };
+
+    // ── Extract 68 landmark positions ─────────────────────────────────────
+    const pts = detection.landmarks.positions; // array of { x, y }
+
+    // Face width anchors: landmark 0 (left contour) and 16 (right contour)
+    const leftX  = pts[0].x;
+    const rightX = pts[16].x;
+    const faceW  = rightX - leftX; // pixels
+    if (faceW < 10) return { faceDetected: false, yawAngle: 0, smileScore: 0 };
+
+    const centerX = (leftX + rightX) / 2;
+
+    // Nose tip: landmark 30
+    const noseTipX   = pts[30].x;
+    // Relative nose position: 0 = centred, positive = nose right of centre
+    const relNose    = (noseTipX - centerX) / faceW; // [-0.5 … +0.5]
+    // Scale to degrees.  A fully side-facing head ~ 0.35 offset → ~35°
+    const yawAngle   = relNose * 90;   // rough degrees
+
+    // ── Smile score from mouth width ───────────────────────────────────────
+    // Landmarks 48 (left mouth corner) and 54 (right mouth corner)
+    const mouthLeft  = pts[48];
+    const mouthRight = pts[54];
+    const mouthW     = Math.sqrt(
+      Math.pow(mouthRight.x - mouthLeft.x, 2) +
+      Math.pow(mouthRight.y - mouthLeft.y, 2)
+    );
+    // At rest ~ 0.28–0.32; smiling ~ 0.40+
+    const smileRatio = mouthW / faceW;
+    // Map [0.28, 0.50] → [0, 1]
+    const smileScore = Math.max(0, Math.min(1, (smileRatio - 0.28) / 0.22));
+
+    return { faceDetected: true, yawAngle, smileScore };
+  } catch (err) {
+    console.warn('[analyzePose] Error:', err.message);
+    return { faceDetected: false, yawAngle: 0, smileScore: 0 };
+  } finally {
+    tensor?.dispose?.();
+  }
+}
+
+module.exports = { compareFaces, loadModels, analyzePose };

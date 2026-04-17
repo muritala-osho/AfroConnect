@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, StyleSheet, Pressable, ScrollView, ActivityIndicator,
   Alert, Dimensions, Animated,
@@ -29,25 +29,46 @@ interface VerificationState {
 }
 
 const BENEFITS = [
-  { icon: 'shield-checkmark', title: 'Trust Badge',        desc: 'Blue tick on your profile',        color: '#4CAF50' },
-  { icon: 'trending-up',      title: 'More Matches',       desc: 'Appear higher in discovery',       color: '#2196F3' },
-  { icon: 'heart',            title: 'Better Connections', desc: 'Quality over quantity',             color: '#E91E63' },
-  { icon: 'star',             title: 'Stand Out',          desc: 'Premium verified look',            color: '#FF9800' },
+  { icon: 'shield-checkmark', title: 'Trust Badge',        desc: 'Blue tick on your profile',     color: '#4CAF50' },
+  { icon: 'trending-up',      title: 'More Matches',       desc: 'Appear higher in discovery',    color: '#2196F3' },
+  { icon: 'heart',            title: 'Better Connections', desc: 'Quality over quantity',          color: '#E91E63' },
+  { icon: 'star',             title: 'Stand Out',          desc: 'Premium verified look',          color: '#FF9800' },
 ];
 
 const STEPS = [
-  { num: 1, icon: 'camera-outline',          title: 'Quick live selfie',   desc: 'Follow 3 on-screen prompts while the camera is open' },
+  { num: 1, icon: 'camera-outline',           title: 'Quick live selfie',  desc: 'Follow 3 on-screen prompts — the camera watches you in real time' },
   { num: 2, icon: 'checkmark-circle-outline', title: 'Submit & get badge', desc: 'Verified tick appears on your profile within 24 hours' },
 ];
 
-// ─── Liveness stages shown in the camera HUD ─────────────────────────────────
+// ─── Liveness stages ─────────────────────────────────────────────────────────
+// yaw: negative = user looking LEFT, positive = user looking RIGHT
+// Front-facing camera: if images are mirrored, swap the signs.
 const LIVENESS_STAGES = [
-  { icon: 'arrow-back',   label: 'Look Left',  color: '#4CAF50', arrowDir: 'left'  },
-  { icon: 'arrow-forward', label: 'Look Right', color: '#2196F3', arrowDir: 'right' },
-  { icon: 'happy-outline', label: 'Smile',      color: '#FF9800', arrowDir: 'smile' },
+  {
+    icon: 'arrow-back'   as const,
+    label: 'Look Left',
+    hint: 'Turn your head slowly to the left',
+    color: '#4CAF50',
+    check: (yaw: number, smile: number) => yaw < -12,
+  },
+  {
+    icon: 'arrow-forward' as const,
+    label: 'Look Right',
+    hint: 'Now turn your head to the right',
+    color: '#2196F3',
+    check: (yaw: number, smile: number) => yaw > 12,
+  },
+  {
+    icon: 'happy-outline' as const,
+    label: 'Smile',
+    hint: 'Give us a big smile',
+    color: '#FF9800',
+    check: (yaw: number, smile: number) => smile > 0.60,
+  },
 ] as const;
 
-const STAGE_DURATION_MS = 2000; // time per stage in ms
+const HOLD_DURATION_MS = 500; // how long to hold pose before advancing
+const SCAN_INTERVAL_MS = 900; // how often to analyze a frame
 
 export default function VerificationScreen() {
   const { theme } = useTheme();
@@ -60,80 +81,157 @@ export default function VerificationScreen() {
   const [loading, setLoading]     = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Steps: 'main' | 'camera' | 'review'
-  const [step, setStep]           = useState<'main' | 'camera' | 'review'>('main');
+  const [step, setStep] = useState<'main' | 'camera' | 'review'>('main');
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const cameraRef = useRef<any>(null);
 
-  // Liveness HUD state
-  const [livenessStage, setLivenessStage] = useState(0); // 0-2 = prompts, 3 = done
-  const livenessStageRef = useRef(0);
-  const livenessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ─── Liveness detection state ───────────────────────────────────────────────
+  const [livenessStage, setLivenessStage]     = useState(0);
+  const livenessStageRef                      = useRef(0);
+  const [faceDetected, setFaceDetected]       = useState(false);
+  const [holdProgress, setHoldProgress]       = useState(0); // 0-1
+  const isAnalyzingRef                        = useRef(false);
+  const detectionIntervalRef                  = useRef<ReturnType<typeof setInterval> | null>(null);
+  const holdStartRef                          = useRef<number | null>(null);
 
   // Animations
-  const arrowAnim  = useRef(new Animated.Value(0)).current;
-  const fadeAnim   = useRef(new Animated.Value(1)).current;
-  const pulseAnim  = useRef(new Animated.Value(1)).current;
-  const capturePulse = useRef(new Animated.Value(1)).current;
+  const stageTransitionAnim = useRef(new Animated.Value(1)).current;
+  const capturePulse        = useRef(new Animated.Value(1)).current;
+  const dotPulse            = useRef(new Animated.Value(0)).current;
 
   useEffect(() => { fetchVerificationStatus(); }, []);
 
-  // Start liveness cycle when camera opens
+  // Start / stop detection loop when camera is open
   useEffect(() => {
     if (step === 'camera') {
       livenessStageRef.current = 0;
       setLivenessStage(0);
-      advanceLiveness(0);
-      return () => { if (livenessTimerRef.current) clearTimeout(livenessTimerRef.current); };
+      setFaceDetected(false);
+      setHoldProgress(0);
+      holdStartRef.current = null;
+      startDetectionLoop();
+    } else {
+      stopDetectionLoop();
     }
+    return () => stopDetectionLoop();
   }, [step]);
 
-  // Arrow bounce animation whenever stage changes
+  // Animate stage card whenever stage changes
   useEffect(() => {
+    stageTransitionAnim.setValue(0);
+    Animated.spring(stageTransitionAnim, { toValue: 1, useNativeDriver: true, damping: 14, stiffness: 120 }).start();
+
     if (livenessStage >= LIVENESS_STAGES.length) {
-      // All done — pulse the capture button
+      // All done — pulse capture button
       Animated.loop(
         Animated.sequence([
-          Animated.timing(capturePulse, { toValue: 1.12, duration: 600, useNativeDriver: true }),
-          Animated.timing(capturePulse, { toValue: 1,    duration: 600, useNativeDriver: true }),
+          Animated.timing(capturePulse, { toValue: 1.10, duration: 650, useNativeDriver: true }),
+          Animated.timing(capturePulse, { toValue: 1,    duration: 650, useNativeDriver: true }),
         ])
       ).start();
-      return;
     }
-
-    capturePulse.setValue(1);
-    arrowAnim.setValue(0);
-    fadeAnim.setValue(0);
-
-    const dir = LIVENESS_STAGES[livenessStage].arrowDir;
-    const target = dir === 'left' ? -14 : dir === 'right' ? 14 : 0;
-
-    Animated.parallel([
-      Animated.timing(fadeAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(arrowAnim, { toValue: target, duration: 350, useNativeDriver: true }),
-          Animated.timing(arrowAnim, { toValue: 0,      duration: 350, useNativeDriver: true }),
-        ]), { iterations: dir === 'smile' ? 4 : 999 }
-      ),
-    ]).start();
   }, [livenessStage]);
 
-  function advanceLiveness(stage: number) {
-    if (stage >= LIVENESS_STAGES.length) {
+  // Scanning dot animation
+  useEffect(() => {
+    if (step !== 'camera') return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(dotPulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(dotPulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [step]);
+
+  const startDetectionLoop = () => {
+    if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+    // Small delay so camera is fully ready
+    setTimeout(() => {
+      detectionIntervalRef.current = setInterval(analyzeFrame, SCAN_INTERVAL_MS);
+    }, 1200);
+  };
+
+  const stopDetectionLoop = () => {
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+      detectionIntervalRef.current = null;
+    }
+  };
+
+  const advanceStage = useCallback((toStage: number) => {
+    holdStartRef.current = null;
+    setHoldProgress(0);
+    isAnalyzingRef.current = false;
+
+    if (toStage >= LIVENESS_STAGES.length) {
+      // All stages done
+      stopDetectionLoop();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       livenessStageRef.current = LIVENESS_STAGES.length;
       setLivenessStage(LIVENESS_STAGES.length);
+    } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      return;
+      livenessStageRef.current = toStage;
+      setLivenessStage(toStage);
     }
-    Haptics.selectionAsync();
-    livenessTimerRef.current = setTimeout(() => {
-      const next = stage + 1;
-      livenessStageRef.current = next;
-      setLivenessStage(next);
-      advanceLiveness(next);
-    }, STAGE_DURATION_MS);
-  }
+  }, []);
+
+  const analyzeFrame = useCallback(async () => {
+    if (isAnalyzingRef.current) return;
+    if (!cameraRef.current) return;
+    if (livenessStageRef.current >= LIVENESS_STAGES.length) return;
+
+    isAnalyzingRef.current = true;
+    try {
+      // Take a low-quality frame — just enough for face landmark detection
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 0.18,
+        skipProcessing: true,
+      });
+      if (!photo?.uri) return;
+
+      // Send to backend for face landmark analysis
+      const formData = new FormData();
+      formData.append('frame', { uri: photo.uri, type: 'image/jpeg', name: 'frame.jpg' } as any);
+
+      const resp = await fetch(`${getApiBaseUrl()}/api/verification/analyze-frame`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!resp.ok) return;
+      const data = await resp.json();
+
+      if (!data.faceDetected) {
+        setFaceDetected(false);
+        holdStartRef.current = null;
+        setHoldProgress(0);
+        return;
+      }
+
+      setFaceDetected(true);
+      const yaw   = data.yawAngle   ?? 0;
+      const smile = data.smileScore ?? 0;
+      const stage = livenessStageRef.current;
+
+      const conditionMet = LIVENESS_STAGES[stage].check(yaw, smile);
+
+      if (conditionMet) {
+        if (!holdStartRef.current) holdStartRef.current = Date.now();
+        const elapsed  = Date.now() - holdStartRef.current;
+        const progress = Math.min(elapsed / HOLD_DURATION_MS, 1);
+        setHoldProgress(progress);
+        if (elapsed >= HOLD_DURATION_MS) advanceStage(stage + 1);
+      } else {
+        holdStartRef.current = null;
+        setHoldProgress(0);
+      }
+    } catch {
+      // Network hiccup — silently skip this frame
+    } finally {
+      isAnalyzingRef.current = false;
+    }
+  }, [advanceStage, token]);
 
   const fetchVerificationStatus = async () => {
     if (!token) return;
@@ -161,14 +259,15 @@ export default function VerificationScreen() {
   const takePhoto = async () => {
     if (!cameraRef.current) return;
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      stopDetectionLoop();
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (!photo) return;
-      if (livenessTimerRef.current) clearTimeout(livenessTimerRef.current);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setCapturedPhoto(photo.uri);
       setStep('review');
     } catch (e) {
       Alert.alert('Error', 'Failed to capture photo. Please try again.');
+      startDetectionLoop();
     }
   };
 
@@ -199,7 +298,7 @@ export default function VerificationScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           'Submitted!',
-          "Your selfie has been submitted for review. We'll compare it against your profile photos and award your verified badge within 24 hours.",
+          "Your selfie has been submitted for review. We'll compare it against your profile photos and notify you within 24 hours.",
           [{ text: 'Got it', onPress: () => navigation.goBack() }],
         );
       } else {
@@ -214,113 +313,150 @@ export default function VerificationScreen() {
 
   // ─── CAMERA SCREEN ─────────────────────────────────────────────────────────
   if (step === 'camera') {
-    const stagesDone = livenessStage >= LIVENESS_STAGES.length;
-    const currentStage = !stagesDone ? LIVENESS_STAGES[livenessStage] : null;
+    const allDone     = livenessStage >= LIVENESS_STAGES.length;
+    const stageInfo   = !allDone ? LIVENESS_STAGES[livenessStage] : null;
+    const stageColor  = stageInfo?.color ?? '#4CAF50';
 
     return (
       <View style={styles.cameraContainer}>
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
 
-        {/* Top gradient + back button */}
+        {/* Top gradient */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.75)', 'transparent']}
+          colors={['rgba(0,0,0,0.80)', 'transparent']}
           style={[styles.cameraTopOverlay, { paddingTop: insets.top + 8 }]}
         >
+          {/* Header */}
           <View style={styles.cameraHeader}>
-            <Pressable style={styles.cameraCloseBtn} onPress={() => setStep('main')}>
+            <Pressable style={styles.cameraCloseBtn} onPress={() => { stopDetectionLoop(); setStep('main'); }}>
               <Ionicons name="arrow-back" size={24} color="#FFF" />
             </Pressable>
             <ThemedText style={styles.cameraTitle}>Live Verification</ThemedText>
             <View style={{ width: 44 }} />
           </View>
 
-          {/* Progress dots */}
-          <View style={styles.livenessDots}>
-            {LIVENESS_STAGES.map((s, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.livenessDot,
-                  {
-                    backgroundColor:
-                      livenessStage > i
+          {/* Step dots */}
+          <View style={styles.stepDotsRow}>
+            {LIVENESS_STAGES.map((s, i) => {
+              const isDone    = livenessStage > i;
+              const isCurrent = livenessStage === i;
+              return (
+                <View key={i} style={styles.stepDotWrapper}>
+                  <View style={[
+                    styles.stepDot,
+                    {
+                      backgroundColor: isDone
                         ? s.color
-                        : livenessStage === i
-                        ? s.color + 'AA'
-                        : 'rgba(255,255,255,0.25)',
-                    width: livenessStage === i ? 22 : 8,
-                  },
-                ]}
-              />
-            ))}
+                        : isCurrent
+                        ? s.color + 'BB'
+                        : 'rgba(255,255,255,0.22)',
+                      width: isCurrent ? 24 : 8,
+                    },
+                  ]}>
+                    {isDone && <Ionicons name="checkmark" size={10} color="#FFF" />}
+                  </View>
+                </View>
+              );
+            })}
           </View>
         </LinearGradient>
 
-        {/* Face guide oval */}
-        <View style={styles.faceGuideWrapper}>
-          <View style={[
-            styles.faceOval,
-            { borderColor: stagesDone ? '#4CAF50' : (currentStage?.color ?? '#FFF') },
-          ]}>
-            <View style={[styles.faceOvalCorner, styles.faceOvalCornerTL, { borderColor: stagesDone ? '#4CAF50' : (currentStage?.color ?? '#FFF') }]} />
-            <View style={[styles.faceOvalCorner, styles.faceOvalCornerTR, { borderColor: stagesDone ? '#4CAF50' : (currentStage?.color ?? '#FFF') }]} />
-            <View style={[styles.faceOvalCorner, styles.faceOvalCornerBL, { borderColor: stagesDone ? '#4CAF50' : (currentStage?.color ?? '#FFF') }]} />
-            <View style={[styles.faceOvalCorner, styles.faceOvalCornerBR, { borderColor: stagesDone ? '#4CAF50' : (currentStage?.color ?? '#FFF') }]} />
+        {/* Face guide oval — color tracks current stage */}
+        <View style={styles.faceGuideWrapper} pointerEvents="none">
+          <View style={[styles.faceOval, { borderColor: allDone ? '#4CAF50' : stageColor + 'BB' }]}>
+            <View style={[styles.faceOvalCorner, styles.faceOvalCornerTL, { borderColor: allDone ? '#4CAF50' : stageColor }]} />
+            <View style={[styles.faceOvalCorner, styles.faceOvalCornerTR, { borderColor: allDone ? '#4CAF50' : stageColor }]} />
+            <View style={[styles.faceOvalCorner, styles.faceOvalCornerBL, { borderColor: allDone ? '#4CAF50' : stageColor }]} />
+            <View style={[styles.faceOvalCorner, styles.faceOvalCornerBR, { borderColor: allDone ? '#4CAF50' : stageColor }]} />
           </View>
         </View>
 
-        {/* Liveness HUD — shown in the middle of the screen */}
-        <View style={styles.livenessHudWrapper} pointerEvents="none">
-          {!stagesDone && currentStage ? (
+        {/* ─── Liveness instruction card ─── */}
+        <View style={styles.hudWrapper} pointerEvents="none">
+          {allDone ? (
+            // All stages done
             <Animated.View
               style={[
-                styles.livenessHud,
-                { backgroundColor: currentStage.color + '22', borderColor: currentStage.color + '66' },
-                { opacity: fadeAnim },
+                styles.hudCard,
+                { backgroundColor: '#4CAF5022', borderColor: '#4CAF5066' },
+                { transform: [{ scale: stageTransitionAnim }], opacity: stageTransitionAnim },
               ]}
             >
-              <Animated.View style={{
-                transform: [
-                  currentStage.arrowDir === 'smile'
-                    ? { scale: arrowAnim.interpolate({ inputRange: [-14, 0, 14], outputRange: [0.9, 1.1, 0.9] }) }
-                    : { translateX: arrowAnim },
-                ],
-              }}>
-                <Ionicons
-                  name={currentStage.icon as any}
-                  size={46}
-                  color={currentStage.color}
-                />
-              </Animated.View>
-              <ThemedText style={[styles.livenessHudLabel, { color: currentStage.color }]}>
-                {currentStage.label}
-              </ThemedText>
+              <Ionicons name="checkmark-circle" size={40} color="#4CAF50" />
+              <ThemedText style={[styles.hudLabel, { color: '#4CAF50' }]}>All set!</ThemedText>
+              <ThemedText style={styles.hudHint}>Tap the button to take your selfie</ThemedText>
             </Animated.View>
           ) : (
-            <Animated.View style={[styles.livenessHudDone, { opacity: fadeAnim }]}>
-              <Ionicons name="checkmark-circle" size={44} color="#4CAF50" />
-              <ThemedText style={styles.livenessHudDoneText}>Now take your selfie</ThemedText>
+            <Animated.View
+              style={[
+                styles.hudCard,
+                { backgroundColor: stageColor + '1A', borderColor: stageColor + '55' },
+                { transform: [{ scale: stageTransitionAnim }], opacity: stageTransitionAnim },
+              ]}
+            >
+              {/* Icon */}
+              <View style={[styles.hudIconCircle, { backgroundColor: stageColor + '25' }]}>
+                <Ionicons name={stageInfo!.icon} size={32} color={stageColor} />
+              </View>
+
+              {/* Label */}
+              <ThemedText style={[styles.hudLabel, { color: stageColor }]}>
+                {stageInfo!.label}
+              </ThemedText>
+
+              {/* Hint or detection status */}
+              {!faceDetected ? (
+                <View style={styles.hudStatusRow}>
+                  <Animated.View style={[
+                    styles.hudStatusDot,
+                    { backgroundColor: '#FF5722', opacity: dotPulse },
+                  ]} />
+                  <ThemedText style={styles.hudHint}>Face your camera directly</ThemedText>
+                </View>
+              ) : holdProgress > 0 ? (
+                // Actively holding correct pose — show progress
+                <View style={styles.holdProgressWrapper}>
+                  <View style={[styles.holdProgressTrack, { backgroundColor: stageColor + '30' }]}>
+                    <View style={[
+                      styles.holdProgressFill,
+                      { backgroundColor: stageColor, width: `${holdProgress * 100}%` as any },
+                    ]} />
+                  </View>
+                  <ThemedText style={[styles.hudHint, { color: stageColor }]}>Hold it…</ThemedText>
+                </View>
+              ) : (
+                <View style={styles.hudStatusRow}>
+                  <Animated.View style={[
+                    styles.hudStatusDot,
+                    { backgroundColor: stageColor, opacity: dotPulse },
+                  ]} />
+                  <ThemedText style={styles.hudHint}>{stageInfo!.hint}</ThemedText>
+                </View>
+              )}
             </Animated.View>
           )}
         </View>
 
-        {/* Bottom capture button */}
+        {/* Bottom capture area */}
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.80)']}
+          colors={['transparent', 'rgba(0,0,0,0.85)']}
           style={[styles.cameraBottomOverlay, { paddingBottom: insets.bottom + 28 }]}
         >
-          <Pressable style={styles.captureBtn} onPress={takePhoto}>
-            <Animated.View style={[styles.captureBtnOuter, { transform: [{ scale: capturePulse }] }]}>
+          <Pressable
+            style={[styles.captureBtn, !allDone && styles.captureBtnDimmed]}
+            onPress={takePhoto}
+          >
+            <Animated.View style={[styles.captureBtnOuter, { transform: [{ scale: allDone ? capturePulse : 1 }] }]}>
               <LinearGradient
-                colors={stagesDone ? ['#4CAF50', '#2E7D32'] : ['rgba(255,255,255,0.3)', 'rgba(255,255,255,0.15)']}
+                colors={allDone ? ['#4CAF50', '#2E7D32'] : ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.08)']}
                 style={styles.captureBtnInner}
               >
-                <Ionicons name="camera" size={28} color="#FFF" />
+                <Ionicons name="camera" size={28} color={allDone ? '#FFF' : 'rgba(255,255,255,0.45)'} />
               </LinearGradient>
             </Animated.View>
           </Pressable>
           <ThemedText style={styles.captureBtnLabel}>
-            {stagesDone ? 'Tap to capture' : 'Follow the prompts above…'}
+            {allDone ? 'Tap to capture' : 'Complete prompts above to unlock'}
           </ThemedText>
         </LinearGradient>
       </View>
@@ -343,7 +479,6 @@ export default function VerificationScreen() {
         </LinearGradient>
 
         <ScrollView contentContainerStyle={styles.reviewContent} showsVerticalScrollIndicator={false}>
-          {/* Photo preview */}
           <View style={styles.reviewPhotoWrapper}>
             <LinearGradient
               colors={[theme.primary, (theme as any).secondary || theme.primary + 'CC']}
@@ -353,13 +488,13 @@ export default function VerificationScreen() {
             </LinearGradient>
           </View>
 
-          {/* Liveness confirmed badge */}
+          {/* Liveness confirmed */}
           <View style={[styles.livenessBadge, { backgroundColor: '#4CAF5015', borderColor: '#4CAF5040' }]}>
             <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
             <View style={{ flex: 1, marginLeft: 10 }}>
               <ThemedText style={[styles.livenessBadgeTitle, { color: '#4CAF50' }]}>Liveness Confirmed</ThemedText>
               <ThemedText style={[styles.livenessBadgeDesc, { color: theme.textSecondary }]}>
-                Look Left · Look Right · Smile completed
+                Look Left · Look Right · Smile — all detected by camera
               </ThemedText>
             </View>
           </View>
@@ -392,14 +527,13 @@ export default function VerificationScreen() {
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={styles.submitBtnGradient}
             >
-              {submitting ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons name="shield-checkmark" size={20} color="#FFF" />
-                  <ThemedText style={styles.submitBtnText}>Submit for Verification</ThemedText>
-                </>
-              )}
+              {submitting
+                ? <ActivityIndicator color="#FFF" />
+                : <>
+                    <Ionicons name="shield-checkmark" size={20} color="#FFF" />
+                    <ThemedText style={styles.submitBtnText}>Submit for Verification</ThemedText>
+                  </>
+              }
             </LinearGradient>
           </Pressable>
         </View>
@@ -444,7 +578,7 @@ export default function VerificationScreen() {
               </LinearGradient>
               <ThemedText style={[styles.heroTitle, { color: theme.text }]}>Verify Your Identity</ThemedText>
               <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-                Take a quick live selfie — look left, look right, smile — to prove you're real and earn your verified badge.
+                The camera watches you in real time — look left, look right, smile. Each action unlocks the next step automatically.
               </ThemedText>
               {verificationState?.verified && (
                 <View style={[styles.statusPill, { backgroundColor: '#4CAF5025' }]}>
@@ -467,26 +601,25 @@ export default function VerificationScreen() {
             </LinearGradient>
           </View>
 
-          {/* Live selfie indicator preview */}
+          {/* Steps preview */}
           <View style={[styles.livenessPreviewCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-            <ThemedText style={[styles.livenessPreviewTitle, { color: theme.text }]}>
-              What you'll do
-            </ThemedText>
+            <ThemedText style={[styles.livenessPreviewTitle, { color: theme.text }]}>What the camera checks</ThemedText>
             <View style={styles.livenessPreviewRow}>
               {LIVENESS_STAGES.map((s, i) => (
                 <View key={i} style={styles.livenessPreviewItem}>
                   <View style={[styles.livenessPreviewIcon, { backgroundColor: s.color + '20' }]}>
-                    <Ionicons name={s.icon as any} size={22} color={s.color} />
+                    <Ionicons name={s.icon} size={22} color={s.color} />
                   </View>
-                  <ThemedText style={[styles.livenessPreviewLabel, { color: theme.textSecondary }]}>
-                    {s.label}
-                  </ThemedText>
+                  <ThemedText style={[styles.livenessPreviewLabel, { color: theme.textSecondary }]}>{s.label}</ThemedText>
                   {i < LIVENESS_STAGES.length - 1 && (
                     <Ionicons name="chevron-forward" size={14} color={theme.border} style={styles.livenessPreviewArrow} />
                   )}
                 </View>
               ))}
             </View>
+            <ThemedText style={[styles.livenessPreviewNote, { color: theme.textSecondary }]}>
+              Each step only advances when your action is actually detected.
+            </ThemedText>
           </View>
 
           {/* Benefits */}
@@ -540,9 +673,7 @@ export default function VerificationScreen() {
               <Ionicons name="alert-circle" size={24} color="#F44336" />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <ThemedText style={[styles.alertTitle, { color: '#F44336' }]}>Rejection Reason</ThemedText>
-                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  {verificationState.rejectionReason}
-                </ThemedText>
+                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>{verificationState.rejectionReason}</ThemedText>
               </View>
             </View>
           )}
@@ -551,9 +682,7 @@ export default function VerificationScreen() {
               <Feather name="check-circle" size={24} color="#4CAF50" />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <ThemedText style={[styles.alertTitle, { color: '#4CAF50' }]}>You're Verified!</ThemedText>
-                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  Your verified badge is live on your profile.
-                </ThemedText>
+                <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>Your verified badge is live on your profile.</ThemedText>
               </View>
             </View>
           )}
@@ -587,7 +716,6 @@ const styles = StyleSheet.create({
   reviewHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 0, paddingBottom: 16 },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700' },
-
   mainContent: { paddingHorizontal: 20, paddingTop: 8 },
 
   heroSection: { marginBottom: 24 },
@@ -600,14 +728,14 @@ const styles = StyleSheet.create({
 
   livenessPreviewCard: { borderRadius: 20, padding: 18, borderWidth: 1, marginBottom: 24 },
   livenessPreviewTitle: { fontSize: 13, fontWeight: '700', marginBottom: 14, textAlign: 'center' },
-  livenessPreviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 0 },
+  livenessPreviewRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', gap: 4 },
   livenessPreviewItem: { alignItems: 'center', flexDirection: 'row', gap: 8 },
   livenessPreviewIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   livenessPreviewLabel: { fontSize: 12, fontWeight: '600' },
-  livenessPreviewArrow: { marginHorizontal: 6 },
+  livenessPreviewArrow: { marginHorizontal: 4 },
+  livenessPreviewNote: { fontSize: 11, textAlign: 'center', marginTop: 12, lineHeight: 16, fontStyle: 'italic' },
 
   sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 14 },
-
   benefitsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 28 },
   benefitCard: { width: (SCREEN_WIDTH - 52) / 2, borderRadius: 18, padding: 16, borderWidth: 1, alignItems: 'flex-start' },
   benefitIconCircle: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
@@ -633,15 +761,16 @@ const styles = StyleSheet.create({
 
   // ─── Camera ────────────────────────────────────────────────────────────────
   cameraContainer: { flex: 1, backgroundColor: '#000' },
-  cameraTopOverlay: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 20 },
-  cameraHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 14 },
+  cameraTopOverlay: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 16 },
+  cameraHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 16 },
   cameraCloseBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 22 },
   cameraTitle: { color: '#FFF', fontSize: 17, fontWeight: '700' },
 
-  livenessDots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  livenessDot: { height: 8, borderRadius: 4 },
+  stepDotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  stepDotWrapper: { alignItems: 'center' },
+  stepDot: { height: 8, borderRadius: 4, alignItems: 'center', justifyContent: 'center' },
 
-  // Face guide oval
+  // Face oval
   faceGuideWrapper: { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
   faceOval: { width: 220, height: 290, borderRadius: 110, borderWidth: 2, borderStyle: 'dashed' },
   faceOvalCorner: { position: 'absolute', width: 30, height: 30, borderWidth: 4 },
@@ -650,38 +779,56 @@ const styles = StyleSheet.create({
   faceOvalCornerBL: { bottom: -2, left: -2, borderTopWidth: 0, borderRightWidth: 0, borderRadius: 4 },
   faceOvalCornerBR: { bottom: -2, right: -2, borderTopWidth: 0, borderLeftWidth: 0, borderRadius: 4 },
 
-  // Liveness HUD
-  livenessHudWrapper: { position: 'absolute', bottom: 200, left: 0, right: 0, zIndex: 20, alignItems: 'center' },
-  livenessHud: { alignItems: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 16, borderRadius: 24, borderWidth: 1.5, minWidth: 160 },
-  livenessHudLabel: { fontSize: 18, fontWeight: '800', letterSpacing: 0.2 },
-  livenessHudDone: { alignItems: 'center', gap: 8 },
-  livenessHudDoneText: { color: '#4CAF50', fontSize: 16, fontWeight: '700' },
+  // HUD instruction card
+  hudWrapper: {
+    position: 'absolute',
+    bottom: 210,
+    left: 24,
+    right: 24,
+    zIndex: 20,
+    alignItems: 'center',
+  },
+  hudCard: {
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 18,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    width: '100%',
+  },
+  hudIconCircle: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  hudLabel: { fontSize: 20, fontWeight: '900', letterSpacing: 0.2 },
+  hudHint: { fontSize: 13, color: 'rgba(255,255,255,0.70)', textAlign: 'center' },
+  hudStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 2 },
+  hudStatusDot: { width: 8, height: 8, borderRadius: 4 },
+
+  holdProgressWrapper: { width: '80%', gap: 6, alignItems: 'center', marginTop: 4 },
+  holdProgressTrack: { width: '100%', height: 6, borderRadius: 3, overflow: 'hidden' },
+  holdProgressFill: { height: '100%', borderRadius: 3 },
 
   // Capture button
-  cameraBottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, paddingTop: 40, alignItems: 'center', gap: 10 },
+  cameraBottomOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, paddingTop: 48, alignItems: 'center', gap: 10 },
   captureBtn: { alignItems: 'center', justifyContent: 'center' },
-  captureBtnOuter: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, borderColor: 'rgba(255,255,255,0.5)', alignItems: 'center', justifyContent: 'center' },
+  captureBtnDimmed: { opacity: 0.55 },
+  captureBtnOuter: { width: 84, height: 84, borderRadius: 42, borderWidth: 4, borderColor: 'rgba(255,255,255,0.45)', alignItems: 'center', justifyContent: 'center' },
   captureBtnInner: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
-  captureBtnLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: '600' },
+  captureBtnLabel: { color: 'rgba(255,255,255,0.70)', fontSize: 13, fontWeight: '600', textAlign: 'center', paddingHorizontal: 24 },
 
   // ─── Review ────────────────────────────────────────────────────────────────
   reviewContent: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 32 },
   reviewPhotoWrapper: { alignItems: 'center', marginBottom: 24 },
   reviewPhotoRing: { padding: 4, borderRadius: 120, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 12 },
   reviewPhoto: { width: 200, height: 200, borderRadius: 100 },
-
   livenessBadge: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 16, borderWidth: 1, marginBottom: 16 },
   livenessBadgeTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
   livenessBadgeDesc: { fontSize: 12 },
-
   reviewInfoCard: { borderRadius: 18, padding: 16, borderWidth: 1, marginBottom: 20 },
   reviewInfoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   reviewInfoIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   reviewInfoText: { flex: 1, fontSize: 13, lineHeight: 19 },
-
   retakeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 14, borderWidth: 1, marginBottom: 4 },
   retakeBtnText: { fontSize: 15, fontWeight: '600' },
-
   reviewFooter: { paddingHorizontal: 20 },
   submitBtn: { borderRadius: 16, overflow: 'hidden' },
   submitBtnGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },

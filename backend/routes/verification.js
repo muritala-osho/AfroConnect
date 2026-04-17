@@ -23,6 +23,33 @@ const isAdmin = async (req, res, next) => {
 };
 
 const emailService = require('../utils/emailService');
+const { analyzePose } = require('../utils/faceVerifier');
+
+// ─── POST /api/verification/analyze-frame ────────────────────────────────────
+// Lightweight liveness helper — accepts a low-quality selfie frame and returns
+// estimated head yaw angle + smile score derived from 68-point landmarks.
+// Used by the mobile app camera screen for real-time liveness detection.
+const uploadFrame = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3 MB max (low-quality frame)
+});
+
+router.post('/analyze-frame', protect, uploadFrame.fields([
+  { name: 'frame', maxCount: 1 },
+]), async (req, res) => {
+  try {
+    const files = req.files;
+    if (!files?.frame?.[0]) {
+      return res.status(400).json({ success: false, message: 'frame image required' });
+    }
+    const result = await analyzePose(files.frame[0].buffer);
+    return res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[analyze-frame] Error:', err.message);
+    // Return a safe fallback so the app never hard-crashes
+    return res.json({ success: true, faceDetected: false, yawAngle: 0, smileScore: 0 });
+  }
+});
 
 // Submit verification request with selfie photo only
 router.post('/request', protect, upload.fields([
