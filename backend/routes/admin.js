@@ -904,7 +904,7 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
   }
 });
 
-// App settings store (production: use a DB or config file)
+// App settings store — exported so server.js can read maintenanceMode for middleware
 let appSettings = {
   appName: 'AfroConnect',
   maintenanceMode: false,
@@ -1212,5 +1212,64 @@ router.put('/support-tickets/:ticketId/status', protect, isAdmin, async (req, re
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
+// ─── POST /api/admin/kill-switch ─────────────────────────────────────────────
+// Immediately enables maintenance mode, rejects all non-admin API traffic.
+router.post('/kill-switch', protect, isAdmin, async (req, res) => {
+  try {
+    appSettings.maintenanceMode = true;
+
+    // Log to audit trail
+    try {
+      const AuditLog = require('../models/AuditLog');
+      await AuditLog.create({
+        action: 'KILL_SWITCH_ACTIVATED',
+        performedBy: req.user._id,
+        details: { activatedAt: new Date().toISOString(), ip: req.ip },
+      });
+    } catch (_) {}
+
+    console.warn(`[KILL-SWITCH] Activated by admin ${req.user.email} at ${new Date().toISOString()}`);
+
+    return res.json({
+      success: true,
+      message: 'Kill switch activated — platform is now in maintenance mode.',
+      maintenanceMode: true,
+    });
+  } catch (error) {
+    console.error('[kill-switch] Error:', error.message);
+    return res.status(500).json({ success: false, message: 'Failed to activate kill switch' });
+  }
+});
+
+// ─── POST /api/admin/kill-switch/deactivate ───────────────────────────────────
+// Restore normal operation.
+router.post('/kill-switch/deactivate', protect, isAdmin, async (req, res) => {
+  try {
+    appSettings.maintenanceMode = false;
+
+    try {
+      const AuditLog = require('../models/AuditLog');
+      await AuditLog.create({
+        action: 'KILL_SWITCH_DEACTIVATED',
+        performedBy: req.user._id,
+        details: { deactivatedAt: new Date().toISOString() },
+      });
+    } catch (_) {}
+
+    console.log(`[KILL-SWITCH] Deactivated by admin ${req.user.email}`);
+
+    return res.json({
+      success: true,
+      message: 'Kill switch deactivated — platform restored to normal operation.',
+      maintenanceMode: false,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to deactivate kill switch' });
+  }
+});
+
+// Expose a getter so server.js middleware can check maintenanceMode without circular deps
+router.getSettings = () => appSettings;
 
 module.exports = router;

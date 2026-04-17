@@ -20,6 +20,9 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [killSwitchActive, setKillSwitchActive] = useState(false);
+  const [killSwitchLoading, setKillSwitchLoading] = useState(false);
+  const [showKillConfirm, setShowKillConfirm] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -28,6 +31,7 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
         const data = await adminApi.getAppSettings();
         if (data.success && data.settings) {
           setSettings(prev => ({ ...prev, ...data.settings }));
+          if (data.settings.maintenanceMode) setKillSwitchActive(true);
         }
       } catch {
         console.log('Settings API unavailable — using defaults');
@@ -37,6 +41,28 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
     };
     loadSettings();
   }, []);
+
+  const handleKillSwitch = async () => {
+    setShowKillConfirm(false);
+    setKillSwitchLoading(true);
+    try {
+      if (killSwitchActive) {
+        await adminApi.deactivateKillSwitch();
+        setKillSwitchActive(false);
+        setSettings(prev => ({ ...prev, maintenanceMode: false }));
+        showToast?.('Kill switch deactivated — platform restored to normal.', 'success');
+      } else {
+        await adminApi.activateKillSwitch();
+        setKillSwitchActive(true);
+        setSettings(prev => ({ ...prev, maintenanceMode: true }));
+        showToast?.('Kill switch activated — all user traffic is blocked.', 'error');
+      }
+    } catch (err: any) {
+      showToast?.(err.message || 'Failed to toggle kill switch.', 'error');
+    } finally {
+      setKillSwitchLoading(false);
+    }
+  };
 
   const toggle = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
@@ -173,16 +199,81 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ showToast }) => {
             </div>
           </div>
 
-          <div className="p-10 bg-gradient-to-br from-rose-600 to-rose-400 rounded-[3rem] text-white shadow-2xl shadow-rose-500/40 relative overflow-hidden group">
+          {/* Kill Switch Confirmation Modal */}
+          {showKillConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+              <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 shadow-2xl max-w-sm mx-4 w-full border border-rose-200 dark:border-rose-500/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-rose-100 dark:bg-rose-500/20 rounded-2xl">
+                    <AlertTriangle size={24} className="text-rose-600 dark:text-rose-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-black text-gray-900 dark:text-white">
+                      {killSwitchActive ? 'Deactivate Kill Switch?' : 'Activate Kill Switch?'}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">This action takes effect immediately.</p>
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 dark:text-slate-300 mb-6 leading-relaxed">
+                  {killSwitchActive
+                    ? 'This will restore normal platform operation. All users will regain access to the app.'
+                    : 'This will BLOCK all user API traffic and activate maintenance mode immediately. Only admin accounts will remain accessible.'}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowKillConfirm(false)}
+                    className="flex-1 py-3 rounded-2xl border border-gray-200 dark:border-slate-700 text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleKillSwitch}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-black text-white transition-all hover:scale-[1.02] active:scale-95 ${
+                      killSwitchActive ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-600 hover:bg-rose-700'
+                    }`}
+                  >
+                    {killSwitchActive ? 'Yes, Restore' : 'Yes, Activate'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className={`p-10 rounded-[3rem] text-white shadow-2xl relative overflow-hidden group transition-all duration-500 ${
+            killSwitchActive
+              ? 'bg-gradient-to-br from-emerald-600 to-emerald-400 shadow-emerald-500/40'
+              : 'bg-gradient-to-br from-rose-600 to-rose-400 shadow-rose-500/40'
+          }`}>
             <div className="absolute top-[-20%] right-[-10%] w-64 h-64 bg-white/10 rounded-full blur-3xl group-hover:scale-125 transition-transform duration-700"></div>
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-4">
-                <AlertTriangle size={24} className="animate-bounce" />
-                <h3 className="text-xl font-black uppercase tracking-widest">Panic Switch</h3>
+                <AlertTriangle size={24} className={killSwitchActive ? '' : 'animate-bounce'} />
+                <h3 className="text-xl font-black uppercase tracking-widest">
+                  {killSwitchActive ? 'Platform in Maintenance' : 'Panic Switch'}
+                </h3>
               </div>
-              <p className="text-sm opacity-90 mb-8 font-medium leading-relaxed">Instantly disconnect all API integrations, lock all database writes, and initiate global maintenance. Use ONLY in cases of a catastrophic security breach.</p>
-              <button className="w-full py-5 bg-white text-rose-600 rounded-2xl font-black text-xs uppercase tracking-[0.3em] transition-all hover:scale-[1.02] active:scale-95 shadow-lg">
-                Activate Kill-Switch
+              {killSwitchActive && (
+                <div className="flex items-center gap-2 mb-4 px-4 py-2 bg-white/20 rounded-2xl w-fit">
+                  <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span className="text-xs font-black uppercase tracking-widest">KILL SWITCH ACTIVE</span>
+                </div>
+              )}
+              <p className="text-sm opacity-90 mb-8 font-medium leading-relaxed">
+                {killSwitchActive
+                  ? 'All user API traffic is currently blocked. Only admin accounts have access. Tap below to restore normal operation.'
+                  : 'Instantly block all user API traffic and initiate global maintenance mode. Use ONLY in cases of a catastrophic security breach.'}
+              </p>
+              <button
+                onClick={() => setShowKillConfirm(true)}
+                disabled={killSwitchLoading}
+                className="w-full py-5 bg-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] transition-all hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ color: killSwitchActive ? '#059669' : '#dc2626' }}
+              >
+                {killSwitchLoading
+                  ? 'Processing…'
+                  : killSwitchActive
+                  ? 'Deactivate Kill Switch'
+                  : 'Activate Kill-Switch'}
               </button>
             </div>
           </div>

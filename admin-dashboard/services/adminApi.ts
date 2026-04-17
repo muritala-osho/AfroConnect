@@ -228,6 +228,22 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  activateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  deactivateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch/deactivate`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   // ─── Legacy admin support routes (kept for backward compat) ───────────────
   getSupportTickets: async (status?: string) => {
     const query = status ? `?status=${status}` : '';

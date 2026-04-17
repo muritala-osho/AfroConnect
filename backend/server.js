@@ -358,6 +358,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ─── Maintenance mode gate ────────────────────────────────────────────────────
+// Reads live appSettings from adminRoutes; admin + auth routes always pass through.
+app.use((req, res, next) => {
+  const settings = adminRoutes.getSettings ? adminRoutes.getSettings() : {};
+  if (!settings.maintenanceMode) return next();
+  // Always allow admin API and auth routes so admins can deactivate the switch
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/auth')) return next();
+  return res.status(503).json({
+    success: false,
+    maintenance: true,
+    message: 'AfroConnect is currently undergoing maintenance. Please try again shortly.',
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/match', matchRoutes);

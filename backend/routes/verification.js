@@ -24,32 +24,6 @@ const isAdmin = async (req, res, next) => {
 
 const emailService = require('../utils/emailService');
 
-// Validate pose BEFORE uploading — no Cloudinary, just AI check
-router.post('/validate-pose', protect, upload.fields([
-  { name: 'photo', maxCount: 1 }
-]), async (req, res) => {
-  try {
-    const { poseId } = req.body;
-    const files = req.files;
-
-    if (!files?.photo?.[0]) {
-      return res.status(400).json({ success: false, message: 'Photo required' });
-    }
-    if (!poseId) {
-      return res.status(400).json({ success: false, message: 'poseId required' });
-    }
-
-    const { validatePoseFromBuffer } = require('../utils/poseValidator');
-    const result = await validatePoseFromBuffer(files.photo[0].buffer, poseId);
-
-    return res.json({ success: true, ...result });
-  } catch (error) {
-    console.error('Pose validation error:', error.message);
-    // On unexpected error, let it pass through (don't block the user)
-    return res.json({ success: true, matched: true, noFace: false, reason: 'Validation unavailable — admin will review', details: {} });
-  }
-});
-
 // Submit verification request with selfie photo only
 router.post('/request', protect, upload.fields([
   { name: 'selfiePhoto', maxCount: 1 }
@@ -82,22 +56,11 @@ router.post('/request', protect, upload.fields([
       stream.end(files.selfiePhoto[0].buffer);
     });
 
-    // Parse pose challenge if provided
-    let poseChallenge = null;
-    if (req.body.poseChallenge) {
-      try {
-        poseChallenge = typeof req.body.poseChallenge === 'string'
-          ? JSON.parse(req.body.poseChallenge)
-          : req.body.poseChallenge;
-      } catch (e) { /* ignore parse errors */ }
-    }
-
     user.verificationStatus = 'pending';
     user.selfiePhoto = {
       url: selfieResult.secure_url,
       publicId: selfieResult.public_id,
       submittedAt: new Date(),
-      ...(poseChallenge ? { poseChallenge } : {})
     };
     user.verificationRequestDate = new Date();
     await user.save();
