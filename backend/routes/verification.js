@@ -7,6 +7,7 @@ const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 const path = require('path');
+const redis = require('../utils/redis');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -100,6 +101,7 @@ const handleVerificationVideoUpload = async (req, res) => {
     user.verificationRequestDate      = new Date();
     user.verificationRejectionReason  = null;
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     return res.json({
       success:  true,
@@ -176,6 +178,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
     user.verificationApprovedAt      = new Date();
     user.verificationRejectionReason = null;
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     try {
       const { sendVerificationApprovedEmail } = require('../utils/emailService');
@@ -219,6 +222,7 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
     user.verificationRejectionReason = reason || 'Video does not meet requirements';
     user.verificationApprovedAt      = null;
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     try {
       const { sendVerificationRejectedEmail } = require('../utils/emailService');
@@ -261,6 +265,7 @@ router.post('/request', protect, upload.fields([{ name: 'selfiePhoto', maxCount:
     user.selfiePhoto = { url: selfieResult.secure_url, publicId: selfieResult.public_id, submittedAt: new Date() };
     user.verificationRequestDate = new Date();
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
     res.json({ success: true, message: 'Verification request submitted', status: 'pending' });
   } catch (error) {
     console.error('Verification request error:', error);

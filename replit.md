@@ -1,6 +1,11 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Verification and appeal flow fixes**:
+  - `frontend/screens/VerificationScreen.tsx`: Switched verification submission from selfie photo capture to front-camera video recording. Users must record for at least 5 seconds before reviewing and submitting the video to `/api/verification/upload-verification-video`; recordings stop at a 30-second maximum.
+  - `frontend/screens/SettingsScreen.tsx`: Changed the verification row label from "Photo Verification" to "Video Verification" and replaced the rejected status label with "Try Again".
+  - `backend/routes/verification.js` and `backend/routes/admin.js`: Added profile cache invalidation after verification uploads, verification decisions, bans, and appeal changes so the mobile app sees fresh status immediately.
+  - `backend/routes/admin.js` and `frontend/screens/AppealBannedScreen.tsx`: Reset approved appeals after admin approval and treat old approved appeal records as submit-able when a user is banned again.
 - **Face verification liveness flow**:
   - `frontend/screens/VerificationScreen.tsx`: Replaced timer/skip selfie flow with strict sequential steps (`0=blink`, `1=left`, `2=right`, `3=complete`). The camera records automatically, detects blink/head turns with lightweight face detection, and only stops after all steps complete.
   - `backend/routes/verification.js`: Added `POST /upload-verification-video` for multipart video uploads with `userId`, cloud upload when configured, and local server fallback.

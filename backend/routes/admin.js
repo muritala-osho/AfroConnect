@@ -7,6 +7,7 @@ const Report = require('../models/Report');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
 const AuditLog = require('../models/AuditLog');
+const redis = require('../utils/redis');
 
 const logAudit = async (req, action, category, severity, targetUser, details, metadata) => {
   try {
@@ -213,6 +214,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
     }
     
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     // Emit real-time socket event so the user is force-logged out instantly if active
     try {
@@ -286,6 +288,7 @@ router.put('/verifications/:userId', protect, isAdmin, async (req, res) => {
     }
     
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
     res.json({ success: true, message: `Verification ${action}d`, user });
   } catch (error) {
     console.error('Update verification error:', error);
@@ -337,6 +340,7 @@ router.post('/appeals', protect, async (req, res) => {
       submittedAt: Date.now()
     };
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     res.json({ success: true, message: 'Appeal submitted successfully. Admins will review it soon.' });
   } catch (error) {
@@ -394,9 +398,19 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
       user.banReason = null;
       user.suspended = false;
       user.suspendedUntil = null;
+      user.appeal = {
+        status: 'none',
+        message: null,
+        submittedAt: null,
+        reviewedAt: Date.now(),
+        reviewedBy: req.user._id,
+        adminResponse: adminResponse || '',
+        lastAppealRejectedAt: user.appeal.lastAppealRejectedAt || null
+      };
     }
 
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     // Send appeal decision email
     try {
@@ -457,6 +471,7 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
     user.verificationApprovedBy = req.user._id;
     user.verificationApprovedAt = new Date();
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     await logAudit(req, 'APPROVE_VERIFICATION', 'VERIFICATION', 'medium', user, `ID verification approved for ${user.name}`);
 
@@ -485,6 +500,7 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
     user.verificationStatus = 'rejected';
     user.verificationRejectionReason = reason || 'Photos do not meet requirements';
     await user.save();
+    await redis.del(`profile:me:${user._id}`);
 
     await logAudit(req, 'REJECT_VERIFICATION', 'VERIFICATION', 'medium', user,
       `ID verification rejected. Reason: ${reason || 'Photos do not meet requirements'}`);
