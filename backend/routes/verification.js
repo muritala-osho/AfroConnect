@@ -5,10 +5,23 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
+const fs = require('fs');
+const path = require('path');
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB max
+});
+
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 40 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype?.startsWith('video/')) {
+      return cb(new Error('Video file required'));
+    }
+    cb(null, true);
+  },
 });
 
 // Admin auth middleware
@@ -24,6 +37,86 @@ const isAdmin = async (req, res, next) => {
 
 const emailService = require('../utils/emailService');
 const { analyzePose } = require('../utils/faceVerifier');
+
+const storeVerificationVideoLocally = async (file, userId) => {
+  const uploadDir = path.join(__dirname, '..', 'public', 'verification-videos');
+  await fs.promises.mkdir(uploadDir, { recursive: true });
+  const ext = file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
+  const fileName = `${userId}-${Date.now()}.${ext}`;
+  const filePath = path.join(uploadDir, fileName);
+  await fs.promises.writeFile(filePath, file.buffer);
+  return `/public/verification-videos/${fileName}`;
+};
+
+const handleVerificationVideoUpload = async (req, res) => {
+  try {
+    const requestedUserId = req.body.userId;
+    const authenticatedUserId = req.user._id.toString();
+    const userId = requestedUserId || authenticatedUserId;
+
+    if (requestedUserId && requestedUserId !== authenticatedUserId && !req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Cannot upload verification for another user' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'video file required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    let videoUrl = null;
+    let publicId = null;
+    let storage = 'local';
+
+    if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
+      try {
+        const uploaded = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            { folder: 'afroconnect_verifications/videos', resource_type: 'video' },
+            (error, result) => (error ? reject(error) : resolve(result))
+          );
+          stream.end(req.file.buffer);
+        });
+        videoUrl = uploaded.secure_url;
+        publicId = uploaded.public_id;
+        storage = 'cloudinary';
+      } catch (cloudError) {
+        console.error('[upload-verification-video] Cloudinary upload failed:', cloudError.message);
+      }
+    }
+
+    if (!videoUrl) {
+      videoUrl = await storeVerificationVideoLocally(req.file, userId);
+    }
+
+    user.verificationStatus = 'pending';
+    user.verificationVideoUrl = videoUrl;
+    user.verificationVideo = {
+      url: videoUrl,
+      publicId,
+      storedAt: new Date(),
+      storage,
+    };
+    user.verificationRequestDate = new Date();
+    user.verificationRejectionReason = null;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Verification video uploaded',
+      status: 'pending',
+      videoUrl,
+    });
+  } catch (error) {
+    console.error('[upload-verification-video] Error:', error.message);
+    return res.status(500).json({ success: false, message: 'Verification video upload failed' });
+  }
+};
+
+router.post('/upload-verification-video', protect, uploadVideo.single('video'), handleVerificationVideoUpload);
 
 // ─── POST /api/verification/analyze-frame ────────────────────────────────────
 // Lightweight liveness helper — accepts a low-quality selfie frame and returns
@@ -130,7 +223,7 @@ router.get('/pending', protect, isAdmin, async (req, res) => {
   try {
     const verifications = await User.find({ 
       verificationStatus: 'pending'
-    }).select('_id name email age gender bio photos selfiePhoto verificationRequestDate livingIn jobTitle interests');
+    }).select('_id name email age gender bio photos selfiePhoto verificationVideoUrl verificationVideo verificationRequestDate livingIn jobTitle interests');
 
     res.json({
       success: true,

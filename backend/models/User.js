@@ -186,6 +186,16 @@ const userSchema = new mongoose.Schema({
       emoji: String
     }
   },
+  verificationVideoUrl: {
+    type: String,
+    default: null
+  },
+  verificationVideo: {
+    url: { type: String, default: null },
+    publicId: { type: String, default: null },
+    storedAt: { type: Date, default: null },
+    storage: { type: String, enum: ['cloudinary', 'local'], default: null }
+  },
   verificationRequestDate: {
     type: Date,
     default: null

@@ -389,6 +389,10 @@ app.use('/api/chat', messageLimiter, chatRoutes);
 app.use('/api/call', callRoutes);
 app.use('/api/upload', uploadLimiter, uploadRoutes);
 app.use('/api/verification', verificationRoutes);
+app.post('/upload-verification-video', protect, (req, res, next) => {
+  req.url = '/upload-verification-video';
+  verificationRoutes(req, res, next);
+});
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
