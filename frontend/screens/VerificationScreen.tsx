@@ -11,7 +11,6 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as FaceDetector from 'expo-face-detector';
 import * as FileSystem from 'expo-file-system';
 import LottieView from 'lottie-react-native';
 import Svg, { Circle, Path, Line } from 'react-native-svg';
