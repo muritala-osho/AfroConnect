@@ -127,7 +127,10 @@ export default function VerificationScreen() {
   const [landmarkMetrics, setLandmarkMetrics] = useState<LandmarkMetrics>(INITIAL_METRICS);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [faceDetected, setFaceDetected] = useState(false);
+  const [insight, setInsight] = useState({ leftEye: 1, rightEye: 1, yaw: 0 });
+  const [showInsight, setShowInsight] = useState(false);
 
+  const eyeBarAnim  = useRef(new Animated.Value(1)).current;
   const cameraRef              = useRef<any>(null);
   const recordingPromiseRef    = useRef<Promise<{ uri: string }> | null>(null);
   const recordingStartedAtRef  = useRef(0);
@@ -294,6 +297,13 @@ export default function VerificationScreen() {
     const rightEye = hasEyeProbs ? face.rightEyeOpenProbability : 1;
     const eyeScore = Math.min(leftEye, rightEye);
 
+    setInsight({ leftEye, rightEye, yaw });
+    Animated.timing(eyeBarAnim, {
+      toValue: eyeScore,
+      duration: 80,
+      useNativeDriver: false,
+    }).start();
+
     console.log(`[Liveness] step=${currentStep} centered=${centered} dist=${distance} hasEyeProbs=${hasEyeProbs} hasYaw=${hasYaw} yaw=${yaw.toFixed(1)} leftEye=${leftEye.toFixed(2)} rightEye=${rightEye.toFixed(2)}`);
 
     setFaceDetected(true);
@@ -377,6 +387,8 @@ export default function VerificationScreen() {
     setScreen('camera');
     setRecording(false);
     setFaceDetected(false);
+    setInsight({ leftEye: 1, rightEye: 1, yaw: 0 });
+    eyeBarAnim.setValue(1);
     setFaceStatus('Position your face in the oval');
     setLandmarkMetrics(INITIAL_METRICS);
   };
@@ -522,9 +534,18 @@ export default function VerificationScreen() {
               <Ionicons name="arrow-back" size={20} color="#FFF" />
             </Pressable>
             <ThemedText style={styles.camTitle}>Face Verification</ThemedText>
-            <View style={[styles.recPill, { borderColor: recording ? '#ef444460' : '#ffffff30' }]}>
-              <View style={[styles.recDot, { backgroundColor: recording ? '#ef4444' : '#64748b' }]} />
-              <ThemedText style={styles.recText}>{recording ? 'REC' : 'READY'}</ThemedText>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <Pressable
+                style={[styles.insightBtn, showInsight && styles.insightBtnActive]}
+                onPress={() => setShowInsight(v => !v)}
+              >
+                <Ionicons name="analytics-outline" size={14} color={showInsight ? '#10B981' : '#ffffff99'} />
+                <ThemedText style={[styles.insightBtnText, showInsight && { color: '#10B981' }]}>Insight</ThemedText>
+              </Pressable>
+              <View style={[styles.recPill, { borderColor: recording ? '#ef444460' : '#ffffff30' }]}>
+                <View style={[styles.recDot, { backgroundColor: recording ? '#ef4444' : '#64748b' }]} />
+                <ThemedText style={styles.recText}>{recording ? 'REC' : 'READY'}</ThemedText>
+              </View>
             </View>
           </View>
         </LinearGradient>
@@ -540,7 +561,131 @@ export default function VerificationScreen() {
           <View style={styles.statusPillWrap}>
             <ThemedText style={styles.statusPillText}>{faceStatus}</ThemedText>
           </View>
+
+          {/* Eye openness meter — shown only during blink step */}
+          {verificationStep === 0 && faceDetected && (
+            <View style={styles.eyeMeterWrap}>
+              <View style={styles.eyeMeterRow}>
+                <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.70)" />
+                <ThemedText style={styles.eyeMeterLabel}>L</ThemedText>
+                <View style={styles.eyeTrack}>
+                  <Animated.View
+                    style={[
+                      styles.eyeFill,
+                      {
+                        width: eyeBarAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0%', '100%'],
+                        }),
+                        backgroundColor: eyeBarAnim.interpolate({
+                          inputRange: [0, 0.35, 0.5, 1],
+                          outputRange: ['#ef4444', '#ef4444', '#f59e0b', '#10B981'],
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+                <ThemedText style={styles.eyeMeterPct}>
+                  {Math.round(insight.leftEye * 100)}%
+                </ThemedText>
+              </View>
+              <View style={styles.eyeMeterRow}>
+                <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.70)" />
+                <ThemedText style={styles.eyeMeterLabel}>R</ThemedText>
+                <View style={styles.eyeTrack}>
+                  <Animated.View
+                    style={[
+                      styles.eyeFill,
+                      {
+                        width: eyeBarAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0%', '100%'],
+                        }),
+                        backgroundColor: eyeBarAnim.interpolate({
+                          inputRange: [0, 0.35, 0.5, 1],
+                          outputRange: ['#ef4444', '#ef4444', '#f59e0b', '#10B981'],
+                        }),
+                      },
+                    ]}
+                  />
+                </View>
+                <ThemedText style={styles.eyeMeterPct}>
+                  {Math.round(insight.rightEye * 100)}%
+                </ThemedText>
+              </View>
+              <ThemedText style={styles.eyeMeterHint}>
+                {insight.leftEye < 0.35 && insight.rightEye < 0.35 ? '✓ Blink registered!' : 'Close your eyes to blink'}
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Head yaw indicator — shown during head turn steps */}
+          {(verificationStep === 1 || verificationStep === 2) && faceDetected && (
+            <View style={styles.yawMeterWrap}>
+              <ThemedText style={styles.yawLabel}>Head angle</ThemedText>
+              <View style={styles.yawTrack}>
+                <View style={styles.yawCenter} />
+                <View
+                  style={[
+                    styles.yawThumb,
+                    {
+                      left: `${Math.min(Math.max(50 + insight.yaw * 1.5, 5), 95)}%`,
+                      backgroundColor: Math.abs(insight.yaw) > 15 ? '#10B981' : '#f59e0b',
+                    },
+                  ]}
+                />
+              </View>
+              <ThemedText style={styles.yawValue}>
+                {insight.yaw > 0 ? `↑ ${insight.yaw.toFixed(0)}° right` : insight.yaw < 0 ? `↑ ${Math.abs(insight.yaw).toFixed(0)}° left` : 'Center'}
+              </ThemedText>
+            </View>
+          )}
         </View>
+
+        {/* Live insight overlay */}
+        {showInsight && (
+          <View style={styles.insightPanel} pointerEvents="none">
+            <ThemedText style={styles.insightTitle}>Live Detection</ThemedText>
+            <View style={styles.insightGrid}>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Face</ThemedText>
+                <ThemedText style={[styles.insightVal, { color: faceDetected ? '#10B981' : '#ef4444' }]}>
+                  {faceDetected ? 'YES' : 'NO'}
+                </ThemedText>
+              </View>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Centered</ThemedText>
+                <ThemedText style={[styles.insightVal, { color: landmarkMetrics.centered ? '#10B981' : '#f59e0b' }]}>
+                  {landmarkMetrics.centered ? 'YES' : 'NO'}
+                </ThemedText>
+              </View>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Left eye</ThemedText>
+                <ThemedText style={[styles.insightVal, { color: insight.leftEye < 0.35 ? '#ef4444' : '#10B981' }]}>
+                  {Math.round(insight.leftEye * 100)}%
+                </ThemedText>
+              </View>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Right eye</ThemedText>
+                <ThemedText style={[styles.insightVal, { color: insight.rightEye < 0.35 ? '#ef4444' : '#10B981' }]}>
+                  {Math.round(insight.rightEye * 100)}%
+                </ThemedText>
+              </View>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Yaw</ThemedText>
+                <ThemedText style={[styles.insightVal, { color: Math.abs(insight.yaw) > 15 ? '#10B981' : '#f59e0b' }]}>
+                  {insight.yaw.toFixed(1)}°
+                </ThemedText>
+              </View>
+              <View style={styles.insightCell}>
+                <ThemedText style={styles.insightKey}>Step</ThemedText>
+                <ThemedText style={styles.insightVal}>
+                  {verificationStep < 3 ? VERIFICATION_STEPS[verificationStep].key : 'done'}
+                </ThemedText>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* Action card */}
         <View style={styles.actionCardWrap} pointerEvents="none">
@@ -856,6 +1001,79 @@ const styles = StyleSheet.create({
   },
   captureLbl:  { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '800', textAlign: 'center' },
   captureHint: { color: 'rgba(255,255,255,0.58)', fontSize: 12, fontWeight: '600', textAlign: 'center' },
+
+  // ── Insight toggle button ──
+  insightBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+  },
+  insightBtnActive: {
+    borderColor: 'rgba(16,185,129,0.60)', backgroundColor: 'rgba(16,185,129,0.12)',
+  },
+  insightBtnText: { color: 'rgba(255,255,255,0.60)', fontSize: 10, fontWeight: '900', letterSpacing: 0.4 },
+
+  // ── Eye openness meter ──
+  eyeMeterWrap: {
+    marginTop: 12, width: 200,
+    backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10, gap: 7,
+    borderWidth: 1, borderColor: 'rgba(16,185,129,0.30)',
+    alignItems: 'stretch',
+  },
+  eyeMeterRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  eyeMeterLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', width: 10 },
+  eyeTrack: {
+    flex: 1, height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden',
+  },
+  eyeFill: { height: 6, borderRadius: 3 },
+  eyeMeterPct: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '800', width: 30, textAlign: 'right' },
+  eyeMeterHint: {
+    color: 'rgba(255,255,255,0.65)', fontSize: 10, fontWeight: '700',
+    textAlign: 'center', marginTop: 2,
+  },
+
+  // ── Yaw indicator ──
+  yawMeterWrap: {
+    marginTop: 12, width: 200,
+    backgroundColor: 'rgba(0,0,0,0.58)', borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderWidth: 1, borderColor: 'rgba(16,185,129,0.30)',
+    alignItems: 'center', gap: 6,
+  },
+  yawLabel: { color: 'rgba(255,255,255,0.70)', fontSize: 10, fontWeight: '900', letterSpacing: 0.3 },
+  yawTrack: {
+    width: '100%', height: 6, borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)', position: 'relative',
+  },
+  yawCenter: {
+    position: 'absolute', left: '50%', top: -2,
+    width: 2, height: 10, borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    transform: [{ translateX: -1 }],
+  },
+  yawThumb: {
+    position: 'absolute', top: -3, width: 12, height: 12,
+    borderRadius: 6, marginLeft: -6,
+  },
+  yawValue: { color: 'rgba(255,255,255,0.80)', fontSize: 11, fontWeight: '800' },
+
+  // ── Live insight panel ──
+  insightPanel: {
+    position: 'absolute', top: 130, right: 14, zIndex: 30,
+    backgroundColor: 'rgba(0,0,0,0.82)', borderRadius: 16,
+    padding: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.35)',
+    minWidth: 150,
+  },
+  insightTitle: {
+    color: '#10B981', fontSize: 10, fontWeight: '900',
+    letterSpacing: 0.8, marginBottom: 8, textTransform: 'uppercase',
+  },
+  insightGrid: { gap: 6 },
+  insightCell: { flexDirection: 'row', justifyContent: 'space-between', gap: 10 },
+  insightKey: { color: 'rgba(255,255,255,0.50)', fontSize: 11, fontWeight: '600' },
+  insightVal: { color: '#fff', fontSize: 11, fontWeight: '900' },
 
   // ── Analyzing ──
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
