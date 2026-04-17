@@ -35,8 +35,80 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
-const emailService = require('../utils/emailService');
+const emailService  = require('../utils/emailService');
 const { analyzePose } = require('../utils/faceVerifier');
+const { checkAntispoof, isServiceAvailable } = require('../utils/insightClient');
+const { execFile } = require('child_process');
+const os = require('os');
+
+// ─── Frame extraction via ffmpeg ─────────────────────────────────────────────
+// Writes the video buffer to a temp file, extracts up to 4 frames at fixed
+// timestamps, returns them as base64 JPEG strings, then cleans up.
+
+async function extractFramesBase64(videoBuffer, mimeType) {
+  const ext = mimeType === 'video/quicktime' ? 'mov' : 'mp4';
+  const tmpVideo = path.join(os.tmpdir(), `vf_${Date.now()}.${ext}`);
+  const frames   = [];
+
+  try {
+    await fs.promises.writeFile(tmpVideo, videoBuffer);
+
+    const timestamps = [1, 2, 3, 4]; // seconds into the recording
+    for (const ts of timestamps) {
+      const tmpFrame = path.join(os.tmpdir(), `vf_frame_${Date.now()}_${ts}.jpg`);
+      await new Promise((resolve) => {
+        execFile('ffmpeg', [
+          '-ss', String(ts), '-i', tmpVideo,
+          '-vframes', '1', '-q:v', '4',
+          '-vf', 'scale=320:-1',
+          tmpFrame,
+        ], { timeout: 15_000 }, () => resolve());
+      });
+
+      if (fs.existsSync(tmpFrame)) {
+        const buf = await fs.promises.readFile(tmpFrame);
+        frames.push(buf.toString('base64'));
+        await fs.promises.unlink(tmpFrame).catch(() => null);
+      }
+    }
+  } catch (err) {
+    console.warn('[frame-extract] Error:', err.message);
+  } finally {
+    fs.unlink(tmpVideo, () => null);
+  }
+
+  return frames;
+}
+
+// ─── Background anti-spoof run ────────────────────────────────────────────────
+// Called after responding to the client so it never delays the upload response.
+
+async function runAntiSpoofBackground(userId, videoBuffer, mimeType) {
+  try {
+    const available = await isServiceAvailable();
+    if (!available) {
+      console.log('[antispoof] InsightFace service unavailable — skipping');
+      return;
+    }
+
+    const frames = await extractFramesBase64(videoBuffer, mimeType);
+    if (!frames.length) {
+      console.log('[antispoof] No frames extracted — skipping');
+      return;
+    }
+
+    const result = await checkAntispoof(frames);
+    console.log(`[antispoof] userId=${userId} score=${result.score} real=${result.real} frames=${frames.length}`);
+
+    await User.findByIdAndUpdate(userId, {
+      'verificationVideo.antiSpoofScore': result.score,
+      'verificationVideo.antiSpoofReal':  result.real,
+      'verificationVideo.antiSpoofAt':    new Date(),
+    });
+  } catch (err) {
+    console.error('[antispoof] Background run failed:', err.message);
+  }
+}
 
 const storeVerificationVideoLocally = async (file, userId) => {
   const uploadDir = path.join(__dirname, '..', 'public', 'verification-videos');
@@ -92,6 +164,15 @@ const handleVerificationVideoUpload = async (req, res) => {
       videoUrl = await storeVerificationVideoLocally(req.file, userId);
     }
 
+    const challengeOrder = (() => {
+      try {
+        const raw = req.body.challengeOrder;
+        if (!raw) return null;
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return Array.isArray(parsed) ? parsed : null;
+      } catch { return null; }
+    })();
+
     user.verificationStatus = 'pending';
     user.verificationVideoUrl = videoUrl;
     user.verificationVideo = {
@@ -99,17 +180,23 @@ const handleVerificationVideoUpload = async (req, res) => {
       publicId,
       storedAt: new Date(),
       storage,
+      challengeOrder,
     };
     user.verificationRequestDate = new Date();
     user.verificationRejectionReason = null;
     await user.save();
 
-    return res.json({
+    // Respond immediately — anti-spoof runs in the background
+    res.json({
       success: true,
       message: 'Verification video uploaded',
       status: 'pending',
       videoUrl,
     });
+
+    // Fire-and-forget: extract frames + run InsightFace passive liveness check
+    runAntiSpoofBackground(userId, req.file.buffer, req.file.mimetype).catch(() => null);
+
   } catch (error) {
     console.error('[upload-verification-video] Error:', error.message);
     return res.status(500).json({ success: false, message: 'Verification video upload failed' });

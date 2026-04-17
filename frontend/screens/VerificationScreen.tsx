@@ -18,11 +18,20 @@ import { getApiBaseUrl } from '@/constants/config';
 
 const { width: SW } = Dimensions.get('window');
 
-const VERIFICATION_STEPS = [
-  { index: 0, key: 'blink', emoji: '😉', title: 'Blink eyes', hint: 'Look at the camera and blink once' },
-  { index: 1, key: 'left',  emoji: '👈', title: 'Turn head left',  hint: 'Slowly turn your head to the left' },
-  { index: 2, key: 'right', emoji: '👉', title: 'Turn head right', hint: 'Now slowly turn your head to the right' },
+const STEP_DEFS = [
+  { key: 'blink', emoji: '😉', title: 'Blink eyes',       hint: 'Look at the camera and blink once' },
+  { key: 'left',  emoji: '👈', title: 'Turn head left',   hint: 'Slowly turn your head to the left' },
+  { key: 'right', emoji: '👉', title: 'Turn head right',  hint: 'Now slowly turn your head to the right' },
 ];
+
+function shuffleStepDefs() {
+  const arr = [...STEP_DEFS];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.map((s, index) => ({ ...s, index }));
+}
 
 const PROMPT_LOTTIE = {
   v: '5.7.4', fr: 30, ip: 0, op: 60, w: 180, h: 180,
@@ -129,14 +138,16 @@ export default function VerificationScreen() {
   const [faceDetected, setFaceDetected] = useState(false);
   const [insight, setInsight] = useState({ leftEye: 1, rightEye: 1, yaw: 0 });
   const [showInsight, setShowInsight] = useState(false);
+  const [orderedSteps, setOrderedSteps] = useState(() => shuffleStepDefs());
 
+  const orderedStepsRef = useRef(orderedSteps);
+  const firstTurnDirRef = useRef<number | null>(null);
   const eyeBarAnim  = useRef(new Animated.Value(1)).current;
   const cameraRef              = useRef<any>(null);
   const recordingPromiseRef    = useRef<Promise<{ uri: string }> | null>(null);
   const recordingStartedAtRef  = useRef(0);
   const uploadStartedRef       = useRef(false);
   const blinkOpenSeenRef       = useRef(false);
-  const leftTurnDirectionRef   = useRef<number | null>(null);
   const stepRef                = useRef(0);
   const screenRef              = useRef<string>('intro');
   const advanceGuardRef        = useRef(false);
@@ -148,6 +159,7 @@ export default function VerificationScreen() {
   useEffect(() => { if (!permission) requestPermission(); }, [permission, requestPermission]);
   useEffect(() => { stepRef.current = verificationStep; }, [verificationStep]);
   useEffect(() => { screenRef.current = screen; }, [screen]);
+  useEffect(() => { orderedStepsRef.current = orderedSteps; }, [orderedSteps]);
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -182,6 +194,7 @@ export default function VerificationScreen() {
       const formData = new FormData();
       formData.append('userId', user?.id || '');
       formData.append('video', { uri: videoUri, type: 'video/mp4', name: 'verification-video.mp4' } as any);
+      formData.append('challengeOrder', JSON.stringify(orderedStepsRef.current.map(s => s.key)));
 
       const resp = await fetch(`${getApiBaseUrl()}/upload-verification-video`, {
         method: 'POST',
@@ -322,66 +335,63 @@ export default function VerificationScreen() {
       return;
     }
 
-    if (currentStep === 0) {
+    const stepKey = orderedStepsRef.current[currentStep]?.key;
+    console.log(`[Liveness] step=${currentStep} key=${stepKey} yaw=${yaw.toFixed(1)} L=${leftEye.toFixed(2)} R=${rightEye.toFixed(2)}`);
+
+    if (stepKey === 'blink') {
       if (!hasEyeProbs) {
         setFaceStatus('Hold still — detecting eye movement…');
         return;
       }
-      if (leftEye > 0.5 && rightEye > 0.5) {
-        blinkOpenSeenRef.current = true;
-      }
+      if (leftEye > 0.5 && rightEye > 0.5) blinkOpenSeenRef.current = true;
       if (blinkOpenSeenRef.current && leftEye < 0.35 && rightEye < 0.35) {
-        console.log(`[Liveness] BLINK detected! leftEye=${leftEye.toFixed(2)} rightEye=${rightEye.toFixed(2)}`);
-        advanceStep(0);
+        console.log(`[Liveness] ✓ BLINK detected! L=${leftEye.toFixed(2)} R=${rightEye.toFixed(2)}`);
+        advanceStep(currentStep);
       } else {
         setFaceStatus(blinkOpenSeenRef.current ? 'Blink now!' : 'Eyes open — ready to blink');
       }
       return;
     }
 
-    if (currentStep === 1) {
+    if (stepKey === 'left' || stepKey === 'right') {
       if (!hasYaw) {
         setFaceStatus('Hold still — detecting head position…');
         return;
       }
-      console.log(`[Liveness] Head turn step 1 — yaw=${yaw.toFixed(1)}`);
-      if (Math.abs(yaw) > 15) {
-        leftTurnDirectionRef.current = Math.sign(yaw) || -1;
-        console.log(`[Liveness] HEAD TURN LEFT detected! yaw=${yaw.toFixed(1)}`);
-        advanceStep(1);
-      } else {
-        setFaceStatus('Turn your head left slowly');
-      }
-      return;
-    }
+      const hint = orderedStepsRef.current[currentStep]?.hint || 'Turn your head';
+      const isFirstTurn = firstTurnDirRef.current === null;
 
-    if (currentStep === 2) {
-      if (!hasYaw) {
-        setFaceStatus('Hold still — detecting head position…');
-        return;
-      }
-      const leftDir        = leftTurnDirectionRef.current;
-      const turnedOpposite = leftDir === null
-        ? Math.abs(yaw) > 15
-        : Math.sign(yaw) === -leftDir && Math.abs(yaw) > 15;
-
-      console.log(`[Liveness] Head turn step 2 — yaw=${yaw.toFixed(1)} leftDir=${leftDir} turnedOpposite=${turnedOpposite}`);
-      if (turnedOpposite) {
-        console.log(`[Liveness] HEAD TURN RIGHT detected! yaw=${yaw.toFixed(1)}`);
-        advanceStep(2);
+      if (isFirstTurn) {
+        if (Math.abs(yaw) > 15) {
+          firstTurnDirRef.current = Math.sign(yaw) || 1;
+          console.log(`[Liveness] ✓ HEAD TURN (${stepKey}) yaw=${yaw.toFixed(1)}`);
+          advanceStep(currentStep);
+        } else {
+          setFaceStatus(hint);
+        }
       } else {
-        setFaceStatus('Turn your head right slowly');
+        const turnedOpposite = Math.sign(yaw) === -firstTurnDirRef.current && Math.abs(yaw) > 15;
+        console.log(`[Liveness] Head turn step 2 — yaw=${yaw.toFixed(1)} firstDir=${firstTurnDirRef.current} opposite=${turnedOpposite}`);
+        if (turnedOpposite) {
+          console.log(`[Liveness] ✓ HEAD TURN OPPOSITE (${stepKey}) yaw=${yaw.toFixed(1)}`);
+          advanceStep(currentStep);
+        } else {
+          setFaceStatus(hint);
+        }
       }
     }
   }, [advanceStep]);
 
   const restart = () => {
+    const fresh = shuffleStepDefs();
     blinkOpenSeenRef.current        = false;
-    leftTurnDirectionRef.current    = null;
+    firstTurnDirRef.current         = null;
     stepRef.current                 = 0;
     uploadStartedRef.current        = false;
     advanceGuardRef.current         = false;
     recordingPromiseRef.current     = null;
+    orderedStepsRef.current         = fresh;
+    setOrderedSteps(fresh);
     setVerificationStep(0);
     setResult(null);
     setScreen('camera');
@@ -502,7 +512,7 @@ export default function VerificationScreen() {
 
   // ─── CAMERA ───────────────────────────────────────────────────────────────
   if (screen === 'camera') {
-    const activeStep = VERIFICATION_STEPS[Math.min(verificationStep, 2)];
+    const activeStep = orderedSteps[Math.min(verificationStep, 2)];
     const ovalColor  = '#10B981';
 
     return (
@@ -680,7 +690,7 @@ export default function VerificationScreen() {
               <View style={styles.insightCell}>
                 <ThemedText style={styles.insightKey}>Step</ThemedText>
                 <ThemedText style={styles.insightVal}>
-                  {verificationStep < 3 ? VERIFICATION_STEPS[verificationStep].key : 'done'}
+                  {verificationStep < 3 ? orderedSteps[verificationStep].key : 'done'}
                 </ThemedText>
               </View>
             </View>
@@ -692,7 +702,7 @@ export default function VerificationScreen() {
           <View style={styles.actionCard}>
             {/* Progress bar */}
             <View style={styles.progressRow}>
-              {VERIFICATION_STEPS.map(item => (
+              {orderedSteps.map(item => (
                 <View
                   key={item.key}
                   style={[
