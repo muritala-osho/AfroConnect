@@ -79,6 +79,9 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
     || req.idPhoto?.url   || (typeof req.idPhoto   === 'string' ? req.idPhoto   : null)
     || null;
 
+  const getVerificationVideo = (req: any): string | null =>
+    req.verificationVideo?.url || req.verificationVideoUrl || null;
+
   return (
     <div className="space-y-6 animate-fadeIn">
 
@@ -152,12 +155,12 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                     <div>
                       <p className="text-sm font-black dark:text-white">{req.name}</p>
                       <p className="text-[10px] text-slate-400 font-medium">{req.email}</p>
-                      {getSelfiePhoto(req) ? (
+                      {getVerificationVideo(req) ? (
                         <p className="text-[10px] text-teal-500 font-semibold mt-0.5">
-                          Live selfie submitted · ready for AI check
+                          Verification video submitted · ready for review
                         </p>
                       ) : (
-                        <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No selfie on record</p>
+                        <p className="text-[10px] text-amber-500 font-semibold mt-0.5">No verification video on record</p>
                       )}
                     </div>
                   </div>
@@ -205,13 +208,13 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
               </div>
 
               {/* ── Liveness badge ── */}
-              {getSelfiePhoto(selectedRequest) && (
+              {getVerificationVideo(selectedRequest) && (
                 <div className="flex items-center gap-3 p-3 rounded-2xl border-2 border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10">
                   <span className="text-2xl">🛡️</span>
                   <div>
-                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Live Selfie</p>
+                    <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-0.5">Liveness Video</p>
                     <p className="text-sm font-bold text-gray-900 dark:text-white">
-                      Look Left · Look Right · Smile — camera-detected liveness
+                      Blink · Turn Left · Turn Right — camera-detected liveness
                     </p>
                   </div>
                 </div>
@@ -242,32 +245,25 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                   </div>
                 </div>
 
-                {/* Selfie photo */}
+                {/* Verification video */}
                 <div className="space-y-2">
                   <p className="text-[10px] font-black text-rose-500 uppercase tracking-widest text-center">
-                    Submitted Selfie
+                    Verification Video
                   </p>
-                  {getSelfiePhoto(selectedRequest) ? (
-                    <div
-                      className="relative group aspect-square cursor-pointer"
-                      onClick={() => setLightboxPhoto(getSelfiePhoto(selectedRequest)!)}
-                    >
-                      <img
-                        src={getSelfiePhoto(selectedRequest)!}
-                        className="w-full h-full object-cover rounded-2xl border-2 border-rose-200 dark:border-rose-500/40 group-hover:border-rose-400 transition-colors"
-                        alt="Submitted Selfie"
+                  {getVerificationVideo(selectedRequest) ? (
+                    <div className="relative aspect-square overflow-hidden rounded-2xl border-2 border-rose-200 dark:border-rose-500/40 bg-black">
+                      <video
+                        src={getVerificationVideo(selectedRequest)!}
+                        className="w-full h-full object-cover"
+                        controls
+                        playsInline
+                        preload="metadata"
                       />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all rounded-2xl flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center gap-1 text-white">
-                          <ZoomIn size={24} className="drop-shadow-lg" />
-                          <span className="text-[10px] font-black tracking-widest uppercase">Expand</span>
-                        </div>
-                      </div>
                     </div>
                   ) : (
                     <div className="aspect-square rounded-2xl border-2 border-dashed border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5 flex flex-col items-center justify-center gap-2 text-amber-500">
                       <AlertCircle size={28} className="opacity-60" />
-                      <p className="text-xs font-bold text-center px-4">No selfie submitted</p>
+                      <p className="text-xs font-bold text-center px-4">No verification video submitted</p>
                     </div>
                   )}
                 </div>
@@ -324,8 +320,8 @@ const IDVerification: React.FC<IDVerificationProps> = ({ showToast }) => {
                 <div className="flex items-start gap-2">
                   <UserCheck size={15} className="text-teal-500 mt-0.5 shrink-0" />
                   <p className="text-xs text-teal-700 dark:text-teal-400 leading-relaxed">
-                    <strong>Review guide:</strong> The AI scores faces using 128-D embeddings. Verify bone structure,
-                    eye shape, and skin tone match across both photos. Click any photo to enlarge. Even if the AI
+                    <strong>Review guide:</strong> Compare the profile photo with the verification video. Verify bone structure,
+                    eye shape, and skin tone match, and check the required blink, left turn, and right turn are visible. Even if the AI
                     passes, you may reject if you see signs of spoofing or AI generation.
                   </p>
                 </div>

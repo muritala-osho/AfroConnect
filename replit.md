@@ -5,6 +5,7 @@
   - `frontend/screens/VerificationScreen.tsx`: Replaced timer/skip selfie flow with strict sequential steps (`0=blink`, `1=left`, `2=right`, `3=complete`). The camera records automatically, detects blink/head turns with lightweight face detection, and only stops after all steps complete.
   - `backend/routes/verification.js`: Added `POST /upload-verification-video` for multipart video uploads with `userId`, cloud upload when configured, and local server fallback.
   - `backend/models/User.js`: Added `verificationVideoUrl` and `verificationVideo` fields while preserving existing verification status logic; uploaded videos set `verificationStatus` to `pending`.
+  - `admin-dashboard/views/IDVerification.tsx`: The review panel now shows the submitted verification video beside the profile photo instead of the old submitted selfie image.
 - **Admin Dashboard — full interactivity upgrade**:
   - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
   - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.

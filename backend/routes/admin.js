@@ -430,7 +430,7 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
   try {
     const verifications = await User.find({ 
       verificationStatus: 'pending'
-    }).select('_id name email idPhoto selfiePhoto verificationRequestDate photos age gender location');
+    }).select('_id name email idPhoto selfiePhoto verificationVideoUrl verificationVideo verificationRequestDate photos age gender location');
 
     res.json({
       success: true,

@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         secure: false,
       },
+      '/public': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
       '/socket.io': {
         target: 'http://localhost:3001',
         ws: true,
