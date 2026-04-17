@@ -1,3 +1,4 @@
+const logger = require('./logger');
 async function brevoSend({ to, subject, html, text }) {
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -352,9 +353,9 @@ const sendOTP = async (email, otp) => {
       subject: '🔐 Your AfroConnect Verification Code',
       html: getOTPEmailTemplate('there', otp),
     });
-    console.log('OTP sent successfully');
+    logger.log('OTP sent successfully');
   } catch (error) {
-    console.error('Failed to send OTP:', error);
+    logger.error('Failed to send OTP:', error);
     throw error;
   }
 };
@@ -366,10 +367,10 @@ const sendWelcomeEmail = async (email, userName) => {
       subject: '🎉 Welcome to AfroConnect — Let\'s Find Your Match!',
       html: getWelcomeEmailTemplate(userName),
     });
-    console.log('Welcome email sent');
+    logger.log('Welcome email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    logger.error('Error sending welcome email:', error);
     throw new Error('Failed to send welcome email');
   }
 };
@@ -382,10 +383,10 @@ const sendPasswordResetEmail = async (email, userName, resetToken) => {
       subject: '🔒 Reset Your AfroConnect Password',
       html: getPasswordResetEmailTemplate(userName, resetLink),
     });
-    console.log('Password reset email sent');
+    logger.log('Password reset email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    logger.error('Error sending password reset email:', error);
     throw new Error('Failed to send password reset email');
   }
 };
@@ -397,10 +398,10 @@ const sendBanNotificationEmail = async (email, userName, reason) => {
       subject: '⚠️ Your AfroConnect Account Has Been Suspended',
       html: getBanNotificationTemplate(userName, reason),
     });
-    console.log('Ban notification email sent');
+    logger.log('Ban notification email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending ban notification email:', error);
+    logger.error('Error sending ban notification email:', error);
     throw new Error('Failed to send ban notification email');
   }
 };
@@ -412,10 +413,10 @@ const sendUnbanNotificationEmail = async (email, userName) => {
       subject: '✓ Your Appeal Was Approved — Welcome Back!',
       html: getUnbanNotificationTemplate(userName),
     });
-    console.log('Unban notification email sent');
+    logger.log('Unban notification email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending unban notification email:', error);
+    logger.error('Error sending unban notification email:', error);
     throw new Error('Failed to send unban notification email');
   }
 };
@@ -427,10 +428,10 @@ const sendAppealDecisionEmail = async (email, userName, approved, adminResponse)
       subject: approved ? '✓ Your Appeal Was Approved!' : '⚠️ Appeal Decision',
       html: getAppealDecisionTemplate(userName, approved, adminResponse),
     });
-    console.log('Appeal decision email sent');
+    logger.log('Appeal decision email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending appeal decision email:', error);
+    logger.error('Error sending appeal decision email:', error);
     throw new Error('Failed to send appeal decision email');
   }
 };
@@ -579,10 +580,10 @@ const sendVerificationApprovedEmail = async (email, userName) => {
       subject: '✓ Your AfroConnect Profile is Verified!',
       html: getVerificationApprovedTemplate(userName),
     });
-    console.log('Verification approved email sent');
+    logger.log('Verification approved email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification approved email:', error);
+    logger.error('Error sending verification approved email:', error);
   }
 };
 
@@ -593,10 +594,10 @@ const sendVerificationRejectedEmail = async (email, userName, reason) => {
       subject: '⚠️ AfroConnect Verification Update',
       html: getVerificationRejectedTemplate(userName, reason),
     });
-    console.log('Verification rejected email sent');
+    logger.log('Verification rejected email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification rejected email:', error);
+    logger.error('Error sending verification rejected email:', error);
   }
 };
 
@@ -607,10 +608,10 @@ const sendWarningEmail = async (email, userName, reason) => {
       subject: '⚠️ Community Guideline Warning — AfroConnect',
       html: getWarningEmailTemplate(userName, reason),
     });
-    console.log('Warning email sent');
+    logger.log('Warning email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending warning email:', error);
+    logger.error('Error sending warning email:', error);
   }
 };
 
@@ -621,10 +622,10 @@ const sendSuspensionEmail = async (email, userName, reason, durationDays) => {
       subject: '⛔ Your AfroConnect Account Has Been Temporarily Suspended',
       html: getSuspensionEmailTemplate(userName, reason, durationDays),
     });
-    console.log('Suspension email sent');
+    logger.log('Suspension email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending suspension email:', error);
+    logger.error('Error sending suspension email:', error);
   }
 };
 
@@ -668,10 +669,10 @@ const sendSuspensionLiftedEmail = async (email, userName) => {
       subject: '✅ Your AfroConnect Suspension Has Been Lifted',
       html: getSuspensionLiftedTemplate(userName),
     });
-    console.log('Suspension lifted email sent');
+    logger.log('Suspension lifted email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending suspension lifted email:', error);
+    logger.error('Error sending suspension lifted email:', error);
   }
 };
 
@@ -724,10 +725,10 @@ const sendNewMatchEmail = async (email, userName, matchName, matchPhoto) => {
       subject: `💚 You matched with ${matchName} on AfroConnect!`,
       html: getNewMatchTemplate(userName, matchName, matchPhoto),
     });
-    console.log('New match email sent');
+    logger.log('New match email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending new match email:', error);
+    logger.error('Error sending new match email:', error);
   }
 };
 
@@ -775,10 +776,10 @@ const sendSupportReplyEmail = async (email, userName, replyContent, ticketSubjec
       subject: '💬 AfroConnect Support has replied to your ticket',
       html: getSupportReplyTemplate(userName, replyContent, ticketSubject),
     });
-    console.log('Support reply email sent');
+    logger.log('Support reply email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending support reply email:', error);
+    logger.error('Error sending support reply email:', error);
   }
 };
 
@@ -826,10 +827,10 @@ const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, 
       subject: `⏰ Your AfroConnect ${planName} plan renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
       html: getRenewalReminderTemplate(userName, planName, renewalDate, daysLeft),
     });
-    console.log('Renewal reminder email sent');
+    logger.log('Renewal reminder email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending renewal reminder email:', error);
+    logger.error('Error sending renewal reminder email:', error);
   }
 };
 
@@ -896,10 +897,10 @@ const sendInactivityEmail = async (email, userName) => {
       subject: `👋 ${userName}, we miss you! New matches are waiting`,
       html: getInactivityTemplate(userName),
     });
-    console.log('Inactivity email sent');
+    logger.log('Inactivity email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending inactivity email:', error);
+    logger.error('Error sending inactivity email:', error);
   }
 };
 

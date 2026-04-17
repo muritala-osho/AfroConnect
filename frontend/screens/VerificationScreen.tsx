@@ -259,7 +259,7 @@ export default function VerificationScreen() {
     setRecording(true);
     recordingStartedAtRef.current = Date.now();
     recordingPromiseRef.current = cameraRef.current.recordAsync();
-    recordingPromiseRef.current.catch(() => null);
+    recordingPromiseRef.current?.catch(() => null);
   }, []);
 
   const advanceStep = useCallback((detectedStep: number) => {

@@ -53,6 +53,11 @@ import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/context/UnreadContext";
 import { VerificationBadge } from "@/components/VerificationBadge";
+import SwipeableMessage from "@/components/chat/SwipeableMessage";
+import WavyWaveform from "@/components/chat/WavyWaveform";
+import { Message, MessageReaction } from "@/types/chat";
+import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
+import logger from "@/utils/logger";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -67,290 +72,7 @@ interface ChatDetailScreenProps {
   route: ChatDetailScreenRouteProp;
 }
 
-interface MessageReaction {
-  user: string | { _id: string };
-  emoji: string;
-}
 
-interface Message {
-  _id: string;
-  sender: string | { _id: string };
-  content?: string;
-  text?: string;
-  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply";
-  imageUrl?: string;
-  videoUrl?: string;
-  audioUrl?: string;
-  latitude?: number;
-  longitude?: number;
-  address?: string;
-  createdAt: string;
-  status?: "sent" | "delivered" | "seen";
-  replyTo?: {
-    messageId: string;
-    content: string;
-    type: string;
-    senderName: string;
-  };
-  deletedForEveryone?: boolean;
-  deletedFor?: string[];
-  reactions?: MessageReaction[];
-  viewOnce?: boolean;
-  viewOnceOpenedBy?: string[];
-  edited?: boolean;
-  editedAt?: string;
-  storyReaction?: {
-    storyId: string;
-    emoji?: string;
-    storyType?: string;
-    storyPreview?: string;
-  };
-}
-
-const EMOJI_LIST = [
-  "😀","😂","😍","🥰","😘","🤗","😊","🙂","😉","😎","🤩","🥳","😋","🤤",
-  "😜","🤪","😏","😌","😓","😪","🤒","😷",
-  "🤕","🤢","🤮","🥵","🥶","😱","😨","😰","😥","😢","😭","😤","😠","🤬",
-  "😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖","🎃","😺",
-  "😸","😹","😻","😼","😽","🙀","😿","😾","❤️","🧡","💛","💚","💙","💜",
-  "🖤","🤍","🤎","💓","💕","💕","💞","💓","💗","💖","💘","💑","💎",
-  "👍","🙌","🤝","✌️","🤟","🤘","🤙","👋","🖖","✋","👌","🤌",
-  "🔥","✨","⭐","🎈","🎀",
-  "🏆","🥇","🥈","🥉",
-];
-
-const REPORT_REASONS = [
-  { id: "inappropriate", label: "Inappropriate Content", icon: "alert-circle" },
-  { id: "harassment", label: "Harassment or Bullying", icon: "user-x" },
-  { id: "spam", label: "Spam or Scam", icon: "mail" },
-  { id: "fake", label: "Fake Profile", icon: "user-check" },
-  { id: "underage", label: "Underage User", icon: "shield-off" },
-  { id: "other", label: "Other", icon: "more-horizontal" },
-];
-
-const CHAT_THEMES = [
-  { id: "default", name: "Default", image: null },
-  { id: "luxury", name: "Luxury", image: require("@/assets/chat-themes/afroconnect_luxury.png") },
-  { id: "blue_doodle", name: "Blue Doodle", image: require("@/assets/chat-themes/theme-blue-doodle.png") },
-  { id: "cats", name: "Cats", image: require("@/assets/chat-themes/theme_cats.png") },
-  { id: "dark_doodle", name: "Dark Doodle", image: require("@/assets/chat-themes/theme-dark-doodle.png") },
-  { id: "dots", name: "Dots", image: require("@/assets/chat-themes/theme-dots.png") },
-  { id: "geometry", name: "Geometry", image: require("@/assets/chat-themes/theme-geometry.jpg") },
-  { id: "hearts_outline", name: "Hearts Outline", image: require("@/assets/chat-themes/theme_hearts_outline.png") },
-  { id: "hearts_purple", name: "Hearts Purple", image: require("@/assets/chat-themes/theme_hearts_purple.png") },
-  { id: "light_doodle", name: "Light Doodle", image: require("@/assets/chat-themes/theme-light-doodle.png") },
-  { id: "love_dark", name: "Love Dark", image: require("@/assets/chat-themes/theme_love_dark.png") },
-  { id: "love_pink", name: "Love Pink", image: require("@/assets/chat-themes/theme_love_pink.png") },
-  { id: "magic", name: "Magic", image: require("@/assets/chat-themes/theme-magic.jpg") },
-  { id: "rainbow", name: "Rainbow", image: require("@/assets/chat-themes/theme-rainbow.png") },
-  { id: "sky_doodle", name: "Sky Doodle", image: require("@/assets/chat-themes/theme-sky-doodle.png") },
-  { id: "valentine_black", name: "Valentine Black", image: require("@/assets/chat-themes/theme_valentine_black.png") },
-];
-
-const AI_SUGGESTIONS = [
-  "Hey! How's your day going? 😊",
-  "I love your profile! What are your hobbies?",
-  "What's your favorite thing to do on weekends?",
-  "I noticed we have similar interests! Tell me more about yourself",
-  "You seem really interesting! What do you do for fun?",
-  "Hi there! What made you swipe right on me? 😄",
-  "I'd love to get to know you better!",
-  "What's the best trip you've ever taken?",
-];
-
-
-const SwipeableMessage = React.memo(
-  ({
-    item,
-    isMe,
-    children,
-    onReply,
-    themeTextSecondary,
-  }: {
-    item: Message;
-    isMe: boolean;
-    children: React.ReactNode;
-    onReply: (item: Message) => void;
-    themeTextSecondary: string;
-  }) => {
-    const translateX = useRef(new Animated.Value(0)).current;
-    const itemRef = useRef(item);
-    const onReplyRef = useRef(onReply);
-    itemRef.current = item;
-    onReplyRef.current = onReply;
-
-    const panResponder = useRef(
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return (
-            Math.abs(gestureState.dx) > 10 &&
-            Math.abs(gestureState.dy) < 10 &&
-            gestureState.dx < 0
-          );
-        },
-        onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dx < 0) {
-            translateX.setValue(Math.max(gestureState.dx, -80));
-          }
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -50) {
-            onReplyRef.current(itemRef.current);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-      }),
-    ).current;
-
-    return (
-      <View style={{ overflow: "hidden" }}>
-        <View
-          style={{
-            position: "absolute",
-            right: isMe ? undefined : 8,
-            left: isMe ? 8 : undefined,
-            top: 0,
-            bottom: 0,
-            justifyContent: "center",
-          }}
-        >
-          <Feather name="corner-up-left" size={20} color={themeTextSecondary} />
-        </View>
-        <Animated.View
-          style={{ transform: [{ translateX }] }}
-          {...panResponder.panHandlers}
-        >
-          {children}
-        </Animated.View>
-      </View>
-    );
-  },
-);
-
-
-const WAVEFORM_HEIGHTS = [
-  0.3, 0.5, 0.8, 0.6, 1.0, 0.7, 0.4, 0.9, 0.5, 0.7,
-  1.0, 0.6, 0.4, 0.8, 0.5, 0.9, 0.6, 0.3, 0.7, 0.5,
-  0.8, 1.0, 0.4, 0.6, 0.9, 0.5, 0.7, 0.3, 0.8, 0.6,
-];
-
-const WavyWaveform = ({
-  isPlaying,
-  progress,
-  isMe,
-  theme,
-  duration,
-}: {
-  isPlaying: boolean;
-  progress: number;
-  isMe: boolean;
-  theme: any;
-  duration?: number;
-}) => {
-  const BAR_COUNT = 30;
-  const [animations] = useState(() =>
-    WAVEFORM_HEIGHTS.slice(0, BAR_COUNT).map((h) => new Animated.Value(h)),
-  );
-  const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
-
-  useEffect(() => {
-    if (isPlaying) {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = animations.map((anim, i) => {
-        const baseH = WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length];
-        const loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(anim, {
-              toValue: baseH * (0.3 + Math.random() * 0.7) + 0.4,
-              duration: 200 + (i % 5) * 60,
-              useNativeDriver: false,
-            }),
-            Animated.timing(anim, {
-              toValue: baseH * 0.6,
-              duration: 180 + (i % 4) * 50,
-              useNativeDriver: false,
-            }),
-          ]),
-        );
-        loop.start();
-        return loop;
-      });
-    } else {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = [];
-      animations.forEach((anim, i) => {
-        Animated.spring(anim, {
-          toValue: WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length],
-          useNativeDriver: false,
-          tension: 60,
-          friction: 8,
-        }).start();
-      });
-    }
-    return () => {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = [];
-    };
-  }, [isPlaying]);
-
-  const formatDuration = (secs?: number) => {
-    if (!secs) return "";
-    const m = Math.floor(secs / 60);
-    const s = Math.round(secs % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  return (
-    <View style={{ flex: 1 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          height: 28,
-          gap: 2,
-          flex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {animations.map((anim, i) => {
-          const barProgress = i / BAR_COUNT;
-          const isActive = barProgress <= progress;
-          const isPast = progress > 0 && barProgress < progress;
-          return (
-            <Animated.View
-              key={i}
-              style={{
-                width: 3,
-                borderRadius: 2,
-                height: anim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [3, 22],
-                }),
-                backgroundColor: isPast || isActive
-                  ? isMe ? "rgba(255,255,255,0.95)" : theme.primary
-                  : isMe ? "rgba(255,255,255,0.35)" : theme.border + "AA",
-              }}
-            />
-          );
-        })}
-      </View>
-      {duration !== undefined && duration > 0 && (
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
-          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
-            {progress > 0 ? formatDuration(progress * duration) : "0:00"}
-          </ThemedText>
-          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
-            {formatDuration(duration)}
-          </ThemedText>
-        </View>
-      )}
-    </View>
-  );
-};
 
 
 export default function ChatDetailScreen({
@@ -458,7 +180,7 @@ export default function ChatDetailScreen({
         if (savedDraft) setMessage(savedDraft);
         if (savedLang) setSavedTranslateLang(savedLang);
       } catch (error) {
-        console.error("Failed to load draft:", error);
+        logger.error("Failed to load draft:", error);
       }
     };
     loadDraft();
@@ -597,7 +319,7 @@ export default function ChatDetailScreen({
             await ScreenCapture.allowScreenCaptureAsync();
           }
         } catch (e) {
-          console.log("Screenshot listener error:", e);
+          logger.log("Screenshot listener error:", e);
         }
       }
     };
@@ -741,7 +463,7 @@ export default function ChatDetailScreen({
         }
       }
     } catch (error) {
-      console.error("Chat load error:", error);
+      logger.error("Chat load error:", error);
     } finally {
       setLoading(false);
     }
@@ -770,7 +492,7 @@ export default function ChatDetailScreen({
         }
       }
     } catch (error) {
-      console.error("Load more error:", error);
+      logger.error("Load more error:", error);
     } finally {
       setLoadingMore(false);
     }
@@ -982,7 +704,7 @@ export default function ChatDetailScreen({
         );
       }
     } catch (error) {
-      console.error("Send error:", error);
+      logger.error("Send error:", error);
       setMessages((prev) => prev.filter((m) => m._id !== tempMessage._id));
       Alert.alert("Error", "Failed to send message");
     } finally {
@@ -1000,7 +722,7 @@ export default function ChatDetailScreen({
     fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    }).catch(e => console.error("View once mark error:", e));
+    }).catch(e => logger.error("View once mark error:", e));
   };
 
   /** Start the 10-second view-once countdown and handle auto-close. */
@@ -1074,7 +796,7 @@ export default function ChatDetailScreen({
           if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
-        console.error("Image upload error:", error);
+        logger.error("Image upload error:", error);
         Alert.alert("Error", "Failed to upload image. Check your connection.");
       }
     }
@@ -1103,7 +825,7 @@ export default function ChatDetailScreen({
           if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
-        console.error("Video upload error:", error);
+        logger.error("Video upload error:", error);
         Alert.alert("Error", "Failed to upload video. Check your connection.");
       }
     }
@@ -1180,7 +902,7 @@ export default function ChatDetailScreen({
       }, 1000);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
-      console.error("Recording error:", error);
+      logger.error("Recording error:", error);
       recordingRef.current = null;
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
       Alert.alert("Error", "Could not start recording. Please try again.");
@@ -1216,7 +938,7 @@ export default function ChatDetailScreen({
           if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
           else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
         } catch (error) {
-          console.error("Voice upload error:", error);
+          logger.error("Voice upload error:", error);
           Alert.alert("Error", "Failed to upload voice message");
         }
       } else if (uri && duration < 1) {
@@ -1226,7 +948,7 @@ export default function ChatDetailScreen({
       recordingDurationRef.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
-      console.error("Stop recording error:", error);
+      logger.error("Stop recording error:", error);
       setIsRecording(false);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
@@ -1246,7 +968,7 @@ export default function ChatDetailScreen({
       } else {
         recordingRef.current = null;
       }
-    } catch (error) { console.log("Cancel recording cleanup:", error); }
+    } catch (error) { logger.log("Cancel recording cleanup:", error); }
     if (matchId) socketService.emit("chat:recording-voice", { chatId: matchId, userId: myId, isRecording: false });
     setIsRecording(false);
     setRecordingDuration(0);
@@ -1277,7 +999,7 @@ export default function ChatDetailScreen({
             if (currentId === messageId && status.isPlaying) { await soundRef.current.pauseAsync(); updatePlayingId("paused:" + messageId); return; }
             if (currentId === "paused:" + messageId && !status.isPlaying) { await soundRef.current.playAsync(); updatePlayingId(messageId); return; }
           }
-        } catch (e) { console.log("Status check error:", e); }
+        } catch (e) { logger.log("Status check error:", e); }
         try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (cleanupErr) {}
         soundRef.current = null;
       }
@@ -1301,7 +1023,7 @@ export default function ChatDetailScreen({
           const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
           soundRef.current = sound; updatePlayingId(messageId);
         } catch (expoError) {
-          console.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
+          logger.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
           try {
             const htmlAudio = new window.Audio(audioUrl);
             htmlAudioRef.current = htmlAudio;
@@ -1310,7 +1032,7 @@ export default function ChatDetailScreen({
             htmlAudio.onerror = () => { updatePlayingId(null); setAudioProgress(0); Alert.alert("Playback Error", "Could not play this voice message. The audio format may not be supported."); };
             await htmlAudio.play(); updatePlayingId(messageId);
           } catch (htmlError: any) {
-            console.error("HTML5 Audio fallback also failed:", htmlError);
+            logger.error("HTML5 Audio fallback also failed:", htmlError);
             Alert.alert("Playback Error", `Could not play voice message: ${htmlError.message || "Unknown error"}`);
           }
         }
@@ -1321,7 +1043,7 @@ export default function ChatDetailScreen({
       const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
       soundRef.current = sound; updatePlayingId(messageId);
     } catch (error: any) {
-      console.error("Audio playback error for URL:", audioUrl, error);
+      logger.error("Audio playback error for URL:", audioUrl, error);
       Alert.alert("Playback Error", `Could not play voice message: ${error.message || "Unknown error"}`);
     }
   };
@@ -1350,7 +1072,7 @@ export default function ChatDetailScreen({
       try { const { status } = await MediaLibrary.requestPermissionsAsync(); if (status === "granted") { await MediaLibrary.saveToLibraryAsync(downloadResult.uri); Alert.alert("Saved", "Image saved to your gallery."); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; } } catch (_permError) {}
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(downloadResult.uri, { mimeType: "image/jpeg", dialogTitle: "Save Image" }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
       else Alert.alert("Error", "Cannot save images in this environment. Try a development build.");
-    } catch (error) { console.error("Save image error:", error); Alert.alert("Error", "Could not save image."); }
+    } catch (error) { logger.error("Save image error:", error); Alert.alert("Error", "Could not save image."); }
   };
 
   const saveVideo = async (url: string) => {
@@ -1362,7 +1084,7 @@ export default function ChatDetailScreen({
       try { const { status } = await MediaLibrary.requestPermissionsAsync(); if (status === "granted") { await MediaLibrary.saveToLibraryAsync(downloadResult.uri); Alert.alert("Saved!", "Video saved to your gallery"); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; } } catch (_permError) {}
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(downloadResult.uri, { mimeType: "video/mp4", dialogTitle: "Save Video" }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
       else Alert.alert("Error", "Cannot save videos in this environment. Try a development build.");
-    } catch (error) { console.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
+    } catch (error) { logger.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
   // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1515,7 +1237,7 @@ export default function ChatDetailScreen({
         ));
       }
     } catch (e) {
-      console.error('React error:', e);
+      logger.error('React error:', e);
     }
     setSelectedMessage(null);
   }, [selectedMessage, matchId, token, post]);

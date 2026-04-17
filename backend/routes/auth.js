@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
@@ -71,7 +72,7 @@ router.post(
       // If user exists but email not verified (abandoned signup), delete and recreate
       if (existingUser && !existingUser.emailVerified) {
         await User.deleteOne({ _id: existingUser._id });
-        console.log("Deleted unverified user for re-registration (user ID redacted).");
+        logger.log("Deleted unverified user for re-registration (user ID redacted).");
       }
 
       // Generate OTP
@@ -99,7 +100,7 @@ router.post(
       try {
         await sendOTP(email, otpCode);
       } catch (emailError) {
-        console.error("Failed to send OTP email:", emailError);
+        logger.error("Failed to send OTP email:", emailError);
         // Continue anyway - user can request resend
       }
 
@@ -110,7 +111,7 @@ router.post(
         email: user.email,
       });
     } catch (error) {
-      console.error("Signup error");
+      logger.error("Signup error");
       res.status(500).json({
         success: false,
         message: "Server error during signup",
@@ -147,7 +148,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
 
     // Send welcome email — fire and forget, don't block the response
     sendWelcomeEmail(user.email, user.name || "there").catch((err) =>
-      console.error("Welcome email failed (non-blocking):", err.message),
+      logger.error("Welcome email failed (non-blocking):", err.message),
     );
 
     const token = generateToken(user._id);
@@ -167,7 +168,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("OTP verification error:", error);
+    logger.error("OTP verification error:", error);
     res.status(500).json({
       success: false,
       message: "Server error during verification",
@@ -211,7 +212,7 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
       message: "New verification code sent to your email",
     });
   } catch (error) {
-    console.error("Resend OTP error:", error);
+    logger.error("Resend OTP error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to resend verification code",
@@ -309,7 +310,7 @@ router.post(
         },
       });
     } catch (error) {
-      console.error("Login error:", error);
+      logger.error("Login error:", error);
       res.status(500).json({
         success: false,
         message: "Server error during login",
@@ -351,7 +352,7 @@ router.post(
       try {
         await sendOTP(user.email, otpCode);
       } catch (emailError) {
-        console.error("Forgot password email failed");
+        logger.error("Forgot password email failed");
       }
 
       res.json({
@@ -361,7 +362,7 @@ router.post(
         userId: user._id,
       });
     } catch (error) {
-      console.error("Forgot password error");
+      logger.error("Forgot password error");
       res.status(500).json({ success: false, message: "Server error" });
     }
   },
@@ -392,7 +393,7 @@ router.post(
       });
 
       if (!user) {
-        console.log("[RESET_PASSWORD] User not found for provided email.");
+        logger.log("[RESET_PASSWORD] User not found for provided email.");
         return res.status(400).json({
           success: false,
           message: "Invalid verification code",
@@ -429,7 +430,7 @@ router.post(
         message: "Password reset successful",
       });
     } catch (error) {
-      console.error("Reset password error:", error);
+      logger.error("Reset password error:", error);
       res.status(500).json({
         success: false,
         message: "Server error",
@@ -540,7 +541,7 @@ router.post("/appeal", async (req, res) => {
       message: "Appeal submitted successfully. Admins will review it soon.",
     });
   } catch (error) {
-    console.error("Appeal submission error:", error);
+    logger.error("Appeal submission error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",
