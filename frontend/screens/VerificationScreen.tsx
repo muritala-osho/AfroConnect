@@ -318,17 +318,17 @@ export default function VerificationScreen() {
     const rightEye = typeof face?.rightEyeOpenProbability === 'number' ? face.rightEyeOpenProbability : 1;
 
     if (currentStep === 0) {
-      if (leftEye > 0.65 && rightEye > 0.65) blinkOpenSeenRef.current = true;
-      if (blinkOpenSeenRef.current && leftEye < 0.35 && rightEye < 0.35) {
+      if (leftEye > 0.55 && rightEye > 0.55) blinkOpenSeenRef.current = true;
+      if (blinkOpenSeenRef.current && leftEye < 0.45 && rightEye < 0.45) {
         advanceStep(0);
       } else {
-        setFaceStatus(blinkOpenSeenRef.current ? 'Blink now' : 'Eyes open — ready to blink');
+        setFaceStatus(blinkOpenSeenRef.current ? 'Blink now!' : 'Eyes open — ready to blink');
       }
       return;
     }
 
     if (currentStep === 1) {
-      if (Math.abs(yaw) > 15) {
+      if (Math.abs(yaw) > 12) {
         leftTurnDirectionRef.current = Math.sign(yaw) || -1;
         advanceStep(1);
       } else {
@@ -339,7 +339,7 @@ export default function VerificationScreen() {
 
     if (currentStep === 2) {
       const leftDirection = leftTurnDirectionRef.current;
-      const turnedOpposite = leftDirection === null ? Math.abs(yaw) > 15 : Math.sign(yaw) === -leftDirection && Math.abs(yaw) > 15;
+      const turnedOpposite = leftDirection === null ? Math.abs(yaw) > 12 : Math.sign(yaw) === -leftDirection && Math.abs(yaw) > 12;
       if (turnedOpposite) {
         advanceStep(2);
       } else {
@@ -384,7 +384,7 @@ export default function VerificationScreen() {
   useEffect(() => {
     if (screen !== 'camera' || !permission?.granted || !cameraReady) return;
     startRecording();
-    const interval = setInterval(detectFrame, 700);
+    const interval = setInterval(detectFrame, 350);
     return () => clearInterval(interval);
   }, [screen, permission?.granted, cameraReady, startRecording, detectFrame]);
 
