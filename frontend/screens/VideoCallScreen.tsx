@@ -26,18 +26,41 @@ import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
 
-import {
-  createAgoraRtcEngine,
-  IRtcEngine,
-  RtcSurfaceView,
-  VideoSourceType,
-  ChannelProfileType,
-  ClientRoleType,
-  VideoMirrorModeType,
-  RenderModeType,
-  OrientationMode,
-  DegradationPreference,
-} from "react-native-agora";
+import Constants from "expo-constants";
+
+/* react-native-agora is a native module — not available in Expo Go.
+   We lazy-require it so the screen loads normally in Expo Go (no crash),
+   and native rendering is used automatically in real dev/production builds. */
+let createAgoraRtcEngine: any = null;
+let RtcSurfaceView: any       = null;
+let VideoSourceType: any      = {};
+let ChannelProfileType: any   = {};
+let ClientRoleType: any       = {};
+let VideoMirrorModeType: any  = {};
+let RenderModeType: any       = {};
+let OrientationMode: any      = {};
+let DegradationPreference: any = {};
+
+const isExpoGo =
+  Constants.executionEnvironment === "storeClient" ||
+  Constants.appOwnership === "expo";
+
+if (!isExpoGo && Platform.OS !== "web") {
+  try {
+    const agora = require("react-native-agora");
+    createAgoraRtcEngine = agora.createAgoraRtcEngine;
+    RtcSurfaceView       = agora.RtcSurfaceView;
+    VideoSourceType      = agora.VideoSourceType;
+    ChannelProfileType   = agora.ChannelProfileType;
+    ClientRoleType       = agora.ClientRoleType;
+    VideoMirrorModeType  = agora.VideoMirrorModeType;
+    RenderModeType       = agora.RenderModeType;
+    OrientationMode      = agora.OrientationMode;
+    DegradationPreference = agora.DegradationPreference;
+  } catch (e) {
+    console.log("[VideoCall] Native Agora not available — using fallback");
+  }
+}
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
@@ -173,7 +196,7 @@ export default function VideoCallScreen() {
   const ringtoneRef       = useRef<Audio.Sound | null>(null);
   const shouldRingRef     = useRef(false);
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const engineRef         = useRef<IRtcEngine | null>(null);
+  const engineRef         = useRef<any>(null);
   const agoraJoined       = useRef(false);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
@@ -267,7 +290,7 @@ export default function VideoCallScreen() {
 
   /* ── Init native Agora engine ── */
   const initEngine = useCallback((callDataObj: any) => {
-    if (engineRef.current || Platform.OS === "web") return;
+    if (engineRef.current || Platform.OS === "web" || isExpoGo || !createAgoraRtcEngine) return;
     try {
       const engine = createAgoraRtcEngine();
       engineRef.current = engine;
@@ -290,12 +313,12 @@ export default function VideoCallScreen() {
         mirrorMode:           VideoMirrorModeType.VideoMirrorModeEnabled,
       });
 
-      engine.addListener("onUserJoined", (_conn, uid) => {
+      engine.addListener("onUserJoined", (_conn: any, uid: any) => {
         setRemoteUid(uid);
         setHasRemoteVideo(true);
       });
 
-      engine.addListener("onUserOffline", (_conn, _uid, _reason) => {
+      engine.addListener("onUserOffline", (_conn: any, _uid: any, _reason: any) => {
         setRemoteUid(null);
         setHasRemoteVideo(false);
         if (callStatusRef.current === "connected") {
@@ -303,11 +326,11 @@ export default function VideoCallScreen() {
         }
       });
 
-      engine.addListener("onNetworkQuality", (_conn, uid, txQ, rxQ) => {
+      engine.addListener("onNetworkQuality", (_conn: any, uid: any, txQ: any, rxQ: any) => {
         if (uid === 0) setNetworkQuality(Math.max(txQ, rxQ));
       });
 
-      engine.addListener("onRemoteVideoStateChanged", (_conn, _uid, state) => {
+      engine.addListener("onRemoteVideoStateChanged", (_conn: any, _uid: any, state: any) => {
         setHasRemoteVideo(state === 2);
       });
 
@@ -333,8 +356,8 @@ export default function VideoCallScreen() {
       if (agoraJoined.current) return;
       agoraJoined.current = true;
 
-      if (Platform.OS === "web") {
-        agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, callDataObj.token, callDataObj.uid || 0);
+      if (Platform.OS === "web" || isExpoGo || !createAgoraRtcEngine) {
+        if (Platform.OS === "web") agoraService.joinVideoCall(callDataObj.appId, callDataObj.channelName, callDataObj.token, callDataObj.uid || 0);
         return;
       }
 
@@ -386,7 +409,7 @@ export default function VideoCallScreen() {
 
     if (Platform.OS === "web") {
       agoraService.leave();
-    } else {
+    } else if (!isExpoGo) {
       try { engineRef.current?.leaveChannel(); } catch {}
     }
 
@@ -463,7 +486,7 @@ export default function VideoCallScreen() {
     setIsMuted((prev) => {
       const next = !prev;
       if (Platform.OS === "web") agoraService.toggleMute(next);
-      else engineRef.current?.muteLocalAudioStream(next);
+      else if (!isExpoGo) engineRef.current?.muteLocalAudioStream(next);
       return next;
     });
     showControls();
@@ -475,7 +498,7 @@ export default function VideoCallScreen() {
     setIsCameraOff((prev) => {
       const next = !prev;
       if (Platform.OS === "web") agoraService.toggleCamera(next);
-      else engineRef.current?.muteLocalVideoStream(next);
+      else if (!isExpoGo) engineRef.current?.muteLocalVideoStream(next);
       return next;
     });
     showControls();
@@ -485,7 +508,7 @@ export default function VideoCallScreen() {
   const flipCamera = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (Platform.OS === "web") agoraService.switchCamera();
-    else engineRef.current?.switchCamera();
+    else if (!isExpoGo) engineRef.current?.switchCamera();
     showControls();
   }, [showControls]);
 
@@ -502,7 +525,7 @@ export default function VideoCallScreen() {
         playThroughEarpieceAndroid: !next,
       });
     } catch {}
-    if (Platform.OS !== "web") engineRef.current?.setEnableSpeakerphone(next);
+    if (Platform.OS !== "web" && !isExpoGo) engineRef.current?.setEnableSpeakerphone(next);
     showControls();
   }, [isSpeakerOn, showControls]);
 
@@ -550,7 +573,7 @@ export default function VideoCallScreen() {
 
   /* ── Release engine on unmount ── */
   const releaseEngine = useCallback(() => {
-    if (!engineRef.current || Platform.OS === "web") return;
+    if (!engineRef.current || Platform.OS === "web" || isExpoGo) return;
     try {
       engineRef.current.removeAllListeners();
       engineRef.current.leaveChannel();
@@ -626,7 +649,7 @@ export default function VideoCallScreen() {
     socketService.onCallEnded(async () => {
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
-      else { try { engineRef.current?.leaveChannel(); } catch {} }
+      else if (!isExpoGo) { try { engineRef.current?.leaveChannel(); } catch {} }
       setStatus("ended");
       stopGlobalTimer();
       clearCall();
@@ -712,7 +735,8 @@ export default function VideoCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
-  const showVideo    = (isConnected || (!isIncoming && (callStatus === "connecting" || callStatus === "ringing"))) && Platform.OS !== "web";
+  const nativeVideo  = Platform.OS !== "web" && !isExpoGo && !!createAgoraRtcEngine;
+  const showVideo    = (isConnected || (!isIncoming && (callStatus === "connecting" || callStatus === "ringing"))) && nativeVideo;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -758,8 +782,8 @@ export default function VideoCallScreen() {
         </>
       )}
 
-      {/* ── NATIVE VIDEO VIEWS (iOS / Android) ── */}
-      {Platform.OS !== "web" && engineReady && (
+      {/* ── NATIVE VIDEO VIEWS (iOS / Android, not Expo Go) ── */}
+      {nativeVideo && engineReady && RtcSurfaceView && (
 
         <>
           {/* Remote video — full-screen, shown when connected and remote joined */}
