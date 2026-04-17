@@ -13,9 +13,20 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
+const VIDEO_UPLOAD_DIR = path.join(__dirname, '..', 'public', 'verification-videos');
+
 const uploadVideo = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 80 * 1024 * 1024 },
+  storage: multer.diskStorage({
+    destination: async (req, file, cb) => {
+      await fs.promises.mkdir(VIDEO_UPLOAD_DIR, { recursive: true });
+      cb(null, VIDEO_UPLOAD_DIR);
+    },
+    filename: (req, file, cb) => {
+      const ext = file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
+      cb(null, `${req.user?._id || 'unknown'}-${Date.now()}.${ext}`);
+    },
+  }),
+  limits: { fileSize: 300 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file.mimetype?.startsWith('video/')) {
       return cb(new Error('Video file required'));
@@ -31,18 +42,9 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
-const storeVerificationVideoLocally = async (file, userId) => {
-  const uploadDir = path.join(__dirname, '..', 'public', 'verification-videos');
-  await fs.promises.mkdir(uploadDir, { recursive: true });
-  const ext = file.mimetype === 'video/quicktime' ? 'mov' : 'mp4';
-  const fileName = `${userId}-${Date.now()}.${ext}`;
-  const filePath = path.join(uploadDir, fileName);
-  await fs.promises.writeFile(filePath, file.buffer);
-  return `/public/verification-videos/${fileName}`;
-};
-
 // ─── POST /upload-verification-video ────────────────────────────────────────
 const handleVerificationVideoUpload = async (req, res) => {
+  const tempPath = req.file?.path || null;
   try {
     const requestedUserId     = req.body.userId;
     const authenticatedUserId = req.user._id.toString();
@@ -68,22 +70,28 @@ const handleVerificationVideoUpload = async (req, res) => {
     if (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET) {
       try {
         const uploaded = await new Promise((resolve, reject) => {
+          const readStream = fs.createReadStream(tempPath);
           const stream = cloudinary.uploader.upload_stream(
             { folder: 'afroconnect_verifications/videos', resource_type: 'video' },
             (error, result) => (error ? reject(error) : resolve(result))
           );
-          stream.end(req.file.buffer);
+          readStream.pipe(stream);
         });
         videoUrl = uploaded.secure_url;
         publicId = uploaded.public_id;
         storage  = 'cloudinary';
+        // Remove temp file after successful Cloudinary upload
+        fs.unlink(tempPath, () => {});
       } catch (cloudError) {
         console.error('[upload-verification-video] Cloudinary upload failed:', cloudError.message);
       }
     }
 
     if (!videoUrl) {
-      videoUrl = await storeVerificationVideoLocally(req.file, userId);
+      // Keep the file on disk — serve it locally
+      const fileName = path.basename(tempPath);
+      videoUrl = `/public/verification-videos/${fileName}`;
+      storage  = 'local';
     }
 
     user.verificationStatus           = 'pending';
@@ -101,11 +109,27 @@ const handleVerificationVideoUpload = async (req, res) => {
     });
   } catch (error) {
     console.error('[upload-verification-video] Error:', error.message);
+    if (tempPath) fs.unlink(tempPath, () => {});
     return res.status(500).json({ success: false, message: 'Verification video upload failed' });
   }
 };
 
-router.post('/upload-verification-video', protect, uploadVideo.single('video'), handleVerificationVideoUpload);
+const handleMulterError = (err, req, res, next) => {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ success: false, message: 'Video file is too large. Maximum size is 300 MB.' });
+  }
+  if (err) {
+    return res.status(400).json({ success: false, message: err.message || 'Upload error' });
+  }
+  next();
+};
+
+router.post(
+  '/upload-verification-video',
+  protect,
+  (req, res, next) => uploadVideo.single('video')(req, res, (err) => handleMulterError(err, req, res, next)),
+  handleVerificationVideoUpload
+);
 
 // ─── GET /status ─────────────────────────────────────────────────────────────
 router.get('/status', protect, async (req, res) => {
