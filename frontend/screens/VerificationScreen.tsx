@@ -123,26 +123,28 @@ export default function VerificationScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [detecting, setDetecting] = useState(false);
   const [faceStatus, setFaceStatus] = useState('Position your face in the oval');
   const [landmarkMetrics, setLandmarkMetrics] = useState<LandmarkMetrics>(INITIAL_METRICS);
   const [result, setResult] = useState<VerificationResult | null>(null);
+  const [faceDetected, setFaceDetected] = useState(false);
 
-  const cameraRef           = useRef<any>(null);
-  const recordingPromiseRef = useRef<Promise<{ uri: string }> | null>(null);
-  const recordingStartedAtRef = useRef(0);
-  const uploadStartedRef    = useRef(false);
-  const detectionBusyRef    = useRef(false);
-  const blinkOpenSeenRef    = useRef(false);
-  const leftTurnDirectionRef = useRef<number | null>(null);
-  const stepRef             = useRef(0);
-  const pulseAnim           = useRef(new Animated.Value(1)).current;
-  const fadeAnim            = useRef(new Animated.Value(0)).current;
-  const slideAnim           = useRef(new Animated.Value(24)).current;
-  const scanAnim            = useRef(new Animated.Value(0)).current;
+  const cameraRef              = useRef<any>(null);
+  const recordingPromiseRef    = useRef<Promise<{ uri: string }> | null>(null);
+  const recordingStartedAtRef  = useRef(0);
+  const uploadStartedRef       = useRef(false);
+  const blinkOpenSeenRef       = useRef(false);
+  const leftTurnDirectionRef   = useRef<number | null>(null);
+  const stepRef                = useRef(0);
+  const screenRef              = useRef<string>('intro');
+  const advanceGuardRef        = useRef(false);
+  const pulseAnim              = useRef(new Animated.Value(1)).current;
+  const fadeAnim               = useRef(new Animated.Value(0)).current;
+  const slideAnim              = useRef(new Animated.Value(24)).current;
+  const scanAnim               = useRef(new Animated.Value(0)).current;
 
   useEffect(() => { if (!permission) requestPermission(); }, [permission, requestPermission]);
   useEffect(() => { stepRef.current = verificationStep; }, [verificationStep]);
+  useEffect(() => { screenRef.current = screen; }, [screen]);
 
   useEffect(() => {
     fadeAnim.setValue(0);
@@ -195,7 +197,6 @@ export default function VerificationScreen() {
     } finally {
       setScreen('result');
       setRecording(false);
-      setDetecting(false);
     }
   }, [token, user?.id]);
 
@@ -225,11 +226,14 @@ export default function VerificationScreen() {
   }, [uploadVerificationVideo]);
 
   const advanceStep = useCallback((detectedStep: number) => {
-    if (stepRef.current !== detectedStep || detectedStep >= 3) return;
+    if (stepRef.current !== detectedStep || detectedStep >= 3 || advanceGuardRef.current) return;
+    advanceGuardRef.current = true;
+    console.log(`[Liveness] Step ${detectedStep} COMPLETED ✓`);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const next = detectedStep + 1;
     stepRef.current = next;
     setVerificationStep(next);
+    setTimeout(() => { advanceGuardRef.current = false; }, 800);
     if (next >= 3) stopRecordingAndUpload();
   }, [stopRecordingAndUpload]);
 
@@ -239,93 +243,13 @@ export default function VerificationScreen() {
     recordingStartedAtRef.current = Date.now();
     recordingPromiseRef.current = cameraRef.current.recordAsync();
     recordingPromiseRef.current?.catch(() => null);
+    console.log('[Liveness] Recording started');
   }, []);
-
-  const getLandmarkMetrics = useCallback((face: any, frame: any): LandmarkMetrics => {
-    const fW = frame?.width  || SW;
-    const fH = frame?.height || SW * 1.3;
-    const centerX   = ((face?.bounds?.origin?.x || 0) + (face?.bounds?.size?.width  || 0) / 2) / fW;
-    const centerY   = ((face?.bounds?.origin?.y || 0) + (face?.bounds?.size?.height || 0) / 2) / fH;
-    const widthRatio = (face?.bounds?.size?.width || 0) / fW;
-    const centered  = centerX > 0.28 && centerX < 0.72 && centerY > 0.22 && centerY < 0.78;
-    const distance  = widthRatio < 0.22 ? 'tooFar' : widthRatio > 0.72 ? 'tooClose' : 'good';
-    const landmarksReady = Boolean(face?.leftEyePosition && face?.rightEyePosition && (face?.noseBasePosition || face?.mouthPosition));
-    const yaw      = Number(face?.yawAngle ?? 0);
-    const leftEye  = typeof face?.leftEyeOpenProbability  === 'number' ? face.leftEyeOpenProbability  : 1;
-    const rightEye = typeof face?.rightEyeOpenProbability === 'number' ? face.rightEyeOpenProbability : 1;
-    const eyeScore = Math.min(leftEye, rightEye);
-    let prompt = 'Face locked. Follow the prompt.';
-    if (!centered)            prompt = 'Center your face inside the oval';
-    else if (distance === 'tooFar')   prompt = 'Move a little closer';
-    else if (distance === 'tooClose') prompt = 'Move slightly back';
-    else if (!landmarksReady) prompt = 'Hold still while landmarks lock';
-    return { centered, landmarksReady, distance, yaw, eyeScore, prompt };
-  }, []);
-
-  const analyzeDetectedFace = useCallback((face: any, frame: any) => {
-    const currentStep = stepRef.current;
-    const metrics = getLandmarkMetrics(face, frame);
-    setLandmarkMetrics(metrics);
-    if (!metrics.centered || metrics.distance !== 'good' || !metrics.landmarksReady) {
-      setFaceStatus(metrics.prompt);
-      return;
-    }
-    const yaw      = metrics.yaw;
-    const leftEye  = typeof face?.leftEyeOpenProbability  === 'number' ? face.leftEyeOpenProbability  : 1;
-    const rightEye = typeof face?.rightEyeOpenProbability === 'number' ? face.rightEyeOpenProbability : 1;
-
-    if (currentStep === 0) {
-      if (leftEye > 0.55 && rightEye > 0.55) blinkOpenSeenRef.current = true;
-      if (blinkOpenSeenRef.current && leftEye < 0.45 && rightEye < 0.45) { advanceStep(0); }
-      else setFaceStatus(blinkOpenSeenRef.current ? 'Blink now!' : 'Eyes open — ready to blink');
-      return;
-    }
-    if (currentStep === 1) {
-      if (Math.abs(yaw) > 12) { leftTurnDirectionRef.current = Math.sign(yaw) || -1; advanceStep(1); }
-      else setFaceStatus('Turn your head left slowly');
-      return;
-    }
-    if (currentStep === 2) {
-      const leftDir     = leftTurnDirectionRef.current;
-      const turnedOpposite = leftDir === null ? Math.abs(yaw) > 12 : Math.sign(yaw) === -leftDir && Math.abs(yaw) > 12;
-      if (turnedOpposite) advanceStep(2);
-      else setFaceStatus('Turn your head right slowly');
-    }
-  }, [advanceStep, getLandmarkMetrics]);
-
-  const detectFrame = useCallback(async () => {
-    if (detectionBusyRef.current || !cameraRef.current || screen !== 'camera') return;
-    detectionBusyRef.current = true;
-    setDetecting(true);
-    try {
-      const frame = await (cameraRef.current as any).takePictureAsync?.({
-        quality: 0.15, base64: false, skipProcessing: true, exif: false,
-      });
-      if (!frame) return;
-      const FaceDetector = (await import('expo-face-detector')).default;
-      const { faces } = await FaceDetector.detectFacesAsync(frame.uri, {
-        mode: FaceDetector.FaceDetectorMode.fast,
-        detectLandmarks: FaceDetector.FaceDetectorLandmarks.all,
-        runClassifications: FaceDetector.FaceDetectorClassifications.all,
-        minDetectionInterval: 0,
-        tracking: false,
-      });
-      if (faces.length > 0) analyzeDetectedFace(faces[0], frame);
-      else setFaceStatus('No face detected — look at the camera');
-    } catch {
-      setFaceStatus('Position your face in the oval');
-    } finally {
-      detectionBusyRef.current = false;
-      setDetecting(false);
-    }
-  }, [analyzeDetectedFace, screen]);
 
   useEffect(() => {
     if (screen !== 'camera' || !permission?.granted || !cameraReady) return;
     startRecording();
-    const interval = setInterval(detectFrame, 350);
-    return () => clearInterval(interval);
-  }, [screen, permission?.granted, cameraReady, startRecording, detectFrame]);
+  }, [screen, permission?.granted, cameraReady, startRecording]);
 
   useEffect(() => {
     return () => {
@@ -335,16 +259,124 @@ export default function VerificationScreen() {
     };
   }, []);
 
+  const onFacesDetected = useCallback(({ faces }: { faces: any[] }) => {
+    if (screenRef.current !== 'camera') return;
+
+    if (!faces || faces.length === 0) {
+      setFaceDetected(false);
+      setFaceStatus('No face detected — look at the camera');
+      console.log('[Liveness] No face detected');
+      return;
+    }
+
+    const face = faces[0];
+    const currentStep = stepRef.current;
+    if (currentStep >= 3) return;
+
+    console.log('[Liveness] Face detected — landmarks count: face data present');
+
+    const fW = SW;
+    const fH = SW * 1.4;
+    const centerX   = ((face?.bounds?.origin?.x || 0) + (face?.bounds?.size?.width  || 0) / 2) / fW;
+    const centerY   = ((face?.bounds?.origin?.y || 0) + (face?.bounds?.size?.height || 0) / 2) / fH;
+    const widthRatio = (face?.bounds?.size?.width || 0) / fW;
+
+    const centered  = centerX > 0.25 && centerX < 0.75 && centerY > 0.15 && centerY < 0.85;
+    const distance  = widthRatio < 0.18 ? 'tooFar' : widthRatio > 0.78 ? 'tooClose' : 'good';
+
+    const hasEyeProbs = typeof face?.leftEyeOpenProbability === 'number' &&
+                        typeof face?.rightEyeOpenProbability === 'number';
+    const hasYaw      = typeof face?.yawAngle === 'number';
+    const landmarksReady = hasEyeProbs || hasYaw;
+
+    const yaw      = hasYaw ? Number(face.yawAngle) : 0;
+    const leftEye  = hasEyeProbs ? face.leftEyeOpenProbability  : 1;
+    const rightEye = hasEyeProbs ? face.rightEyeOpenProbability : 1;
+    const eyeScore = Math.min(leftEye, rightEye);
+
+    console.log(`[Liveness] step=${currentStep} centered=${centered} dist=${distance} hasEyeProbs=${hasEyeProbs} hasYaw=${hasYaw} yaw=${yaw.toFixed(1)} leftEye=${leftEye.toFixed(2)} rightEye=${rightEye.toFixed(2)}`);
+
+    setFaceDetected(true);
+    setLandmarkMetrics({ centered, landmarksReady, distance, yaw, eyeScore, prompt: 'Face locked. Follow the prompt.' });
+
+    if (!centered) {
+      setFaceStatus('Center your face inside the oval');
+      return;
+    }
+    if (distance === 'tooFar') {
+      setFaceStatus('Move a little closer');
+      return;
+    }
+    if (distance === 'tooClose') {
+      setFaceStatus('Move slightly back');
+      return;
+    }
+
+    if (currentStep === 0) {
+      if (!hasEyeProbs) {
+        setFaceStatus('Hold still — detecting eye movement…');
+        return;
+      }
+      if (leftEye > 0.5 && rightEye > 0.5) {
+        blinkOpenSeenRef.current = true;
+      }
+      if (blinkOpenSeenRef.current && leftEye < 0.35 && rightEye < 0.35) {
+        console.log(`[Liveness] BLINK detected! leftEye=${leftEye.toFixed(2)} rightEye=${rightEye.toFixed(2)}`);
+        advanceStep(0);
+      } else {
+        setFaceStatus(blinkOpenSeenRef.current ? 'Blink now!' : 'Eyes open — ready to blink');
+      }
+      return;
+    }
+
+    if (currentStep === 1) {
+      if (!hasYaw) {
+        setFaceStatus('Hold still — detecting head position…');
+        return;
+      }
+      console.log(`[Liveness] Head turn step 1 — yaw=${yaw.toFixed(1)}`);
+      if (Math.abs(yaw) > 15) {
+        leftTurnDirectionRef.current = Math.sign(yaw) || -1;
+        console.log(`[Liveness] HEAD TURN LEFT detected! yaw=${yaw.toFixed(1)}`);
+        advanceStep(1);
+      } else {
+        setFaceStatus('Turn your head left slowly');
+      }
+      return;
+    }
+
+    if (currentStep === 2) {
+      if (!hasYaw) {
+        setFaceStatus('Hold still — detecting head position…');
+        return;
+      }
+      const leftDir        = leftTurnDirectionRef.current;
+      const turnedOpposite = leftDir === null
+        ? Math.abs(yaw) > 15
+        : Math.sign(yaw) === -leftDir && Math.abs(yaw) > 15;
+
+      console.log(`[Liveness] Head turn step 2 — yaw=${yaw.toFixed(1)} leftDir=${leftDir} turnedOpposite=${turnedOpposite}`);
+      if (turnedOpposite) {
+        console.log(`[Liveness] HEAD TURN RIGHT detected! yaw=${yaw.toFixed(1)}`);
+        advanceStep(2);
+      } else {
+        setFaceStatus('Turn your head right slowly');
+      }
+    }
+  }, [advanceStep]);
+
   const restart = () => {
     blinkOpenSeenRef.current        = false;
     leftTurnDirectionRef.current    = null;
     stepRef.current                 = 0;
     uploadStartedRef.current        = false;
+    advanceGuardRef.current         = false;
     recordingPromiseRef.current     = null;
     setVerificationStep(0);
     setResult(null);
     setScreen('camera');
     setRecording(false);
+    setFaceDetected(false);
     setFaceStatus('Position your face in the oval');
     setLandmarkMetrics(INITIAL_METRICS);
   };
@@ -459,7 +491,7 @@ export default function VerificationScreen() {
   // ─── CAMERA ───────────────────────────────────────────────────────────────
   if (screen === 'camera') {
     const activeStep = VERIFICATION_STEPS[Math.min(verificationStep, 2)];
-    const ovalColor  = verificationStep === 3 ? '#10B981' : '#10B981';
+    const ovalColor  = '#10B981';
 
     return (
       <View style={styles.cameraFull}>
@@ -469,7 +501,18 @@ export default function VerificationScreen() {
           facing="front"
           mode="video"
           mute
-          onCameraReady={() => setCameraReady(true)}
+          onCameraReady={() => {
+            console.log('[Liveness] Camera ready');
+            setCameraReady(true);
+          }}
+          onFacesDetected={onFacesDetected}
+          faceDetectorSettings={{
+            mode: 'fast',
+            detectLandmarks: 'all',
+            runClassifications: 'all',
+            minDetectionInterval: 100,
+            tracking: true,
+          }}
         />
 
         {/* Top bar */}
@@ -488,11 +531,11 @@ export default function VerificationScreen() {
 
         {/* Face oval */}
         <View style={styles.ovalWrapper} pointerEvents="none">
-          <View style={[styles.faceOval, { borderColor: ovalColor + 'CC' }]}>
-            <Corner top={-2}  left={-2}  color={ovalColor} />
-            <Corner top={-2}  right={-2} color={ovalColor} />
-            <Corner bottom={-2} left={-2} color={ovalColor} />
-            <Corner bottom={-2} right={-2} color={ovalColor} />
+          <View style={[styles.faceOval, { borderColor: (faceDetected ? '#10B981' : '#ffffff80') + 'CC' }]}>
+            <Corner top={-2}  left={-2}  color={faceDetected ? ovalColor : '#ffffff80'} />
+            <Corner top={-2}  right={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
+            <Corner bottom={-2} left={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
+            <Corner bottom={-2} right={-2} color={faceDetected ? ovalColor : '#ffffff80'} />
           </View>
           <View style={styles.statusPillWrap}>
             <ThemedText style={styles.statusPillText}>{faceStatus}</ThemedText>
@@ -537,15 +580,15 @@ export default function VerificationScreen() {
                   <View style={[styles.signalPill, landmarkMetrics.landmarksReady && styles.signalOn]}>
                     <ThemedText style={styles.signalText}>Landmarks</ThemedText>
                   </View>
+                  <View style={[styles.signalPill, faceDetected && styles.signalOn]}>
+                    <ThemedText style={styles.signalText}>Face</ThemedText>
+                  </View>
                   <View style={[styles.signalPill, recording && styles.signalRec]}>
                     <ThemedText style={styles.signalText}>Live</ThemedText>
                   </View>
                 </View>
               </View>
-              {detecting
-                ? <ActivityIndicator color="#10B981" size="small" />
-                : <Ionicons name="scan" size={22} color="#10B981" />
-              }
+              <Ionicons name="scan" size={22} color="#10B981" />
             </View>
           </View>
         </View>
