@@ -141,7 +141,7 @@ export default function VerificationScreen() {
   const navigation = useNavigation<any>();
   const { token, user } = useAuth();
 
-  const [screen, setScreen] = useState<'camera' | 'analyzing' | 'result'>('camera');
+  const [screen, setScreen] = useState<'intro' | 'camera' | 'analyzing' | 'result'>('intro');
   const [verificationStep, setVerificationStep] = useState(0);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraReady, setCameraReady] = useState(false);
@@ -410,17 +410,97 @@ export default function VerificationScreen() {
     setLandmarkMetrics(INITIAL_METRICS);
   };
 
-  if (!permission?.granted) {
+  if (screen === 'intro') {
+    const steps = [
+      { icon: 'eye-outline' as const, label: 'Blink your eyes', desc: 'Look at the camera and blink once naturally' },
+      { icon: 'arrow-back-circle-outline' as const, label: 'Turn head left', desc: 'Slowly turn your head to the left' },
+      { icon: 'arrow-forward-circle-outline' as const, label: 'Turn head right', desc: 'Then slowly turn your head to the right' },
+    ];
     return (
-      <View style={[styles.container, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 }]}> 
-        <Ionicons name="camera-outline" size={60} color={theme.textSecondary} />
-        <ThemedText style={[styles.heroTitle, { color: theme.text, fontSize: 20 }]}>Camera Permission Required</ThemedText>
-        <ThemedText style={[styles.heroSub, { color: theme.textSecondary }]}>Camera access is needed to complete face verification.</ThemedText>
-        <Pressable style={[styles.primaryBtn, { width: '100%' }]} onPress={requestPermission}>
-          <LinearGradient colors={[theme.primary, theme.primary + 'CC']} style={styles.primaryBtnGrad}>
-            <ThemedText style={styles.primaryBtnText}>Grant Camera Access</ThemedText>
-          </LinearGradient>
-        </Pressable>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <LinearGradient colors={['#6366f115', 'transparent']} style={StyleSheet.absoluteFill} />
+        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+          <Pressable style={[styles.introBackBtn, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={20} color={theme.text} />
+          </Pressable>
+          <ThemedText style={[styles.topBarTitle, { color: theme.text }]}>Verification</ThemedText>
+          <View style={{ width: 38 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], alignItems: 'center' }}>
+
+            <View style={styles.introBadgeWrap}>
+              <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.introBadge}>
+                <Ionicons name="shield-checkmark" size={52} color="#FFF" />
+              </LinearGradient>
+              <View style={styles.introBadgeRing} />
+            </View>
+
+            <ThemedText style={[styles.heroTitle, { color: theme.text, marginTop: 20 }]}>Face Verification</ThemedText>
+            <ThemedText style={[styles.heroSub, { color: theme.textSecondary, marginBottom: 28 }]}>
+              Verify your identity to earn the{' '}
+              <ThemedText style={{ color: '#6366f1', fontWeight: '800' }}>AfroConnect verified badge</ThemedText>
+              {' '}and build trust with other members.
+            </ThemedText>
+
+            <View style={[styles.introCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <ThemedText style={[styles.tipsTitle, { color: theme.text, marginBottom: 16 }]}>What you will do</ThemedText>
+              {steps.map((s, i) => (
+                <View key={s.label} style={styles.introStepRow}>
+                  <View style={styles.introStepNum}>
+                    <ThemedText style={styles.introStepNumText}>{i + 1}</ThemedText>
+                  </View>
+                  <View style={styles.introStepIcon}>
+                    <Ionicons name={s.icon} size={22} color="#6366f1" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.introStepLabel, { color: theme.text }]}>{s.label}</ThemedText>
+                    <ThemedText style={[styles.introStepDesc, { color: theme.textSecondary }]}>{s.desc}</ThemedText>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={[styles.introTipsCard, { backgroundColor: '#6366f108', borderColor: '#6366f130' }]}>
+              <Ionicons name="information-circle-outline" size={18} color="#6366f1" />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.introTipText, { color: theme.textSecondary }]}>
+                  Make sure you are in a{' '}
+                  <ThemedText style={{ fontWeight: '800', color: theme.text }}>well-lit area</ThemedText>
+                  {' '}and hold your phone at face level. The process takes about 15 seconds.
+                </ThemedText>
+              </View>
+            </View>
+
+            <View style={[styles.introTipsCard, { backgroundColor: '#10b98108', borderColor: '#10b98130' }]}>
+              <Ionicons name="lock-closed-outline" size={18} color="#10b981" />
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.introTipText, { color: theme.textSecondary }]}>
+                  Your video is submitted securely for{' '}
+                  <ThemedText style={{ fontWeight: '800', color: theme.text }}>admin review only</ThemedText>
+                  {' '}and is never shared publicly.
+                </ThemedText>
+              </View>
+            </View>
+
+            <Pressable
+              style={[styles.primaryBtn, { marginTop: 8 }]}
+              onPress={() => {
+                if (!permission?.granted) {
+                  requestPermission().then(res => { if (res.granted) setScreen('camera'); });
+                } else {
+                  setScreen('camera');
+                }
+              }}
+            >
+              <LinearGradient colors={['#6366f1', '#8b5cf6']} style={styles.primaryBtnGrad}>
+                <Ionicons name="videocam" size={20} color="#FFF" />
+                <ThemedText style={styles.primaryBtnText}>Start Verification</ThemedText>
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        </ScrollView>
       </View>
     );
   }
@@ -632,4 +712,17 @@ const styles = StyleSheet.create({
   primaryBtn: { width: '100%', borderRadius: 18, overflow: 'hidden' },
   primaryBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },
   primaryBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
+  introBadgeWrap: { marginTop: 12, alignItems: 'center', justifyContent: 'center' },
+  introBadge: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  introBadgeRing: { position: 'absolute', width: 128, height: 128, borderRadius: 64, borderWidth: 2, borderColor: '#6366f130', backgroundColor: '#6366f10A' },
+  introCard: { width: '100%', borderRadius: 20, padding: 18, borderWidth: 1, marginBottom: 14 },
+  introStepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  introStepNum: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#6366f1', alignItems: 'center', justifyContent: 'center' },
+  introStepNumText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+  introStepIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#6366f112', alignItems: 'center', justifyContent: 'center' },
+  introStepLabel: { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  introStepDesc: { fontSize: 12, lineHeight: 17 },
+  introTipsCard: { width: '100%', borderRadius: 14, padding: 14, borderWidth: 1, marginBottom: 12, flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  introTipText: { fontSize: 13, lineHeight: 19 },
+  introBackBtn: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
 });
