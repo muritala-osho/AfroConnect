@@ -748,9 +748,6 @@ router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// In-memory flagged content store (production: use a DB model)
-const flaggedContentStore = [];
-
 // @route   GET /api/admin/flagged-content
 // @desc    Get flagged images and stories for moderation
 // @access  Private/Admin
@@ -758,29 +755,35 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
-    // Gather from real data sources
-    const usersWithFlaggedPhotos = await User.find({ reportCount: { $gt: 0 } })
-      .select('name photos reportCount')
-      .limit(20);
+    const reports = await Report.find({ status: 'pending' })
+      .populate('reportedBy', 'name email photos')
+      .populate('reportedUser', 'name email photos')
+      .sort({ createdAt: -1 })
+      .limit(100);
 
-    const content = [];
+    const content = reports
+      .map(report => {
+        const reportedUser = report.reportedUser;
+        const reporter = report.reportedBy;
+        const photoIndex = reportedUser?.photos?.findIndex(photo => photo?.url) ?? -1;
+        const photo = photoIndex >= 0 ? reportedUser.photos[photoIndex] : null;
+        if (!reportedUser || !photo?.url) return null;
 
-    usersWithFlaggedPhotos.forEach(u => {
-      if (u.photos && u.photos.length > 0) {
-        content.push({
-          id: `ph-${u._id}`,
-          userId: u._id,
-          userName: u.name,
-          userAvatar: u.photos[0],
+        return {
+          id: `report-photo-${report._id}-${photoIndex}`,
+          reportId: report._id,
+          userId: reportedUser._id,
+          userName: reportedUser.name || 'Unknown user',
+          userAvatar: photo.url,
           type: 'profile_photo',
-          imageUrl: u.photos[0],
-          reason: `Reported ${u.reportCount} time(s)`,
-          flaggedAt: new Date().toISOString(),
+          imageUrl: photo.url,
+          reason: `${report.reason || 'Reported content'}${reporter?.name ? ` • reported by ${reporter.name}` : ''}`,
+          flaggedAt: report.createdAt || new Date(),
           status: 'pending',
-          aiConfidence: Math.min(90, u.reportCount * 15),
-        });
-      }
-    });
+          aiConfidence: 60,
+        };
+      })
+      .filter(Boolean);
 
     const filtered = status ? content.filter(c => c.status === status) : content;
 
@@ -802,14 +805,27 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
       return res.status(400).json({ success: false, message: 'Invalid action' });
     }
 
-    // If reject, remove the photo from user profile
-    if (action === 'reject' && req.params.contentId.startsWith('ph-')) {
-      const userId = req.params.contentId.replace('ph-', '');
-      const user = await User.findById(userId);
-      if (user && user.photos && user.photos.length > 0) {
-        user.photos = user.photos.slice(1); // Remove first flagged photo
-        await user.save();
+    if (req.params.contentId.startsWith('report-photo-')) {
+      const parts = req.params.contentId.replace('report-photo-', '').split('-');
+      const photoIndex = Number(parts.pop());
+      const reportId = parts.join('-');
+      const report = await Report.findById(reportId);
+      if (!report) {
+        return res.status(404).json({ success: false, message: 'Flagged report not found' });
       }
+
+      const user = await User.findById(report.reportedUser);
+      if (action === 'reject' && user && Number.isInteger(photoIndex) && user.photos?.[photoIndex]) {
+        user.photos.splice(photoIndex, 1);
+        await user.save();
+        await redis.del(`profile:me:${user._id}`);
+      }
+
+      report.status = 'resolved';
+      report.resolvedBy = req.user._id;
+      report.resolvedAt = Date.now();
+      report.adminNotes = action === 'approve' ? 'Content reviewed and kept' : 'Flagged content removed';
+      await report.save();
     }
 
     await logAudit(req, action === 'reject' ? 'REMOVE_CONTENT' : 'APPROVE_CONTENT', 'MODERATION',

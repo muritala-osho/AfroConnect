@@ -19,7 +19,7 @@ import {
 import { AdminRole, PushTemplate } from './types';
 
 export const NAV_ITEMS = [
-  { id: 'dashboard',    label: 'Dashboard',          icon: <LayoutDashboard size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
+  { id: 'dashboard',    label: 'Dashboard',          icon: <LayoutDashboard size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'users',        label: 'Citizens',            icon: <Users size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'verification', label: 'Verification Requests', icon: <UserCheck size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'reports',      label: 'Safety Hub',          icon: <ShieldAlert size={20} />,     roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },

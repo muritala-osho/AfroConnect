@@ -1,6 +1,9 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Admin support and moderation fixes**:
+  - `admin-dashboard/App.tsx` and `admin-dashboard/constants.tsx`: Support agents no longer land on the admin-only dashboard or user search; they are routed to "My Tickets" to avoid misleading backend/API errors after successful support login.
+  - `backend/routes/admin.js`: Content Moderation now builds moderation cards from real pending `Report` records with reported user profile photos. Approving resolves the report and keeps the content; rejecting removes the flagged photo, resolves the report, and clears the user's cached profile.
 - **Verification and appeal flow fixes**:
   - `frontend/screens/VerificationScreen.tsx`: Switched verification submission from selfie photo capture to front-camera video recording. Users must record for at least 5 seconds before reviewing and submitting the video to `/api/verification/upload-verification-video`; recordings stop at a 30-second maximum.
   - `frontend/screens/SettingsScreen.tsx`: Changed the verification row label from "Photo Verification" to "Video Verification" and replaced the rejected status label with "Try Again".

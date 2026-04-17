@@ -171,6 +171,18 @@ const App: React.FC = () => {
     return item.roles.includes(role);
   };
 
+  const getDefaultTabForRole = (role?: AdminRole): string => {
+    if (role === AdminRole.SUPPORT) return 'agent';
+    return 'dashboard';
+  };
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !auth.user?.role) return;
+    if (!canAccessTab(activeTab)) {
+      setActiveTab(getDefaultTabForRole(auth.user.role));
+    }
+  }, [auth.isAuthenticated, auth.user?.role, activeTab]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockoutRemaining > 0) return;
@@ -357,15 +369,17 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab('users')}
-                title="Search users (⌘K)"
-                className="hidden md:flex items-center gap-2.5 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-gray-400 dark:text-slate-500 hover:text-teal-500 hover:border-teal-500/30 transition-all text-xs font-medium"
-              >
-                <Search size={14} />
-                <span>Search</span>
-                <kbd className="ml-1 px-1.5 py-0.5 text-[9px] font-black bg-gray-100 dark:bg-slate-700 rounded-md tracking-widest">⌘K</kbd>
-              </button>
+              {canAccessTab('users') && (
+                <button
+                  onClick={() => setActiveTab('users')}
+                  title="Search users (⌘K)"
+                  className="hidden md:flex items-center gap-2.5 px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-gray-400 dark:text-slate-500 hover:text-teal-500 hover:border-teal-500/30 transition-all text-xs font-medium"
+                >
+                  <Search size={14} />
+                  <span>Search</span>
+                  <kbd className="ml-1 px-1.5 py-0.5 text-[9px] font-black bg-gray-100 dark:bg-slate-700 rounded-md tracking-widest">⌘K</kbd>
+                </button>
+              )}
 
               <NotificationCenter onNavigate={setActiveTab} />
 
@@ -428,7 +442,7 @@ const App: React.FC = () => {
                     currentRole={auth.user?.role}
                     requiredRoles={NAV_ITEMS.find(n => n.id === activeTab)?.roles}
                     section={NAV_ITEMS.find(n => n.id === activeTab)?.label}
-                    onBack={() => setActiveTab('dashboard')}
+                    onBack={() => setActiveTab(getDefaultTabForRole(auth.user?.role))}
                   />
                 )}
 
