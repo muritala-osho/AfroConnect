@@ -13,6 +13,8 @@ import * as Haptics from 'expo-haptics';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as FaceDetector from 'expo-face-detector';
 import * as FileSystem from 'expo-file-system';
+import LottieView from 'lottie-react-native';
+import Svg, { Circle, Path, Line } from 'react-native-svg';
 import { useAuth } from '@/hooks/useAuth';
 import { getApiBaseUrl } from '@/constants/config';
 
@@ -24,12 +26,77 @@ const VERIFICATION_STEPS = [
   { index: 2, key: 'right', emoji: '👉', title: 'Turn head right', hint: 'Now slowly turn your head to the right' },
 ];
 
+const PROMPT_LOTTIE = {
+  v: '5.7.4',
+  fr: 30,
+  ip: 0,
+  op: 60,
+  w: 180,
+  h: 180,
+  nm: 'AfroConnect verification prompt pulse',
+  ddd: 0,
+  assets: [],
+  layers: [
+    {
+      ddd: 0,
+      ind: 1,
+      ty: 4,
+      nm: 'premium-pulse',
+      sr: 1,
+      ks: {
+        o: { a: 1, k: [{ t: 0, s: [80] }, { t: 30, s: [38] }, { t: 60, s: [80] }] },
+        r: { a: 0, k: 0 },
+        p: { a: 0, k: [90, 90, 0] },
+        a: { a: 0, k: [0, 0, 0] },
+        s: { a: 1, k: [{ t: 0, s: [72, 72, 100] }, { t: 30, s: [104, 104, 100] }, { t: 60, s: [72, 72, 100] }] },
+      },
+      ao: 0,
+      shapes: [
+        {
+          ty: 'gr',
+          it: [
+            { d: 1, ty: 'el', s: { a: 0, k: [132, 132] }, p: { a: 0, k: [0, 0] }, nm: 'pulse-ring' },
+            { ty: 'st', c: { a: 0, k: [0.39, 0.4, 0.95, 1] }, o: { a: 0, k: 100 }, w: { a: 0, k: 7 }, lc: 2, lj: 2, ml: 4, nm: 'indigo-stroke' },
+            { ty: 'tr', p: { a: 0, k: [0, 0] }, a: { a: 0, k: [0, 0] }, s: { a: 0, k: [100, 100] }, r: { a: 0, k: 0 }, o: { a: 0, k: 100 }, sk: { a: 0, k: 0 }, sa: { a: 0, k: 0 }, nm: 'Transform' },
+          ],
+          nm: 'pulse-group',
+          np: 3,
+          cix: 2,
+          bm: 0,
+        },
+      ],
+      ip: 0,
+      op: 60,
+      st: 0,
+      bm: 0,
+    },
+  ],
+};
+
 interface VerificationResult {
   submitted: boolean;
   status: 'pending' | 'failed';
   videoUrl?: string;
   reason?: string;
 }
+
+interface LandmarkMetrics {
+  centered: boolean;
+  landmarksReady: boolean;
+  distance: 'tooFar' | 'good' | 'tooClose';
+  yaw: number;
+  eyeScore: number;
+  prompt: string;
+}
+
+const INITIAL_METRICS: LandmarkMetrics = {
+  centered: false,
+  landmarksReady: false,
+  distance: 'good',
+  yaw: 0,
+  eyeScore: 1,
+  prompt: 'Position your face in the oval',
+};
 
 function Corner({ top, bottom, left, right, color }: any) {
   return (
@@ -42,6 +109,29 @@ function Corner({ top, bottom, left, right, color }: any) {
       borderLeftWidth: left !== undefined ? 3 : 0,
       borderRightWidth: right !== undefined ? 3 : 0,
     }} />
+  );
+}
+
+function PromptIcon({ stepKey }: { stepKey: string }) {
+  const stroke = '#6366f1';
+  return (
+    <View style={styles.promptIcon}>
+      <LottieView source={PROMPT_LOTTIE as any} autoPlay loop style={StyleSheet.absoluteFill} />
+      <Svg width={78} height={78} viewBox="0 0 78 78">
+        <Circle cx={39} cy={39} r={24} fill="rgba(99,102,241,0.12)" stroke={stroke} strokeWidth={3} />
+        {stepKey === 'blink' ? (
+          <>
+            <Path d="M23 36 Q30 31 37 36" stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+            <Path d="M41 36 Q48 31 55 36" stroke={stroke} strokeWidth={4} fill="none" strokeLinecap="round" />
+            <Line x1={24} y1={47} x2={54} y2={47} stroke={stroke} strokeWidth={4} strokeLinecap="round" />
+          </>
+        ) : stepKey === 'left' ? (
+          <Path d="M48 25 L27 39 L48 53 M29 39 H57" stroke={stroke} strokeWidth={5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <Path d="M30 25 L51 39 L30 53 M21 39 H49" stroke={stroke} strokeWidth={5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+      </Svg>
+    </View>
   );
 }
 
@@ -58,6 +148,7 @@ export default function VerificationScreen() {
   const [recording, setRecording] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [faceStatus, setFaceStatus] = useState('Position your face in the oval');
+  const [landmarkMetrics, setLandmarkMetrics] = useState<LandmarkMetrics>(INITIAL_METRICS);
   const [result, setResult] = useState<VerificationResult | null>(null);
 
   const cameraRef = useRef<any>(null);
@@ -187,9 +278,42 @@ export default function VerificationScreen() {
     }
   }, [stopRecordingAndUpload]);
 
-  const analyzeDetectedFace = useCallback((face: any) => {
-    const currentStep = stepRef.current;
+  const getLandmarkMetrics = useCallback((face: any, frame: any): LandmarkMetrics => {
+    const bounds = face?.bounds;
+    const frameWidth = Number(frame?.width || 1);
+    const frameHeight = Number(frame?.height || 1);
+    const faceWidth = Number(bounds?.size?.width || 0);
+    const faceHeight = Number(bounds?.size?.height || 0);
+    const centerX = (Number(bounds?.origin?.x || 0) + faceWidth / 2) / frameWidth;
+    const centerY = (Number(bounds?.origin?.y || 0) + faceHeight / 2) / frameHeight;
+    const widthRatio = faceWidth / frameWidth;
+    const centered = centerX > 0.28 && centerX < 0.72 && centerY > 0.22 && centerY < 0.78;
+    const distance = widthRatio < 0.22 ? 'tooFar' : widthRatio > 0.72 ? 'tooClose' : 'good';
+    const landmarksReady = Boolean(face?.leftEyePosition && face?.rightEyePosition && (face?.noseBasePosition || face?.mouthPosition));
     const yaw = Number(face?.yawAngle ?? 0);
+    const leftEye = typeof face?.leftEyeOpenProbability === 'number' ? face.leftEyeOpenProbability : 1;
+    const rightEye = typeof face?.rightEyeOpenProbability === 'number' ? face.rightEyeOpenProbability : 1;
+    const eyeScore = Math.min(leftEye, rightEye);
+    let prompt = 'Face locked. Follow the prompt.';
+
+    if (!centered) prompt = 'Center your face inside the oval';
+    else if (distance === 'tooFar') prompt = 'Move a little closer';
+    else if (distance === 'tooClose') prompt = 'Move slightly back';
+    else if (!landmarksReady) prompt = 'Hold still while landmarks lock';
+
+    return { centered, landmarksReady, distance, yaw, eyeScore, prompt };
+  }, []);
+
+  const analyzeDetectedFace = useCallback((face: any, frame: any) => {
+    const currentStep = stepRef.current;
+    const metrics = getLandmarkMetrics(face, frame);
+    setLandmarkMetrics(metrics);
+    if (!metrics.centered || metrics.distance !== 'good' || !metrics.landmarksReady) {
+      setFaceStatus(metrics.prompt);
+      return;
+    }
+
+    const yaw = metrics.yaw;
     const leftEye = typeof face?.leftEyeOpenProbability === 'number' ? face.leftEyeOpenProbability : 1;
     const rightEye = typeof face?.rightEyeOpenProbability === 'number' ? face.rightEyeOpenProbability : 1;
 
@@ -198,7 +322,7 @@ export default function VerificationScreen() {
       if (blinkOpenSeenRef.current && leftEye < 0.35 && rightEye < 0.35) {
         advanceStep(0);
       } else {
-        setFaceStatus('Blink once to continue');
+        setFaceStatus(blinkOpenSeenRef.current ? 'Blink now' : 'Eyes open — ready to blink');
       }
       return;
     }
@@ -208,7 +332,7 @@ export default function VerificationScreen() {
         leftTurnDirectionRef.current = Math.sign(yaw) || -1;
         advanceStep(1);
       } else {
-        setFaceStatus('Turn your head left');
+        setFaceStatus('Turn your head left slowly');
       }
       return;
     }
@@ -219,10 +343,10 @@ export default function VerificationScreen() {
       if (turnedOpposite) {
         advanceStep(2);
       } else {
-        setFaceStatus('Turn your head right');
+        setFaceStatus('Turn your head right slowly');
       }
     }
-  }, [advanceStep]);
+  }, [advanceStep, getLandmarkMetrics]);
 
   const detectFrame = useCallback(async () => {
     if (!cameraRef.current || detectionBusyRef.current || screen !== 'camera' || stepRef.current >= 3) return;
@@ -247,7 +371,7 @@ export default function VerificationScreen() {
         return;
       }
 
-      analyzeDetectedFace(face);
+      analyzeDetectedFace(face, frame);
     } catch {
       setFaceStatus('Detecting face movement…');
     } finally {
@@ -283,6 +407,7 @@ export default function VerificationScreen() {
     setScreen('camera');
     setRecording(false);
     setFaceStatus('Position your face in the oval');
+    setLandmarkMetrics(INITIAL_METRICS);
   };
 
   if (!permission?.granted) {
@@ -346,10 +471,25 @@ export default function VerificationScreen() {
               ))}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <ThemedText style={{ fontSize: 28 }}>{verificationStep === 3 ? '✅' : activeStep.emoji}</ThemedText>
+              {verificationStep === 3 ? (
+                <ThemedText style={{ fontSize: 28 }}>✅</ThemedText>
+              ) : (
+                <PromptIcon stepKey={activeStep.key} />
+              )}
               <View style={{ flex: 1 }}>
                 <ThemedText style={styles.actionTitle}>{verificationStep === 3 ? 'Complete' : activeStep.title}</ThemedText>
                 <ThemedText style={styles.actionHint}>{verificationStep === 3 ? 'Saving your recording now' : activeStep.hint}</ThemedText>
+                <View style={styles.signalRow}>
+                  <View style={[styles.signalPill, landmarkMetrics.centered && styles.signalPillOn]}>
+                    <ThemedText style={styles.signalText}>Centered</ThemedText>
+                  </View>
+                  <View style={[styles.signalPill, landmarkMetrics.landmarksReady && styles.signalPillOn]}>
+                    <ThemedText style={styles.signalText}>Landmarks</ThemedText>
+                  </View>
+                  <View style={[styles.signalPill, recording && styles.signalPillRec]}>
+                    <ThemedText style={styles.signalText}>Live</ThemedText>
+                  </View>
+                </View>
               </View>
               {detecting ? <ActivityIndicator color="#6366f1" /> : <Ionicons name="scan" size={24} color="#6366f1" />}
             </View>
@@ -464,6 +604,12 @@ const styles = StyleSheet.create({
   actionCard: { backgroundColor: 'rgba(0,0,0,0.72)', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(99,102,241,0.35)' },
   actionTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', marginBottom: 2 },
   actionHint: { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  promptIcon: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center' },
+  signalRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 9 },
+  signalPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+  signalPillOn: { backgroundColor: 'rgba(16,185,129,0.2)', borderColor: 'rgba(16,185,129,0.5)' },
+  signalPillRec: { backgroundColor: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)' },
+  signalText: { color: 'rgba(255,255,255,0.78)', fontSize: 9, fontWeight: '900', letterSpacing: 0.4 },
   progressRow: { flexDirection: 'row', gap: 8, marginBottom: 14 },
   progressDot: { flex: 1, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.22)' },
   progressDotActive: { backgroundColor: '#6366f1' },

@@ -6,6 +6,8 @@
   - `backend/routes/verification.js`: Added `POST /upload-verification-video` for multipart video uploads with `userId`, cloud upload when configured, and local server fallback.
   - `backend/models/User.js`: Added `verificationVideoUrl` and `verificationVideo` fields while preserving existing verification status logic; uploaded videos set `verificationStatus` to `pending`.
   - `admin-dashboard/views/IDVerification.tsx`: The review panel now shows the submitted verification video beside the profile photo instead of the old submitted selfie image.
+  - `frontend/screens/VerificationScreen.tsx`: Added premium Lottie-powered prompt animation, SVG step icons, and MediaPipe-style landmark gating for centered face, usable landmarks, distance guidance, blink readiness, and opposite-direction head turns.
+  - `frontend/package.json`: Added `lottie-react-native` for animated guided verification prompts.
 - **Admin Dashboard — full interactivity upgrade**:
   - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
   - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.
