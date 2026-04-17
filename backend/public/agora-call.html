@@ -2,12 +2,30 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Agora Call Bridge</title>
   <script src="https://download.agora.io/sdk/release/AgoraRTC_N-4.20.0.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body { margin: 0; background: #000; overflow: hidden; }
+
+    /* Force GPU compositing for all video containers — eliminates WebView blur */
+    #local-video, #remote-video {
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      will-change: transform;
+    }
+
+    /* Video element quality overrides — crisp rendering */
+    #local-video video, #remote-video video {
+      image-rendering: -webkit-optimize-contrast;
+      object-fit: cover;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
     #local-video {
       position: absolute;
       bottom: 120px;
@@ -21,7 +39,6 @@
       box-shadow: 0 4px 16px rgba(0,0,0,0.6);
       touch-action: none;
       cursor: grab;
-      will-change: transform;
       -webkit-user-select: none;
       user-select: none;
     }
@@ -33,10 +50,10 @@
     #remote-video {
       width: 100vw;
       height: 100vh;
-      object-fit: cover;
       position: absolute;
       top: 0;
       left: 0;
+      overflow: hidden;
     }
   </style>
 </head>
@@ -178,7 +195,7 @@
         if (mediaType === 'video' && callType === 'video') {
           hasRemoteStream = true;
           updateVideoLayout();
-          user.videoTrack && user.videoTrack.play('remote-video');
+          user.videoTrack && user.videoTrack.play('remote-video', { fit: 'cover' });
           postToNative({ type: 'remote-video-started', uid: user.uid });
         }
       });
@@ -208,10 +225,22 @@
       });
 
       var audioConfig = {
-        encoderConfig: 'speech_standard',
+        encoderConfig: 'music_standard',
         AEC: true,
         ANS: true,
         AGC: true,
+      };
+
+      /* High-quality video config — 720p @ 30fps, 2.5 Mbps max */
+      var videoConfig = {
+        facingMode: currentFacingMode,
+        encoderConfig: {
+          width:      { ideal: 1280, max: 1920 },
+          height:     { ideal: 720,  max: 1080 },
+          frameRate:  { ideal: 30,   max: 30   },
+          bitrateMin: 1200,
+          bitrateMax: 2500,
+        },
       };
 
       /* ── Start join + track creation in parallel so camera appears immediately ── */
@@ -221,13 +250,10 @@
       var cameraPromise = null;
       if (callType === 'video') {
         /* Camera creation is independent of join — start immediately */
-        cameraPromise = AgoraRTC.createCameraVideoTrack({
-          facingMode: currentFacingMode,
-          encoderConfig: '720p_1',
-        }).then(function(track) {
+        cameraPromise = AgoraRTC.createCameraVideoTrack(videoConfig).then(function(track) {
           localVideoTrack = track;
           updateVideoLayout();        /* full-screen until remote joins */
-          track.play('local-video');
+          track.play('local-video', { fit: 'cover', mirror: true });
           postToNative({ type: 'local-video-started' });
           return track;
         }).catch(function(camErr) {
@@ -246,12 +272,9 @@
         if (cameraPromise) await cameraPromise;
         if (!localVideoTrack) {
           /* Fallback if parallel creation failed: try once more after join */
-          localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-            facingMode: currentFacingMode,
-            encoderConfig: '720p_1',
-          });
+          localVideoTrack = await AgoraRTC.createCameraVideoTrack(videoConfig);
           updateVideoLayout();
-          localVideoTrack.play('local-video');
+          localVideoTrack.play('local-video', { fit: 'cover', mirror: true });
           postToNative({ type: 'local-video-started' });
         }
         await client.publish([localAudioTrack, localVideoTrack]);
@@ -332,9 +355,15 @@
 
       localVideoTrack = await AgoraRTC.createCameraVideoTrack({
         facingMode: currentFacingMode,
-        encoderConfig: '720p_1',
+        encoderConfig: {
+          width:      { ideal: 1280, max: 1920 },
+          height:     { ideal: 720,  max: 1080 },
+          frameRate:  { ideal: 30,   max: 30   },
+          bitrateMin: 1200,
+          bitrateMax: 2500,
+        },
       });
-      localVideoTrack.play('local-video');
+      localVideoTrack.play('local-video', { fit: 'cover', mirror: true });
       await client.publish([localVideoTrack]);
       if (localEl) localEl.classList.remove('switching');
       postToNative({ type: 'cameraSwitched', facingMode: currentFacingMode });
