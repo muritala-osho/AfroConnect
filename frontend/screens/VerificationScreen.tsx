@@ -14,15 +14,15 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { getApiBaseUrl } from '@/constants/config';
 
-const { width: SW, height: SH } = Dimensions.get('window');
+const { width: SW } = Dimensions.get('window');
 
-// ─── Liveness challenges ─────────────────────────────────────────────────────
+// ─── Liveness challenges ──────────────────────────────────────────────────────
 const LIVENESS_ACTIONS = [
-  { id: 'look_left',  emoji: '👈', title: 'Turn your head LEFT',   hint: 'Slowly rotate your head to the left',  holdSecs: 3 },
-  { id: 'look_right', emoji: '👉', title: 'Turn your head RIGHT',  hint: 'Slowly rotate your head to the right', holdSecs: 3 },
-  { id: 'smile',      emoji: '😁', title: 'Show a BIG smile',      hint: 'Show your teeth — smile wide!',        holdSecs: 3 },
-  { id: 'blink',      emoji: '😉', title: 'Blink slowly',          hint: 'Close both eyes then reopen them',     holdSecs: 3 },
-  { id: 'nod',        emoji: '🙂', title: 'Nod your head',         hint: 'Gently nod up and down twice',         holdSecs: 3 },
+  { id: 'look_left',  emoji: '👈', title: 'Turn LEFT',   hint: 'Slowly rotate your head to the left',  holdSecs: 3 },
+  { id: 'look_right', emoji: '👉', title: 'Turn RIGHT',  hint: 'Slowly rotate your head to the right', holdSecs: 3 },
+  { id: 'smile',      emoji: '😁', title: 'Big Smile',   hint: 'Show your teeth — smile wide!',        holdSecs: 3 },
+  { id: 'blink',      emoji: '😉', title: 'Blink Slowly',hint: 'Close both eyes then reopen them',     holdSecs: 3 },
+  { id: 'nod',        emoji: '🙂', title: 'Nod Head',    hint: 'Gently nod up and down twice',         holdSecs: 3 },
 ];
 
 function shuffled<T>(arr: T[]): T[] {
@@ -34,7 +34,11 @@ function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
-type Step = 'intro' | 'liveness' | 'capture' | 'analyzing' | 'result';
+type Step = 'intro' | 'camera' | 'analyzing' | 'result';
+// During 'camera' step we have sub-phases:
+//  'challenge' → liveness actions in progress (capture button locked)
+//  'selfie'    → all actions done, user takes final selfie (capture button unlocked)
+type CameraPhase = 'challenge' | 'selfie';
 
 interface AnalysisResult {
   verified: boolean;
@@ -43,53 +47,33 @@ interface AnalysisResult {
   livenessIssues?: string[];
 }
 
-// ─── Countdown ring component ─────────────────────────────────────────────────
-function CountdownRing({ seconds, color }: { seconds: number; color: string }) {
-  const progress = useRef(new Animated.Value(0)).current;
-  const SIZE = 80;
-  const R    = 36;
-  const CIRC = 2 * Math.PI * R;
-
-  useEffect(() => {
-    progress.setValue(0);
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: seconds * 1000,
-      easing: Easing.linear,
-      useNativeDriver: false,
-    }).start();
-  }, [seconds]);
-
-  const strokeDashoffset = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, CIRC],
-  });
+// ─── Countdown ring (arc style) ──────────────────────────────────────────────
+function CountdownRing({ seconds, total, color }: { seconds: number; total: number; color: string }) {
+  const SIZE = 56;
+  const pct  = seconds / total;
 
   return (
     <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
-      <View style={[StyleSheet.absoluteFill, { borderRadius: SIZE / 2, borderWidth: 6, borderColor: color + '30' }]} />
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: SIZE,
-          height: SIZE,
+      <View style={[StyleSheet.absoluteFill, { borderRadius: SIZE / 2, borderWidth: 4, borderColor: 'rgba(255,255,255,0.15)' }]} />
+      <View style={[
+        StyleSheet.absoluteFill,
+        {
           borderRadius: SIZE / 2,
-          borderWidth: 6,
+          borderWidth: 4,
           borderColor: color,
-          borderTopColor: 'transparent',
-          borderLeftColor: 'transparent',
-        }}
-      />
-      <ThemedText style={{ fontSize: 22, fontWeight: '900', color }}>{seconds}</ThemedText>
+          opacity: pct,
+        }
+      ]} />
+      <ThemedText style={{ fontSize: 20, fontWeight: '900', color: '#FFF' }}>{seconds}</ThemedText>
     </View>
   );
 }
 
 // ─── Similarity meter ─────────────────────────────────────────────────────────
 function SimilarityMeter({ score, verified }: { score: number; verified: boolean }) {
-  const anim     = useRef(new Animated.Value(0)).current;
-  const pct      = Math.round(score * 100);
-  const color    = verified ? '#10b981' : score > 0.6 ? '#f59e0b' : '#ef4444';
+  const anim  = useRef(new Animated.Value(0)).current;
+  const pct   = Math.round(score * 100);
+  const color = verified ? '#10b981' : score > 0.6 ? '#f59e0b' : '#ef4444';
 
   useEffect(() => {
     Animated.timing(anim, { toValue: score, duration: 1200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
@@ -113,33 +97,50 @@ function SimilarityMeter({ score, verified }: { score: number; verified: boolean
   );
 }
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
+// ─── Corner bracket ───────────────────────────────────────────────────────────
+function Corner({ top, bottom, left, right, color }: any) {
+  return (
+    <View style={{
+      position: 'absolute', width: 28, height: 28,
+      top, bottom, left, right,
+      borderColor: color,
+      borderTopWidth:    top    !== undefined ? 3 : 0,
+      borderBottomWidth: bottom !== undefined ? 3 : 0,
+      borderLeftWidth:   left   !== undefined ? 3 : 0,
+      borderRightWidth:  right  !== undefined ? 3 : 0,
+    }} />
+  );
+}
+
+// ─── Main screen ─────────────────────────────────────────────────────────────
 export default function VerificationScreen() {
   const { theme }  = useTheme();
   const insets     = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { token }  = useAuth();
 
-  const [step,        setStep]        = useState<Step>('intro');
-  const [challenges,  setChallenges]  = useState(() => shuffled(LIVENESS_ACTIONS).slice(0, 3));
-  const [challengeIdx,setChallengeIdx]= useState(0);
-  const [countdown,   setCountdown]   = useState(challenges[0]?.holdSecs ?? 3);
-  const [allPassed,   setAllPassed]   = useState(false);
+  const [step,         setStep]         = useState<Step>('intro');
+  const [cameraPhase,  setCameraPhase]  = useState<CameraPhase>('challenge');
+  const [challenges,   setChallenges]   = useState(() => shuffled(LIVENESS_ACTIONS).slice(0, 3));
+  const [challengeIdx, setChallengeIdx] = useState(0);
+  const [countdown,    setCountdown]    = useState(challenges[0]?.holdSecs ?? 3);
+  const [result,       setResult]       = useState<AnalysisResult | null>(null);
 
   // Camera
   const [permission, requestPermission] = useCameraPermissions();
-  const cameraRef  = useRef<any>(null);
-  const [capturing,  setCapturing]  = useState(false);
+  const cameraRef      = useRef<any>(null);
+  const [capturing,    setCapturing]    = useState(false);
+  const liveCapturingRef = useRef(false); // ref avoids stale-closure issues inside the interval
 
-  // Result
-  const [result,    setResult]    = useState<AnalysisResult | null>(null);
+  // Flash effect on auto-capture
+  const flashAnim = useRef(new Animated.Value(0)).current;
 
   // Animations
-  const fadeAnim   = useRef(new Animated.Value(0)).current;
-  const slideAnim  = useRef(new Animated.Value(30)).current;
-  const pulseAnim  = useRef(new Animated.Value(1)).current;
-  const scanAnim   = useRef(new Animated.Value(0)).current;
-  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fadeAnim  = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const scanAnim  = useRef(new Animated.Value(0)).current;
+  const timerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fadeIn = useCallback(() => {
     fadeAnim.setValue(0);
@@ -152,7 +153,7 @@ export default function VerificationScreen() {
 
   useEffect(() => { fadeIn(); }, [step]);
 
-  // Pulse loop for the shield icon on intro / result
+  // Pulse for intro / result shield icon
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(pulseAnim, { toValue: 1.06, duration: 900, useNativeDriver: true }),
@@ -162,7 +163,7 @@ export default function VerificationScreen() {
     return () => loop.stop();
   }, []);
 
-  // Scan line animation for analyzing step
+  // Scan line for analyzing step
   useEffect(() => {
     if (step !== 'analyzing') return;
     const loop = Animated.loop(Animated.sequence([
@@ -173,9 +174,12 @@ export default function VerificationScreen() {
     return () => loop.stop();
   }, [step]);
 
-  // Liveness countdown timer
+  // Challenge countdown — runs while step='camera' and cameraPhase='challenge'
   useEffect(() => {
-    if (step !== 'liveness') { if (timerRef.current) clearInterval(timerRef.current); return; }
+    if (step !== 'camera' || cameraPhase !== 'challenge') {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
     const action = challenges[challengeIdx];
     if (!action) return;
     setCountdown(action.holdSecs);
@@ -183,44 +187,65 @@ export default function VerificationScreen() {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(timerRef.current!);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          nextChallenge();
+          autoCaptureLiveness();
           return action.holdSecs;
         }
         return prev - 1;
       });
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [step, challengeIdx]);
+  }, [step, cameraPhase, challengeIdx]);
 
-  const nextChallenge = useCallback(() => {
+  // Flash effect helper
+  const triggerFlash = () => {
+    flashAnim.setValue(1);
+    Animated.timing(flashAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+  };
+
+  // Advance to next challenge (or to selfie phase when all done)
+  const advanceChallenge = useCallback(() => {
     setChallengeIdx(prev => {
       const next = prev + 1;
       if (next >= challenges.length) {
-        setAllPassed(true);
-        setTimeout(() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          setStep('capture');
-        }, 600);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => setCameraPhase('selfie'), 400);
         return prev;
       }
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       return next;
     });
   }, [challenges]);
 
+  // Auto-capture a liveness frame silently, then advance
+  const autoCaptureLiveness = useCallback(async () => {
+    if (!cameraRef.current || liveCapturingRef.current) return;
+    liveCapturingRef.current = true;
+    triggerFlash();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      await cameraRef.current.takePictureAsync({ quality: 0.4, skipProcessing: true });
+    } catch {
+      // Ignore camera errors on liveness captures
+    } finally {
+      liveCapturingRef.current = false;
+      advanceChallenge();
+    }
+  }, [advanceChallenge]);
+
   const skipChallenge = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    nextChallenge();
+    autoCaptureLiveness();
   };
 
-  // Take photo and call API
+  // Take the final selfie and send to server
   const captureAndVerify = async () => {
     if (!cameraRef.current || capturing) return;
     setCapturing(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    triggerFlash();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.8 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       if (!photo?.uri) { setCapturing(false); return; }
       setStep('analyzing');
       await callVerifyFace(photo.uri);
@@ -250,9 +275,9 @@ export default function VerificationScreen() {
           issues.push(...data.liveness.issues);
         }
         setResult({
-          verified: data.verified,
-          similarity: data.similarity ?? 0,
-          reason: data.reason,
+          verified:       data.verified,
+          similarity:     data.similarity ?? 0,
+          reason:         data.reason,
           livenessIssues: issues,
         });
         Haptics.notificationAsync(data.verified
@@ -270,19 +295,19 @@ export default function VerificationScreen() {
   const restart = () => {
     setChallenges(shuffled(LIVENESS_ACTIONS).slice(0, 3));
     setChallengeIdx(0);
-    setAllPassed(false);
+    setCameraPhase('challenge');
     setResult(null);
     setCapturing(false);
+    liveCapturingRef.current = false;
     setStep('intro');
   };
 
-  // ─── INTRO ──────────────────────────────────────────────────────────────────
+  // ─── INTRO ───────────────────────────────────────────────────────────────────
   if (step === 'intro') {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <LinearGradient colors={[theme.primary + '18', 'transparent']} style={StyleSheet.absoluteFill} />
 
-        {/* Header */}
         <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
           <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={22} color={theme.text} />
@@ -294,7 +319,6 @@ export default function VerificationScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
 
-            {/* Hero icon */}
             <View style={styles.heroBlock}>
               <Animated.View style={[styles.shieldRing, { transform: [{ scale: pulseAnim }], borderColor: theme.primary + '40', backgroundColor: theme.primary + '10' }]}>
                 <LinearGradient colors={[theme.primary, theme.primary + 'CC']} style={styles.shieldInner}>
@@ -303,15 +327,15 @@ export default function VerificationScreen() {
               </Animated.View>
               <ThemedText style={[styles.heroTitle, { color: theme.text }]}>Identity Verification</ThemedText>
               <ThemedText style={[styles.heroSub, { color: theme.textSecondary }]}>
-                A quick liveness check confirms you're a real person, then your face is compared to your profile photo.
+                Your camera opens once. Follow 3 quick actions, then tap to take your final selfie.
               </ThemedText>
             </View>
 
-            {/* Steps */}
             {[
-              { n: 1, icon: 'walk', title: 'Complete 3 liveness checks', desc: 'Turn left, turn right, smile — proves you\'re live in front of the camera.', color: '#6366f1' },
-              { n: 2, icon: 'camera', title: 'Take a clear selfie', desc: 'One frontal photo in good lighting — this is compared to your profile.', color: '#14b8a6' },
-              { n: 3, icon: 'sparkles', title: 'Instant AI result', desc: 'Our AI compares your faces. 85%+ similarity = verified blue badge.', color: '#f59e0b' },
+              { n: 1, icon: 'videocam',        title: 'Live camera opens',          desc: 'Position your face in the oval and follow the on-screen prompts.',            color: '#6366f1' },
+              { n: 2, icon: 'walk',             title: 'Auto-captures 3 actions',    desc: 'Turn left, smile, blink — each snapped automatically when the timer hits 0.', color: '#14b8a6' },
+              { n: 3, icon: 'camera',           title: 'Tap to take your selfie',    desc: 'Once all actions pass, the button unlocks. Tap for your final frontal photo.', color: '#f59e0b' },
+              { n: 4, icon: 'sparkles',         title: 'Instant AI result',          desc: '85%+ match with your profile photo = verified blue badge.',                   color: '#10b981' },
             ].map(({ n, icon, title, desc, color }) => (
               <View key={n} style={[styles.stepRow, { borderColor: theme.border, backgroundColor: theme.card }]}>
                 <View style={[styles.stepNum, { backgroundColor: color }]}>
@@ -321,11 +345,10 @@ export default function VerificationScreen() {
                   <ThemedText style={[styles.stepTitle, { color: theme.text }]}>{title}</ThemedText>
                   <ThemedText style={[styles.stepDesc, { color: theme.textSecondary }]}>{desc}</ThemedText>
                 </View>
-                <Ionicons name={icon as any} size={22} color={color} style={{ opacity: 0.7 }} />
+                <Ionicons name={icon as any} size={20} color={color} style={{ opacity: 0.7 }} />
               </View>
             ))}
 
-            {/* Note */}
             <View style={[styles.noteCard, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '25' }]}>
               <Ionicons name="lock-closed" size={14} color={theme.primary} style={{ marginRight: 8 }} />
               <ThemedText style={[styles.noteText, { color: theme.primary }]}>
@@ -333,10 +356,19 @@ export default function VerificationScreen() {
               </ThemedText>
             </View>
 
-            {/* Start */}
-            <Pressable style={styles.startBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setStep('liveness'); }}>
+            <Pressable
+              style={styles.startBtn}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                if (!permission?.granted) {
+                  requestPermission().then(r => { if (r.granted) setStep('camera'); });
+                } else {
+                  setStep('camera');
+                }
+              }}
+            >
               <LinearGradient colors={[theme.primary, theme.primary + 'CC']} style={styles.startBtnGrad}>
-                <Ionicons name="play-circle" size={22} color="#FFF" />
+                <Ionicons name="videocam" size={22} color="#FFF" />
                 <ThemedText style={styles.startBtnText}>Start Verification</ThemedText>
               </LinearGradient>
             </Pressable>
@@ -346,150 +378,161 @@ export default function VerificationScreen() {
     );
   }
 
-  // ─── LIVENESS ───────────────────────────────────────────────────────────────
-  if (step === 'liveness') {
-    const action = challenges[challengeIdx];
-    const done   = allPassed;
-    const pct    = ((challengeIdx + (done ? 1 : 0)) / challenges.length) * 100;
-
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <LinearGradient colors={['#6366f115', 'transparent']} style={StyleSheet.absoluteFill} />
-
-        <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
-          <Pressable style={styles.backBtn} onPress={() => setStep('intro')}>
-            <Ionicons name="arrow-back" size={22} color={theme.text} />
-          </Pressable>
-          <ThemedText style={[styles.topBarTitle, { color: theme.text }]}>Liveness Check</ThemedText>
-          <ThemedText style={[styles.stepCounter, { color: theme.textSecondary }]}>
-            {Math.min(challengeIdx + 1, challenges.length)}/{challenges.length}
-          </ThemedText>
-        </View>
-
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 }}>
-          <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], alignItems: 'center', width: '100%' }}>
-
-            {/* Progress bar */}
-            <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-              <Animated.View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: '#6366f1' }]} />
-            </View>
-
-            {done ? (
-              <>
-                <View style={[styles.livenessEmojiCircle, { backgroundColor: '#10b98115', borderColor: '#10b981' }]}>
-                  <ThemedText style={styles.bigEmoji}>✅</ThemedText>
-                </View>
-                <ThemedText style={[styles.livenessTitle, { color: theme.text }]}>Liveness Confirmed!</ThemedText>
-                <ThemedText style={[styles.livenessSub, { color: theme.textSecondary }]}>
-                  Great job! Now take a clear frontal selfie for face comparison.
-                </ThemedText>
-                <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} />
-              </>
-            ) : (
-              <>
-                <View style={[styles.livenessEmojiCircle, { backgroundColor: '#6366f115', borderColor: '#6366f1' }]}>
-                  <ThemedText style={styles.bigEmoji}>{action.emoji}</ThemedText>
-                </View>
-                <ThemedText style={[styles.livenessTitle, { color: theme.text }]}>{action.title}</ThemedText>
-                <ThemedText style={[styles.livenessSub, { color: theme.textSecondary }]}>{action.hint}</ThemedText>
-
-                <View style={{ marginVertical: 24 }}>
-                  <CountdownRing seconds={countdown} color="#6366f1" />
-                </View>
-
-                <Pressable
-                  style={[styles.skipBtn, { borderColor: theme.border }]}
-                  onPress={skipChallenge}
-                >
-                  <Ionicons name="checkmark" size={16} color={theme.textSecondary} />
-                  <ThemedText style={[styles.skipBtnText, { color: theme.textSecondary }]}>I did it</ThemedText>
-                </Pressable>
-
-                {/* Progress dots */}
-                <View style={styles.dots}>
-                  {challenges.map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        styles.dot,
-                        { backgroundColor: i < challengeIdx ? '#6366f1' : i === challengeIdx ? '#a5b4fc' : theme.border },
-                        i === challengeIdx && { width: 20 },
-                      ]}
-                    />
-                  ))}
-                </View>
-              </>
-            )}
-          </Animated.View>
-        </View>
-      </View>
-    );
-  }
-
-  // ─── CAPTURE ────────────────────────────────────────────────────────────────
-  if (step === 'capture') {
+  // ─── CAMERA (liveness + selfie combined) ─────────────────────────────────────
+  if (step === 'camera') {
     if (!permission?.granted) {
       return (
-        <View style={[styles.container, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }]}>
+        <View style={[styles.container, { backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center', gap: 16, paddingHorizontal: 32 }]}>
           <Ionicons name="camera-outline" size={60} color={theme.textSecondary} />
-          <ThemedText style={[styles.permTitle, { color: theme.text, marginTop: 16, marginBottom: 8 }]}>Camera Permission</ThemedText>
-          <ThemedText style={[styles.permSub, { color: theme.textSecondary }]}>Camera access is required to take your verification selfie.</ThemedText>
-          <Pressable style={[styles.permBtn, { backgroundColor: theme.primary }]} onPress={requestPermission}>
-            <ThemedText style={styles.permBtnText}>Grant Camera Access</ThemedText>
+          <ThemedText style={[styles.heroTitle, { color: theme.text, fontSize: 20 }]}>Camera Permission Required</ThemedText>
+          <ThemedText style={[styles.heroSub, { color: theme.textSecondary }]}>Camera access is needed to complete identity verification.</ThemedText>
+          <Pressable style={[styles.startBtn, { width: '100%' }]} onPress={requestPermission}>
+            <LinearGradient colors={[theme.primary, theme.primary + 'CC']} style={styles.startBtnGrad}>
+              <ThemedText style={styles.startBtnText}>Grant Camera Access</ThemedText>
+            </LinearGradient>
           </Pressable>
         </View>
       );
     }
 
+    const isChallenge = cameraPhase === 'challenge';
+    const isSelfie    = cameraPhase === 'selfie';
+    const action      = challenges[challengeIdx];
+    const completedCount = isChallenge ? challengeIdx : challenges.length;
+    const ovalColor   = isSelfie ? '#10b981' : '#6366f1';
+
     return (
       <View style={styles.cameraFull}>
         <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
 
-        {/* Top gradient */}
-        <LinearGradient colors={['rgba(0,0,0,0.7)', 'transparent']} style={[styles.camTop, { paddingTop: insets.top + 8 }]}>
+        {/* White flash overlay */}
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: '#FFF', opacity: flashAnim, zIndex: 50 }]}
+        />
+
+        {/* Top gradient + header */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.0)']}
+          style={[styles.camTop, { paddingTop: insets.top + 6 }]}
+        >
           <View style={styles.camHeader}>
-            <Pressable style={styles.camBackBtn} onPress={() => setStep('liveness')}>
-              <Ionicons name="arrow-back" size={22} color="#FFF" />
+            <Pressable style={styles.camBackBtn} onPress={() => setStep('intro')}>
+              <Ionicons name="arrow-back" size={20} color="#FFF" />
             </Pressable>
-            <ThemedText style={styles.camTitle}>Take Your Selfie</ThemedText>
-            <View style={{ width: 40 }} />
+            <ThemedText style={styles.camTitle}>
+              {isSelfie ? 'Take Your Selfie' : 'Live Verification'}
+            </ThemedText>
+            {/* Progress dots */}
+            <View style={{ flexDirection: 'row', gap: 5, paddingRight: 4 }}>
+              {challenges.map((_, i) => (
+                <View
+                  key={i}
+                  style={{
+                    width:  i < completedCount ? 18 : 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: i < completedCount
+                      ? '#10b981'
+                      : i === challengeIdx && isChallenge
+                        ? '#6366f1'
+                        : 'rgba(255,255,255,0.3)',
+                  }}
+                />
+              ))}
+              {isSelfie && (
+                <View style={{ width: 18, height: 8, borderRadius: 4, backgroundColor: '#10b981' }} />
+              )}
+            </View>
           </View>
-          <ThemedText style={styles.camSubtitle}>Look straight ahead — neutral expression, good light</ThemedText>
         </LinearGradient>
 
-        {/* Face oval */}
-        <View style={styles.ovalWrapper}>
-          <View style={styles.faceOval} />
-          <ThemedText style={styles.ovalLabel}>Centre your face here</ThemedText>
+        {/* Face oval with corner brackets */}
+        <View style={styles.ovalWrapper} pointerEvents="none">
+          <View style={[styles.faceOval, { borderColor: ovalColor + 'CC' }]}>
+            <Corner top={-2}   left={-2}  color={ovalColor} />
+            <Corner top={-2}   right={-2} color={ovalColor} />
+            <Corner bottom={-2} left={-2} color={ovalColor} />
+            <Corner bottom={-2} right={-2} color={ovalColor} />
+          </View>
+          <ThemedText style={[styles.ovalLabel, { color: isSelfie ? '#10b981' : 'rgba(255,255,255,0.65)' }]}>
+            {isSelfie ? 'Look straight ahead' : 'Keep face in oval'}
+          </ThemedText>
         </View>
 
-        {/* Tips bar */}
-        <View style={styles.tipBar}>
-          {['💡 Good lighting', '👀 Look straight', '😐 Neutral expression'].map((t, i) => (
-            <View key={i} style={styles.tipChip}>
-              <ThemedText style={styles.tipText}>{t}</ThemedText>
+        {/* Action card — shows during challenges */}
+        {isChallenge && action && (
+          <View style={styles.actionCardWrap} pointerEvents="none">
+            <View style={styles.actionCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <ThemedText style={{ fontSize: 28 }}>{action.emoji}</ThemedText>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={styles.actionTitle}>{action.title}</ThemedText>
+                  <ThemedText style={styles.actionHint}>{action.hint}</ThemedText>
+                </View>
+                <CountdownRing seconds={countdown} total={action.holdSecs} color="#6366f1" />
+              </View>
             </View>
-          ))}
-        </View>
+          </View>
+        )}
 
-        {/* Bottom capture */}
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={[styles.camBottom, { paddingBottom: insets.bottom + 28 }]}>
-          <Pressable style={styles.captureBtn} onPress={captureAndVerify} disabled={capturing}>
-            <View style={styles.captureOuter}>
-              <LinearGradient colors={['#14b8a6', '#0d9488']} style={styles.captureInner}>
+        {/* Selfie prompt — shows after all actions */}
+        {isSelfie && (
+          <View style={styles.actionCardWrap} pointerEvents="none">
+            <View style={[styles.actionCard, { borderColor: '#10b98140' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <ThemedText style={{ fontSize: 26 }}>✅</ThemedText>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={[styles.actionTitle, { color: '#10b981' }]}>Liveness Confirmed!</ThemedText>
+                  <ThemedText style={styles.actionHint}>Now tap the button below to take your selfie</ThemedText>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Bottom gradient + capture button */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.82)']}
+          style={[styles.camBottom, { paddingBottom: insets.bottom + 28 }]}
+        >
+          {/* Skip button — only during challenges */}
+          {isChallenge && (
+            <Pressable style={styles.skipBtn} onPress={skipChallenge}>
+              <Ionicons name="checkmark" size={14} color="rgba(255,255,255,0.65)" />
+              <ThemedText style={styles.skipBtnText}>I did it</ThemedText>
+            </Pressable>
+          )}
+
+          {/* Capture button */}
+          <Pressable
+            style={[styles.captureBtn, isChallenge && styles.captureBtnLocked]}
+            onPress={isSelfie ? captureAndVerify : undefined}
+            disabled={isChallenge || capturing}
+          >
+            <View style={[styles.captureOuter, { borderColor: isSelfie ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.2)' }]}>
+              <LinearGradient
+                colors={isSelfie ? ['#10b981', '#059669'] : ['#334155', '#1e293b']}
+                style={styles.captureInner}
+              >
                 {capturing
                   ? <ActivityIndicator color="#FFF" size="small" />
-                  : <Ionicons name="camera" size={30} color="#FFF" />}
+                  : <Ionicons name="camera" size={30} color={isSelfie ? '#FFF' : 'rgba(255,255,255,0.4)'} />}
               </LinearGradient>
             </View>
           </Pressable>
-          <ThemedText style={styles.captureLbl}>Tap to capture</ThemedText>
+
+          <ThemedText style={styles.captureLbl}>
+            {isChallenge
+              ? 'Complete prompts above to unlock'
+              : capturing ? 'Processing…' : 'Tap to capture'}
+          </ThemedText>
         </LinearGradient>
       </View>
     );
   }
 
-  // ─── ANALYZING ──────────────────────────────────────────────────────────────
+  // ─── ANALYZING ───────────────────────────────────────────────────────────────
   if (step === 'analyzing') {
     const scanY = scanAnim.interpolate({ inputRange: [0, 1], outputRange: [-20, SW * 0.65] });
     return (
@@ -497,13 +540,13 @@ export default function VerificationScreen() {
         <LinearGradient colors={['#14b8a615', 'transparent']} style={StyleSheet.absoluteFill} />
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], alignItems: 'center' }}>
           <View style={styles.analyzeFrame}>
-            <LinearGradient colors={['#0f172a', '#1e293b']} style={styles.analyzeGrad} />
+            <LinearGradient colors={['#0f172a', '#1e293b']} style={StyleSheet.absoluteFillObject} />
             <Ionicons name="person" size={64} color="#334155" />
             <Animated.View style={[styles.scanLine, { transform: [{ translateY: scanY }] }]} />
-            <View style={[styles.analyzeCorner, { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 }]} />
-            <View style={[styles.analyzeCorner, { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 }]} />
-            <View style={[styles.analyzeCorner, { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 }]} />
-            <View style={[styles.analyzeCorner, { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 }]} />
+            <Corner top={0}    left={0}  color="#14b8a6" />
+            <Corner top={0}    right={0} color="#14b8a6" />
+            <Corner bottom={0} left={0}  color="#14b8a6" />
+            <Corner bottom={0} right={0} color="#14b8a6" />
           </View>
           <ActivityIndicator size="large" color="#14b8a6" style={{ marginTop: 28 }} />
           <ThemedText style={[styles.analyzeTitle, { color: theme.text }]}>Analyzing your identity…</ThemedText>
@@ -515,7 +558,7 @@ export default function VerificationScreen() {
     );
   }
 
-  // ─── RESULT ─────────────────────────────────────────────────────────────────
+  // ─── RESULT ──────────────────────────────────────────────────────────────────
   if (step === 'result' && result) {
     const ok    = result.verified;
     const color = ok ? '#10b981' : result.similarity > 0.6 ? '#f59e0b' : '#ef4444';
@@ -534,7 +577,6 @@ export default function VerificationScreen() {
         <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
           <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }], alignItems: 'center' }}>
 
-            {/* Result icon */}
             <Animated.View style={[styles.resultIconRing, { borderColor: color + '40', backgroundColor: color + '12', transform: [{ scale: pulseAnim }] }]}>
               <LinearGradient colors={[color, color + 'BB']} style={styles.resultIconInner}>
                 <Ionicons name={icon} size={48} color="#FFF" />
@@ -547,17 +589,15 @@ export default function VerificationScreen() {
             <ThemedText style={[styles.resultSub, { color: theme.textSecondary }]}>
               {ok
                 ? 'Your identity has been confirmed. A verified badge has been added to your profile.'
-                : result.reason || 'The face in your selfie didn\'t match your profile photo closely enough.'}
+                : result.reason || "The face in your selfie didn't match your profile photo closely enough."}
             </ThemedText>
 
-            {/* Similarity meter */}
             {result.similarity > 0 && (
               <View style={[styles.resultCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <SimilarityMeter score={result.similarity} verified={ok} />
               </View>
             )}
 
-            {/* Liveness issues */}
             {(result.livenessIssues?.length ?? 0) > 0 && (
               <View style={[styles.resultCard, { backgroundColor: '#ef444410', borderColor: '#ef444430' }]}>
                 <ThemedText style={{ fontSize: 12, fontWeight: '800', color: '#ef4444', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>Liveness Issues</ThemedText>
@@ -570,7 +610,6 @@ export default function VerificationScreen() {
               </View>
             )}
 
-            {/* Tips on failure */}
             {!ok && (
               <View style={[styles.resultCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                 <ThemedText style={[styles.tipsTitle, { color: theme.text }]}>Tips for a better result</ThemedText>
@@ -585,7 +624,6 @@ export default function VerificationScreen() {
               </View>
             )}
 
-            {/* Actions */}
             {ok ? (
               <Pressable style={styles.primaryBtn} onPress={() => navigation.goBack()}>
                 <LinearGradient colors={['#10b981', '#059669']} style={styles.primaryBtnGrad}>
@@ -621,71 +659,60 @@ const styles = StyleSheet.create({
   topBar:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   topBarTitle:   { fontSize: 17, fontWeight: '800' },
   backBtn:       { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  stepCounter:   { fontSize: 13, fontWeight: '700' },
 
-  // ── Intro
-  heroBlock:     { alignItems: 'center', paddingVertical: 28 },
-  shieldRing:    { width: 108, height: 108, borderRadius: 54, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  shieldInner:   { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
-  heroTitle:     { fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
-  heroSub:       { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 300 },
-  stepRow:       { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 10 },
-  stepNum:       { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  stepNumText:   { color: '#FFF', fontWeight: '900', fontSize: 15 },
-  stepTitle:     { fontSize: 14, fontWeight: '800', marginBottom: 2 },
-  stepDesc:      { fontSize: 12, lineHeight: 17 },
-  noteCard:      { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 14, borderWidth: 1, padding: 14, marginTop: 4, marginBottom: 20 },
-  noteText:      { fontSize: 12, lineHeight: 18, flex: 1 },
-  startBtn:      { borderRadius: 18, overflow: 'hidden', marginBottom: 4 },
-  startBtnGrad:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },
-  startBtnText:  { color: '#FFF', fontSize: 17, fontWeight: '900' },
+  heroBlock:    { alignItems: 'center', paddingVertical: 28 },
+  shieldRing:   { width: 108, height: 108, borderRadius: 54, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  shieldInner:  { width: 80, height: 80, borderRadius: 40, alignItems: 'center', justifyContent: 'center' },
+  heroTitle:    { fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
+  heroSub:      { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 300 },
+  stepRow:      { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18, borderWidth: 1, marginBottom: 10 },
+  stepNum:      { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  stepNumText:  { color: '#FFF', fontWeight: '900', fontSize: 15 },
+  stepTitle:    { fontSize: 14, fontWeight: '800', marginBottom: 2 },
+  stepDesc:     { fontSize: 12, lineHeight: 17 },
+  noteCard:     { flexDirection: 'row', alignItems: 'flex-start', borderRadius: 14, borderWidth: 1, padding: 14, marginTop: 4, marginBottom: 20 },
+  noteText:     { fontSize: 12, lineHeight: 18, flex: 1 },
+  startBtn:     { borderRadius: 18, overflow: 'hidden', marginBottom: 4 },
+  startBtnGrad: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 18 },
+  startBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
 
-  // ── Liveness
-  progressBar:          { height: 6, width: '100%', borderRadius: 3, overflow: 'hidden', marginBottom: 32 },
-  progressFill:         { height: '100%', borderRadius: 3 },
-  livenessEmojiCircle:  { width: 120, height: 120, borderRadius: 60, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  bigEmoji:             { fontSize: 58 },
-  livenessTitle:        { fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 8 },
-  livenessSub:          { fontSize: 14, textAlign: 'center', lineHeight: 21, maxWidth: 260 },
-  skipBtn:              { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, borderWidth: 1, marginTop: 4 },
-  skipBtnText:          { fontSize: 13, fontWeight: '600' },
-  dots:                 { flexDirection: 'row', gap: 6, marginTop: 24 },
-  dot:                  { height: 8, width: 8, borderRadius: 4 },
+  // Camera
+  cameraFull:      { flex: 1, backgroundColor: '#000' },
+  camTop:          { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 20 },
+  camHeader:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 4 },
+  camBackBtn:      { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.45)', alignItems: 'center', justifyContent: 'center' },
+  camTitle:        { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  ovalWrapper:     { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  faceOval:        { width: 210, height: 280, borderRadius: 105, borderWidth: 2.5, borderStyle: 'dashed' },
+  ovalLabel:       { fontSize: 12, marginTop: 14, fontWeight: '600' },
 
-  // ── Camera capture
-  cameraFull:    { flex: 1, backgroundColor: '#000' },
-  camTop:        { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, paddingBottom: 20 },
-  camHeader:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16 },
-  camBackBtn:    { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center' },
-  camTitle:      { color: '#FFF', fontSize: 17, fontWeight: '800' },
-  camSubtitle:   { color: 'rgba(255,255,255,0.75)', fontSize: 13, textAlign: 'center', marginTop: 6, paddingHorizontal: 20 },
-  ovalWrapper:   { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
-  faceOval:      { width: 210, height: 280, borderRadius: 105, borderWidth: 2.5, borderColor: '#14b8a6', borderStyle: 'dashed' },
-  ovalLabel:     { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 14 },
-  tipBar:        { position: 'absolute', bottom: 160, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 8, zIndex: 10 },
-  tipChip:       { backgroundColor: 'rgba(0,0,0,0.55)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 },
-  tipText:       { color: '#FFF', fontSize: 11, fontWeight: '600' },
-  camBottom:     { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, paddingTop: 60, alignItems: 'center', gap: 8 },
-  captureBtn:    { alignItems: 'center' },
-  captureOuter:  { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center' },
-  captureInner:  { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
-  captureLbl:    { color: 'rgba(255,255,255,0.75)', fontSize: 12, fontWeight: '600' },
+  actionCardWrap: { position: 'absolute', bottom: 180, left: 16, right: 16, zIndex: 20 },
+  actionCard:     {
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.35)',
+  },
+  actionTitle:    { color: '#FFF', fontSize: 16, fontWeight: '900', marginBottom: 2 },
+  actionHint:     { color: 'rgba(255,255,255,0.6)', fontSize: 12 },
 
-  // ── Permission request
-  permTitle:  { fontSize: 20, fontWeight: '900', textAlign: 'center' },
-  permSub:    { fontSize: 13, textAlign: 'center', maxWidth: 280, lineHeight: 19 },
-  permBtn:    { marginTop: 20, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 14 },
-  permBtnText:{ color: '#FFF', fontWeight: '800', fontSize: 15 },
+  camBottom:       { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 10, paddingTop: 40, alignItems: 'center', gap: 6 },
+  skipBtn:         { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 7, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)' },
+  skipBtnText:     { color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '600' },
+  captureBtn:      { alignItems: 'center' },
+  captureBtnLocked:{ opacity: 0.55 },
+  captureOuter:    { width: 78, height: 78, borderRadius: 39, borderWidth: 4, alignItems: 'center', justifyContent: 'center' },
+  captureInner:    { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  captureLbl:      { color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '600' },
 
-  // ── Analyzing
+  // Analyzing
   analyzeFrame:  { width: SW * 0.6, height: SW * 0.65, borderRadius: 16, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f172a' },
-  analyzeGrad:   { ...StyleSheet.absoluteFillObject },
   scanLine:      { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#14b8a6', opacity: 0.85 },
-  analyzeCorner: { position: 'absolute', width: 24, height: 24, borderColor: '#14b8a6' },
   analyzeTitle:  { fontSize: 20, fontWeight: '900', marginTop: 20, textAlign: 'center' },
   analyzeSub:    { fontSize: 13, textAlign: 'center', marginTop: 8, maxWidth: 280, lineHeight: 19 },
 
-  // ── Result
+  // Result
   resultIconRing:  { width: 120, height: 120, borderRadius: 60, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 20, marginTop: 16 },
   resultIconInner: { width: 88, height: 88, borderRadius: 44, alignItems: 'center', justifyContent: 'center' },
   resultTitle:     { fontSize: 26, fontWeight: '900', textAlign: 'center', marginBottom: 10 },
