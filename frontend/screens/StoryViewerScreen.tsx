@@ -371,6 +371,44 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     }
   };
 
+  const handleReportStory = async () => {
+    if (!token || !currentStory) return;
+    pauseProgress();
+    Alert.alert(
+      "Report Story",
+      `Report ${userName}'s story for review?`,
+      [
+        { text: "Cancel", style: "cancel", onPress: resumeProgress },
+        {
+          text: "Report",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await post("/reports", {
+                reportedUserId: userId,
+                reason: "inappropriate",
+                description: "Reported from story viewer",
+                contentType: "story",
+                contentId: currentStory._id,
+                contentUrl: currentStory.imageUrl || currentStory.mediaUrl,
+                contentPreview: currentStory.textContent || "Reported story"
+              }, token);
+              if (response.success) {
+                Alert.alert("Reported", "Thank you. Our team will review this story.");
+              } else {
+                Alert.alert("Error", "Failed to submit report");
+              }
+            } catch (error) {
+              Alert.alert("Error", "Failed to submit report");
+            } finally {
+              resumeProgress();
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const currentStory = stories[currentIndex];
   const activeStoryType = currentStory?.type || "image";
 
@@ -688,6 +726,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               </Pressable>
               <Pressable style={styles.actionButton} onPress={handleShareStory}>
                 <Ionicons name="share-outline" size={28} color="#FFF" />
+              </Pressable>
+              <Pressable style={styles.actionButton} onPress={handleReportStory}>
+                <Ionicons name="flag-outline" size={28} color="#FFF" />
               </Pressable>
             </View>
           </View>

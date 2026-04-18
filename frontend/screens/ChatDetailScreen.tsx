@@ -118,6 +118,7 @@ export default function ChatDetailScreen({
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportTargetMessage, setReportTargetMessage] = useState<Message | null>(null);
 
   const [chatTheme, setChatTheme] = useState<string>("default");
   const [isRecording, setIsRecording] = useState(false);
@@ -1246,8 +1247,15 @@ export default function ChatDetailScreen({
     if (!selectedReportReason) { Alert.alert("Select Reason", "Please select a reason for reporting"); return; }
     setSubmittingReport(true);
     try {
-      const response = await post("/reports", { reportedUserId: userId, reason: selectedReportReason, description: reportDetails, matchId }, token || "");
-      if (response.success) { setShowReportModal(false); setSelectedReportReason(null); setReportDetails(""); Alert.alert("Report Submitted", "Thank you for your report. Our team will review it shortly."); }
+      const payload: any = { reportedUserId: userId, reason: selectedReportReason, description: reportDetails, matchId };
+      if (reportTargetMessage?.type === "image" && reportTargetMessage.imageUrl) {
+        payload.contentType = "message_image";
+        payload.contentId = reportTargetMessage._id;
+        payload.contentUrl = reportTargetMessage.imageUrl;
+        payload.contentPreview = reportTargetMessage.content || "Reported image message";
+      }
+      const response = await post("/reports", payload, token || "");
+      if (response.success) { setShowReportModal(false); setSelectedReportReason(null); setReportDetails(""); setReportTargetMessage(null); Alert.alert("Report Submitted", "Thank you for your report. Our team will review it shortly."); }
     } catch (error) { Alert.alert("Error", "Failed to submit report. Please try again."); }
     finally { setSubmittingReport(false); }
   };
@@ -1971,7 +1979,7 @@ export default function ChatDetailScreen({
               <Feather name={isDark ? "sun" : "moon"} size={22} color={theme.text} />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>{isDark ? "Light Mode" : "Dark Mode"}</ThemedText>
             </Pressable>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowReportModal(true); }}>
+            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setReportTargetMessage(null); setShowReportModal(true); }}>
               <Feather name="flag" size={22} color="#FF9800" />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>Report User</ThemedText>
             </Pressable>
@@ -2014,14 +2022,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Report modal */}
-      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
+      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => { setShowReportModal(false); setReportTargetMessage(null); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.reportModal, { backgroundColor: theme.background }]}>
             <View style={styles.reportHeader}>
-              <ThemedText style={[styles.reportTitle, { color: theme.text }]}>Report {userName}</ThemedText>
-              <Pressable onPress={() => setShowReportModal(false)}><Feather name="x" size={24} color={theme.text} /></Pressable>
+              <ThemedText style={[styles.reportTitle, { color: theme.text }]}>{reportTargetMessage ? "Report Image" : `Report ${userName}`}</ThemedText>
+              <Pressable onPress={() => { setShowReportModal(false); setReportTargetMessage(null); }}><Feather name="x" size={24} color={theme.text} /></Pressable>
             </View>
-            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>Why are you reporting this user?</ThemedText>
+            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>Why are you reporting this {reportTargetMessage ? "image" : "user"}?</ThemedText>
             <ScrollView style={styles.reportReasons}>
               {REPORT_REASONS.map((reason) => (
                 <Pressable key={reason.id} style={[styles.reportReasonItem, selectedReportReason === reason.id && { backgroundColor: theme.primary + "20", borderColor: theme.primary }, { borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} onPress={() => setSelectedReportReason(reason.id)}>
@@ -2121,6 +2129,15 @@ export default function ChatDetailScreen({
               <Pressable style={styles.messageMenuItem} onPress={handleEditOpen}>
                 <Feather name="edit-3" size={22} color={theme.primary} />
                 <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Edit Message</ThemedText>
+              </Pressable>
+            )}
+            {selectedMessage && (() => {
+              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
+              return String(sid) !== String(myId) && selectedMessage.type === "image" && !!selectedMessage.imageUrl && !selectedMessage.deletedForEveryone;
+            })() && (
+              <Pressable style={styles.messageMenuItem} onPress={() => { setReportTargetMessage(selectedMessage); setShowMessageMenu(false); setShowReportModal(true); }}>
+                <Feather name="flag" size={22} color="#F44336" />
+                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Report Image</ThemedText>
               </Pressable>
             )}
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>

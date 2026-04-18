@@ -6,6 +6,7 @@ const User = require('../models/User');
 const Report = require('../models/Report');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
+const Story = require('../models/Story');
 const AuditLog = require('../models/AuditLog');
 const redis = require('../utils/redis');
 
@@ -755,8 +756,9 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
-    const reports = await Report.find({ status: 'pending' })
+    const reports = await Report.find({ status: 'pending', contentType: { $in: ['profile_photo', 'story', 'message_image'] } })
       .populate('reportedBy', 'name email photos')
+      .populate('reporter', 'name email photos')
       .populate('reportedUser', 'name email photos')
       .sort({ createdAt: -1 })
       .limit(100);
@@ -764,20 +766,26 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
     const content = reports
       .map(report => {
         const reportedUser = report.reportedUser;
-        const reporter = report.reportedBy;
-        const photoIndex = reportedUser?.photos?.findIndex(photo => photo?.url) ?? -1;
-        const photo = photoIndex >= 0 ? reportedUser.photos[photoIndex] : null;
-        if (!reportedUser || !photo?.url) return null;
+        const reporter = report.reportedBy || report.reporter;
+        if (!reportedUser) return null;
+        const userAvatar = reportedUser.photos?.[0]?.url || reportedUser.photos?.[0] || report.contentUrl;
+        let imageUrl = report.contentUrl || userAvatar;
+        if (report.contentType === 'profile_photo' && !imageUrl) {
+          const photoIndex = Number.parseInt(report.contentId || '0', 10);
+          const photo = reportedUser.photos?.[photoIndex] || reportedUser.photos?.[0];
+          imageUrl = photo?.url || photo;
+        }
+        if (!imageUrl) return null;
 
         return {
-          id: `report-photo-${report._id}-${photoIndex}`,
+          id: `report-${report._id}`,
           reportId: report._id,
           userId: reportedUser._id,
           userName: reportedUser.name || 'Unknown user',
-          userAvatar: photo.url,
-          type: 'profile_photo',
-          imageUrl: photo.url,
-          reason: `${report.reason || 'Reported content'}${reporter?.name ? ` • reported by ${reporter.name}` : ''}`,
+          userAvatar,
+          type: report.contentType,
+          imageUrl,
+          reason: `${report.reason || 'Reported content'}${report.description ? `: ${report.description}` : ''}${reporter?.name ? ` • reported by ${reporter.name}` : ''}`,
           flaggedAt: report.createdAt || new Date(),
           status: 'pending',
           aiConfidence: 60,
@@ -805,20 +813,54 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
       return res.status(400).json({ success: false, message: 'Invalid action' });
     }
 
-    if (req.params.contentId.startsWith('report-photo-')) {
-      const parts = req.params.contentId.replace('report-photo-', '').split('-');
-      const photoIndex = Number(parts.pop());
-      const reportId = parts.join('-');
+    if (req.params.contentId.startsWith('report-')) {
+      const reportId = req.params.contentId.replace('report-', '');
       const report = await Report.findById(reportId);
       if (!report) {
         return res.status(404).json({ success: false, message: 'Flagged report not found' });
       }
 
-      const user = await User.findById(report.reportedUser);
-      if (action === 'reject' && user && Number.isInteger(photoIndex) && user.photos?.[photoIndex]) {
-        user.photos.splice(photoIndex, 1);
-        await user.save();
-        await redis.del(`profile:me:${user._id}`);
+      const reportedUserId = report.reportedUser?._id || report.reportedUser;
+      const user = await User.findById(reportedUserId);
+      if (action === 'reject') {
+        if (report.contentType === 'profile_photo' && user) {
+          let photoIndex = Number.parseInt(report.contentId || '', 10);
+          if (!Number.isInteger(photoIndex) || !user.photos?.[photoIndex]) {
+            photoIndex = user.photos?.findIndex(photo => (photo?.url || photo) === report.contentUrl) ?? -1;
+          }
+          if (photoIndex >= 0 && user.photos?.[photoIndex]) {
+            user.photos.splice(photoIndex, 1);
+            await user.save();
+            await redis.del(`profile:me:${user._id}`);
+          }
+        } else if (report.contentType === 'story' && report.contentId) {
+          const story = await Story.findById(report.contentId);
+          if (story) {
+            const ownerId = story.user.toString();
+            await story.deleteOne();
+            await Promise.all([
+              redis.del(`stories:active:${ownerId}`),
+              redis.del(`stories:mine:${ownerId}`),
+              redis.del(`stories:user:${ownerId}:viewer:${ownerId}`),
+            ]);
+          }
+        } else if (report.contentType === 'message_image' && report.contentId) {
+          const message = await Message.findById(report.contentId);
+          if (message) {
+            message.content = 'This image was removed by moderation';
+            message.type = 'system';
+            message.imageUrl = undefined;
+            message.deletedForEveryone = true;
+            await message.save();
+            const io = req.app.get('io');
+            if (io) {
+              io.to(message.matchId.toString()).emit('chat:message-deleted', {
+                messageId: message._id,
+                matchId: message.matchId,
+              });
+            }
+          }
+        }
       }
 
       report.status = 'resolved';

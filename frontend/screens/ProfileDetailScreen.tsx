@@ -298,7 +298,15 @@ export default function ProfileDetailScreen() {
           onPress: async () => {
             try {
               if (token) {
-                await post('/reports', { reportedUserId: userId, reason: 'inappropriate' }, token);
+                const currentPhoto = user?.photos?.[currentPhotoIndex];
+                await post('/reports', {
+                  reportedUserId: userId,
+                  reason: 'inappropriate',
+                  contentType: currentPhoto ? 'profile_photo' : 'user',
+                  contentId: currentPhoto ? String(currentPhotoIndex) : undefined,
+                  contentUrl: currentPhoto?.url || currentPhoto,
+                  description: currentPhoto ? `Profile photo #${currentPhotoIndex + 1}` : 'Profile report'
+                }, token);
               }
               Alert.alert('Reported', 'Thank you for your report. We will review it shortly.');
             } catch (error) {
