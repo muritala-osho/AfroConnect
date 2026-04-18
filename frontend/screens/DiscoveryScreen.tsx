@@ -1499,6 +1499,13 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               </Animated.View>
 
 
+              <Pressable
+                style={styles.profileIconButton}
+                onPress={handleViewProfile}
+              >
+                <Feather name="user" size={20} color="#FFF" />
+              </Pressable>
+
               <View style={[styles.cardInfoOverlay, { zIndex: 10 }]}>
                 <View style={styles.nameRow}>
                   <ThemedText style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit={false}>
@@ -1538,7 +1545,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 </View>
 
                 {displayInterests.length > 0 && (
-                  <View style={[styles.tagsRow, { marginBottom: 14 }]}>
+                  <View style={styles.tagsRow}>
                     {displayInterests.map((interest, index) => (
                       <View key={index} style={styles.tag}>
                         <Feather name={getInterestIcon(interest)} size={12} color="#FFF" />
@@ -1547,15 +1554,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     ))}
                   </View>
                 )}
-
-                <Pressable
-                  style={styles.viewProfileButton}
-                  onPress={handleViewProfile}
-                >
-                  <Feather name="user" size={16} color="#FFF" />
-                  <ThemedText style={styles.viewProfileButtonText}>View Profile</ThemedText>
-                  <Feather name="chevron-right" size={16} color="#FFF" />
-                </Pressable>
               </View>
             </Animated.View>
           </GestureDetector>
@@ -2193,12 +2191,26 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(50, 50, 50, 0.85)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.15)",
+    borderColor: "rgba(255, 255, 255, 0.35)",
+  },
+  profileIconButton: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
   },
   tagText: {
     fontSize: 13,
