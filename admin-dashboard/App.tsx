@@ -93,7 +93,7 @@ const App: React.FC = () => {
     setAuth({ isAuthenticated: false, user: null });
     localStorage.removeItem('afroconnect_auth');
     clearToken();
-    setPendingCounts({ reports: 0, verifications: 0, tickets: 0 });
+    setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0 });
     showToast('Session terminated safely.', 'success');
   }, [showToast]);
 
