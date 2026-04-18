@@ -19,6 +19,48 @@ function sanitizeUrl(url) {
     return null;
   }
 }
+
+/**
+ * Safely remove all children from an element without using innerHTML.
+ * Eliminates XSS risk from innerHTML = '' patterns.
+ */
+function clearEl(el) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+/**
+ * Create a "no data" table row using safe DOM APIs — no innerHTML.
+ * @param {number} colSpan  Number of columns to span
+ * @param {string} message  Plain-text message to display
+ */
+function emptyRow(colSpan, message) {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = colSpan;
+  td.style.cssText = 'text-align:center;padding:40px;color:var(--text-muted)';
+  td.textContent = message;
+  tr.appendChild(td);
+  return tr;
+}
+
+/**
+ * Create an empty-state block using safe DOM APIs — no innerHTML.
+ * @param {string|null} iconClass  Optional Font Awesome class string (e.g. 'fas fa-check-circle')
+ * @param {string}      message    Plain-text message to display
+ */
+function emptyState(iconClass, message) {
+  const div = document.createElement('div');
+  div.className = 'empty-state';
+  if (iconClass) {
+    const icon = document.createElement('i');
+    icon.className = iconClass;
+    div.appendChild(icon);
+  }
+  const p = document.createElement('p');
+  p.textContent = message;
+  div.appendChild(p);
+  return div;
+}
 let authToken = localStorage.getItem('admin_token') || '';
 let currentAdmin = null;
 
@@ -373,7 +415,8 @@ async function loadUsers() {
     const res = await apiCall('/api/admin/users');
     const users = res.users || [];
     if (!users.length) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">No users found</td></tr>';
+      clearEl(tbody);
+      tbody.appendChild(emptyRow(5, 'No users found'));
       return;
     }
     tbody.textContent = '';
@@ -463,7 +506,8 @@ async function loadUsers() {
     };
     tbody.addEventListener('click', tbody._userClickHandler);
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">Could not load users</td></tr>';
+    clearEl(tbody);
+    tbody.appendChild(emptyRow(5, 'Could not load users'));
   }
 }
 
@@ -478,7 +522,7 @@ async function viewUserDetail(userId) {
     document.getElementById('detailUserName').textContent = u.name || 'Unknown';
     document.getElementById('detailUserEmail').textContent = u.email || '';
     const statusEl = document.getElementById('detailUserStatus');
-    statusEl.innerHTML = '';
+    clearEl(statusEl);
     const statusBadge = document.createElement('span');
     statusBadge.className = `badge-status ${u.isBanned ? 'badge-banned' : 'badge-active'}`;
     statusBadge.textContent = u.isBanned ? 'Banned' : 'Active';
@@ -486,7 +530,7 @@ async function viewUserDetail(userId) {
     document.getElementById('detailUserBio').textContent = u.bio || 'No bio';
     const picsGrid = document.getElementById('detailProfilePictures');
     const photos = (u.photos || []).map(p => typeof p === 'string' ? p : p?.url).filter(Boolean);
-    picsGrid.innerHTML = '';
+    clearEl(picsGrid);
     photos.forEach(p => {
       const img = document.createElement('img');
       img.src = p;
@@ -525,10 +569,11 @@ async function loadReports() {
     const container = document.getElementById('reportsContainer');
     if (!container) return;
     if (!reports.length) {
-      container.innerHTML = '<div class="empty-state"><i class="fas fa-check-circle"></i><p>No pending reports</p></div>';
+      clearEl(container);
+      container.appendChild(emptyState('fas fa-check-circle', 'No pending reports'));
       return;
     }
-    container.innerHTML = '';
+    clearEl(container);
     reports.slice(0, 20).forEach(r => {
       const card = document.createElement('div');
       card.className = 'report-card';
@@ -583,7 +628,7 @@ async function loadReports() {
     });
   } catch (e) {
     const container = document.getElementById('reportsContainer');
-    if (container) container.innerHTML = '<div class="empty-state"><p>Could not load reports</p></div>';
+    if (container) { clearEl(container); container.appendChild(emptyState(null, 'Could not load reports')); }
   }
 }
 
@@ -638,7 +683,8 @@ async function loadPayments() {
             tbody.appendChild(tr);
           });
         } else {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No subscription data</td></tr>';
+          clearEl(tbody);
+          tbody.appendChild(emptyRow(6, 'No subscription data'));
         }
       }
     }
@@ -654,7 +700,8 @@ async function loadSupportTickets() {
     const res = await apiCall('/api/support/tickets').catch(() => ({}));
     const tickets = res.tickets || res.data || [];
     if (!tickets.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No support tickets</td></tr>';
+      clearEl(tbody);
+      tbody.appendChild(emptyRow(6, 'No support tickets'));
       return;
     }
     const fragment = document.createDocumentFragment();
@@ -691,10 +738,11 @@ async function loadSupportTickets() {
 
       fragment.appendChild(tr);
     });
-    tbody.innerHTML = '';
+    clearEl(tbody);
     tbody.appendChild(fragment);
   } catch (e) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">No support tickets</td></tr>';
+    clearEl(tbody);
+    tbody.appendChild(emptyRow(6, 'No support tickets'));
   }
 }
 
