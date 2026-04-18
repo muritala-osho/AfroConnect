@@ -1486,7 +1486,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               )}
 
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
+                colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.98)']}
                 style={styles.cardGradient}
               />
 
@@ -1499,7 +1499,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               </Animated.View>
 
 
-              <View style={styles.cardInfoOverlay}>
+              <View style={[styles.cardInfoOverlay, { zIndex: 10 }]}>
                 <View style={styles.nameRow}>
                   <ThemedText style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit={false}>
                     {currentUser.name?.split(' ')[0]}
@@ -1508,7 +1508,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     )}
                   </ThemedText>
                   {currentUser.verified && (
-                    <VerificationBadge size={14} />
+                    <VerificationBadge size={22} />
                   )}
                   {(currentUser as any).premium?.isActive && (
                     <PremiumBadge size="small" style={{ marginLeft: 4 }} />
@@ -1524,19 +1524,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                   </View>
                 )}
 
-                <Pressable 
-                  style={styles.basicsRow}
-                  onPress={handleViewProfile}
-                >
-                  <View style={styles.basicsIconContainer}>
-                    <Feather name="grid" size={14} color="#FFF" />
-                  </View>
-                  <ThemedText style={styles.basicsText}>{t('basicsLifestyle')}</ThemedText>
-                  <View style={styles.chevronContainer}>
-                    <Feather name="chevron-right" size={18} color="#FFF" />
-                  </View>
-                </Pressable>
-
                 <View style={styles.lifestyleRow}>
                   {currentUser.religion && (
                     <View style={styles.lifestyleBadge}>
@@ -1551,7 +1538,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 </View>
 
                 {displayInterests.length > 0 && (
-                  <View style={styles.tagsRow}>
+                  <View style={[styles.tagsRow, { marginBottom: 14 }]}>
                     {displayInterests.map((interest, index) => (
                       <View key={index} style={styles.tag}>
                         <Feather name={getInterestIcon(interest)} size={12} color="#FFF" />
@@ -1560,6 +1547,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     ))}
                   </View>
                 )}
+
+                <Pressable
+                  style={styles.viewProfileButton}
+                  onPress={handleViewProfile}
+                >
+                  <Feather name="user" size={16} color="#FFF" />
+                  <ThemedText style={styles.viewProfileButtonText}>View Profile</ThemedText>
+                  <Feather name="chevron-right" size={16} color="#FFF" />
+                </Pressable>
               </View>
             </Animated.View>
           </GestureDetector>
@@ -2032,16 +2028,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    paddingBottom: 25,
-    height: '60%',
-    justifyContent: 'flex-end',
+    paddingBottom: 20,
+    zIndex: 10,
   },
   nameRow: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     marginBottom: 6,
     flexWrap: 'nowrap',
     width: '100%',
+    gap: 6,
   },
   profileName: {
     fontSize: 32,
@@ -2173,6 +2169,25 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+  },
+  viewProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    alignSelf: "flex-start",
+  },
+  viewProfileButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
+    letterSpacing: 0.3,
   },
   tag: {
     flexDirection: "row",
