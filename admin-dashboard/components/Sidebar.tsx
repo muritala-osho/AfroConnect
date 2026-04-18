@@ -10,7 +10,7 @@ interface SidebarProps {
   adminName: string;
   adminAvatar?: string;
   onLogout: () => void;
-  pendingCounts?: { reports: number; verifications: number; tickets: number };
+  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number };
 }
 
 const SECTION_GROUPS = [
@@ -40,7 +40,7 @@ const BADGE_MAP: Record<string, keyof NonNullable<SidebarProps['pendingCounts']>
   reports: 'reports',
   verification: 'verifications',
   support: 'tickets',
-  agent: 'tickets',
+  agent: 'unreadTickets',
 };
 
 const AfroLogo = () => (

@@ -39,7 +39,7 @@ const PAGE_TITLES: Record<string, string> = {
   churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
 };
 
-interface PendingCounts { reports: number; verifications: number; tickets: number }
+interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number }
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -64,7 +64,7 @@ const App: React.FC = () => {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; id: number } | null>(null);
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
-  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0 });
+  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0 });
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notifIdRef = useRef(0);
 
@@ -132,12 +132,14 @@ const App: React.FC = () => {
       const [rRes, vRes, tRes] = await Promise.allSettled([
         adminApi.getReports('pending'),
         adminApi.getVerifications(),
-        adminApi.getAllSupportTickets({ status: 'open' }),
+        adminApi.getAllSupportTickets(),
       ]);
+      const allTickets: any[] = tRes.status === 'fulfilled' && tRes.value?.success ? (tRes.value.tickets || []) : [];
       setPendingCounts({
         reports:       rRes.status === 'fulfilled' && rRes.value?.success ? (rRes.value.reports?.length || 0) : 0,
         verifications: vRes.status === 'fulfilled' && vRes.value?.success ? (vRes.value.verifications?.length || 0) : 0,
-        tickets:       tRes.status === 'fulfilled' && tRes.value?.success ? (tRes.value.tickets?.filter((t: any) => t.status === 'open').length || 0) : 0,
+        tickets:       allTickets.filter((t: any) => t.status === 'open').length,
+        unreadTickets: allTickets.filter((t: any) => (t.unreadByAgent ?? 0) > 0).length,
       });
     } catch {
     }
