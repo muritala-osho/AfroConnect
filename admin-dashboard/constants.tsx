@@ -19,14 +19,14 @@ import {
 import { AdminRole, PushTemplate } from './types';
 
 export const NAV_ITEMS = [
-  { id: 'dashboard',    label: 'Dashboard',          icon: <LayoutDashboard size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'dashboard',    label: 'Dashboard',          icon: <LayoutDashboard size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
   { id: 'users',        label: 'Citizens',            icon: <Users size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'verification', label: 'Verification Requests', icon: <UserCheck size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'reports',      label: 'Safety Hub',          icon: <ShieldAlert size={20} />,     roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'appeals',      label: 'Appeals Queue',       icon: <Gavel size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'churn',        label: 'Churn Intelligence',  icon: <TrendingDown size={20} />,    roles: [AdminRole.SUPER_ADMIN] },
   { id: 'content',      label: 'Content Moderation',  icon: <ImageOff size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
-  { id: 'support',      label: 'Support Desk',        icon: <LifeBuoy size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'support',      label: 'Support Desk',        icon: <LifeBuoy size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
   { id: 'agent',        label: 'My Tickets',          icon: <Headphones size={20} />,      roles: [AdminRole.SUPPORT] },
   { id: 'payments',     label: 'Finances',            icon: <CreditCard size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'analytics',    label: 'Intelligence',        icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
