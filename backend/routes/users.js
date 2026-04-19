@@ -48,6 +48,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     ];
 
     const user = await User.findById(req.user._id);
+    const isPremium = user.premium?.isActive;
 
     allowedUpdates.forEach(field => {
       if (updates[field] !== undefined) {
@@ -68,6 +69,11 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
                 ...(user.preferences.ageRange || {}),
                 ...updates.preferences.ageRange
               };
+            } else if (prefKey === 'maxDistance') {
+              const maxDistance = normaliseMaxDistanceKm(updates.preferences.maxDistance, 50);
+              user.preferences.maxDistance = isPremium ? maxDistance : Math.min(maxDistance, 50);
+            } else if (prefKey === 'showVerifiedOnly') {
+              user.preferences.showVerifiedOnly = isPremium ? updates.preferences.showVerifiedOnly : false;
             } else {
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
@@ -268,7 +274,7 @@ router.get('/nearby', protect, async (req, res) => {
     };
 
     const wantVerifiedOnly =
-      verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true;
+      currentUser.premium?.isActive && (verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true);
     if (wantVerifiedOnly) query.verified = true;
 
     const wantOnlineOnly =

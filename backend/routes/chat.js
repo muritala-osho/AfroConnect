@@ -305,6 +305,19 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
     const { replyTo, viewOnce } = req.body;
 
+    if (type === "audio") {
+      const freeLimit = 30;
+      const duration = Number(audioDuration || 0);
+      if (!req.user.premium?.isActive && duration > freeLimit) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "Voice notes longer than 30s require Premium",
+          });
+      }
+    }
+
     const messageData = {
       matchId,
       sender: req.user._id,
@@ -346,19 +359,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
     const message = await Message.create(messageData);
     await message.populate("sender", "name photos");
-
-    if (type === "audio") {
-      const freeLimit = 30;
-      const isPremium = req.user.premium?.isActive;
-      if (!isPremium && audioDuration > freeLimit) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "Voice notes longer than 30s require Premium",
-          });
-      }
-    }
 
     const wasFirstMessage = !match.hasFirstMessage;
     await Match.findByIdAndUpdate(matchId, {
