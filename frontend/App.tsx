@@ -107,6 +107,7 @@ function AppContent() {
   const { user, token } = useAuth();
   const [isOverlayVisible, setIsOverlayVisible] = React.useState(false);
   const appState = useRef(AppState.currentState);
+  const lastTokenRegistration = useRef<number>(0);
 
   const onLayoutRootView = useCallback(async () => {
     await SplashScreen.hideAsync();
@@ -207,13 +208,18 @@ function AppContent() {
     };
 
     setupNotifications();
+    lastTokenRegistration.current = Date.now();
 
-    // Re-register push token every time the app comes back to the foreground.
-    // This ensures the token stays fresh if Expo rotates it while the app was
-    // in the background, and also retries any failed registration from login.
+    // Re-register push token when the app comes back to the foreground, but
+    // no more than once per hour to avoid TOO_MANY_REGISTRATIONS from Firebase.
+    const ONE_HOUR_MS = 60 * 60 * 1000;
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === "active") {
-        registerForPushNotificationsAsync(token ?? undefined).catch(() => {});
+        const timeSinceLastReg = Date.now() - lastTokenRegistration.current;
+        if (timeSinceLastReg >= ONE_HOUR_MS) {
+          lastTokenRegistration.current = Date.now();
+          registerForPushNotificationsAsync(token ?? undefined).catch(() => {});
+        }
       }
       appState.current = nextState;
     });

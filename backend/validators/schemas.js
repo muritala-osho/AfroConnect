@@ -18,11 +18,16 @@ const signup = Joi.object({
 const login = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   password: Joi.string().min(1).max(128).required(),
+  deviceName: Joi.string().max(200).optional().allow(''),
+  platform: Joi.string().valid('ios', 'android', 'web', 'unknown').optional().allow(''),
 });
 
 const verifyOtp = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+  userId: Joi.string().optional().allow(''),
+  deviceName: Joi.string().max(200).optional().allow(''),
+  platform: Joi.string().valid('ios', 'android', 'web', 'unknown').optional().allow(''),
 });
 
 const forgotPassword = Joi.object({
