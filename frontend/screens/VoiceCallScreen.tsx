@@ -383,30 +383,6 @@ export default function VoiceCallScreen() {
     if (navigation.canGoBack()) navigation.goBack();
   }, [minimizeCall, navigation]);
 
-  /* ── Unified back press handler (UI button + Android hardware back) ── */
-  const handleBackPress = useCallback(() => {
-    const status = callStatusRef.current;
-    if (status === "connected") {
-      handleMinimize();
-    } else if (isIncoming && status === "ringing") {
-      handleDecline();
-    } else if (["ended", "declined", "missed", "failed", "busy"].includes(status)) {
-      clearCall();
-      if (navigation.canGoBack()) navigation.goBack();
-    } else {
-      handleEndCall();
-    }
-    return true;
-  }, [isIncoming, handleMinimize, handleDecline, handleEndCall, clearCall, navigation]);
-
-  /* ── Android hardware back button ── */
-  useFocusEffect(
-    useCallback(() => {
-      const sub = BackHandler.addEventListener("hardwareBackPress", handleBackPress);
-      return () => sub.remove();
-    }, [handleBackPress])
-  );
-
   /* ── Accept incoming ── */
   const handleAccept = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -431,6 +407,30 @@ export default function VoiceCallScreen() {
     clearCall();
     setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
   }, [callerId, isIncoming, authToken, post, stopRingtone, clearCall, navigation, setStatus]);
+
+  /* ── Unified back press handler (UI button + Android hardware back) ── */
+  const handleBackPress = useCallback(() => {
+    const status = callStatusRef.current;
+    if (status === "connected") {
+      handleMinimize();
+    } else if (isIncoming && status === "ringing") {
+      handleDecline();
+    } else if (["ended", "declined", "missed", "failed", "busy"].includes(status)) {
+      clearCall();
+      if (navigation.canGoBack()) navigation.goBack();
+    } else {
+      handleEndCall();
+    }
+    return true;
+  }, [isIncoming, handleMinimize, handleDecline, handleEndCall, clearCall, navigation]);
+
+  /* ── Android hardware back button ── */
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", handleBackPress);
+      return () => sub.remove();
+    }, [handleBackPress])
+  );
 
   /* ── Toggle mute ── */
   const toggleMute = useCallback(() => {

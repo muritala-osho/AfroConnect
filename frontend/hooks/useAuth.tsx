@@ -8,6 +8,7 @@ import { getApiBaseUrl } from "@/constants/config";
 import logger from "@/utils/logger";
 
 export interface UserPhoto {
+  _id?: string;
   url: string;
   publicId?: string;
   isPrimary?: boolean;
@@ -81,6 +82,12 @@ export interface User {
   premium?: { isActive: boolean; plan: string; expiresAt?: string };
   needsVerification?: boolean;
   profileIncomplete?: boolean;
+  height?: string | number;
+  language?: string;
+  religion?: string;
+  ethnicity?: string;
+  additionalLocations?: Array<{ city?: string; country?: string; coordinates?: [number, number] }>;
+  settings?: Record<string, any>;
 }
 
 interface AuthContextType {

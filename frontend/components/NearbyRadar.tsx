@@ -25,6 +25,7 @@ interface NearbyUser {
   distance: number;
   photos: any[];
   online?: boolean;
+  premium?: { isActive: boolean; plan?: string };
 }
 
 interface NearbyRadarProps {

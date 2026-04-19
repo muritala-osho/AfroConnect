@@ -937,7 +937,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     width: '100%',
-    marginBotttom: 6,
+    marginBottom: 6,
     flexWrap: 'nowrap',
   },
   name: {

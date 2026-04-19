@@ -215,7 +215,7 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
           onPress: async () => {
             setDeletingIndex(index);
             try {
-              await del(`/upload/photo?publicId=${encodeURIComponent(photo.publicId || photo._id)}`, token);
+              await del(`/upload/photo?publicId=${encodeURIComponent(photo.publicId || photo._id || '')}`, token ?? undefined);
               await fetchUser();
             } catch (error) {
               console.error('Delete photo error:', error);

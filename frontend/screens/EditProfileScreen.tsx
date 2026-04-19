@@ -1455,6 +1455,12 @@ const styles = StyleSheet.create({
 
   selectButton: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   selectIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
+  sectionIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  sectionHeaderText: { flex: 1 },
+  sectionTitle: { fontSize: 15, fontWeight: '700' as const },
+  sectionDescription: { fontSize: 12, marginTop: 2 },
   selectButtonText: { fontSize: 14, flex: 1 },
 
   triggerRow: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },

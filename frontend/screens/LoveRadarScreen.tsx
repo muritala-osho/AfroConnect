@@ -58,6 +58,7 @@ interface NearbyUser {
   angle: number;
   online: boolean;
   verified: boolean;
+  premium?: { isActive: boolean; plan?: string };
   interests: string[];
 }
 
@@ -728,7 +729,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
           {/* Refresh */}
           <Pressable
             style={styles.refreshBtn}
-            onPress={handleRefreshLocation}
+            onPress={() => handleRefreshLocation()}
             disabled={locationLoading}
           >
             <LinearGradient
@@ -772,7 +773,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
               <ThemedText style={styles.emptySub}>
                 Try expanding your radius or refreshing your location
               </ThemedText>
-              <Pressable style={styles.emptyAction} onPress={handleRefreshLocation}>
+              <Pressable style={styles.emptyAction} onPress={() => handleRefreshLocation()}>
                 <Feather name="refresh-cw" size={14} color="#10B981" />
                 <ThemedText style={styles.emptyActionText}>Refresh</ThemedText>
               </Pressable>

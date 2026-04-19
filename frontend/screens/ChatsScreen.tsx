@@ -547,7 +547,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.navigate("MainTabs", { screen: "Discovery" });
+      (navigation as any).navigate("MainTabs", { screen: "Discovery" });
     }
   }, [navigation]);
 
@@ -1081,9 +1081,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
 
     try {
       if (isMuting) {
-        await post("/mute/user", { userId, muteAll: true }, token);
+        await post("/mute/user", { userId, muteAll: true }, token ?? undefined);
       } else {
-        await del(`/mute/user/${userId}`, token);
+        await del(`/mute/user/${userId}`, token ?? undefined);
       }
     } catch (e) {
       console.log("Mute sync error (non-critical):", e);

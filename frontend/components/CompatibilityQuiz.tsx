@@ -95,7 +95,7 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
       if (response.success && response.questions.length > 0) {
         setQuestions(response.questions);
       } else {
-        await api.post('/api/quiz/seed');
+        await api.post('/api/quiz/seed', {});
         const retry = await api.get('/api/quiz/questions');
         if (retry.success) {
           setQuestions(retry.questions);

@@ -41,7 +41,7 @@ export function ProgressiveImage({ source, style, contentFit = "cover" }: Progre
 
   return (
     <View style={style as any}>
-      {isLoading && <Skeleton width="100%" height="100%" style={StyleSheet.absoluteFill} />}
+      {isLoading && <Skeleton style={StyleSheet.absoluteFill} />}
       <SafeImage
         source={normalizedSource}
         style={[StyleSheet.absoluteFill, { opacity: isLoading ? 0 : 1 }]}

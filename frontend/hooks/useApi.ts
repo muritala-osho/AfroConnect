@@ -10,6 +10,7 @@ interface ApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+  [key: string]: any;
 }
 
 export function useApi() {

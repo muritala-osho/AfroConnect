@@ -41,7 +41,7 @@ interface BoostProfileProps {
 const { width } = Dimensions.get('window');
 
 export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) => {
-  const { colors } = useTheme();
+  const { theme: colors } = useTheme();
   const api = useApi();
   
   const [modalVisible, setModalVisible] = useState(false);
@@ -163,7 +163,7 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
   const handleCancelBoost = async () => {
     try {
       setLoading(true);
-      const response = await api.delete('/api/boost/cancel');
+      const response = await api.del('/api/boost/cancel');
       if (response.success) {
         setActiveBoost(null);
         setRemainingTime(0);
@@ -450,7 +450,7 @@ interface BoostedBadgeProps {
 }
 
 export const BoostedBadge: React.FC<BoostedBadgeProps> = ({ multiplier = 2 }) => {
-  const { colors } = useTheme();
+  const { theme: colors } = useTheme();
   
   return (
     <View style={[styles.boostedBadge, { backgroundColor: colors.primary }]}>
