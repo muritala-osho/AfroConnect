@@ -1,11 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
+import * as Device from "expo-device";
 import { useApi } from "./useApi";
 import socketService from "@/services/socket";
 import { getApiBaseUrl } from "@/constants/config";
 import logger from "@/utils/logger";
+
+function getDeviceInfo(): { deviceName: string; platform: string } {
+  const model = Device.modelName || "Unknown Device";
+  const osName = Device.osName || (Platform.OS === "ios" ? "iOS" : Platform.OS === "android" ? "Android" : "Web");
+  const osVersion = Device.osVersion || "";
+  const deviceName = osVersion ? `${model} · ${osName} ${osVersion}` : `${model} · ${osName}`;
+  const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
+  return { deviceName, platform };
+}
 
 export interface UserPhoto {
   _id?: string;
@@ -258,7 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...getDeviceInfo() }),
       });
 
       const responseText = await response.text();
@@ -328,6 +338,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await post<{ token: string; user: any }>('/auth/verify-otp', {
       userId,
       otp,
+      ...getDeviceInfo(),
     });
 
     if (response.success && response.data) {
