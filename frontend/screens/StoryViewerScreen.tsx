@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView, Keyboard } from "react-native";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
+import { useKeyboardAnimation, KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -76,7 +78,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(STORY_DURATION);
   const [showViewers, setShowViewers] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const { height: kbAnimHeight } = useKeyboardAnimation();
   const [showStoryMenu, setShowStoryMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('inappropriate');
@@ -129,18 +131,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     fetchStories();
   }, [userId, token, user?.id]);
 
-  useEffect(() => {
-    const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-      setKeyboardHeight(0);
-    });
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, []);
+  const bottomBarAnimStyle = useAnimatedStyle(() => ({
+    bottom: kbAnimHeight.value,
+  }));
 
   useEffect(() => {
     videoDurationSet.current = false;
@@ -670,14 +663,12 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         />
       </View>
 
+      <Reanimated.View style={[styles.bottomGradientWrapper, bottomBarAnimStyle]}>
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.6)"]}
         style={[
           styles.bottomGradient,
-          {
-            paddingBottom: showReplyInput ? 16 : insets.bottom + 16,
-            bottom: showReplyInput ? keyboardHeight : 0,
-          },
+          { paddingBottom: showReplyInput ? 16 : insets.bottom + 16 },
         ]}
       >
         {showReplyInput ? (
@@ -767,6 +758,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </Pressable>
         )}
       </LinearGradient>
+      </Reanimated.View>
 
       <Modal
         visible={showViewers}
@@ -837,6 +829,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           style={styles.reportModalOverlay}
           onPress={() => { setShowReportModal(false); resumeProgress(); }}
         >
+          <KAVController behavior="padding" style={{ width: '100%' }}>
           <Pressable style={styles.reportModalSheet} onPress={() => {}}>
             <View style={styles.reportModalHandle} />
             <ThemedText style={styles.reportModalTitle}>Report Story</ThemedText>
@@ -904,6 +897,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               </Pressable>
             </View>
           </Pressable>
+          </KAVController>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
@@ -1074,14 +1068,15 @@ const styles = StyleSheet.create({
   rightTap: {
     flex: 2,
   },
-  bottomGradient: {
+  bottomGradientWrapper: {
     position: "absolute",
-    bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 10,
+  },
+  bottomGradient: {
     paddingHorizontal: 16,
     paddingTop: 40,
-    zIndex: 10,
   },
   bottomActions: {
     flexDirection: "row",
