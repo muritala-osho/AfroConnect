@@ -29,15 +29,17 @@ const generateToken = (userId, tokenVersion = 0, sessionId = null) => {
 async function createSession(userId, req) {
   try {
     const sessionId = crypto.randomUUID();
-    const deviceName = req.body.deviceName || req.headers['x-device-name'] || 'Unknown Device';
+    const rawDeviceName = req.body.deviceName || req.headers['x-device-name'] || null;
+    const deviceName = rawDeviceName || 'Unknown Device';
     const platform = req.body.platform || req.headers['x-platform'] || 'unknown';
     const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || null;
+    const cleanIp = ipAddress && ipAddress.startsWith('::ffff:') ? ipAddress.slice(7) : ipAddress;
 
     let city = null;
     let country = null;
-    if (ipAddress && ipAddress !== '127.0.0.1' && ipAddress !== '::1' && !ipAddress.startsWith('::ffff:127')) {
+    if (cleanIp && cleanIp !== '127.0.0.1' && cleanIp !== '::1' && !cleanIp.startsWith('::ffff:127')) {
       try {
-        const geoRes = await fetch(`http://ip-api.com/json/${ipAddress}?fields=city,country,status`, { signal: AbortSignal.timeout(3000) });
+        const geoRes = await fetch(`http://ip-api.com/json/${cleanIp}?fields=city,country,status`, { signal: AbortSignal.timeout(3000) });
         const geo = await geoRes.json();
         if (geo.status === 'success') {
           city = geo.city || null;
@@ -46,8 +48,22 @@ async function createSession(userId, req) {
       } catch (_) {}
     }
 
-    await Session.create({ userId, sessionId, deviceName, platform, ipAddress, city, country });
-    return { sessionId, deviceName, ipAddress, city, country };
+    // Remove any existing sessions for the same device to prevent duplicates
+    if (rawDeviceName) {
+      await Session.deleteMany({ userId, deviceName: rawDeviceName });
+    }
+
+    // Cap sessions at 5 per user — delete the oldest ones if over the limit
+    const SESSION_CAP = 5;
+    const existingSessions = await Session.find({ userId }).sort({ lastActive: 1 });
+    if (existingSessions.length >= SESSION_CAP) {
+      const toDelete = existingSessions.slice(0, existingSessions.length - SESSION_CAP + 1);
+      const idsToDelete = toDelete.map(s => s.sessionId);
+      await Session.deleteMany({ sessionId: { $in: idsToDelete } });
+    }
+
+    await Session.create({ userId, sessionId, deviceName, platform, ipAddress: cleanIp, city, country });
+    return { sessionId, deviceName, ipAddress: cleanIp, city, country };
   } catch (err) {
     logger.error('Failed to create session:', err.message);
     return { sessionId: crypto.randomUUID(), deviceName: 'Unknown Device', ipAddress: null, city: null, country: null };
