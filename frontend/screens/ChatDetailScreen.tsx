@@ -45,6 +45,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { Audio, Video, ResizeMode } from "expo-av";
 import { useApi } from "@/hooks/useApi";
+import { KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
@@ -1606,8 +1607,10 @@ export default function ChatDetailScreen({
                     </View>
                   </View>
 
+                </View>
+
                   {item.reactions && item.reactions.length > 0 && (
-                    <View style={[styles.reactionsRow, isMe ? { alignSelf: 'flex-end', marginRight: 4 } : { alignSelf: 'flex-start', marginLeft: 48 }]}>
+                    <View style={[styles.reactionsRow, isMe ? { alignSelf: 'flex-end', marginRight: 12 } : { alignSelf: 'flex-start', marginLeft: 12 }]}>
                       {(() => {
                         const grouped: Record<string, number> = {};
                         (item.reactions || []).forEach(r => { grouped[r.emoji] = (grouped[r.emoji] || 0) + 1; });
@@ -1627,7 +1630,6 @@ export default function ChatDetailScreen({
                       })()}
                     </View>
                   )}
-                </View>
               </Pressable>
             </SwipeableMessage>
           )}
@@ -1752,7 +1754,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0} enabled={Platform.OS !== "web"}>
+      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
@@ -1873,7 +1875,7 @@ export default function ChatDetailScreen({
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KAVController>
 
       {/* Attachment modal */}
       <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
@@ -2334,7 +2336,7 @@ const styles = StyleSheet.create<any>({
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
   audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: -12, marginBottom: 8, zIndex: 1 },
+  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: -8, marginBottom: 4, zIndex: 2, paddingHorizontal: 4 },
   reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 },
   reactionEmoji: { fontSize: 13 },
   reactionCount: { fontSize: 11, fontWeight: "600" },
