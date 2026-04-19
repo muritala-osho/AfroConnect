@@ -14,6 +14,8 @@
   - `backend/models/User.js` (UPDATED): Added `voipPushToken` field.
   - `backend/routes/notifications.js` (UPDATED): Added `POST /api/notifications/register-voip-token` endpoint.
   - `backend/server.js` (UPDATED): On `call:initiate`, if target user has a `voipPushToken` the server now sends a VoIP push (wakes killed iOS app → triggers CallKit UI) before the regular Expo push.
+  - **Firebase Messaging added**: Installed `@react-native-firebase/app` and `@react-native-firebase/messaging`. `frontend/services/firebaseMessaging.ts` registers a background message handler; `frontend/index.js` calls it before `registerRootComponent`. The FCM token is fetched after login and stored in `backend/models/User.js` `fcmToken` field via `POST /api/notifications/register-fcm-token`. Backend `backend/utils/fcmPush.js` uses Firebase Admin SDK (`firebase-admin`) to send data-only FCM messages for calls.
+  - **To enable Android killed-app call ringing via Firebase**: set `FIREBASE_SERVICE_ACCOUNT` env var to the full JSON of your Firebase service account key (Firebase Console → Project Settings → Service Accounts → Generate New Private Key).
   - **To enable iOS VoIP push for killed-app ringing**: set `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (contents of your .p8 key), and optionally `APNS_BUNDLE_ID` in environment variables. The app otherwise functions normally via the Expo notification fallback.
 - **Admin support and moderation fixes**:
   - `admin-dashboard/App.tsx` and `admin-dashboard/constants.tsx`: Support agents no longer land on the admin-only dashboard or user search; they are routed to "My Tickets" to avoid misleading backend/API errors after successful support login.

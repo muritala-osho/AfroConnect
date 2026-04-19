@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.afroconnect.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "backgroundModes": ["voip", "audio", "fetch", "remote-notification"],
       "infoPlist": {
         "UIBackgroundModes": ["voip", "audio", "fetch", "remote-notification"]
@@ -22,6 +23,7 @@
     "android": {
       "package": "com.afroconnect.app",
       "googleServicesFile": "./google-services.json",
+      "useNextNotificationsApi": true,
       "adaptiveIcon": {
         "backgroundColor": "#1A0A2E",
         "foregroundImage": "./assets/images/android-adaptive-foreground.png",
@@ -58,6 +60,8 @@
     },
     "plugins": [
       "./plugins/withCallKeep",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       [
         "expo-splash-screen",
         {

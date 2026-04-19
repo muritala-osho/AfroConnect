@@ -10,6 +10,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { Ionicons } from "@expo/vector-icons";
 import { initCallKeep } from "@/services/callkeep";
 import { registerVoipPushNotifications } from "@/services/voipPush";
+import { requestFCMPermissionAndGetToken } from "@/services/firebaseMessaging";
 
 import RootNavigator from "@/navigation/RootNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -138,6 +139,29 @@ function AppContent() {
               console.warn('[App] Failed to register VoIP token:', err);
             }
           });
+        }
+
+        // Register FCM token for direct Firebase data messages.
+        // On Android this enables the background message handler to wake the
+        // killed app and display the native ConnectionService call screen.
+        try {
+          const fcmToken = await requestFCMPermissionAndGetToken();
+          if (fcmToken) {
+            const authToken = token || (await AsyncStorage.getItem('auth_token'));
+            if (authToken) {
+              await fetch(`${getApiBaseUrl()}/api/notifications/register-fcm-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ fcmToken }),
+              });
+              console.log('[App] FCM token registered with backend.');
+            }
+          }
+        } catch (fcmErr) {
+          console.warn('[App] FCM token registration failed (non-fatal):', fcmErr);
         }
 
         // Handle a notification that launched the app from a killed state

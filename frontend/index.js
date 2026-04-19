@@ -6,16 +6,20 @@ if (typeof global !== 'undefined') {
   global.Platform = Platform;
 }
 
+// ── Firebase background message handler (Android killed-state calls) ─────────
+// Must be imported BEFORE registerRootComponent so Firebase can register its
+// headless handler before the bundle finishes evaluating.
+import { registerFirebaseBackgroundHandler } from "@/services/firebaseMessaging";
+if (Platform.OS !== 'web') {
+  registerFirebaseBackgroundHandler();
+}
+
 import App from "@/App";
 
 registerRootComponent(App);
 
-// ── Android: headless task for incoming calls when app is killed ──────────────
-// This task is invoked by the native side (e.g. Firebase Messaging background
-// handler or a custom native module) when a high-priority FCM data message
-// arrives while the app is completely killed.
-// The task calls react-native-callkeep to display the native ConnectionService
-// incoming call screen without needing the JS UI to be rendered.
+// ── Android: legacy headless task (fallback if Firebase is not available) ──────
+// The BackgroundCallTask can also be triggered by custom native code.
 if (Platform.OS === 'android') {
   AppRegistry.registerHeadlessTask('BackgroundCallTask', () => {
     return async (taskData) => {
@@ -25,8 +29,6 @@ if (Platform.OS === 'android') {
         const { callerId, callerName, callType } = taskData || {};
         if (callerId) {
           displayIncomingCall(callerId, callerName || 'Unknown', callType === 'video');
-          // Store so that when the app foregrounds after answer, IncomingCallHandler
-          // picks it up and connects via socket.
           global.__pendingVoipCall = {
             callerId,
             callerName: callerName || 'Unknown',

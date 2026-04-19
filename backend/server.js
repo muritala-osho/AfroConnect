@@ -755,7 +755,7 @@ io.on('connection', (socket) => {
           const callType = callData?.callType || 'voice';
           const notifType = callType === 'video' ? 'video_call' : 'voice_call';
           const targetUser = await User.findById(targetUserId).select(
-            'pushToken voipPushToken pushNotificationsEnabled muteSettings notificationPreferences'
+            'pushToken voipPushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences'
           );
           const callerName = callerInfo?.name || 'Someone';
 
@@ -774,7 +774,23 @@ io.on('connection', (socket) => {
             }
           }
 
-          // 2) Regular Expo push (covers Android and iOS as fallback)
+          // 2) Android — FCM data-only message: wakes killed app → Firebase background
+          //    handler calls CallKeep.displayIncomingCall() → native ConnectionService UI
+          if (targetUser?.fcmToken) {
+            try {
+              const { sendCallDataMessage } = require('./utils/fcmPush');
+              await sendCallDataMessage(targetUser.fcmToken, {
+                callerId,
+                callerName,
+                callType,
+                callData,
+              });
+            } catch (fcmErr) {
+              console.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
+            }
+          }
+
+          // 3) Regular Expo push (covers Android and iOS as fallback)
           const { sendSmartNotification } = require('./utils/pushNotifications');
           await sendSmartNotification(
             targetUser,

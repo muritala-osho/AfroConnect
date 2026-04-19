@@ -57,6 +57,25 @@ router.post('/register-token', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/notifications/register-fcm-token
+// @desc    Register device FCM token for direct Firebase data messages (Android killed-state calls)
+// @access  Private
+router.post('/register-fcm-token', protect, async (req, res) => {
+  const userId = req.user?._id;
+  try {
+    const { fcmToken } = req.body;
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: 'fcmToken is required' });
+    }
+    await User.findByIdAndUpdate(userId, { fcmToken });
+    console.log(`[Notifications] ✅ FCM token stored for user ${userId}`);
+    res.json({ success: true, message: 'FCM token registered' });
+  } catch (error) {
+    console.error(`[Notifications] register-fcm-token error for user ${userId}:`, error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   POST /api/notifications/register-voip-token
 // @desc    Register iOS VoIP (PushKit) push token for native CallKit support
 // @access  Private
