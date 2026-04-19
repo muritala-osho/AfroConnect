@@ -63,6 +63,11 @@ function navigateFromNotification(data: Record<string, any>) {
   }
   if (screen === "Discovery") {
     nav.navigate("MainTabs", { screen: "Discovery" });
+    return;
+  }
+  if (type === "security" || screen === "DeviceManagement") {
+    nav.navigate("DeviceManagement");
+    return;
   }
 }
 

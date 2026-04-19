@@ -255,6 +255,16 @@ async function setupAndroidChannels() {
     lightColor: '#FF6B9D',
     sound: 'default',
   });
+
+  await Notifications.setNotificationChannelAsync('security', {
+    name: 'Security Alerts',
+    importance: Notifications.AndroidImportance.HIGH,
+    vibrationPattern: [0, 400, 200, 400],
+    lightColor: '#FF4444',
+    sound: 'default',
+    bypassDnd: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
 }
 
 export async function sendLocalNotification(title: string, body: string, data?: any) {

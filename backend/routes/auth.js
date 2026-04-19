@@ -9,6 +9,7 @@ const {
   sendPasswordResetEmail,
   sendWelcomeEmail,
 } = require("../utils/emailService");
+const { sendSmartNotification } = require('../utils/pushNotifications');
 const {
   authLimiter,
   otpLimiter,
@@ -46,10 +47,10 @@ async function createSession(userId, req) {
     }
 
     await Session.create({ userId, sessionId, deviceName, platform, ipAddress, city, country });
-    return sessionId;
+    return { sessionId, deviceName, ipAddress, city, country };
   } catch (err) {
     logger.error('Failed to create session:', err.message);
-    return crypto.randomUUID();
+    return { sessionId: crypto.randomUUID(), deviceName: 'Unknown Device', ipAddress: null, city: null, country: null };
   }
 }
 
@@ -287,9 +288,41 @@ router.post(
       user.onlineStatus = "online";
       await user.save();
 
-      const userWithVersion = await User.findById(user._id).select('+tokenVersion');
-      const sessionId = await createSession(user._id, req);
+      const userWithVersion = await User.findById(user._id).select('+tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings');
+      const newSession = await createSession(user._id, req);
+      const { sessionId } = newSession;
       const token = generateToken(user._id, userWithVersion.tokenVersion || 0, sessionId);
+
+      // ── Suspicious login detection (fire-and-forget) ───────────────────────
+      setImmediate(async () => {
+        try {
+          const prevSessions = await Session.find({ userId: user._id, sessionId: { $ne: sessionId } }).lean();
+          if (prevSessions.length > 0) {
+            const knownDevices = new Set(prevSessions.map(s => s.deviceName).filter(Boolean));
+            const knownIPs    = new Set(prevSessions.map(s => s.ipAddress).filter(Boolean));
+            const isNewDevice = newSession.deviceName && !knownDevices.has(newSession.deviceName);
+            const isNewIP     = newSession.ipAddress  && !knownIPs.has(newSession.ipAddress);
+
+            if (isNewDevice || isNewIP) {
+              const locationStr = [newSession.city, newSession.country].filter(Boolean).join(', ') || 'Unknown location';
+              const deviceStr   = newSession.deviceName || 'Unknown device';
+              await sendSmartNotification(
+                userWithVersion,
+                {
+                  title: '⚠️ New sign-in detected',
+                  body: `${deviceStr} · ${locationStr}. If this wasn't you, go to Active Sessions to revoke it.`,
+                  data:  { type: 'security', screen: 'DeviceManagement' },
+                  channelId: 'security',
+                },
+                'security',
+              );
+              logger.info(`[Auth] Suspicious login alert sent → user ${user._id} | device: ${deviceStr} | IP: ${newSession.ipAddress}`);
+            }
+          }
+        } catch (alertErr) {
+          logger.warn('[Auth] Suspicious login alert failed (non-fatal):', alertErr.message);
+        }
+      });
 
       res.json({
         success: true,
