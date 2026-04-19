@@ -1,5 +1,5 @@
-import { registerRootComponent, AppRegistry } from "expo";
-import { Platform } from 'react-native';
+import { registerRootComponent } from "expo";
+import { AppRegistry, Platform } from 'react-native';
 
 // Polyfill Platform globally to fix ReferenceError: Property 'Platform' doesn't exist
 if (typeof global !== 'undefined') {
