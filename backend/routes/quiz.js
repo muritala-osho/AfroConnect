@@ -143,6 +143,15 @@ function getCategoryLabel(category, score) {
 router.get('/compatibility/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
+
+    const Match = require('../models/Match');
+    const match = await Match.findOne({
+      users: { $all: [req.user._id, userId] },
+      status: 'active'
+    });
+    if (!match) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
     
     const [myResponses, theirResponses] = await Promise.all([
       UserQuizResponse.findOne({ userId: req.user._id }),

@@ -11,8 +11,10 @@
 
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
+const { supportTicketLimiter } = require('../middleware/rateLimiter');
 const User = require('../models/User');
 const SupportTicket = require('../models/SupportTicket');
 const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
@@ -79,23 +81,77 @@ async function pushToStaff(ticket, title, body) {
 
 
 /**
+ * GET /api/support/challenge
+ * Returns a simple math CAPTCHA question + a signed token containing the answer.
+ * The client must solve the question and submit both the token and answer with their ticket.
+ */
+router.get('/challenge', (req, res) => {
+  const a = Math.floor(Math.random() * 10) + 1;
+  const b = Math.floor(Math.random() * 10) + 1;
+  const ops = [
+    { symbol: '+', answer: a + b },
+    { symbol: '-', answer: a - b },
+    { symbol: 'x', answer: a * b },
+  ];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  const question = `What is ${a} ${op.symbol} ${b}?`;
+
+  const challengeToken = jwt.sign(
+    { answer: op.answer },
+    process.env.JWT_SECRET,
+    { expiresIn: '10m' }
+  );
+
+  res.json({ success: true, question, challengeToken });
+});
+
+/**
  * POST /api/support/ticket
  * Create a new support ticket.
  * Works without auth (public contact form) or with auth (links to user account).
+ * Requires a valid CAPTCHA challenge (challengeToken + challengeAnswer) for unauthenticated requests.
  */
-router.post('/ticket', async (req, res) => {
+router.post('/ticket', supportTicketLimiter, async (req, res) => {
   try {
-    const { name, email, message, subject, category } = req.body;
+    const { name, email, message, subject, category, challengeToken, challengeAnswer } = req.body;
+
+    const authHeader = req.headers.authorization;
+    const isAuthenticated = !!(authHeader && authHeader.startsWith('Bearer '));
+
+    if (!isAuthenticated) {
+      if (!challengeToken || challengeAnswer === undefined || challengeAnswer === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete the security challenge to submit a ticket.',
+          requiresChallenge: true
+        });
+      }
+      let decoded;
+      try {
+        decoded = jwt.verify(challengeToken, process.env.JWT_SECRET);
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          message: 'Challenge expired. Please request a new one.',
+          requiresChallenge: true
+        });
+      }
+      if (parseInt(challengeAnswer, 10) !== decoded.answer) {
+        return res.status(400).json({
+          success: false,
+          message: 'Incorrect answer to the security challenge.',
+          requiresChallenge: true
+        });
+      }
+    }
 
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, message: 'Name, email and message are required' });
     }
 
     let resolvedUserId = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (isAuthenticated) {
       try {
-        const jwt = require('jsonwebtoken');
         const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
         resolvedUserId = decoded.id;
       } catch (_) {}

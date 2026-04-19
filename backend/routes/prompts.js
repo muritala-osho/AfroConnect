@@ -65,8 +65,21 @@ router.get('/my-responses', protect, async (req, res) => {
 
 router.get('/user/:userId', protect, async (req, res) => {
   try {
+    const { userId } = req.params;
+
+    if (userId !== req.user._id.toString()) {
+      const Match = require('../models/Match');
+      const match = await Match.findOne({
+        users: { $all: [req.user._id, userId] },
+        status: 'active'
+      });
+      if (!match) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
     const responses = await UserPromptResponse.find({ 
-      userId: req.params.userId,
+      userId,
       isVisible: true 
     })
     .populate('promptId', 'question category')

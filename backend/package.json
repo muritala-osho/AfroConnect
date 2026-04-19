@@ -12,7 +12,9 @@
     "snyk:test": "snyk test --severity-threshold=high",
     "snyk:monitor": "snyk monitor",
     "snyk:fix": "snyk fix",
-    "security": "snyk test --severity-threshold=medium --json > snyk-report.json || true"
+    "security": "snyk test --severity-threshold=medium --json > snyk-report.json || true",
+    "audit:security": "node scripts/security-audit.js",
+    "predeploy": "node scripts/security-audit.js"
   },
   "jest": {
     "testEnvironment": "node",
