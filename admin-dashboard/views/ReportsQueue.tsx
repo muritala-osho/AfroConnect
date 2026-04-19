@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldAlert, CheckCircle2, Eye, ShieldCheck, MessageCircle,
-  Loader2, RefreshCw, AlertCircle, X, UserX, AlertTriangle, Clock,
+  Loader2, RefreshCw, AlertCircle, X, UserX, AlertTriangle, Clock, Trash2, FileImage, FileText, Mic, Video,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 
@@ -27,6 +27,7 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<ResolveAction | null>(null);
   const [actionNotes, setActionNotes] = useState('');
+  const [deletingContent, setDeletingContent] = useState(false);
 
   const fetchReports = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -78,6 +79,33 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
   const handleModalAction = (reportId: string) => {
     if (!pendingAction) return;
     handleResolve(reportId, pendingAction, actionNotes.trim() || undefined);
+  };
+
+  const handleDeleteContent = async (reportId: string) => {
+    setDeletingContent(true);
+    try {
+      const data = await adminApi.deleteReportedContent(reportId);
+      if (data.success) {
+        setReports(prev => prev.filter(r => r._id !== reportId));
+        setSelectedReport(null);
+        showToast?.('Reported content removed successfully.', 'success');
+      } else {
+        showToast?.(data.message || 'Failed to remove content.', 'error');
+      }
+    } catch (err: any) {
+      showToast?.(err?.message || 'Failed to remove content.', 'error');
+    } finally {
+      setDeletingContent(false);
+    }
+  };
+
+  const CONTENT_TYPE_META: Record<string, { label: string; icon: React.ReactNode }> = {
+    story:         { label: 'Story',         icon: <FileImage size={14} /> },
+    message_image: { label: 'Image Message', icon: <FileImage size={14} /> },
+    message_text:  { label: 'Text Message',  icon: <FileText  size={14} /> },
+    message_audio: { label: 'Voice Message', icon: <Mic       size={14} /> },
+    message_video: { label: 'Video Message', icon: <Video     size={14} /> },
+    profile_photo: { label: 'Profile Photo', icon: <FileImage size={14} /> },
   };
 
   const stats = [
@@ -247,7 +275,7 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                 </div>
               </div>
 
-              <div className="p-6 bg-rose-50/50 dark:bg-rose-500/5 rounded-2xl border border-rose-100 dark:border-rose-500/20 mb-6">
+              <div className="p-6 bg-rose-50/50 dark:bg-rose-500/5 rounded-2xl border border-rose-100 dark:border-rose-500/20 mb-4">
                 <div className="flex items-center gap-2 mb-3 text-rose-600">
                   <MessageCircle size={16} />
                   <p className="text-xs font-black uppercase tracking-widest">Incident Description</p>
@@ -256,6 +284,40 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                   {selectedReport.description || selectedReport.reason || 'No additional details provided.'}
                 </p>
               </div>
+
+              {selectedReport.contentType && (
+                <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 mb-4">
+                  <div className="flex items-center gap-2 mb-3 text-slate-500">
+                    {CONTENT_TYPE_META[selectedReport.contentType]?.icon ?? <FileImage size={14} />}
+                    <p className="text-xs font-black uppercase tracking-widest">
+                      Reported {CONTENT_TYPE_META[selectedReport.contentType]?.label ?? selectedReport.contentType}
+                    </p>
+                  </div>
+                  {selectedReport.contentUrl && (selectedReport.contentType === 'story' || selectedReport.contentType === 'message_image' || selectedReport.contentType === 'profile_photo') && (
+                    <img
+                      src={selectedReport.contentUrl}
+                      alt="Reported content"
+                      className="w-full max-h-48 object-cover rounded-xl mb-3 border border-slate-200 dark:border-slate-700"
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                  {selectedReport.contentPreview && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+                      "{selectedReport.contentPreview}"
+                    </p>
+                  )}
+                  {selectedReport.status === 'pending' && (
+                    <button
+                      onClick={() => handleDeleteContent(selectedReport._id)}
+                      disabled={deletingContent}
+                      className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-black text-xs uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      {deletingContent ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      Remove This Content
+                    </button>
+                  )}
+                </div>
+              )}
 
               {selectedReport.status === 'pending' && (
                 <div className="space-y-3">

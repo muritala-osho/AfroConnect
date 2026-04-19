@@ -787,12 +787,14 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
               redis.del(`stories:user:${ownerId}:viewer:${ownerId}`),
             ]);
           }
-        } else if (report.contentType === 'message_image' && report.contentId) {
+        } else if (['message_image', 'message_text', 'message_audio', 'message_video'].includes(report.contentType) && report.contentId) {
           const message = await Message.findById(report.contentId);
           if (message) {
-            message.content = 'This image was removed by moderation';
+            message.content = 'This message was removed by moderation';
             message.type = 'system';
             message.imageUrl = undefined;
+            message.audioUrl = undefined;
+            message.videoUrl = undefined;
             message.deletedForEveryone = true;
             await message.save();
             const io = req.app.get('io');

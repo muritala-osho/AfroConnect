@@ -119,6 +119,15 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  deleteReportedContent: async (reportId: string) => {
+    const res = await fetch(`${API_BASE}/admin/flagged-content/report-${reportId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ action: 'reject' }),
+    });
+    return handleResponse(res);
+  },
+
   getSubscriptionsRevenue: async () => {
     const res = await fetch(`${API_BASE}/admin/subscriptions-revenue`, { headers: authHeaders() });
     return handleResponse(res);
