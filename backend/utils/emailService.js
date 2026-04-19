@@ -869,6 +869,93 @@ const getInactivityTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
+const getPremiumConfirmationTemplate = (userName, plan, expiresAt) => {
+  const planLabel = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' }[plan] || plan;
+  const planPrice = { day: '$0.99', week: '$4.99', month: '$9.99', year: '$49.99' }[plan] || '';
+  const expiryStr = expiresAt ? new Date(expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A';
+
+  return emailShell(`
+    ${emailHeader('Welcome to AfroConnect Premium! 🌟', 'Your premium membership is now active')}
+    <tr>
+      <td style="padding: 48px 40px;">
+        <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
+          Congratulations, ${escapeHtml(userName)}! 🎉
+        </h2>
+        <p style="margin: 0 0 24px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+          Your <strong style="color: ${BRAND.primary};">AfroConnect Premium</strong> subscription
+          is now active. Get ready to enjoy a whole new level of connection.
+        </p>
+
+        <div style="background: linear-gradient(135deg, ${BRAND.primaryLight} 0%, ${BRAND.accentLight} 100%);
+                    border: 1px solid ${BRAND.accent}; border-radius: 14px; padding: 24px 28px; margin: 0 0 28px 0;">
+          <p style="margin: 0 0 6px 0; color: #555555; font-size: 13px; text-transform: uppercase;
+                     letter-spacing: 1px; font-weight: 600;">Subscription Details</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 12px;">
+            <tr>
+              <td style="color: #555555; font-size: 14px; padding: 5px 0;">Plan</td>
+              <td style="color: #1a1a1a; font-size: 14px; font-weight: 700; text-align: right;">${escapeHtml(planLabel)}</td>
+            </tr>
+            ${planPrice ? `<tr>
+              <td style="color: #555555; font-size: 14px; padding: 5px 0;">Amount Paid</td>
+              <td style="color: #1a1a1a; font-size: 14px; font-weight: 700; text-align: right;">${escapeHtml(planPrice)}</td>
+            </tr>` : ''}
+            <tr>
+              <td style="color: #555555; font-size: 14px; padding: 5px 0;">Access Until</td>
+              <td style="color: #1a1a1a; font-size: 14px; font-weight: 700; text-align: right;">${escapeHtml(expiryStr)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3 style="margin: 0 0 14px 0; color: #1a1a1a; font-size: 17px; font-weight: 700;">
+          Your Premium Benefits:
+        </h3>
+        <ul style="color: #555555; font-size: 15px; line-height: 2; padding-left: 20px; margin: 0 0 32px 0;">
+          <li>Unlimited Swipes — no daily cap</li>
+          <li>See exactly who liked your profile</li>
+          <li>10 Super Likes per day</li>
+          <li>Unlimited Rewinds</li>
+          <li>Advanced filters for better matches</li>
+          <li>Incognito Mode — browse privately</li>
+          <li>Read receipts in chat</li>
+          <li>Priority visibility in discovery</li>
+          <li>Ad-free experience</li>
+        </ul>
+
+        <div style="text-align: center; margin: 36px 0;">
+          <a href="#" style="display: inline-block;
+             background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
+             color: #ffffff; text-decoration: none; padding: 16px 42px;
+             border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
+            Start Exploring Premium →
+          </a>
+        </div>
+
+        <p style="margin: 0; color: #AAAAAA; font-size: 13px; line-height: 1.6; text-align: center;">
+          This is a confirmation of your in-app purchase. Billing is managed through the
+          ${plan === 'day' || plan === 'week' || plan === 'month' || plan === 'year' ? 'App Store or Google Play' : 'store'}.
+          For billing questions, contact the store directly.
+        </p>
+      </td>
+    </tr>
+    ${emailFooter()}
+  `);
+};
+
+const sendPremiumConfirmationEmail = async (email, userName, plan, expiresAt) => {
+  try {
+    const planLabel = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' }[plan] || plan;
+    await brevoSend({
+      to: email,
+      subject: `🌟 Your AfroConnect ${planLabel} Premium is Active!`,
+      html: getPremiumConfirmationTemplate(userName, plan, expiresAt),
+    });
+    logger.log('Premium confirmation email sent');
+    return { success: true };
+  } catch (error) {
+    logger.error('Error sending premium confirmation email:', error);
+  }
+};
+
 const sendInactivityEmail = async (email, userName) => {
   try {
     await brevoSend({
@@ -899,5 +986,6 @@ module.exports = {
   sendSupportReplyEmail,
   sendRenewalReminderEmail,
   sendInactivityEmail,
+  sendPremiumConfirmationEmail,
   generateOTP,
 };

@@ -4,6 +4,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const { sendPremiumConfirmationEmail } = require('../utils/emailService');
 
 const PREMIUM_INFO = {
   name: 'AfroConnect Premium',
@@ -252,6 +253,9 @@ router.post('/validate-receipt', protect, async (req, res) => {
     });
 
     console.log(`Premium activated for user ${user._id} via ${platform} in-app purchase`);
+
+    const expiresAt = new Date(Date.now() + durationMs[interval]);
+    sendPremiumConfirmationEmail(user.email, user.firstName || user.name || 'there', interval, expiresAt).catch(() => {});
 
     res.json({
       success: true,
