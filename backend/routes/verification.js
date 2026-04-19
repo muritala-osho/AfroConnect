@@ -72,13 +72,18 @@ const handleVerificationVideoUpload = async (req, res) => {
         const uploaded = await new Promise((resolve, reject) => {
           const readStream = fs.createReadStream(tempPath);
           const stream = cloudinary.uploader.upload_stream(
-            { folder: 'afroconnect_verifications/videos', resource_type: 'video' },
+            { folder: 'afroconnect_verifications/videos', resource_type: 'video', type: 'authenticated' },
             (error, result) => (error ? reject(error) : resolve(result))
           );
           readStream.pipe(stream);
         });
-        videoUrl = uploaded.secure_url;
         publicId = uploaded.public_id;
+        videoUrl = cloudinary.url(publicId, {
+          sign_url: true,
+          type: 'authenticated',
+          resource_type: 'video',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        });
         storage  = 'cloudinary';
         fs.unlink(tempPath, () => {});
       } catch (cloudError) {
@@ -153,8 +158,32 @@ router.get('/status', protect, async (req, res) => {
 router.get('/pending', protect, isAdmin, async (req, res) => {
   try {
     const verifications = await User.find({ verificationStatus: 'pending' })
-      .select('_id name email age gender bio photos verificationVideoUrl verificationVideo verificationRequestDate livingIn jobTitle interests');
-    res.json({ success: true, verifications });
+      .select('_id name email age gender bio photos verificationVideoUrl verificationVideo selfiePhoto verificationRequestDate livingIn jobTitle interests');
+
+    const signed = verifications.map(v => {
+      const obj = v.toObject();
+      if (obj.verificationVideo?.publicId) {
+        const signedUrl = cloudinary.url(obj.verificationVideo.publicId, {
+          sign_url: true,
+          type: 'authenticated',
+          resource_type: 'video',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        });
+        obj.verificationVideoUrl = signedUrl;
+        obj.verificationVideo.url = signedUrl;
+      }
+      if (obj.selfiePhoto?.publicId) {
+        obj.selfiePhoto.url = cloudinary.url(obj.selfiePhoto.publicId, {
+          sign_url: true,
+          type: 'authenticated',
+          resource_type: 'image',
+          expires_at: Math.floor(Date.now() / 1000) + 3600,
+        });
+      }
+      return obj;
+    });
+
+    res.json({ success: true, verifications: signed });
   } catch (error) {
     console.error('Get pending verifications error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -248,13 +277,19 @@ router.post('/request', protect, upload.fields([{ name: 'selfiePhoto', maxCount:
     }
     const selfieResult = await new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: 'afroconnect_verifications/selfies' },
+        { folder: 'afroconnect_verifications/selfies', type: 'authenticated' },
         (error, result) => (error ? reject(error) : resolve(result))
       );
       stream.end(files.selfiePhoto[0].buffer);
     });
+    const selfieSignedUrl = cloudinary.url(selfieResult.public_id, {
+      sign_url: true,
+      type: 'authenticated',
+      resource_type: 'image',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
+    });
     user.verificationStatus = 'pending';
-    user.selfiePhoto = { url: selfieResult.secure_url, publicId: selfieResult.public_id, submittedAt: new Date() };
+    user.selfiePhoto = { url: selfieSignedUrl, publicId: selfieResult.public_id, submittedAt: new Date() };
     user.verificationRequestDate = new Date();
     await user.save();
     await redis.del(`profile:me:${user._id}`);
