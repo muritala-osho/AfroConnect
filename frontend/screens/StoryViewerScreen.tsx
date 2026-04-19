@@ -77,6 +77,11 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const [videoDuration, setVideoDuration] = useState(STORY_DURATION);
   const [showViewers, setShowViewers] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [showStoryMenu, setShowStoryMenu] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('inappropriate');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportLoading, setReportLoading] = useState(false);
 
   const isOwnStory = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id);
 
@@ -371,42 +376,39 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     }
   };
 
-  const handleReportStory = async () => {
-    if (!token || !currentStory) return;
+  const handleReportStory = () => {
+    if (!currentStory) return;
     pauseProgress();
-    Alert.alert(
-      "Report Story",
-      `Report ${userName}'s story for review?`,
-      [
-        { text: "Cancel", style: "cancel", onPress: resumeProgress },
-        {
-          text: "Report",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const response = await post("/reports", {
-                reportedUserId: userId,
-                reason: "inappropriate",
-                description: "Reported from story viewer",
-                contentType: "story",
-                contentId: currentStory._id,
-                contentUrl: currentStory.imageUrl || currentStory.mediaUrl,
-                contentPreview: currentStory.textContent || "Reported story"
-              }, token);
-              if (response.success) {
-                Alert.alert("Reported", "Thank you. Our team will review this story.");
-              } else {
-                Alert.alert("Error", "Failed to submit report");
-              }
-            } catch (error) {
-              Alert.alert("Error", "Failed to submit report");
-            } finally {
-              resumeProgress();
-            }
-          }
-        }
-      ]
-    );
+    setReportReason('inappropriate');
+    setReportDetails('');
+    setShowReportModal(true);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!token || !currentStory || reportLoading) return;
+    setReportLoading(true);
+    try {
+      const response = await post("/reports", {
+        reportedUserId: userId,
+        reason: reportReason,
+        description: reportDetails.trim() || undefined,
+        contentType: "story",
+        contentId: currentStory._id,
+        contentUrl: currentStory.imageUrl || currentStory.mediaUrl,
+        contentPreview: currentStory.textContent || "Reported story"
+      }, token);
+      setShowReportModal(false);
+      resumeProgress();
+      if (response.success) {
+        Alert.alert("Reported", "Thank you. Our team will review this story.");
+      } else {
+        Alert.alert("Error", "Failed to submit report");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to submit report");
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   const currentStory = stories[currentIndex];
@@ -610,21 +612,35 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </Pressable>
 
           <View style={[styles.headerActions, { flexShrink: 0 }]}>
-            {isOwnStory && currentStory.type === 'text' && (
-              <Pressable
-                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(76,175,80,0.8)' }]}
-                onPress={startEditing}
-              >
-                <Ionicons name="pencil" size={16} color="#FFF" />
-              </Pressable>
-            )}
             {isOwnStory && (
-              <Pressable
-                style={[styles.headerButtonHighVis, { backgroundColor: 'rgba(244,67,54,0.8)' }]}
-                onPress={handleDeleteStory}
-              >
-                <Ionicons name="trash-outline" size={16} color="#FFF" />
-              </Pressable>
+              <View>
+                <Pressable
+                  style={styles.headerButtonHighVis}
+                  onPress={(e) => { e.stopPropagation(); setShowStoryMenu(v => !v); pauseProgress(); }}
+                >
+                  <Ionicons name="ellipsis-vertical" size={18} color="#FFF" />
+                </Pressable>
+                {showStoryMenu && (
+                  <View style={styles.storyMenuDropdown}>
+                    {currentStory?.type === 'text' && (
+                      <Pressable
+                        style={styles.storyMenuItem}
+                        onPress={() => { setShowStoryMenu(false); startEditing(); }}
+                      >
+                        <Ionicons name="pencil" size={16} color="#FFF" />
+                        <ThemedText style={styles.storyMenuItemText}>Edit</ThemedText>
+                      </Pressable>
+                    )}
+                    <Pressable
+                      style={[styles.storyMenuItem, styles.storyMenuItemDanger]}
+                      onPress={() => { setShowStoryMenu(false); resumeProgress(); handleDeleteStory(); }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="#FF6B6B" />
+                      <ThemedText style={[styles.storyMenuItemText, { color: '#FF6B6B' }]}>Delete</ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
             )}
             <Pressable
               style={styles.headerButtonHighVis}
@@ -673,6 +689,12 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       >
         {showReplyInput ? (
           <View style={styles.replyInputContainer}>
+            <Pressable
+              style={styles.replyCloseButton}
+              onPress={() => { setShowReplyInput(false); setReplyText(''); Keyboard.dismiss(); resumeProgress(); }}
+            >
+              <Ionicons name="close" size={18} color="rgba(255,255,255,0.7)" />
+            </Pressable>
             <TextInput
               style={styles.replyInput}
               placeholder="Send a message..."
@@ -680,7 +702,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
               value={replyText}
               onChangeText={setReplyText}
               autoFocus
-              onBlur={() => setShowReplyInput(false)}
+              returnKeyType="send"
+              onSubmitEditing={handleSendReply}
+              blurOnSubmit={false}
             />
             <Pressable style={styles.sendButton} onPress={handleSendReply}>
               <Ionicons name="send" size={20} color="#FFF" />
@@ -805,6 +829,87 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 </ThemedText>
               </View>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Report Story Modal */}
+      <Modal
+        visible={showReportModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setShowReportModal(false); resumeProgress(); }}
+      >
+        <Pressable
+          style={styles.reportModalOverlay}
+          onPress={() => { setShowReportModal(false); resumeProgress(); }}
+        >
+          <Pressable style={styles.reportModalSheet} onPress={() => {}}>
+            <View style={styles.reportModalHandle} />
+            <ThemedText style={styles.reportModalTitle}>Report Story</ThemedText>
+            <ThemedText style={styles.reportModalSubtitle}>
+              What's wrong with {userName}'s story?
+            </ThemedText>
+
+            <View style={styles.reportReasonList}>
+              {[
+                { id: 'inappropriate', label: 'Inappropriate Content' },
+                { id: 'harassment', label: 'Harassment or Bullying' },
+                { id: 'spam', label: 'Spam or Scam' },
+                { id: 'fake', label: 'Fake Profile' },
+                { id: 'underage', label: 'Underage User' },
+                { id: 'other', label: 'Other' },
+              ].map(r => (
+                <Pressable
+                  key={r.id}
+                  style={[
+                    styles.reportReasonChip,
+                    reportReason === r.id && styles.reportReasonChipSelected,
+                  ]}
+                  onPress={() => setReportReason(r.id)}
+                >
+                  {reportReason === r.id && (
+                    <Ionicons name="checkmark-circle" size={16} color="#FF6B6B" style={{ marginRight: 6 }} />
+                  )}
+                  <ThemedText style={[
+                    styles.reportReasonText,
+                    reportReason === r.id && styles.reportReasonTextSelected,
+                  ]}>
+                    {r.label}
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </View>
+
+            <TextInput
+              style={styles.reportDetailsInput}
+              placeholder="Add more details (optional)..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              multiline
+              numberOfLines={3}
+              maxLength={300}
+            />
+
+            <View style={styles.reportModalActions}>
+              <Pressable
+                style={styles.reportCancelButton}
+                onPress={() => { setShowReportModal(false); resumeProgress(); }}
+              >
+                <ThemedText style={styles.reportCancelText}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[styles.reportSubmitButton, reportLoading && { opacity: 0.6 }]}
+                onPress={handleSubmitReport}
+                disabled={reportLoading}
+              >
+                {reportLoading
+                  ? <ActivityIndicator size="small" color="#FFF" />
+                  : <ThemedText style={styles.reportSubmitText}>Submit Report</ThemedText>
+                }
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1162,5 +1267,139 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
     textAlign: 'center',
+  },
+  storyMenuDropdown: {
+    position: 'absolute',
+    top: 40,
+    right: 0,
+    backgroundColor: 'rgba(30,30,30,0.97)',
+    borderRadius: 14,
+    overflow: 'hidden',
+    minWidth: 150,
+    zIndex: 100,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  storyMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
+  storyMenuItemDanger: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  storyMenuItemText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  replyCloseButton: {
+    padding: 6,
+    marginRight: 4,
+  },
+  reportModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  reportModalSheet: {
+    backgroundColor: '#1A1A2E',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 36,
+    paddingTop: 12,
+  },
+  reportModalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  reportModalTitle: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  reportModalSubtitle: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  reportReasonList: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  reportReasonChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  reportReasonChipSelected: {
+    borderColor: '#FF6B6B',
+    backgroundColor: 'rgba(255,107,107,0.12)',
+  },
+  reportReasonText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  reportReasonTextSelected: {
+    color: '#FF6B6B',
+    fontWeight: '600',
+  },
+  reportDetailsInput: {
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    color: '#FFF',
+    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 20,
+  },
+  reportModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reportCancelButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+  },
+  reportCancelText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  reportSubmitButton: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#FF6B6B',
+    alignItems: 'center',
+  },
+  reportSubmitText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
