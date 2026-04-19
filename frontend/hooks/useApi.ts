@@ -1,9 +1,20 @@
 
 import { useState, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import { getApiBaseUrl } from '@/constants/config';
 import { useMaintenance } from '@/context/MaintenanceContext';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;
+
+function getDeviceHeaders(): Record<string, string> {
+  const osName = Device.osName || (Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web');
+  const osVersion = Device.osVersion || '';
+  const model = Device.modelName || osName;
+  const deviceName = osVersion ? `${model} · ${osName} ${osVersion}` : `${model} · ${osName}`;
+  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  return { 'x-device-name': deviceName, 'x-platform': platform };
+}
 
 interface ApiResponse<T> {
   success: boolean;
@@ -36,6 +47,7 @@ export function useApi() {
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          ...getDeviceHeaders(),
           ...options.headers,
         },
       });

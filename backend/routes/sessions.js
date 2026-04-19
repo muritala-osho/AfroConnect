@@ -3,11 +3,71 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Session = require('../models/Session');
 const redis = require('../utils/redis');
+const logger = require('../utils/logger');
+
+async function lookupGeo(ipAddress) {
+  if (!ipAddress || ipAddress === '127.0.0.1' || ipAddress === '::1' || ipAddress.startsWith('::ffff:127')) {
+    return { city: null, country: null };
+  }
+  const cleanIp = ipAddress.startsWith('::ffff:') ? ipAddress.slice(7) : ipAddress;
+  try {
+    const geoRes = await fetch(`http://ip-api.com/json/${cleanIp}?fields=city,country,status`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    const geo = await geoRes.json();
+    if (geo.status === 'success') return { city: geo.city || null, country: geo.country || null };
+  } catch (_) {}
+  return { city: null, country: null };
+}
+
+function parseUserAgent(ua) {
+  if (!ua) return { deviceName: 'Unknown Device', platform: 'unknown' };
+  let platform = 'unknown';
+  if (/android/i.test(ua)) platform = 'android';
+  else if (/iphone|ipad|ipod/i.test(ua)) platform = 'ios';
+  else if (/windows|macintosh|linux/i.test(ua)) platform = 'web';
+
+  const modelMatch = ua.match(/\(([^)]+)\)/);
+  let deviceName = 'Unknown Device';
+  if (modelMatch) {
+    const info = modelMatch[1].replace(/;/g, '·').trim();
+    deviceName = info.length > 60 ? info.slice(0, 60) + '…' : info;
+  }
+  return { deviceName, platform };
+}
 
 router.get('/', protect, async (req, res) => {
   try {
-    const sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
+    let sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
     const currentSessionId = req.sessionId;
+
+    if (sessions.length === 0 && currentSessionId) {
+      const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+      const cleanIp = ipAddress && ipAddress.startsWith('::ffff:') ? ipAddress.slice(7) : ipAddress;
+
+      const deviceName = req.headers['x-device-name'] || parseUserAgent(req.headers['user-agent']).deviceName;
+      const platform   = req.headers['x-platform']     || parseUserAgent(req.headers['user-agent']).platform;
+      const { city, country } = await lookupGeo(cleanIp);
+
+      try {
+        await Session.create({
+          userId: req.user._id,
+          sessionId: currentSessionId,
+          deviceName,
+          platform,
+          ipAddress: cleanIp,
+          city,
+          country,
+        });
+        logger.info(`[Sessions] Auto-registered missing session for user ${req.user._id}`);
+      } catch (createErr) {
+        if (createErr.code !== 11000) {
+          logger.warn('[Sessions] Could not auto-create session:', createErr.message);
+        }
+      }
+
+      sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
+    }
 
     const sessionData = sessions.map((s) => ({
       _id: s._id,
@@ -24,6 +84,7 @@ router.get('/', protect, async (req, res) => {
 
     res.json({ success: true, sessions: sessionData });
   } catch (error) {
+    logger.error('[Sessions] GET / error:', error.message);
     res.status(500).json({ success: false, message: 'Failed to load sessions' });
   }
 });
