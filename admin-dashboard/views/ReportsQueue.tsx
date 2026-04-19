@@ -1,13 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ShieldAlert, CheckCircle2, Eye, ShieldCheck, MessageCircle,
-  Loader2, RefreshCw, AlertCircle, X, UserX,
+  Loader2, RefreshCw, AlertCircle, X, UserX, AlertTriangle, Clock,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 
 interface ReportsQueueProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
+
+type ResolveAction = 'dismiss' | 'warn' | 'suspend' | 'ban';
+
+const ACTION_META: Record<ResolveAction, { label: string; color: string; bg: string; hoverBg: string; icon: React.ReactNode }> = {
+  dismiss: { label: 'Dismiss', color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-500/10', hoverBg: 'hover:bg-emerald-100', icon: <ShieldCheck size={13} /> },
+  warn:    { label: 'Warn',    color: 'text-amber-600',   bg: 'bg-amber-50 dark:bg-amber-500/10',   hoverBg: 'hover:bg-amber-100',   icon: <AlertTriangle size={13} /> },
+  suspend: { label: 'Suspend (7d)', color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-500/10', hoverBg: 'hover:bg-orange-100', icon: <Clock size={13} /> },
+  ban:     { label: 'Ban',     color: 'text-rose-600',    bg: 'bg-rose-50 dark:bg-rose-500/10',    hoverBg: 'hover:bg-rose-100',    icon: <UserX size={13} /> },
+};
 
 const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
   const [reports, setReports] = useState<any[]>([]);
@@ -16,6 +25,8 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
   const [activeFilter, setActiveFilter] = useState('pending');
   const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<ResolveAction | null>(null);
+  const [actionNotes, setActionNotes] = useState('');
 
   const fetchReports = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -39,20 +50,34 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
     fetchReports();
   }, [fetchReports]);
 
-  const handleResolve = async (reportId: string, action: 'dismiss' | 'ban') => {
+  const TOAST_MSG: Record<ResolveAction, string> = {
+    dismiss: 'Report dismissed.',
+    warn:    'Warning issued and user notified.',
+    suspend: 'User suspended for 7 days and notified.',
+    ban:     'User banned and report resolved.',
+  };
+
+  const handleResolve = async (reportId: string, action: ResolveAction, notes?: string) => {
     setActionLoading(reportId + action);
     try {
-      const data = await adminApi.resolveReport(reportId, action);
+      const data = await adminApi.resolveReport(reportId, action, notes);
       if (data.success) {
         setReports(prev => prev.filter(r => r._id !== reportId));
         setSelectedReport(null);
-        showToast?.(action === 'ban' ? 'User banned and report resolved.' : 'Report dismissed.', 'success');
+        setPendingAction(null);
+        setActionNotes('');
+        showToast?.(TOAST_MSG[action], 'success');
       }
     } catch (err: any) {
       showToast?.(err?.message || 'Failed to resolve report.', 'error');
     } finally {
       setActionLoading(null);
     }
+  };
+
+  const handleModalAction = (reportId: string) => {
+    if (!pendingAction) return;
+    handleResolve(reportId, pendingAction, actionNotes.trim() || undefined);
   };
 
   const stats = [
@@ -159,31 +184,21 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => setSelectedReport(report)}
+                          onClick={() => { setSelectedReport(report); setPendingAction(null); setActionNotes(''); }}
                           className="p-2 text-teal-600 bg-teal-50 dark:bg-teal-500/10 rounded-lg hover:bg-teal-100 transition-all"
-                          title="View details"
+                          title="View details & take action"
                         >
                           <Eye size={15} />
                         </button>
                         {report.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleResolve(report._id, 'dismiss')}
-                              disabled={actionLoading !== null}
-                              className="p-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40"
-                              title="Dismiss"
-                            >
-                              {actionLoading === report._id + 'dismiss' ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
-                            </button>
-                            <button
-                              onClick={() => handleResolve(report._id, 'ban')}
-                              disabled={actionLoading !== null}
-                              className="p-2 text-rose-600 bg-rose-50 dark:bg-rose-500/10 rounded-lg hover:bg-rose-100 transition-all disabled:opacity-40"
-                              title="Escalate to ban"
-                            >
-                              {actionLoading === report._id + 'ban' ? <Loader2 size={15} className="animate-spin" /> : <UserX size={15} />}
-                            </button>
-                          </>
+                          <button
+                            onClick={() => handleResolve(report._id, 'dismiss')}
+                            disabled={actionLoading !== null}
+                            className="p-2 text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg hover:bg-emerald-100 transition-all disabled:opacity-40"
+                            title="Dismiss"
+                          >
+                            {actionLoading === report._id + 'dismiss' ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+                          </button>
                         )}
                       </div>
                     </td>
@@ -212,7 +227,7 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                   <h2 className="text-2xl font-black dark:text-white">{selectedReport.reason || 'Incident Report'}</h2>
                 </div>
                 <button
-                  onClick={() => setSelectedReport(null)}
+                  onClick={() => { setSelectedReport(null); setPendingAction(null); setActionNotes(''); }}
                   className="p-2.5 bg-gray-50 dark:bg-slate-800 rounded-xl hover:bg-gray-100 transition-all"
                 >
                   <X size={18} />
@@ -243,23 +258,54 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
               </div>
 
               {selectedReport.status === 'pending' && (
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleResolve(selectedReport._id, 'dismiss')}
-                    disabled={actionLoading !== null}
-                    className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {actionLoading === selectedReport._id + 'dismiss' ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                    Dismiss
-                  </button>
-                  <button
-                    onClick={() => handleResolve(selectedReport._id, 'ban')}
-                    disabled={actionLoading !== null}
-                    className="flex-1 py-3 bg-rose-500 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {actionLoading === selectedReport._id + 'ban' ? <Loader2 size={14} className="animate-spin" /> : <UserX size={14} />}
-                    Ban User
-                  </button>
+                <div className="space-y-3">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Choose Action</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['dismiss', 'warn', 'suspend', 'ban'] as ResolveAction[]).map(act => {
+                      const meta = ACTION_META[act];
+                      const isSelected = pendingAction === act;
+                      return (
+                        <button
+                          key={act}
+                          onClick={() => setPendingAction(isSelected ? null : act)}
+                          className={`flex items-center justify-center gap-2 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all border-2 ${
+                            isSelected
+                              ? `${meta.bg} border-current ${meta.color} shadow-sm`
+                              : `border-transparent ${meta.bg} ${meta.color} ${meta.hoverBg}`
+                          }`}
+                        >
+                          {meta.icon}
+                          {meta.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {pendingAction && pendingAction !== 'dismiss' && (
+                    <textarea
+                      value={actionNotes}
+                      onChange={e => setActionNotes(e.target.value)}
+                      placeholder={pendingAction === 'ban' ? 'Required: Reason for ban...' : 'Optional: Notes / reason for user...'}
+                      rows={2}
+                      className="w-full px-3 py-2.5 rounded-xl text-sm border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                    />
+                  )}
+
+                  {pendingAction && (
+                    <button
+                      onClick={() => handleModalAction(selectedReport._id)}
+                      disabled={actionLoading !== null || (pendingAction === 'ban' && !actionNotes.trim())}
+                      className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-white ${
+                        pendingAction === 'ban' ? 'bg-rose-500 hover:bg-rose-600' :
+                        pendingAction === 'suspend' ? 'bg-orange-500 hover:bg-orange-600' :
+                        pendingAction === 'warn' ? 'bg-amber-500 hover:bg-amber-600' :
+                        'bg-emerald-500 hover:bg-emerald-600'
+                      }`}
+                    >
+                      {actionLoading ? <Loader2 size={14} className="animate-spin" /> : ACTION_META[pendingAction].icon}
+                      Confirm — {ACTION_META[pendingAction].label}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

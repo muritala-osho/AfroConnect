@@ -117,6 +117,29 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
           await sendBanNotificationEmail(reportedUser.email, reportedUser.name, notes || 'Violation of community guidelines');
         } catch (e) { console.error('Ban email failed:', e.message); }
       }
+
+      // Emit real-time socket events so the user is force-logged out instantly if active
+      try {
+        const ioInstance = req.app.get('io');
+        if (ioInstance) {
+          const uid = reportedUser._id.toString();
+          if (action === 'ban') {
+            ioInstance.to(uid).emit('user:banned', {
+              reason: notes || 'Violation of community guidelines',
+              bannedAt: reportedUser.bannedAt,
+            });
+            await redis.del(`profile:me:${uid}`);
+          } else if (action === 'suspend') {
+            ioInstance.to(uid).emit('user:suspended', {
+              reason: notes || 'Repeated violation of community guidelines',
+              suspendedUntil: reportedUser.suspendedUntil,
+            });
+            await redis.del(`profile:me:${uid}`);
+          }
+        }
+      } catch (socketErr) {
+        console.error('Failed to emit moderation socket event:', socketErr.message);
+      }
     }
 
     await logAudit(req, 'RESOLVE_REPORT', 'MODERATION', action === 'ban' ? 'critical' : 'medium',
