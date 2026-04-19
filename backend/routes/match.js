@@ -91,20 +91,36 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     const { targetUserId, action } = req.body;
 
     if (!req.user.premium?.isActive) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const lastReset = new Date(req.user.dailySwipes.lastReset);
-      lastReset.setHours(0, 0, 0, 0);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const swipeKey = `swipecount:${req.user._id}:${todayStr}`;
+      const redisCount = await redis.incr(swipeKey);
 
-      if (lastReset < today) {
-        req.user.dailySwipes.count = 0;
-        req.user.dailySwipes.lastReset = new Date();
-      }
+      if (redisCount !== null) {
+        if (redisCount === 1) {
+          const secondsUntilMidnight = Math.floor(
+            (new Date().setUTCHours(24, 0, 0, 0) - Date.now()) / 1000
+          );
+          await redis.expire(swipeKey, secondsUntilMidnight);
+        }
+        if (redisCount > 10) {
+          return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        }
+      } else {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const lastReset = new Date(req.user.dailySwipes.lastReset);
+        lastReset.setHours(0, 0, 0, 0);
 
-      if (req.user.dailySwipes.count >= 10) {
-        return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        if (lastReset < today) {
+          req.user.dailySwipes.count = 0;
+          req.user.dailySwipes.lastReset = new Date();
+        }
+
+        if (req.user.dailySwipes.count >= 10) {
+          return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        }
+        req.user.dailySwipes.count += 1;
       }
-      req.user.dailySwipes.count += 1;
     }
 
     const targetUser = await User.findById(targetUserId);

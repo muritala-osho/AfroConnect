@@ -204,7 +204,13 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${Math.round((parseFloat(lat) || 0) * 10)}:${Math.round((parseFloat(lng) || 0) * 10)}:${maxDistance || ''}:${minAge || ''}:${maxAge || ''}:${genders || ''}`;
+    const normLat  = Math.round((parseFloat(lat)  || 0) * 10);
+    const normLng  = Math.round((parseFloat(lng)  || 0) * 10);
+    const normDist = parseInt(maxDistance) || '';
+    const normMin  = parseInt(minAge)      || '';
+    const normMax  = parseInt(maxAge)      || '';
+    const normGen  = (genders || '').split(',').sort().join(',');
+    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
       return res.json({ success: true, users: cached, fromCache: true });

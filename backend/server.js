@@ -344,6 +344,7 @@ app.get('/api/health', (req, res) => {
  * Set `forceUpdate: true` to show an un-dismissible modal instead of a banner.
  */
 app.get('/api/app-version', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
   res.json({
     latestVersion:  '1.0.0',
     minimumVersion: '1.0.0',

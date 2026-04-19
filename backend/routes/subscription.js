@@ -117,6 +117,7 @@ async function validateGoogleReceipt(purchaseToken, productId) {
 
 router.get('/plans', async (req, res) => {
   try {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=1200');
     const plans = [
       {
         id: 'premium_plan',
