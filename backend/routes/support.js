@@ -12,12 +12,53 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
 const { supportTicketLimiter } = require('../middleware/rateLimiter');
 const User = require('../models/User');
 const SupportTicket = require('../models/SupportTicket');
 const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
+
+const fallbackChallenges = new Map();
+const CHALLENGE_TTL_MS = 10 * 60 * 1000;
+
+function cleanupFallbackChallenges() {
+  const now = Date.now();
+  for (const [token, entry] of fallbackChallenges.entries()) {
+    if (!entry || entry.expiresAt <= now) fallbackChallenges.delete(token);
+  }
+}
+
+function createChallengeToken(answer) {
+  if (process.env.JWT_SECRET) {
+    return jwt.sign({ answer }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  }
+
+  cleanupFallbackChallenges();
+  const token = `local_${crypto.randomBytes(24).toString('hex')}`;
+  fallbackChallenges.set(token, {
+    answer,
+    expiresAt: Date.now() + CHALLENGE_TTL_MS,
+  });
+  return token;
+}
+
+function verifyChallengeToken(token) {
+  if (!token) throw new Error('missing');
+
+  if (token.startsWith('local_')) {
+    cleanupFallbackChallenges();
+    const entry = fallbackChallenges.get(token);
+    if (!entry) throw new Error('expired');
+    fallbackChallenges.delete(token);
+    return entry.answer;
+  }
+
+  if (!process.env.JWT_SECRET) throw new Error('missing_secret');
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  return decoded.answer;
+}
 
 
 /** Send optional email alert to admin inbox (non-critical, never crashes a route) */
@@ -82,7 +123,7 @@ async function pushToStaff(ticket, title, body) {
 
 /**
  * GET /api/support/challenge
- * Returns a simple math CAPTCHA question + a signed token containing the answer.
+ * Returns a simple math CAPTCHA question + a short-lived token containing the answer.
  * The client must solve the question and submit both the token and answer with their ticket.
  */
 router.get('/challenge', (req, res) => {
@@ -96,11 +137,7 @@ router.get('/challenge', (req, res) => {
   const op = ops[Math.floor(Math.random() * ops.length)];
   const question = `What is ${a} ${op.symbol} ${b}?`;
 
-  const challengeToken = jwt.sign(
-    { answer: op.answer },
-    process.env.JWT_SECRET,
-    { expiresIn: '10m' }
-  );
+  const challengeToken = createChallengeToken(op.answer);
 
   res.json({ success: true, question, challengeToken });
 });
@@ -126,9 +163,9 @@ router.post('/ticket', supportTicketLimiter, async (req, res) => {
           requiresChallenge: true
         });
       }
-      let decoded;
+      let expectedAnswer;
       try {
-        decoded = jwt.verify(challengeToken, process.env.JWT_SECRET);
+        expectedAnswer = verifyChallengeToken(challengeToken);
       } catch (_) {
         return res.status(400).json({
           success: false,
@@ -136,7 +173,7 @@ router.post('/ticket', supportTicketLimiter, async (req, res) => {
           requiresChallenge: true
         });
       }
-      if (parseInt(challengeAnswer, 10) !== decoded.answer) {
+      if (parseInt(challengeAnswer, 10) !== expectedAnswer) {
         return res.status(400).json({
           success: false,
           message: 'Incorrect answer to the security challenge.',

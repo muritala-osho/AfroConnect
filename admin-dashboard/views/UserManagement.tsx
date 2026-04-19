@@ -76,6 +76,23 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
     return 'active';
   };
 
+  const formatLocationName = (location: any) => {
+    if (!location) return '';
+    if (typeof location === 'string') return location;
+    return location.name || [location.city, location.country].filter(Boolean).join(', ') || location.address || '';
+  };
+
+  const getLoveLocations = (user: any) => {
+    const locations: string[] = [];
+    const passport = formatLocationName(user.passportLocation);
+    if (passport) locations.push(`Passport: ${passport}`);
+    (user.additionalLocations || []).forEach((location: any) => {
+      const name = formatLocationName(location);
+      if (name) locations.push(name);
+    });
+    return locations;
+  };
+
   const handleUserClick = (user: any) => {
     setSelectedUser(user);
     setIsModalOpen(true);
@@ -585,6 +602,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                         </div>
                       ) : null)}
                     </div>
+
+                    {getLoveLocations(selectedUser).length > 0 && (
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Heart size={12} /> Love Locations</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {getLoveLocations(selectedUser).map((location, i) => (
+                            <div key={i} className="p-4 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-100 dark:border-rose-500/20">
+                              <p className="text-sm font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                                <MapPin size={13} /> {location}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Interests */}
                     {selectedUser.interests?.length > 0 && (

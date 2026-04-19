@@ -565,8 +565,13 @@ export default function ProfileDetailScreen() {
                 {user.relationshipGoal && <DetailItem icon="ribbon-outline" label="Relationship Goal" value={user.relationshipGoal} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
                 {user.jobTitle && <DetailItem icon="briefcase-outline" label="Job" value={user.jobTitle} />}
+                {(user as any)?.height && <DetailItem icon="resize-outline" label="Height" value={`${(user as any).height} cm`} />}
                 {(user as any)?.school && <DetailItem icon="school-outline" label="School" value={(user as any).school} />}
                 {user.education && <DetailItem icon="ribbon-outline" label="Education" value={user.education} />}
+                {(user as any)?.countryOfOrigin && <DetailItem icon="map-outline" label="Country of Origin" value={(user as any).countryOfOrigin} />}
+                {(user as any)?.tribe && <DetailItem icon="people-circle-outline" label="Tribe / Ethnicity" value={(user as any).tribe} />}
+                {(user as any)?.languages?.length > 0 && <DetailItem icon="chatbubble-ellipses-outline" label="Languages" value={Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages} />}
+                {(user as any)?.diasporaGeneration && <DetailItem icon="git-branch-outline" label="Diaspora Generation" value={(user as any).diasporaGeneration} />}
                 {user.lifestyle?.personalityType && <DetailItem icon="bulb-outline" label="Personality" value={user.lifestyle.personalityType} />}
                 {user.lifestyle?.communicationStyle && <DetailItem icon="chatbubbles-outline" label="Communication" value={user.lifestyle.communicationStyle} />}
                 {user.lifestyle?.loveStyle && <DetailItem icon="heart-circle-outline" label="Love Style" value={user.lifestyle.loveStyle} />}

@@ -1,6 +1,13 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Support flow, admin status controls, profile parity**:
+  - `frontend/screens/WelcomeScreen.tsx`: Public contact form now fetches `/api/support/challenge`, displays the math security challenge, and submits `challengeToken`/`challengeAnswer` with unauthenticated support requests.
+  - `backend/routes/support.js`: Challenge tokens now use JWT when `JWT_SECRET` exists and a short-lived in-memory local token in development when it does not, preventing the challenge endpoint from crashing in local setup.
+  - `frontend/screens/SettingsScreen.tsx`: Contact Support now sends auth headers for signed-in users and only shows the security challenge when no auth token is available.
+  - `admin-dashboard/views/SupportDesk.tsx` and `admin-dashboard/views/AgentDashboard.tsx`: Replaced hover-only support status menus with click-controlled dropdowns so `open`, `pending`, `in-progress`, and `closed` are explicit selectable statuses.
+  - `admin-dashboard/views/UserManagement.tsx`: User detail modal now surfaces passport/additional love locations.
+  - `frontend/screens/ProfileDetailScreen.tsx`: Public profile details now include height, school, country of origin, tribe/ethnicity, languages, and diaspora generation to match the owner profile fields.
 - **CallKit (iOS) / ConnectionService (Android) — native call UI when app is killed**:
   - Installed `react-native-callkeep` (wraps CallKit on iOS and ConnectionService on Android) and `react-native-voip-push-notification` (PushKit VoIP token for iOS).
   - `frontend/services/callkeep.ts` (NEW): Wrapper service — `initCallKeep()`, `displayIncomingCall()`, `endCallKeepCall()`, `reportCallEnded()`, `setCallActive()`, `setupCallKeepListeners()`, `removeCallKeepListeners()`. Calls `RNCallKeep.displayIncomingCall()` so the OS-level native incoming call screen appears regardless of app state.

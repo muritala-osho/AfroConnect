@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { 
   View, 
   StyleSheet, 
@@ -64,6 +64,35 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactMessage, setContactMessage] = useState("");
+  const [challengeQuestion, setChallengeQuestion] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const [challengeLoading, setChallengeLoading] = useState(false);
+
+  const fetchSupportChallenge = useCallback(async () => {
+    if (token) return;
+    setChallengeLoading(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/support/challenge`);
+      const data = await response.json();
+      if (data.success) {
+        setChallengeQuestion(data.question);
+        setChallengeToken(data.challengeToken);
+        setChallengeAnswer("");
+      }
+    } catch {
+      setChallengeQuestion("");
+      setChallengeToken("");
+    } finally {
+      setChallengeLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (contactModalVisible && !token) {
+      fetchSupportChallenge();
+    }
+  }, [contactModalVisible, token, fetchSupportChallenge]);
 
   const handleToggle = async (key: string, value: boolean, setter: (v: boolean) => void) => {
     setter(value);
@@ -598,6 +627,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               value={contactMessage}
               onChangeText={setContactMessage}
             />
+            {!token && (
+              <View style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                <ThemedText style={{ color: theme.text, fontWeight: '700', marginBottom: 10 }}>
+                  {challengeLoading ? 'Loading security challenge...' : challengeQuestion || 'Security challenge unavailable'}
+                </ThemedText>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      paddingHorizontal: 14,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
+                    }}
+                    placeholder="Answer"
+                    placeholderTextColor={theme.textSecondary}
+                    keyboardType="number-pad"
+                    value={challengeAnswer}
+                    onChangeText={setChallengeAnswer}
+                  />
+                  <Pressable
+                    onPress={fetchSupportChallenge}
+                    style={{ width: 46, height: 46, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Feather name="refresh-cw" size={16} color={theme.primary} />
+                  </Pressable>
+                </View>
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 style={{ flex: 1, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }}
@@ -609,27 +670,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 style={{ flex: 2, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: contactMessage.trim() ? theme.primary : theme.border, flexDirection: 'row', gap: 8 }}
                 onPress={async () => {
                   if (contactMessage.trim()) {
+                    if (!token && (!challengeToken || !challengeAnswer.trim())) {
+                      Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
+                      return;
+                    }
                     try {
                       const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',
-                          'Accept': 'application/json'
+                          'Accept': 'application/json',
+                          ...(token ? { Authorization: `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({
                           name: user?.name || 'User',
                           email: user?.email || '',
                           message: contactMessage.trim(),
-                          userId: user?.id
+                          userId: user?.id,
+                          ...(!token ? {
+                            challengeToken,
+                            challengeAnswer: challengeAnswer.trim()
+                          } : {})
                         })
                       });
                       const data = await response.json();
                       if (data.success) {
                         Alert.alert("Message Sent", "We'll get back to you as soon as possible!");
                         setContactMessage("");
+                        setChallengeAnswer("");
                         setContactModalVisible(false);
                       } else {
                         Alert.alert("Error", data.message || "Failed to send message");
+                        if (data.requiresChallenge) fetchSupportChallenge();
                       }
                     } catch (e) {
                       Alert.alert("Error", "Network error. Please try again.");

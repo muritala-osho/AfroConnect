@@ -62,9 +62,11 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const [agents, setAgents] = useState<SupportAgent[]>([]);
   const [assigningTicket, setAssigningTicket] = useState(false);
   const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const assignDropdownRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
 
   const fetchTickets = useCallback(async (silent = false) => {
@@ -115,6 +117,9 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
       if (assignDropdownRef.current && !assignDropdownRef.current.contains(e.target as Node)) {
         setShowAssignDropdown(false);
       }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setShowStatusDropdown(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -125,6 +130,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     setSelectedTicket(ticket);
     setReplyText('');
     setShowAssignDropdown(false);
+    setShowStatusDropdown(false);
     adminApi.getSupportTicket(ticket._id).then(data => {
       if (data.success) setSelectedTicket(data.ticket);
     }).catch(() => {});
@@ -168,6 +174,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!selectedTicket || statusUpdating) return;
     setStatusUpdating(true);
+    setShowStatusDropdown(false);
     try {
       const data = await adminApi.updateSupportStatus(selectedTicket._id, newStatus);
       const updated = data.ticket || { ...selectedTicket, status: newStatus };
@@ -440,22 +447,28 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                   </div>
 
                   {/* Status dropdown */}
-                  <div className="relative group">
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:border-teal-300 transition-all">
+                  <div className="relative" ref={statusDropdownRef}>
+                    <button
+                      onClick={() => setShowStatusDropdown(v => !v)}
+                      disabled={statusUpdating}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:border-teal-300 transition-all disabled:opacity-50"
+                    >
                       {selectedTicket.status} <ChevronDown size={12} />
                     </button>
-                    <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl shadow-xl z-20 opacity-0 group-hover:opacity-100 transition-all pointer-events-none group-hover:pointer-events-auto overflow-hidden">
-                      {ALL_STATUSES.map(s => (
-                        <button
-                          key={s}
-                          onClick={() => handleStatusChange(s)}
-                          disabled={statusUpdating || selectedTicket.status === s}
-                          className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 transition-all disabled:opacity-40"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+                    {showStatusDropdown && (
+                      <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl shadow-xl z-30 overflow-hidden">
+                        {ALL_STATUSES.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => handleStatusChange(s)}
+                            disabled={statusUpdating || selectedTicket.status === s}
+                            className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 transition-all disabled:opacity-40"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
