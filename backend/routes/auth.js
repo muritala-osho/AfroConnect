@@ -4,6 +4,7 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
+const Session = require("../models/Session");
 const {
   sendPasswordResetEmail,
   sendWelcomeEmail,
@@ -16,11 +17,41 @@ const {
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
-const generateToken = (userId, tokenVersion = 0) => {
-  return jwt.sign({ id: userId, tokenVersion }, process.env.JWT_SECRET, {
+const generateToken = (userId, tokenVersion = 0, sessionId = null) => {
+  const payload = { id: userId, tokenVersion };
+  if (sessionId) payload.sessionId = sessionId;
+  return jwt.sign(payload, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || "7d",
   });
 };
+
+async function createSession(userId, req) {
+  try {
+    const sessionId = crypto.randomUUID();
+    const deviceName = req.body.deviceName || req.headers['x-device-name'] || 'Unknown Device';
+    const platform = req.body.platform || req.headers['x-platform'] || 'unknown';
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || null;
+
+    let city = null;
+    let country = null;
+    if (ipAddress && ipAddress !== '127.0.0.1' && ipAddress !== '::1' && !ipAddress.startsWith('::ffff:127')) {
+      try {
+        const geoRes = await fetch(`http://ip-api.com/json/${ipAddress}?fields=city,country,status`, { signal: AbortSignal.timeout(3000) });
+        const geo = await geoRes.json();
+        if (geo.status === 'success') {
+          city = geo.city || null;
+          country = geo.country || null;
+        }
+      } catch (_) {}
+    }
+
+    await Session.create({ userId, sessionId, deviceName, platform, ipAddress, city, country });
+    return sessionId;
+  } catch (err) {
+    logger.error('Failed to create session:', err.message);
+    return crypto.randomUUID();
+  }
+}
 
 router.post(
   "/signup",
@@ -134,7 +165,8 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
     );
 
     const freshUser = await User.findById(user._id).select('+tokenVersion');
-    const token = generateToken(user._id, freshUser.tokenVersion || 0);
+    const sessionId = await createSession(user._id, req);
+    const token = generateToken(user._id, freshUser.tokenVersion || 0, sessionId);
 
     res.json({
       success: true,
@@ -256,7 +288,8 @@ router.post(
       await user.save();
 
       const userWithVersion = await User.findById(user._id).select('+tokenVersion');
-      const token = generateToken(user._id, userWithVersion.tokenVersion || 0);
+      const sessionId = await createSession(user._id, req);
+      const token = generateToken(user._id, userWithVersion.tokenVersion || 0, sessionId);
 
       res.json({
         success: true,
@@ -412,6 +445,9 @@ router.post("/logout", async (req, res) => {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         await User.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+        if (decoded.sessionId) {
+          await Session.deleteOne({ sessionId: decoded.sessionId });
+        }
       } catch (_) {}
     }
     res.json({ success: true, message: "Logged out successfully" });

@@ -40,6 +40,7 @@ const supportRoutes = require('./routes/support');
 const successStoriesRoutes = require('./routes/successStories');
 const subscriptionRoutes = require('./routes/subscription');
 const muteRoutes = require('./routes/mute');
+const sessionsRoutes = require('./routes/sessions');
 
 const compression = require('compression');
 const helmet = require('helmet');
@@ -438,6 +439,7 @@ app.use('/api/engagement', engagementRoutes);
 const spotifyRoutes = require('./routes/spotify');
 app.use('/api/spotify', spotifyRoutes);
 app.use('/api/mute', muteRoutes);
+app.use('/api/sessions', sessionsRoutes);
 /* Alias: some redirect URIs may be registered without the /api prefix */
 app.get('/auth/spotify/callback', (req, res) => {
   const qs = Object.keys(req.query).map(k => `${k}=${encodeURIComponent(req.query[k])}`).join('&');

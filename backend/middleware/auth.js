@@ -1,6 +1,8 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Session = require('../models/Session');
+const redis = require('../utils/redis');
 
 const protect = async (req, res, next) => {
   let token;
@@ -18,6 +20,18 @@ const protect = async (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.sessionId) {
+      const revoked = await redis.get(`revoked:${decoded.sessionId}`);
+      if (revoked) {
+        return res.status(401).json({
+          success: false,
+          message: 'This session has been revoked. Please log in again.',
+          tokenRevoked: true,
+        });
+      }
+      req.sessionId = decoded.sessionId;
+    }
 
     req.user = await User.findById(decoded.id).select('+tokenVersion');
 
@@ -88,6 +102,14 @@ const protect = async (req, res, next) => {
     ) {
       req.user.premium.isActive = false;
       await User.findByIdAndUpdate(req.user._id, { 'premium.isActive': false });
+    }
+
+    if (req.sessionId) {
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+      Session.updateOne(
+        { sessionId: req.sessionId, lastActive: { $lt: fiveMinutesAgo } },
+        { $set: { lastActive: new Date() } }
+      ).catch(() => {});
     }
 
     next();

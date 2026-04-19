@@ -44,6 +44,7 @@ import MatchPopupScreen from "@/screens/MatchPopupScreen";
 import CustomizeInterfaceScreen from "@/screens/CustomizeInterfaceScreen";
 import SocialMediaScreen from "@/screens/SocialMediaScreen";
 import DailyMatchScreen from "@/screens/DailyMatchScreen";
+import DeviceManagementScreen from "@/screens/DeviceManagementScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -104,6 +105,7 @@ export type RootStackParamList = {
   CustomizeInterface: undefined;
   SocialMedia: undefined;
   DailyMatch: undefined;
+  DeviceManagement: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -206,6 +208,7 @@ export default function RootNavigator() {
             <Stack.Screen name="CustomizeInterface" component={CustomizeInterfaceScreen} options={{ headerShown: false }} />
             <Stack.Screen name="SocialMedia" component={SocialMediaScreen} options={{ headerShown: false }} />
             <Stack.Screen name="DailyMatch" component={DailyMatchScreen} options={{ presentation: "fullScreenModal" }} />
+            <Stack.Screen name="DeviceManagement" component={DeviceManagementScreen} options={{ headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

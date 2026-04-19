@@ -320,6 +320,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             }
           />
           <SettingItem 
+            icon="monitor" 
+            label="Active Sessions" 
+            onPress={() => navigation.navigate('DeviceManagement' as any)} 
+          />
+          <SettingItem 
             icon="slash" 
             label="Blocked Users" 
             onPress={() => navigation.navigate('BlockedUsers')} 
