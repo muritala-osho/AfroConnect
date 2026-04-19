@@ -80,8 +80,8 @@ export default function DeviceManagementScreen({ navigation }: Props) {
       else setLoading(true);
       try {
         const res = await get<{ sessions: Session[] }>("/sessions", token);
-        if (res.success && res.sessions) {
-          setSessions(res.sessions);
+        if (res.success && res.data?.sessions) {
+          setSessions(res.data.sessions);
         }
       } catch (_) {}
       setLoading(false);

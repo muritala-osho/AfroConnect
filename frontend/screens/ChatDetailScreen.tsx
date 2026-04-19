@@ -1200,11 +1200,22 @@ export default function ChatDetailScreen({
     setSubmittingReport(true);
     try {
       const payload: any = { reportedUserId: userId, reason: selectedReportReason, description: reportDetails, matchId };
-      if (reportTargetMessage?.type === "image" && reportTargetMessage.imageUrl) {
-        payload.contentType = "message_image";
+      if (reportTargetMessage) {
         payload.contentId = reportTargetMessage._id;
-        payload.contentUrl = reportTargetMessage.imageUrl;
-        payload.contentPreview = reportTargetMessage.content || "Reported image message";
+        if (reportTargetMessage.type === "image" && reportTargetMessage.imageUrl) {
+          payload.contentType = "message_image";
+          payload.contentUrl = reportTargetMessage.imageUrl;
+          payload.contentPreview = reportTargetMessage.content || "Reported image message";
+        } else if (reportTargetMessage.type === "audio") {
+          payload.contentType = "message_audio";
+          payload.contentPreview = "Voice message";
+        } else if (reportTargetMessage.type === "video") {
+          payload.contentType = "message_video";
+          payload.contentPreview = "Video message";
+        } else {
+          payload.contentType = "message_text";
+          payload.contentPreview = reportTargetMessage.content || reportTargetMessage.text || "Text message";
+        }
       }
       const response = await post("/reports", payload, token || "");
       if (response.success) { setShowReportModal(false); setSelectedReportReason(null); setReportDetails(""); setReportTargetMessage(null); Alert.alert("Report Submitted", "Thank you for your report. Our team will review it shortly."); }
@@ -2079,11 +2090,11 @@ export default function ChatDetailScreen({
             )}
             {selectedMessage && (() => {
               const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
-              return String(sid) !== String(myId) && selectedMessage.type === "image" && !!selectedMessage.imageUrl && !selectedMessage.deletedForEveryone;
+              return String(sid) !== String(myId) && !selectedMessage.deletedForEveryone;
             })() && (
               <Pressable style={styles.messageMenuItem} onPress={() => { setReportTargetMessage(selectedMessage); setShowMessageMenu(false); setShowReportModal(true); }}>
                 <Feather name="flag" size={22} color="#F44336" />
-                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Report Image</ThemedText>
+                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Report Message</ThemedText>
               </Pressable>
             )}
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
