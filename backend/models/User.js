@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema({
   verificationOTPExpire: Date,
   resetPasswordOTP: String,
   resetPasswordOTPExpire: Date,
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    select: false
+  },
   password: {
     type: String,
     required: function() {

@@ -16,8 +16,8 @@ const {
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+const generateToken = (userId, tokenVersion = 0) => {
+  return jwt.sign({ id: userId, tokenVersion }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || "7d",
   });
 };
@@ -133,7 +133,8 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
       logger.error("Welcome email failed (non-blocking):", err.message),
     );
 
-    const token = generateToken(user._id);
+    const freshUser = await User.findById(user._id).select('+tokenVersion');
+    const token = generateToken(user._id, freshUser.tokenVersion || 0);
 
     res.json({
       success: true,
@@ -254,7 +255,8 @@ router.post(
       user.onlineStatus = "online";
       await user.save();
 
-      const token = generateToken(user._id);
+      const userWithVersion = await User.findById(user._id).select('+tokenVersion');
+      const token = generateToken(user._id, userWithVersion.tokenVersion || 0);
 
       res.json({
         success: true,
@@ -385,6 +387,7 @@ router.post(
       user.password = newPassword;
       user.resetPasswordOTP = undefined;
       user.resetPasswordOTPExpire = undefined;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
       await user.save();
 
       res.json({
@@ -400,6 +403,22 @@ router.post(
     }
   },
 );
+
+router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        await User.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+      } catch (_) {}
+    }
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 
 router.post("/appeal", async (req, res) => {
   try {

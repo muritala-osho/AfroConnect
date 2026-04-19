@@ -19,12 +19,20 @@ const protect = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    req.user = await User.findById(decoded.id);
+    req.user = await User.findById(decoded.id).select('+tokenVersion');
 
     if (!req.user) {
       return res.status(401).json({ 
         success: false, 
         message: 'User not found' 
+      });
+    }
+
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== (req.user.tokenVersion || 0)) {
+      return res.status(401).json({
+        success: false,
+        message: 'Session expired. Please log in again.',
+        tokenRevoked: true
       });
     }
 

@@ -144,7 +144,7 @@ router.get('/search', protect, async (req, res) => {
         { name: { $regex: query, $options: 'i' } }
       ]
     })
-    .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
+    .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire -email -resetPasswordOTP -resetPasswordOTPExpire -banned -banReason -bannedAt -appeal -suspended -suspendedUntil -tokenVersion')
     .limit(20);
 
     res.json({
@@ -535,6 +535,21 @@ router.get('/:id', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
     const { password, resetPasswordToken, resetPasswordExpire, verificationOTP, verificationOTPExpire, ...otherUserInfo } = user.toObject();
+
+    if (req.user._id.toString() !== req.params.id) {
+      delete otherUserInfo.email;
+      delete otherUserInfo.resetPasswordOTP;
+      delete otherUserInfo.resetPasswordOTPExpire;
+      delete otherUserInfo.banned;
+      delete otherUserInfo.banReason;
+      delete otherUserInfo.bannedAt;
+      delete otherUserInfo.appeal;
+      delete otherUserInfo.suspended;
+      delete otherUserInfo.suspendedUntil;
+      delete otherUserInfo.tokenVersion;
+      delete otherUserInfo.verificationOTP;
+      delete otherUserInfo.verificationOTPExpire;
+    }
 
     if (req.user._id.toString() !== req.params.id) {
       await User.findByIdAndUpdate(req.params.id, {
