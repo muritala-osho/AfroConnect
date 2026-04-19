@@ -1,6 +1,7 @@
 import React, { useEffect, useCallback, useRef } from "react";
 import { StyleSheet, View, Text, TouchableOpacity, AppState } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+import * as Notifications from "expo-notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -28,6 +29,33 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 SplashScreen.preventAutoHideAsync();
+
+export const navigationRef = createNavigationContainerRef<any>();
+
+function navigateFromNotification(data: Record<string, any>) {
+  if (!navigationRef.isReady()) return;
+  const nav = navigationRef as any;
+  const { type, screen, senderId, senderName } = data || {};
+  if (type === "message" || screen === "ChatDetail") {
+    if (senderId) {
+      nav.navigate("ChatDetail", {
+        userId: senderId,
+        userName: senderName || "User",
+        userPhoto: "",
+      });
+    } else {
+      nav.navigate("MainTabs", { screen: "Chats" });
+    }
+    return;
+  }
+  if (type === "match" || screen === "Matches") {
+    nav.navigate("MainTabs", { screen: "Matches" });
+    return;
+  }
+  if (screen === "Discovery") {
+    nav.navigate("MainTabs", { screen: "Discovery" });
+  }
+}
 
 // Print API configuration on startup
 console.log("\n\n========== AFROCONNECT APP STARTED ==========");
@@ -82,27 +110,34 @@ function AppContent() {
         // don't rely on AsyncStorage timing after a fresh login
         await registerForPushNotificationsAsync(token ?? undefined);
 
+        // Handle a notification that launched the app from a killed state
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastResponse) {
+          const data = lastResponse.notification.request.content.data as Record<string, any>;
+          setTimeout(() => navigateFromNotification(data), 500);
+        }
+
         // Setup listeners for incoming notifications
         unsubscribe = setupNotificationListeners(
           (notification) => {
             console.log("Notification received:", notification);
-            // Handle notification when app is in foreground
           },
           async (response) => {
-            console.log("User tapped notification:", response);
-            // Track notification open for the timing engine
+            const data = response?.notification?.request?.content?.data as Record<string, any>;
+            // Navigate to the right screen immediately
+            navigateFromNotification(data);
+            // Fire-and-forget engagement tracking — never block navigation
             try {
-              const token = await AsyncStorage.getItem("auth_token");
-              if (token) {
-                const screen = response?.notification?.request?.content?.data?.screen;
+              const authToken = await AsyncStorage.getItem("auth_token");
+              if (authToken) {
                 fetch(`${getApiBaseUrl()}/api/engagement/notification-opened`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
+                    Authorization: `Bearer ${authToken}`,
                   },
-                  body: JSON.stringify({ screen: screen || "unknown" }),
-                }).catch(() => {}); // fire and forget — never block UX
+                  body: JSON.stringify({ screen: data?.screen || "unknown" }),
+                }).catch(() => {});
               }
             } catch {}
           },
@@ -138,7 +173,7 @@ function AppContent() {
     <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
       <KeyboardProvider>
         <CallProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <RootNavigator />
             <IncomingCallHandler />
             <FloatingCallBar />

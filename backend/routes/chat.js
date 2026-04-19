@@ -459,8 +459,10 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
             badge: totalUnread,
             data: {
               type: "message",
+              screen: "ChatDetail",
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
+              senderName,
             },
           },
           "message",
@@ -801,8 +803,10 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
             badge: totalUnread,
             data: {
               type: "message",
+              screen: "ChatDetail",
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
+              senderName,
             },
           },
           "message",
