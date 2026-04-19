@@ -21,11 +21,19 @@
  */
 
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { initCallKeep, displayIncomingCall } from './callkeep';
+
+/** Returns true when running inside the standard Expo Go app, which does not
+ *  bundle Firebase native modules (RNFBAppModule). */
+function isExpoGo(): boolean {
+  return Constants.appOwnership === 'expo';
+}
 
 let _messaging: any = null;
 
 function getMessaging() {
+  if (isExpoGo()) return null;
   if (_messaging) return _messaging;
   try {
     _messaging = require('@react-native-firebase/messaging').default;
