@@ -349,7 +349,7 @@ app.get('/api/app-version', (req, res) => {
     minimumVersion: '1.0.0',
     forceUpdate:    false,
     message:        'A new version of AfroConnect is available with improvements and bug fixes.',
-    androidUrl:     'https://play.google.com/store/apps/details?id=com.afroconnect',
+    androidUrl:     'https://play.google.com/store/apps/details?id=com.afroconnect.app',
     iosUrl:         'https://apps.apple.com/app/afroconnect/id0000000000',
   });
 });
