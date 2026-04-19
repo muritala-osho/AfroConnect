@@ -15,9 +15,11 @@ router.get('/who-likes-me', protect, async (req, res) => {
   try {
     const FriendRequest = require('../models/FriendRequest');
     const isPremium = req.user.premium?.isActive;
-    const cacheKey = `wholikesme:${req.user._id}:${isPremium ? 'premium' : 'free'}`;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const cacheKey = `wholikesme:${req.user._id}:${isPremium ? 'premium' : 'free'}:p${page}:l${limit}`;
     const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, users: cached, fromCache: true });
+    if (cached) return res.json({ success: true, ...cached, fromCache: true });
 
     const pendingRequests = await FriendRequest.find({
       receiver: req.user._id,
@@ -70,8 +72,14 @@ router.get('/who-likes-me', protect, async (req, res) => {
       });
     }
 
-    await redis.set(cacheKey, processedUsers, 60);
-    res.json({ success: true, users: processedUsers });
+    const total   = processedUsers.length;
+    const skip    = (page - 1) * limit;
+    const paged   = processedUsers.slice(skip, skip + limit);
+    const hasMore = skip + paged.length < total;
+
+    const payload = { users: paged, total, page, limit, hasMore };
+    await redis.set(cacheKey, payload, 60);
+    res.json({ success: true, ...payload });
   } catch (error) {
     console.error('Who likes me error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -232,9 +240,11 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
 router.get('/my-matches', protect, async (req, res) => {
   try {
-    const cacheKey = `matches:${req.user._id}`;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const cacheKey = `matches:${req.user._id}:p${page}:l${limit}`;
     const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, matches: cached, fromCache: true });
+    if (cached) return res.json({ success: true, ...cached, fromCache: true });
 
     const currentUser = await User.findById(req.user._id);
     const matches = await Match.find({ users: req.user._id, status: 'active' })
@@ -271,8 +281,14 @@ router.get('/my-matches', protect, async (req, res) => {
       };
     });
 
-    await redis.set(cacheKey, enriched, 45);
-    res.json({ success: true, matches: enriched });
+    const total   = enriched.length;
+    const skip    = (page - 1) * limit;
+    const paged   = enriched.slice(skip, skip + limit);
+    const hasMore = skip + paged.length < total;
+
+    const payload = { matches: paged, total, page, limit, hasMore };
+    await redis.set(cacheKey, payload, 45);
+    res.json({ success: true, ...payload });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
