@@ -66,7 +66,6 @@ interface LoveRadarScreenProps {
   navigation: LoveRadarScreenNavigationProp;
 }
 
-// ── Pulse ring rendered per avatar ──────────────────────────────────────────
 function AvatarPulse({ active, color }: { active: boolean; color: string }) {
   const scale = useSharedValue(1);
   const opacity = useSharedValue(0.5);
@@ -99,7 +98,6 @@ function AvatarPulse({ active, color }: { active: boolean; color: string }) {
   );
 }
 
-// ── Preview popup card ───────────────────────────────────────────────────────
 function PreviewCard({
   user,
   onClose,
@@ -218,7 +216,6 @@ function PreviewCard({
   );
 }
 
-// ── Main screen ──────────────────────────────────────────────────────────────
 export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -881,7 +878,6 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
 
-  // ── Header ──
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -953,7 +949,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(16,185,129,0.4)",
   },
 
-  // ── Stats ──
   statsRow: {
     flexDirection: "row",
     marginHorizontal: 20,
@@ -995,7 +990,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 
-  // ── Filter ──
   filterToggle: {
     flexDirection: "row",
     alignItems: "center",
@@ -1115,7 +1109,6 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
 
-  // ── Radar ──
   radarSection: {
     marginTop: 22,
     alignItems: "center",
@@ -1228,7 +1221,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // Refresh
   refreshBtn: {
     marginTop: 14,
     borderRadius: 14,
@@ -1251,7 +1243,6 @@ const styles = StyleSheet.create({
     color: "#10B981",
   },
 
-  // ── List ──
   listSection: {
     marginTop: 28,
     paddingHorizontal: 20,
@@ -1445,7 +1436,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // ── Preview card ──
   previewOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.65)",

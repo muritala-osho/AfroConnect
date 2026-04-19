@@ -420,7 +420,6 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // Support agent role — can view assigned tickets and reply, not full admin
   isSupportAgent: {
     type: Boolean,
     default: false
@@ -481,7 +480,6 @@ const userSchema = new mongoose.Schema({
   inactivityEmailSentAt: Date,
   renewalReminderSentAt: Date,
 
-  // ── Churn Prediction ────────────────────────────────────────────────────────
   churnScore: {
     type: Number,
     default: 0,
@@ -496,8 +494,6 @@ const userSchema = new mongoose.Schema({
   },
   freeBoostGrantedAt: Date,
 
-  // ── Notification Timing Engine ──────────────────────────────────────────────
-  // 24-slot array (one per UTC hour) tracking sent/opened counts
   notificationEngagement: [{
     hour:        { type: Number, min: 0, max: 23 },
     sent:        { type: Number, default: 0 },
@@ -535,7 +531,6 @@ const userSchema = new mongoose.Schema({
       unsendLimit: { type: Number, default: 15 } 
     }
   },
-  // ── Cultural Identity ────────────────────────────────────────────────────────
   countryOfOrigin: {
     type: String,
     maxlength: 100,
@@ -558,14 +553,12 @@ const userSchema = new mongoose.Schema({
     default: null
   },
 
-  // ── Voice Bio ────────────────────────────────────────────────────────────────
   voiceBio: {
     url: { type: String, default: null },
     publicId: { type: String, default: null },
     duration: { type: Number, default: 0 }
   },
 
-  // ── Daily Curated Match ──────────────────────────────────────────────────────
   dailyMatch: {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     date: { type: String, default: null }

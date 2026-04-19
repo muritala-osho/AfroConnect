@@ -43,7 +43,6 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
-// ─── POST /upload-verification-video ────────────────────────────────────────
 const handleVerificationVideoUpload = async (req, res) => {
   const tempPath = req.file?.path || null;
   try {
@@ -81,7 +80,6 @@ const handleVerificationVideoUpload = async (req, res) => {
         videoUrl = uploaded.secure_url;
         publicId = uploaded.public_id;
         storage  = 'cloudinary';
-        // Remove temp file after successful Cloudinary upload
         fs.unlink(tempPath, () => {});
       } catch (cloudError) {
         console.error('[upload-verification-video] Cloudinary upload failed:', cloudError.message);
@@ -89,7 +87,6 @@ const handleVerificationVideoUpload = async (req, res) => {
     }
 
     if (!videoUrl) {
-      // Keep the file on disk — serve it locally
       const fileName = path.basename(tempPath);
       videoUrl = `/public/verification-videos/${fileName}`;
       storage  = 'local';
@@ -133,7 +130,6 @@ router.post(
   handleVerificationVideoUpload
 );
 
-// ─── GET /status ─────────────────────────────────────────────────────────────
 router.get('/status', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -154,7 +150,6 @@ router.get('/status', protect, async (req, res) => {
   }
 });
 
-// ─── ADMIN: Get pending verifications ────────────────────────────────────────
 router.get('/pending', protect, isAdmin, async (req, res) => {
   try {
     const verifications = await User.find({ verificationStatus: 'pending' })
@@ -166,7 +161,6 @@ router.get('/pending', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── ADMIN: Approve verification ─────────────────────────────────────────────
 router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
@@ -211,7 +205,6 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── ADMIN: Reject verification ──────────────────────────────────────────────
 router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
   try {
     const { reason } = req.body;
@@ -242,7 +235,6 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── POST /request (selfie only, legacy) ─────────────────────────────────────
 router.post('/request', protect, upload.fields([{ name: 'selfiePhoto', maxCount: 1 }]), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);

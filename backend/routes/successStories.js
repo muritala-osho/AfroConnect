@@ -59,7 +59,6 @@ router.get('/', protect, async (req, res) => {
   try {
     const { featured, relationship, limit = 20, skip = 0 } = req.query;
 
-    // Include approved stories OR user's own pending stories (not rejected/removed)
     const query = {
       $or: [
         { status: 'approved' },
@@ -136,7 +135,6 @@ router.get('/featured', protect, async (req, res) => {
 
 router.get('/stats', protect, async (req, res) => {
   try {
-    // Optimized: single aggregation query instead of 4 separate queries
     const stats = await SuccessStory.aggregate([
       { $match: { status: 'approved' } },
       {

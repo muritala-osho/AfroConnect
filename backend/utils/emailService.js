@@ -24,7 +24,6 @@ async function brevoSend({ to, subject, html, text }) {
   return response.json();
 }
 
-// Escape user-supplied strings before embedding them in HTML email bodies
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
   return str
@@ -35,7 +34,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-// Brand palette — Emerald Blue
 const BRAND = {
   gradientStart: '#059669',   // emerald
   gradientEnd:   '#0EA5E9',   // sky blue
@@ -54,7 +52,6 @@ const LOGO_BLOCK = LOGO_URL
        style="border-radius: 20px; display: block; margin: 0 auto 14px auto;" />`
   : '';
 
-// Reusable header section
 const emailHeader = (title, subtitle = '') => `
   <tr>
     <td style="background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
@@ -68,7 +65,6 @@ const emailHeader = (title, subtitle = '') => `
   </tr>
 `;
 
-// Reusable footer
 const emailFooter = () => `
   <tr>
     <td style="background-color: #F8F9FA; padding: 28px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
@@ -91,7 +87,6 @@ const emailFooter = () => `
   </tr>
 `;
 
-// Email shell wrapper
 const emailShell = (bodyRows) => `
   <!DOCTYPE html>
   <html lang="en">
@@ -115,7 +110,6 @@ const emailShell = (bodyRows) => `
   </html>
 `;
 
-// ─── OTP Email ────────────────────────────────────────────────────────────────
 const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
   ${emailHeader('AfroConnect', 'Connect with Your Perfect Match')}
   <tr>
@@ -165,7 +159,6 @@ const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Welcome Email ────────────────────────────────────────────────────────────
 const getWelcomeEmailTemplate = (userName) => emailShell(`
   ${emailHeader('Welcome to AfroConnect! 🎉')}
   <tr>
@@ -205,7 +198,6 @@ const getWelcomeEmailTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Password Reset Email ─────────────────────────────────────────────────────
 const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
   ${emailHeader('Password Reset Request')}
   <tr>
@@ -243,7 +235,6 @@ const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Ban Notification ─────────────────────────────────────────────────────────
 const getBanNotificationTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
@@ -279,7 +270,6 @@ const getBanNotificationTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Unban Notification ───────────────────────────────────────────────────────
 const getUnbanNotificationTemplate = (userName) => emailShell(`
   ${emailHeader("You're Back! 🎉")}
   <tr>
@@ -305,7 +295,6 @@ const getUnbanNotificationTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Appeal Decision ──────────────────────────────────────────────────────────
 const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
   const headerBg  = approved ? `linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%)` : 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)';
   const noteBg    = approved ? BRAND.primaryLight : '#FEE2E2';
@@ -345,7 +334,6 @@ const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
   `);
 };
 
-// ─── Send functions ───────────────────────────────────────────────────────────
 const sendOTP = async (email, otp) => {
   try {
     await brevoSend({
@@ -436,7 +424,6 @@ const sendAppealDecisionEmail = async (email, userName, approved, adminResponse)
   }
 };
 
-// ─── Verification Approved ────────────────────────────────────────────────────
 const getVerificationApprovedTemplate = (userName) => emailShell(`
   ${emailHeader('Identity Verified! ✓', 'You are now a verified AfroConnect member')}
   <tr>
@@ -464,7 +451,6 @@ const getVerificationApprovedTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Verification Rejected ────────────────────────────────────────────────────
 const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
@@ -502,7 +488,6 @@ const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Warning Email ─────────────────────────────────────────────────────────────
 const getWarningEmailTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
@@ -536,7 +521,6 @@ const getWarningEmailTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Suspension Email ──────────────────────────────────────────────────────────
 const getSuspensionEmailTemplate = (userName, reason, durationDays) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #DC2626 0%, #F59E0B 100%);
@@ -629,7 +613,6 @@ const sendSuspensionEmail = async (email, userName, reason, durationDays) => {
   }
 };
 
-// ─── Suspension Lifted Email ──────────────────────────────────────────────────
 const getSuspensionLiftedTemplate = (userName) => emailShell(`
   ${emailHeader("Suspension Lifted — Welcome Back! 🎉", "Your access has been automatically restored")}
   <tr>
@@ -676,7 +659,6 @@ const sendSuspensionLiftedEmail = async (email, userName) => {
   }
 };
 
-// ─── New Match Notification ───────────────────────────────────────────────────
 const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
   ${emailHeader("It's a Match! 💚", `You and ${matchName} liked each other`)}
   <tr>
@@ -732,7 +714,6 @@ const sendNewMatchEmail = async (email, userName, matchName, matchPhoto) => {
   }
 };
 
-// ─── Support Ticket Reply ─────────────────────────────────────────────────────
 const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => emailShell(`
   ${emailHeader('Support Reply from AfroConnect 💬', 'Our team has responded to your enquiry')}
   <tr>
@@ -783,7 +764,6 @@ const sendSupportReplyEmail = async (email, userName, replyContent, ticketSubjec
   }
 };
 
-// ─── Renewal Reminder ─────────────────────────────────────────────────────────
 const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) => emailShell(`
   ${emailHeader('Subscription Renewal Reminder ⏰', `Your ${planName} plan renews soon`)}
   <tr>
@@ -834,7 +814,6 @@ const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, 
   }
 };
 
-// ─── Inactivity Re-engagement ─────────────────────────────────────────────────
 const getInactivityTemplate = (userName) => emailShell(`
   ${emailHeader('We miss you, ' + userName + '! 👋', 'New people are waiting to connect with you')}
   <tr>

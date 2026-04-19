@@ -606,7 +606,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
         const isValid = Date.now() - timestamp < CACHE_DURATION;
-        // Show cached data immediately even if stale, for faster perceived loading
         if (showImmediately) {
           setConversations(data.conversations || []);
           setStoryUsers(data.stories || []);
@@ -617,7 +616,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     } catch (e) {
       console.log("Cache load error:", e);
     }
-    // No cache found - set loading false to show empty state faster
     if (showImmediately) {
       setLoading(false);
     }
@@ -654,8 +652,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         token,
       );
       if (response.success && response.data?.stories) {
-        // Filter out my own story completely from the active list to avoid any duplication
-        // We handle "Your Story" as the first item in the list manually in the ScrollView
         const filtered = response.data.stories.filter(
           (s) => s.id !== user?.id && s.name !== "Your Story",
         );
@@ -692,7 +688,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         return;
       }
 
-      // Reset pagination on every fresh load
       setCurrentPage(1);
       setHasMore(true);
 
@@ -738,14 +733,11 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
             isPinned: pinnedChats.has(conv.user.id),
           }));
 
-        // If we got fewer results than the page size, there are no more pages
         setHasMore(incoming.length >= limitPerPage);
 
         if (page === 1) {
-          // First page: replace conversations
           setConversations(incoming);
 
-          // Background Pre-fetching for top conversations
           if (!search && !isBackground) {
             incoming.slice(0, 10).forEach(async (conv) => {
               try {
@@ -782,7 +774,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
             } catch (e) {}
           }
         } else {
-          // Subsequent pages: append, avoiding duplicates
           setConversations((prev) => {
             const existingIds = new Set(prev.map((c) => c.user.id));
             const newOnes = incoming.filter((c) => !existingIds.has(c.user.id));
@@ -803,7 +794,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   }
   useFocusEffect(
     useCallback(() => {
-      // Clear the unread badge whenever the user opens the Chats tab
       resetUnread();
 
       const checkAndLoad = async () => {
@@ -829,7 +819,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
 
         await Promise.all(loadPromises);
 
-        // Reload drafts every time the screen is focused (user may have typed and left a chat)
         try {
           const currentConvs = conversations;
           if (currentConvs.length > 0) {
@@ -861,7 +850,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     ]),
   );
 
-  // Listen for real-time online/offline status updates
   useEffect(() => {
     const handleUserStatus = (data: { userId: string; isOnline: boolean }) => {
       setConversations((prev) =>
@@ -873,7 +861,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       );
     };
 
-    // Real-time verified badge: admin approves → chat list updates instantly
     const handleUserVerified = (data: { userId: string; verified: boolean }) => {
       setConversations((prev) =>
         prev.map((conv) =>
@@ -897,17 +884,14 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     };
   }, []);
 
-  // Live unread count: increment when a new message arrives from another user
   useEffect(() => {
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const senderId =
         typeof msg.sender === "string" ? msg.sender : msg.sender?._id;
-      // Only bump unread if someone else sent it
       if (senderId && String(senderId) !== String(user?.id || "")) {
         setConversations((prev) =>
           prev.map((conv) => {
-            // Match conversation by matchId or userId
             const matchesConv =
               conv.matchId === (data.matchId || msg.matchId) ||
               conv.user.id === String(senderId);
@@ -927,11 +911,9 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       }
     };
 
-    // Live read receipt: when the current user reads a chat, clear that conversation's unread count
     const handleMessagesRead = (data: any) => {
       const readByUserId = data.readBy || data.userId;
       const chatMatchId = data.matchId || data.chatId;
-      // If it's the current user reading, clear unread
       if (String(readByUserId) === String(user?.id || "")) {
         setConversations((prev) =>
           prev.map((conv) => {
@@ -1242,7 +1224,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     [conversations, archivedChats],
   );
 
-  // Load drafts whenever the conversations list changes
   useEffect(() => {
     if (conversations.length === 0) return;
     const keys = conversations.map((c) => `chat_draft_${c.user.id}`);

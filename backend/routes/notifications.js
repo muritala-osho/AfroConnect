@@ -4,15 +4,11 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { Expo } = require('expo-server-sdk');
 
-// Always log every request to notification routes regardless of NODE_ENV
 router.use((req, res, next) => {
   console.log(`[Notifications Route] ${req.method} ${req.path} — user: ${req.user?._id || 'unauthenticated'}`);
   next();
 });
 
-// @route   POST /api/notifications/register-token
-// @desc    Register device push token
-// @access  Private
 router.post('/register-token', protect, async (req, res) => {
   const userId = req.user?._id;
   console.log(`[Notifications] register-token called — userId: ${userId}`);
@@ -28,7 +24,6 @@ router.post('/register-token', protect, async (req, res) => {
       });
     }
 
-    // Validate it looks like an Expo token before storing
     if (!Expo.isExpoPushToken(pushToken)) {
       console.warn(`[Notifications] register-token — invalid Expo token format for user ${userId}: ${pushToken}`);
       return res.status(400).json({
@@ -57,9 +52,6 @@ router.post('/register-token', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/notifications/register-fcm-token
-// @desc    Register device FCM token for direct Firebase data messages (Android killed-state calls)
-// @access  Private
 router.post('/register-fcm-token', protect, async (req, res) => {
   const userId = req.user?._id;
   try {
@@ -76,9 +68,6 @@ router.post('/register-fcm-token', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/notifications/register-voip-token
-// @desc    Register iOS VoIP (PushKit) push token for native CallKit support
-// @access  Private
 router.post('/register-voip-token', protect, async (req, res) => {
   const userId = req.user?._id;
   console.log(`[Notifications] register-voip-token — userId: ${userId}`);
@@ -99,9 +88,6 @@ router.post('/register-voip-token', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/notifications/send
-// @desc    Send push notification to a specific user (admin/system use)
-// @access  Private
 router.post('/send', protect, async (req, res) => {
   const callerId = req.user?._id;
   console.log(`[Notifications] /send called by user ${callerId}`);
@@ -136,10 +122,6 @@ router.post('/send', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/notifications/test
-// @desc    Send a test push notification to the calling user's own device.
-//          Use this to verify the full pipeline: token stored → Expo API called → device receives.
-// @access  Private
 router.post('/test', protect, async (req, res) => {
   const userId = req.user?._id;
   console.log(`[Notifications] /test called — userId: ${userId}`);
@@ -202,9 +184,6 @@ router.post('/test', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/notifications/status
-// @desc    Check if the current user has a registered push token
-// @access  Private
 router.get('/status', protect, async (req, res) => {
   const userId = req.user?._id;
   try {

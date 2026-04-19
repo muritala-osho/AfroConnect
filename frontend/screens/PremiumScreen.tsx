@@ -124,7 +124,6 @@ export default function PremiumScreen({ navigation }: any) {
           }
         }
       } catch (e) {
-        // silently fall back to hardcoded prices
       } finally {
         setPricesLoading(false);
       }

@@ -20,11 +20,9 @@
 
 const { sendSmartNotification } = require('./pushNotifications');
 
-// Minimum open rate threshold — below this we fall back to a sensible default
 const MIN_SAMPLES_FOR_LEARNING = 5;
 const DEFAULT_SEND_HOURS = [9, 12, 18, 20]; // 9am, noon, 6pm, 8pm (UTC)
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Returns the hour (0-23, UTC) with the highest open rate for this user.
@@ -36,7 +34,6 @@ const getOptimalSendHour = (user) => {
   const totalSent  = engagement.reduce((s, e) => s + (e.sent || 0), 0);
 
   if (totalSent < MIN_SAMPLES_FOR_LEARNING) {
-    // Not enough data — pick the default hour closest to now
     const nowHour = new Date().getUTCHours();
     return DEFAULT_SEND_HOURS.reduce((best, h) => {
       const distBest = Math.min(Math.abs(nowHour - best), 24 - Math.abs(nowHour - best));
@@ -45,7 +42,6 @@ const getOptimalSendHour = (user) => {
     }, DEFAULT_SEND_HOURS[0]);
   }
 
-  // Find hour with the best open rate (opened / sent)
   let bestHour = DEFAULT_SEND_HOURS[0];
   let bestRate = -1;
 
@@ -72,7 +68,6 @@ const msUntilNextOccurrence = (targetHour) => {
   
   let targetMs = todayUTC.getTime();
   
-  // If that hour already passed today, schedule for tomorrow
   if (targetMs < nowMs - 30 * 60 * 1000) {
     targetMs += 24 * 60 * 60 * 1000;
   }
@@ -148,10 +143,8 @@ const scheduleNotification = async (user, payload, sendNow = false, type = 'syst
     await doSend(user);
     return { scheduled: true, delayMs: 0, sentNow: true };
   } else {
-    // Queue for later — use setTimeout (fire and forget)
     setTimeout(async () => {
       try {
-        // Re-fetch user to get fresh state before delayed send
         const User = require('../models/User');
         const freshUser = await User.findById(user._id).select(
           'pushToken notificationEngagement pushNotificationsEnabled muteSettings notificationPreferences'

@@ -11,16 +11,12 @@ const FriendRequest = require('../models/FriendRequest');
 const crypto = require('crypto');
 const { sendOTP } = require('../utils/emailService');
 
-// @route   DELETE /api/account/delete
-// @desc    Permanently delete user account and all data
-// @access  Private
 router.delete('/delete', protect, async (req, res) => {
   try {
     const { password, reason } = req.body;
     
     const user = await User.findById(req.user._id).select('+password');
     
-    // Verify password if user has one (not OAuth users)
     if (user.password && password) {
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
@@ -36,30 +32,21 @@ router.delete('/delete', protect, async (req, res) => {
       });
     }
     
-    // Log deletion reason for analytics
     console.log('Account deletion - User ID:', user._id, 'Reason:', reason);
     
-    // Delete all user data
     await Promise.all([
-      // Delete user profile
       User.deleteOne({ _id: user._id }),
       
-      // Delete all matches
       Match.deleteMany({ users: user._id }),
       
-      // Delete all messages sent by user
       Message.deleteMany({ sender: user._id }),
       
-      // Delete messages in conversations with user
       Message.deleteMany({ $or: [{ sender: user._id }, { receiver: user._id }] }),
       
-      // Delete activity logs
       Activity.deleteMany({ $or: [{ userId: user._id }, { targetUserId: user._id }] }),
       
-      // Delete call history
       CallHistory.deleteMany({ $or: [{ caller: user._id }, { receiver: user._id }] }),
       
-      // Delete friend requests
       FriendRequest.deleteMany({ $or: [{ from: user._id }, { to: user._id }] })
     ]);
     
@@ -76,9 +63,6 @@ router.delete('/delete', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/account/export-data
-// @desc    Export all user data (GDPR compliance)
-// @access  Private
 router.post('/export-data', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -126,9 +110,6 @@ router.post('/export-data', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/account/privacy-settings
-// @desc    Get privacy settings
-// @access  Private
 router.get('/privacy-settings', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -156,9 +137,6 @@ router.get('/privacy-settings', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/account/privacy-settings
-// @desc    Update privacy settings
-// @access  Private
 router.put('/privacy-settings', protect, async (req, res) => {
   try {
     const { showOnlineStatus, showDistance, showLastActive, hideAge, whoCanViewStories, allowMessageCopying } = req.body;
@@ -203,9 +181,6 @@ router.put('/privacy-settings', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/account/change-password
-// @desc    Change user password
-// @access  Private
 router.put('/change-password', protect, async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -257,9 +232,6 @@ router.put('/change-password', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/account/settings
-// @desc    Update account settings (notifications, theme)
-// @access  Private
 router.put('/settings', protect, async (req, res) => {
   try {
     const { emailNotifications, pushNotifications, theme } = req.body;
@@ -296,9 +268,6 @@ router.put('/settings', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/account/settings
-// @desc    Get account settings
-// @access  Private
 router.get('/settings', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -317,9 +286,6 @@ router.get('/settings', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/account/request-deletion-otp
-// @desc    Request OTP for account deletion (for OAuth users without password)
-// @access  Private
 router.post('/request-deletion-otp', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -346,9 +312,6 @@ router.post('/request-deletion-otp', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/account/delete-with-otp
-// @desc    Delete account using OTP verification
-// @access  Private
 router.delete('/delete-with-otp', protect, async (req, res) => {
   try {
     const { otp, reason } = req.body;
@@ -400,9 +363,6 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/account/check-auth-method
-// @desc    Check if user has password (for determining deletion method)
-// @access  Private
 router.get('/check-auth-method', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('password googleId');

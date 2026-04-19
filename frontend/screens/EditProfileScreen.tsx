@@ -835,7 +835,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const totalFields = 23;
   const completionPct = Math.round((filledFields / totalFields) * 100);
 
-  // Auto-save diaspora selection immediately to the database when user picks an option
   const handleDiasporaSelect = async (value: string) => {
     setDiasporaGeneration(value);
     try {
@@ -1408,14 +1407,12 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // HEADER
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
   headerBack: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', letterSpacing: 0.1 },
   headerSaveBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, minWidth: 70, justifyContent: 'center' },
   headerSaveBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 
-  // HERO
   hero: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 14 },
   heroLeft: {},
   heroRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 2.5, overflow: 'visible' as const, position: 'relative' },
@@ -1430,15 +1427,12 @@ const styles = StyleSheet.create({
   heroBarFill: { height: '100%' as any, borderRadius: 3 },
   heroBarLabel: { fontSize: 12, fontWeight: '700', minWidth: 32 },
 
-  // TAB BAR
   tabBar: { flexDirection: 'row' as const, borderBottomWidth: 1, paddingHorizontal: 4 },
   tabItem: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 11, borderBottomWidth: 2.5, borderBottomColor: 'transparent' },
   tabLabel: { fontSize: 12, letterSpacing: 0.1 },
 
-  // SCROLL CONTENT
   scrollContent: { paddingHorizontal: 14, paddingTop: 16, gap: 14 },
 
-  // CARD
   card: { borderRadius: 18, overflow: 'hidden' as const, borderWidth: 1 },
   cardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, gap: 12 },
   cardIconWrap: { width: 36, height: 36, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
@@ -1446,13 +1440,11 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 12, marginTop: 1 },
   cardBody: { padding: 14, gap: 12 },
 
-  // FIELDS
   fieldWrap: { gap: 6 },
   miniLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   row2: { flexDirection: 'row' as const, gap: 10 },
   half: { flex: 1, gap: 6 },
 
-  // INPUT FIELD sub-component styles
   fieldContainer: {},
   fieldLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 7, gap: 6 },
   fieldLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.6 },
@@ -1461,12 +1453,10 @@ const styles = StyleSheet.create({
   textInput: { flex: 1, fontSize: 15, paddingVertical: 12 },
   multilineInput: { minHeight: 90, textAlignVertical: 'top' as const },
 
-  // SELECT BUTTON sub-component styles
   selectButton: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   selectIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   selectButtonText: { fontSize: 14, flex: 1 },
 
-  // INTERESTS TRIGGER
   triggerRow: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   triggerIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   triggerText: { flex: 1, fontSize: 14 },
@@ -1474,7 +1464,6 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, gap: 5 },
   chipText: { fontSize: 12, fontWeight: '500' },
 
-  // TOGGLE CARD
   toggleCard: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' as const },
   toggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: 'transparent' },
   toggleLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, gap: 12 },
@@ -1484,7 +1473,6 @@ const styles = StyleSheet.create({
   toggleDescription: { fontSize: 12, marginTop: 1 },
   toggleDivider: { height: 1, marginHorizontal: 14 },
 
-  // SONG CARD
   songCard: { borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
   songIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
   songAlbumArt: { width: 48, height: 48, borderRadius: 14 },
@@ -1511,17 +1499,14 @@ const styles = StyleSheet.create({
   spotifyTrackTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
   spotifyTrackArtist: { fontSize: 12 },
 
-  // QUIZ CTA
   quizCta: { borderRadius: 14, overflow: 'hidden' as const, marginTop: 4 },
   quizCtaGradient: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   quizCtaTitle: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   quizCtaSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
 
-  // BOTTOM SAVE
   bottomSave: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, height: 54, borderRadius: 27, marginTop: 4 },
   bottomSaveText: { color: '#FFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
-  // MODALS
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' as const },
   modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, maxHeight: '82%' as any },
   modalDragHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center' as const, marginTop: 10, marginBottom: 2 },

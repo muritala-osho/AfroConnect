@@ -39,7 +39,6 @@ export function useApi() {
         },
       });
 
-      // ── Maintenance mode detection ─────────────────────────────────────────
       if (response.status === 503) {
         const data = await response.json().catch(() => ({}));
         if (data.maintenance) {
@@ -50,7 +49,6 @@ export function useApi() {
         }
       }
 
-      // Clear maintenance flag on any successful response
       setMaintenance(false);
 
       const contentType = response.headers.get('content-type');

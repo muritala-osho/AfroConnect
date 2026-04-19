@@ -13,22 +13,17 @@ interface ProgressiveImageProps {
 function normalizeSource(source: any): any {
   if (!source) return null;
   
-  // If it's already a proper format, return it
   if (typeof source === 'number' || typeof source === 'string') return source;
   
-  // If it's an object with uri property, extract it
   if (typeof source === 'object' && source.uri) {
-    // Make sure uri is a string, not a nested object
     if (typeof source.uri === 'string') {
       return { uri: source.uri };
     }
-    // If uri is an object, try to extract its url property
     if (typeof source.uri === 'object' && source.uri.url) {
       return { uri: source.uri.url };
     }
   }
   
-  // If it's an object with url property, wrap it
   if (typeof source === 'object' && source.url && typeof source.url === 'string') {
     return { uri: source.url };
   }
@@ -40,7 +35,6 @@ export function ProgressiveImage({ source, style, contentFit = "cover" }: Progre
   const [isLoading, setIsLoading] = useState(true);
   const normalizedSource = normalizeSource(source);
 
-  // Don't render if source is invalid
   if (!normalizedSource) {
     return <View style={style as any} />;
   }

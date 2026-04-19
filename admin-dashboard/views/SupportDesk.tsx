@@ -23,7 +23,6 @@ interface SupportDeskProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-// ─── Style maps ────────────────────────────────────────────────────────────
 
 const priorityStyles: Record<string, string> = {
   high: 'bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400',
@@ -50,7 +49,6 @@ const ALL_STATUSES = ['open', 'pending', 'in-progress', 'closed'] as const;
 type TicketStatus = typeof ALL_STATUSES[number];
 type FilterStatus = 'all' | TicketStatus;
 
-// ─── Component ─────────────────────────────────────────────────────────────
 
 const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
@@ -68,7 +66,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const assignDropdownRef = useRef<HTMLDivElement>(null);
 
-  // ─── Data fetching ──────────────────────────────────────────────────────
 
   const fetchTickets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -76,7 +73,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
       const data = await adminApi.getAllSupportTickets();
       if (data.success) {
         setTickets(data.tickets || []);
-        // Refresh selected ticket if open
         if (selectedTicket) {
           const updated = (data.tickets || []).find((t: SupportTicket) => t._id === selectedTicket._id);
           if (updated) setSelectedTicket(updated);
@@ -89,7 +85,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     }
   }, [selectedTicket, showToast]);
 
-  // Fetch agents list once (admin only)
   const fetchAgents = useCallback(async () => {
     try {
       const data = await adminApi.getSupportAgents();
@@ -102,7 +97,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     fetchAgents();
   }, []);
 
-  // Poll for updates every 15 seconds
   useEffect(() => {
     pollingRef.current = setInterval(() => fetchTickets(true), 15000);
     return () => {
@@ -110,14 +104,12 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     };
   }, [fetchTickets]);
 
-  // Auto-scroll message thread to bottom
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [selectedTicket?.messages?.length]);
 
-  // Close assign dropdown when clicking outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (assignDropdownRef.current && !assignDropdownRef.current.contains(e.target as Node)) {
@@ -128,13 +120,11 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // ─── Actions ────────────────────────────────────────────────────────────
 
   const handleSelectTicket = (ticket: SupportTicket) => {
     setSelectedTicket(ticket);
     setReplyText('');
     setShowAssignDropdown(false);
-    // Mark as read by refreshing the full ticket
     adminApi.getSupportTicket(ticket._id).then(data => {
       if (data.success) setSelectedTicket(data.ticket);
     }).catch(() => {});
@@ -145,7 +135,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     setSending(true);
     const content = replyText.trim();
 
-    // Optimistic update
     const optimisticMsg: TicketMessage = {
       role: 'admin',
       content,
@@ -211,7 +200,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     }
   };
 
-  // ─── Derived state ──────────────────────────────────────────────────────
 
   const filteredTickets = tickets.filter(t => {
     const matchesStatus = filterStatus === 'all' || t.status === filterStatus;
@@ -241,7 +229,6 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
 
   const totalUnread = tickets.reduce((sum, t) => sum + (t.unreadByAgent || 0), 0);
 
-  // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6 animate-fadeIn">

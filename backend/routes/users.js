@@ -9,9 +9,6 @@ const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
 
 
-// @route   GET /api/users/me
-// @desc    Get current user profile
-// @access  Private
 router.get('/me', protect, async (req, res) => {
   try {
     if (!req.user.emailVerified) {
@@ -34,12 +31,8 @@ router.get('/me', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/users/me
-// @desc    Update current user profile
-// @access  Private
 router.put('/me', protect, require('../middleware/validate')(require('../validators/schemas').updateProfile), async (req, res) => {
   try {
-    // Ensure the user has verified their email before allowing profile updates
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
@@ -58,7 +51,6 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
 
     allowedUpdates.forEach(field => {
       if (updates[field] !== undefined) {
-        // Special handling for photos - set first photo as primary
         if (field === 'photos' && Array.isArray(updates[field]) && updates[field].length > 0) {
           user.photos = updates[field].map((photo, index) => ({
             ...photo,
@@ -67,9 +59,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
           }));
         }
 
-        // Handle preference updates
         else if (field === 'preferences') {
-          // Merge preferences instead of replacing
           const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language', 'smoking', 'drinking', 'wantsKids', 'onlineNow', 'interests'];
           allowedPrefKeys.forEach(prefKey => {
             if (updates.preferences[prefKey] === undefined) return;
@@ -82,15 +72,12 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
           });
-          // Map genders array → genderPreference string
           if (Array.isArray(updates.preferences.genders) && updates.preferences.genders.length > 0) {
             const g = updates.preferences.genders;
             user.preferences.genderPreference = g.length === 1 ? g[0] : 'both';
           }
         } else if (field === 'lifestyle' && updates.lifestyle) {
-          // Merge lifestyle instead of replacing
           const lifestyleUpdate = { ...updates.lifestyle };
-          // Convert pets array to comma-separated string if needed
           if (Array.isArray(lifestyleUpdate.pets)) {
             lifestyleUpdate.pets = lifestyleUpdate.pets.join(',');
           }
@@ -99,13 +86,11 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ...lifestyleUpdate
           };
         } else if (field === 'privacySettings' && updates.privacySettings) {
-          // Merge privacySettings
           user.privacySettings = {
             ...(user.privacySettings || {}),
             ...updates.privacySettings
           };
         } else if (['communicationStyle', 'loveStyle', 'personalityType'].includes(field)) {
-          // These belong under lifestyle — merge them in for backwards compatibility
           const currentLifestyle = user.lifestyle && typeof user.lifestyle.toObject === 'function'
             ? user.lifestyle.toObject()
             : (user.lifestyle || {});
@@ -117,7 +102,6 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     });
 
     await user.save();
-    // Invalidate own profile cache on update
     await redis.del(`profile:me:${req.user._id}`);
 
     res.json({ 
@@ -138,9 +122,6 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
   }
 });
 
-// @route   GET /api/users/search
-// @desc    Search users by username or name
-// @access  Private
 router.get('/search', protect, async (req, res) => {
   try {
     const { query } = req.query;
@@ -152,7 +133,6 @@ router.get('/search', protect, async (req, res) => {
       });
     }
 
-    // Ensure the user has verified their email before allowing search
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
@@ -180,9 +160,6 @@ router.get('/search', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/countries
-// @desc    Get distinct countries from user locations
-// @access  Private
 router.get('/countries', protect, async (req, res) => {
   try {
     const countries = await User.distinct('location.country', {
@@ -218,7 +195,6 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    // Cache discovery results per user (2 min TTL — fast enough to stay fresh)
     const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${Math.round((parseFloat(lat) || 0) * 10)}:${Math.round((parseFloat(lng) || 0) * 10)}:${maxDistance || ''}:${minAge || ''}:${maxAge || ''}:${genders || ''}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
@@ -234,12 +210,10 @@ router.get('/nearby', protect, async (req, res) => {
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
 
-    // Priority 1: Passport location (premium globe feature)
     if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
       searchLng = currentUser.passportLocation.coordinates[0];
       searchLat = currentUser.passportLocation.coordinates[1];
     }
-    // Priority 2: Active saved location from Manage Locations
     else if (currentUser.premium?.isActive && currentUser.activeLocationId) {
       const activeLoc = (currentUser.additionalLocations || []).find(
         l => l._id.toString() === currentUser.activeLocationId.toString()
@@ -390,13 +364,10 @@ router.get('/nearby', protect, async (req, res) => {
       return { ...userObj, score, scoreBreakdown: breakdown, distance: distanceKm };
     });
 
-    // Apply distance cap for free users in local mode
     if (!isGlobal && hasOrigin && !isPremium) {
       users = users.filter(u => u.distance == null || u.distance <= maxDist);
     }
 
-    // Sort by match score descending (score already encodes distance, recency,
-    // interests, profile completeness, etc.)
     users.sort((a, b) => b.score - a.score);
 
     users = users.slice(0, 40);
@@ -406,7 +377,6 @@ router.get('/nearby', protect, async (req, res) => {
       const isOnline = user.onlineStatus === 'online' || user.online;
       const distanceVisible = isPremium || privacy.showDistance !== false;
 
-      // Filter photos by per-photo privacy — in discovery (no match yet) only show public photos
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
       // eslint-disable-next-line no-unused-vars
@@ -425,7 +395,6 @@ router.get('/nearby', protect, async (req, res) => {
 
     console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
 
-    // Cache discovery results for 2 minutes
     await redis.set(cacheKey, users, 120);
 
     res.json({
@@ -439,9 +408,6 @@ router.get('/nearby', protect, async (req, res) => {
 });
 
 
-// @route   GET /api/users/profile-views
-// @desc    Get users who viewed current user's profile
-// @access  Private
 router.get('/profile-views', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
@@ -456,7 +422,6 @@ router.get('/profile-views', protect, async (req, res) => {
     const user = await User.findById(req.user._id)
       .populate('profileViews.user', 'name username photos age gender');
     
-    // Sort by latest view and remove duplicates (only latest view from each user)
     const uniqueViews = [];
     const seenUsers = new Set();
     
@@ -492,7 +457,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       return res.json({ success: true, views: [], isPremium });
     }
     
-    // Sort by latest view and remove duplicates (only latest view from each user)
     const uniqueViews = [];
     const seenUsers = new Set();
     
@@ -503,7 +467,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       }
     });
 
-    // For non-premium users, blur photos but show name and age
     const processedViews = uniqueViews.map(view => {
       const viewData = {
         _id: view.user._id,
@@ -554,9 +517,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/:id
-// @desc    Get user by ID
-// @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
     if (!req.user.emailVerified) {
@@ -574,10 +534,8 @@ router.get('/:id', protect, async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    // Do not return sensitive info like password, OTP etc.
     const { password, resetPasswordToken, resetPasswordExpire, verificationOTP, verificationOTPExpire, ...otherUserInfo } = user.toObject();
 
-    // Log profile view (don't log if viewing own profile)
     if (req.user._id.toString() !== req.params.id) {
       await User.findByIdAndUpdate(req.params.id, {
         $push: {
@@ -589,7 +547,6 @@ router.get('/:id', protect, async (req, res) => {
       });
     }
 
-    // Apply privacy settings
     const isPremium = req.user.premium?.isActive;
     const privacy = user.privacySettings || {};
 
@@ -599,15 +556,12 @@ router.get('/:id', protect, async (req, res) => {
       otherUserInfo.onlineStatus = null;
     }
 
-    // Feature: Distance viewing is premium only
     if (!isPremium && (privacy.showDistance === false || !isPremium)) {
       otherUserInfo.distance = null;
     }
 
     if (privacy.showLastActive === false) otherUserInfo.lastActive = null;
 
-    // Enforce per-photo privacy
-    // Check if viewer is matched with the profile owner (friends-level access)
     const Match = require('../models/Match');
     const isMatched = await Match.exists({
       users: { $all: [req.user._id, user._id] },
@@ -631,9 +585,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/users/photos/:photoIndex
-// @desc    Delete a specific photo from user's profile
-// @access  Private
 router.delete('/photos/:photoIndex', protect, async (req, res) => {
   try {
     const { photoIndex } = req.params;
@@ -648,15 +599,12 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid photo index' });
     }
     
-    // Enforce 4-photo minimum
     if (user.photos.length <= 4) {
       return res.status(400).json({ success: false, message: 'You need at least 4 photos on your profile. Add more before deleting this one.' });
     }
     
-    // Remove photo
     user.photos.splice(index, 1);
     
-    // Reset primary photo if needed
     if (user.photos.length > 0) {
       user.photos = user.photos.map((photo, idx) => ({
         ...photo,
@@ -674,9 +622,6 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/users/me
-// @desc    Delete user account
-// @access  Private
 router.delete('/me', protect, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.user._id);
@@ -686,7 +631,6 @@ router.delete('/me', protect, async (req, res) => {
   }
 });
 
-// Location routes
 router.post('/me/locations', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -703,7 +647,6 @@ router.post('/me/locations', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Location name is required' });
     }
 
-    // Geocode the location name using OpenStreetMap Nominatim (free, no key needed)
     let lat = null, lng = null, city = '', country = '';
     try {
       const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`;
@@ -734,7 +677,6 @@ router.post('/me/locations/active', protect, async (req, res) => {
     const { locationId } = req.body;
 
     if (!locationId) {
-      // Clear active location — revert to GPS
       user.activeLocationId = null;
       await user.save();
       return res.json({ success: true, message: 'Reverted to GPS location', activeLocationId: null });
@@ -789,7 +731,6 @@ router.post('/passport-location', protect, async (req, res) => {
 router.delete('/me/locations/:locationId', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    // If deleting the currently active location, revert to GPS
     if (user.activeLocationId?.toString() === req.params.locationId) {
       user.activeLocationId = null;
     }

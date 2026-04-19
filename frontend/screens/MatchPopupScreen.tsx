@@ -93,13 +93,11 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
   }, []);
 
   useEffect(() => {
-    // Photos fly in from sides and scale up
     leftPhotoScale.value = withDelay(100, withSpring(1, { damping: 12, stiffness: 100 }));
     rightPhotoScale.value = withDelay(200, withSpring(1, { damping: 12, stiffness: 100 }));
     leftPhotoX.value = withDelay(100, withSpring(0, { damping: 15, stiffness: 80 }));
     rightPhotoX.value = withDelay(200, withSpring(0, { damping: 15, stiffness: 80 }));
     
-    // Heart appears and pulses
     heartScale.value = withDelay(400, withSpring(1, { damping: 8, stiffness: 120 }));
     heartPulse.value = withDelay(600, withRepeat(
       withSequence(
@@ -110,22 +108,18 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
       true
     ));
     
-    // Text fades in and slides up
     textOpacity.value = withDelay(500, withTiming(1, { duration: 400 }));
     textY.value = withDelay(500, withSpring(0, { damping: 15 }));
     
-    // Buttons slide up
     buttonsOpacity.value = withDelay(700, withTiming(1, { duration: 300 }));
     buttonsY.value = withDelay(700, withSpring(0, { damping: 15 }));
     
-    // Sparkle rotation
     sparkleRotate.value = withRepeat(
       withTiming(360, { duration: 8000, easing: Easing.linear }),
       -1,
       false
     );
     
-    // Glow pulse
     glowOpacity.value = withDelay(400, withRepeat(
       withSequence(
         withTiming(0.6, { duration: 1000 }),

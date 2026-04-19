@@ -57,9 +57,6 @@ const createCallMessage = async (callerId, receiverId, callType, callStatus, dur
   }
 };
 
-// @route   POST /api/call/initiate
-// @desc    Initiate a call (create call history entry)
-// @access  Private
 router.post('/initiate', protect, async (req, res) => {
   try {
     const { receiverId, type } = req.body; // type: 'video' or 'audio'
@@ -79,9 +76,6 @@ router.post('/initiate', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/call/decline
-// @desc    Record a declined call
-// @access  Private
 router.post('/decline', protect, async (req, res) => {
   try {
     const { callerId, type } = req.body;
@@ -103,9 +97,6 @@ router.post('/decline', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/call/missed
-// @desc    Record a missed call
-// @access  Private
 router.post('/missed', protect, async (req, res) => {
   try {
     const { callerId, type } = req.body;
@@ -127,9 +118,6 @@ router.post('/missed', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/call/:callId/end
-// @desc    End a call and update duration
-// @access  Private
 router.put('/:callId/end', protect, async (req, res) => {
   try {
     const { duration, status } = req.body;
@@ -153,9 +141,6 @@ router.put('/:callId/end', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/call/history
-// @desc    Get call history
-// @access  Private
 router.get('/history', protect, async (req, res) => {
   try {
     const calls = await CallHistory.find({

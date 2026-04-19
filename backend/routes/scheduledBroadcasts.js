@@ -11,8 +11,6 @@ const isAdmin = async (req, res, next) => {
 };
 const { logAudit } = require('../utils/auditHelper');
 
-// @route   GET /api/admin/scheduled-broadcasts
-// @desc    List scheduled broadcasts (pending, fired, cancelled)
 router.get('/', protect, isAdmin, async (req, res) => {
   try {
     const { status, page = 1, limit = 50 } = req.query;
@@ -44,8 +42,6 @@ router.get('/', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/scheduled-broadcasts
-// @desc    Schedule a new broadcast
 router.post('/', protect, isAdmin, async (req, res) => {
   try {
     const { title, body, imageUrl, target, scheduledAt } = req.body;
@@ -88,8 +84,6 @@ router.post('/', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/admin/scheduled-broadcasts/:id
-// @desc    Cancel a pending scheduled broadcast
 router.delete('/:id', protect, isAdmin, async (req, res) => {
   try {
     const broadcast = await ScheduledBroadcast.findById(req.params.id);
@@ -122,8 +116,6 @@ router.delete('/:id', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/scheduled-broadcasts/:id/fire
-// @desc    Immediately fire a pending broadcast (override schedule)
 router.post('/:id/fire', protect, isAdmin, async (req, res) => {
   try {
     const broadcast = await ScheduledBroadcast.findById(req.params.id);

@@ -194,7 +194,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     }, [token])
   );
 
-  // Real-time: when a first message is sent in any match, clear that match's countdown immediately
   useEffect(() => {
     const handleNewMessage = (data: any) => {
       const matchId = data.matchId || data.message?.matchId;
@@ -205,7 +204,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         )
       );
     };
-    // Dedicated event fired by the backend only on the very first message
     const handleFirstMessage = (data: any) => {
       const matchId = data?.matchId;
       if (!matchId) return;
@@ -247,7 +245,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     
     setLoading(true);
     try {
-      // Fetch matches and likes
       const [matchesRes, likesRes] = await Promise.all([
         api.get<{ success: boolean; matches: any[] }>('/match/my-matches', token),
         api.get<{ success: boolean; users: any[] }>('/match/who-likes-me', token)
@@ -358,12 +355,10 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const handleLikeBack = async (likeUserId: string) => {
     if (!token) return;
     try {
-      // Use friends/request endpoint which handles mutual likes and creates matches
       const response = await api.post<{ isMatch?: boolean; matchedUser?: any }>('/friends/request', { receiverId: likeUserId }, token);
       if (response.success) {
         setWhoLikesMe(prev => prev.filter(u => u._id !== likeUserId));
         
-        // If it's a match, show the match popup
         if (response.data?.isMatch && response.data?.matchedUser) {
           const matchedUser = response.data.matchedUser;
           navigation.navigate('MatchPopup', {

@@ -66,7 +66,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     try {
       await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, code);
       setLanguageState(code);
-      // We'll let the user sync this to profile if they are in settings
     } catch (error) {
       console.error("Error saving language preference:", error);
     }

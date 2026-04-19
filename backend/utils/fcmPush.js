@@ -68,7 +68,6 @@ async function sendFcmDataMessage(fcmToken, data) {
   const firebaseAdmin = getAdmin();
   if (!firebaseAdmin) return;
 
-  // All values in FCM data payloads must be strings
   const stringData = {};
   for (const [k, v] of Object.entries(data)) {
     stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);

@@ -13,17 +13,12 @@ const redis = require('../utils/redis');
 const STORY_ACTIVE_TTL = 30;   // seconds — active feed refreshes quickly
 const STORY_USER_TTL   = 60;   // seconds — single-user story list
 
-// @route   POST /api/stories
-// @desc    Create a new story
-// @access  Private
 router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), async (req, res) => {
   try {
     const { type, content, textContent, backgroundColor, mediaUrl, thumbnail, durationHours } = req.body;
 
-    // Default 24 hours
     let hours = 24;
     
-    // Custom duration (up to 30 days)
     if (durationHours) {
       const requestedHours = parseInt(durationHours);
       if (!isNaN(requestedHours) && requestedHours > 0 && requestedHours <= 720) {
@@ -46,7 +41,6 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
 
     await story.populate('user', 'name photos');
 
-    // Invalidate story caches so the new story appears immediately
     await Promise.all([
       redis.del(`stories:active:${req.user._id}`),
       redis.del(`stories:mine:${req.user._id}`),
@@ -59,9 +53,6 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
   }
 });
 
-// @route   GET /api/stories/active
-// @desc    Get stories from matched users who have chatted + self
-// @access  Private
 router.get('/active', protect, async (req, res) => {
   try {
     const cacheKey = `stories:active:${req.user._id}`;
@@ -76,7 +67,6 @@ router.get('/active', protect, async (req, res) => {
     }).select('_id');
     const allBlockedIds = [...blockedUserIds, ...usersWhoBlockedMe.map(u => u._id.toString())];
 
-    // Get active matches for this user
     const matches = await Match.find({
       users: req.user._id,
       status: 'active'
@@ -86,7 +76,6 @@ router.get('/active', protect, async (req, res) => {
       m.users.find(id => id.toString() !== req.user._id.toString())
     ).filter(Boolean);
 
-    // Check which matches have at least one message exchanged
     const matchIds = matches.map(m => m._id);
     const matchesWithMessages = await Message.aggregate([
       { $match: { matchId: { $in: matchIds } } },
@@ -94,7 +83,6 @@ router.get('/active', protect, async (req, res) => {
     ]);
     const matchIdsWithChat = new Set(matchesWithMessages.map(m => m._id.toString()));
 
-    // Filter to only matched users who have chatted
     const chattedUserIds = [];
     for (const match of matches) {
       if (matchIdsWithChat.has(match._id.toString())) {
@@ -103,7 +91,6 @@ router.get('/active', protect, async (req, res) => {
       }
     }
 
-    // Include self + chatted matched users, exclude blocked
     const allowedUserIds = [req.user._id, ...chattedUserIds];
 
     const stories = await Story.find({
@@ -113,7 +100,6 @@ router.get('/active', protect, async (req, res) => {
     .populate('user', 'name photos')
     .sort({ createdAt: -1 });
 
-    // Group by user and check if current user viewed them
     const userStoryMap = new Map();
     
     stories.forEach(story => {
@@ -155,12 +141,8 @@ router.get('/active', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/stories/friends
-// @desc    Get stories from friends (matched users)
-// @access  Private
 router.get('/friends', protect, async (req, res) => {
   try {
-    // Get user's matches to find friends
     const matches = await Match.find({
       users: req.user._id,
       status: 'active'
@@ -170,7 +152,6 @@ router.get('/friends', protect, async (req, res) => {
       match.users.find(id => !id.equals(req.user._id))
     );
 
-    // Get active stories from friends
     const stories = await Story.find({
       user: { $in: friendIds },
       expiresAt: { $gt: Date.now() }
@@ -178,7 +159,6 @@ router.get('/friends', protect, async (req, res) => {
     .populate('user', 'name photos')
     .sort({ createdAt: -1 });
 
-    // Group stories by user
     const storiesByUser = stories.reduce((acc, story) => {
       const userId = story.user._id.toString();
       if (!acc[userId]) {
@@ -201,9 +181,6 @@ router.get('/friends', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/stories/my-stories
-// @desc    Get current user's active stories with full viewer details
-// @access  Private
 router.get('/my-stories', protect, async (req, res) => {
   try {
     const cacheKey = `stories:mine:${req.user._id}`;
@@ -217,7 +194,6 @@ router.get('/my-stories', protect, async (req, res) => {
     .populate('views.user', 'name photos')
     .sort({ createdAt: -1 });
 
-    // Premium feature: see who viewed story
     const isPremium = req.user.premium?.isActive;
 
     const result = stories.map(s => {
@@ -247,9 +223,6 @@ router.get('/my-stories', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/stories/user/:userId
-// @desc    Get a specific user's active stories
-// @access  Private
 router.get('/user/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -257,7 +230,6 @@ router.get('/user/:userId', protect, async (req, res) => {
     const cached = await redis.get(cacheKey);
     if (cached) return res.json({ success: true, stories: cached, fromCache: true });
 
-    // Check if user is blocked
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
     const targetUserCheck = await User.findById(userId).select('blockedUsers');
     
@@ -265,7 +237,6 @@ router.get('/user/:userId', protect, async (req, res) => {
       return res.json({ success: true, stories: [] });
     }
     
-    // If viewing own stories
     if (userId === req.user._id.toString()) {
       const stories = await Story.find({
         user: req.user._id,
@@ -315,9 +286,6 @@ router.get('/user/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/stories/:storyId/view
-// @desc    Mark story as viewed
-// @access  Private
 router.post('/:storyId/view', protect, async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
@@ -326,7 +294,6 @@ router.post('/:storyId/view', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Story not found' });
     }
 
-    // Check if already viewed
     const alreadyViewed = story.views.some(v => v.user.equals(req.user._id));
 
     if (!alreadyViewed) {
@@ -341,9 +308,6 @@ router.post('/:storyId/view', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/stories/:storyId/react
-// @desc    Add reaction to a story
-// @access  Private
 router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), async (req, res) => {
   try {
     const { emoji } = req.body;
@@ -361,35 +325,28 @@ router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), as
     const storyOwnerId = story.user._id.toString();
     const reactorId = req.user._id.toString();
     
-    // Don't allow reacting to own story
     if (storyOwnerId === reactorId) {
       return res.status(400).json({ success: false, message: 'Cannot react to your own story' });
     }
     
-    // Check if this is a new reaction (not just changing emoji)
     const existingReaction = story.reactions.find(r => r.user.equals(req.user._id));
     const isNewReaction = !existingReaction;
     
-    // Remove existing reaction from this user if any
     story.reactions = story.reactions.filter(r => !r.user.equals(req.user._id));
     
-    // Add new reaction
     story.reactions.push({ user: req.user._id, emoji });
     await story.save();
     
-    // Send a chat message to the story owner about the reaction
     try {
       const Message = require('../models/Message');
       const reactor = await User.findById(req.user._id).select('name photos');
       
-      // Find the match between reactor and story owner
       const match = await Match.findOne({
         users: { $all: [req.user._id, story.user._id] },
         status: 'active'
       });
       
       if (match) {
-        // Create a story reaction message
         const storyPreview = story.type === 'text' ? story.textContent?.substring(0, 50) : 'your story';
         const messageContent = `Reacted ${emoji} to ${storyPreview}`;
         
@@ -407,7 +364,6 @@ router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), as
           }
         });
 
-        // Emit socket event for real-time notification
         const io = req.app.get('io');
         if (io) {
           io.to(storyOwnerId).emit('chat:new-message', {
@@ -424,7 +380,6 @@ router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), as
       }
     } catch (msgError) {
       console.error('Failed to send reaction message:', msgError);
-      // Don't fail the reaction if message fails
     }
     
     res.json({ success: true, message: 'Reaction added' });
@@ -434,9 +389,6 @@ router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), as
   }
 });
 
-// @route   POST /api/stories/:storyId/reply
-// @desc    Reply to a story
-// @access  Private
 router.post('/:storyId/reply', protect, validate(schemas.stories.storyReply), async (req, res) => {
   try {
     const { message } = req.body;
@@ -516,9 +468,6 @@ router.post('/:storyId/reply', protect, validate(schemas.stories.storyReply), as
   }
 });
 
-// @route   DELETE /api/stories/:storyId/react
-// @desc    Remove reaction from a story
-// @access  Private
 router.delete('/:storyId/react', protect, async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
@@ -537,9 +486,6 @@ router.delete('/:storyId/react', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/stories/:storyId/reactions
-// @desc    Get reactions for a story
-// @access  Private
 router.get('/:storyId/reactions', protect, async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId)
@@ -549,13 +495,10 @@ router.get('/:storyId/reactions', protect, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Story not found' });
     }
     
-    // Check if user has permission to view this story
     const storyUserId = story.user.toString();
     const currentUserId = req.user._id.toString();
     
-    // Allow story owner to see reactions
     if (storyUserId !== currentUserId) {
-      // Check if viewer is blocked
       const currentUser = await User.findById(req.user._id).select('blockedUsers');
       const storyOwner = await User.findById(storyUserId).select('blockedUsers privacySettings');
       
@@ -587,7 +530,6 @@ router.get('/:storyId/reactions', protect, async (req, res) => {
       }
     }
     
-    // Find current user's reaction
     const userReaction = story.reactions.find(r => r.user._id.toString() === currentUserId);
     
     res.json({ 
@@ -607,9 +549,6 @@ router.get('/:storyId/reactions', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/stories/:storyId
-// @desc    Update own story
-// @access  Private
 router.put('/:storyId', protect, async (req, res) => {
   try {
     const { textContent, backgroundColor } = req.body;
@@ -641,9 +580,6 @@ router.put('/:storyId', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/stories/:storyId
-// @desc    Delete own story
-// @access  Private
 router.delete('/:storyId', protect, async (req, res) => {
   try {
     const story = await Story.findById(req.params.storyId);
@@ -658,7 +594,6 @@ router.delete('/:storyId', protect, async (req, res) => {
 
     await story.deleteOne();
 
-    // Invalidate caches so deletion is reflected immediately
     await Promise.all([
       redis.del(`stories:active:${req.user._id}`),
       redis.del(`stories:mine:${req.user._id}`),
@@ -672,9 +607,6 @@ router.delete('/:storyId', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/stories/block/:userId
-// @desc    Block a user from viewing stories
-// @access  Private
 router.put('/block/:userId', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
@@ -698,9 +630,6 @@ router.put('/block/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/stories/unblock/:userId
-// @desc    Unblock a user from viewing stories
-// @access  Private
 router.put('/unblock/:userId', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);

@@ -69,7 +69,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     setter(value);
     if (!token) return;
     try {
-      // If it's the master notification toggle
       if (key === 'notificationsEnabled') {
         const response = await put('/account/settings', { pushNotifications: value }, token);
         if (response.success) {
@@ -80,7 +79,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         return;
       }
 
-      // Use the generic /users/me endpoint for privacy settings to ensure compatibility
       const response = await put('/users/me', { 
         privacySettings: {
           ...user?.privacySettings,

@@ -1127,7 +1127,6 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   detailTextWrap: {
-    //flex: 1,
   },
   detailLabel: {
     display: 'none',

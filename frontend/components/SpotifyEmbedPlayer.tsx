@@ -84,7 +84,6 @@ export default function SpotifyEmbedPlayer({
   const trackId = extractTrackId(spotifyUri);
   const hasSource = !!trackId || !!previewUrl;
 
-  // Clean up sound when modal closes
   useEffect(() => {
     if (!modalVisible && soundRef.current) {
       soundRef.current.stopAsync().catch(() => {});
@@ -96,7 +95,6 @@ export default function SpotifyEmbedPlayer({
     }
   }, [modalVisible]);
 
-  // Update progress animation
   const updateProgress = useCallback((pos: number, dur: number) => {
     setPosition(pos);
     setDuration(dur);
@@ -131,10 +129,8 @@ export default function SpotifyEmbedPlayer({
         staysActiveInBackground: false,
       });
 
-      // Priority 1: stored previewUrl
       let audioUrl: string | null = previewUrl || null;
 
-      // Priority 2: Deezer search (free, public, works for all songs)
       if (!audioUrl && title) {
         audioUrl = await fetchDeezerPreview(title, artist || "");
       }

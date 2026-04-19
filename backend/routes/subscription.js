@@ -28,7 +28,6 @@ const DEFAULT_PRICES = [
   { id: 'premium_monthly', amount: 999, currency: 'usd', interval: 'month', name: 'Premium Monthly' }
 ];
 
-// ─── Apple iOS Receipt Validation ───────────────────────────────────────────
 async function validateAppleReceipt(receiptData) {
   const sharedSecret = process.env.APPLE_IAP_SHARED_SECRET;
   if (!sharedSecret) {
@@ -42,11 +41,9 @@ async function validateAppleReceipt(receiptData) {
     'exclude-old-transactions': true
   };
 
-  // Try production first; Apple returns status 21007 for sandbox receipts
   try {
     const prodRes = await axios.post('https://buy.itunes.apple.com/verifyReceipt', payload, { timeout: 10000 });
     if (prodRes.data.status === 21007) {
-      // Sandbox receipt — retry against sandbox endpoint
       const sandboxRes = await axios.post('https://sandbox.itunes.apple.com/verifyReceipt', payload, { timeout: 10000 });
       if (sandboxRes.data.status !== 0) {
         return { valid: false, error: `Apple sandbox status ${sandboxRes.data.status}` };
@@ -63,7 +60,6 @@ async function validateAppleReceipt(receiptData) {
   }
 }
 
-// ─── Google Android Purchase Validation ─────────────────────────────────────
 async function validateGoogleReceipt(purchaseToken, productId) {
   const serviceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   const packageName = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.afroconnect.app';
@@ -82,7 +78,6 @@ async function validateGoogleReceipt(purchaseToken, productId) {
   }
 
   try {
-    // Build a JWT to obtain an OAuth2 access token from Google
     const now = Math.floor(Date.now() / 1000);
     const jwtPayload = {
       iss: serviceAccount.client_email,
@@ -100,7 +95,6 @@ async function validateGoogleReceipt(purchaseToken, productId) {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Verify the subscription purchase against the Play Developer API
     const verifyUrl = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/subscriptions/${productId}/tokens/${purchaseToken}`;
     const verifyRes = await axios.get(verifyUrl, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -108,7 +102,6 @@ async function validateGoogleReceipt(purchaseToken, productId) {
     });
 
     const purchase = verifyRes.data;
-    // paymentState: 1 = payment received, 2 = free trial, 0 = pending
     if (purchase.paymentState !== 1 && purchase.paymentState !== 2) {
       return { valid: false, error: `Google paymentState=${purchase.paymentState}` };
     }
@@ -120,7 +113,6 @@ async function validateGoogleReceipt(purchaseToken, productId) {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
 
 router.get('/plans', async (req, res) => {
   try {
@@ -152,7 +144,6 @@ router.get('/status', protect, async (req, res) => {
       await User.findByIdAndUpdate(user._id, { 'premium.isActive': false });
     }
 
-    // Reset super like count if it's a new day
     let superLikesRemaining = isActive ? 10 : 0;
     if (isActive && user.dailySuperLikes) {
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -206,7 +197,6 @@ router.post('/validate-receipt', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid product ID.' });
     }
 
-    // ── Server-side receipt validation ──────────────────────────────────────
     let validationResult;
     if (platform === 'ios') {
       validationResult = await validateAppleReceipt(receipt);
@@ -224,7 +214,6 @@ router.post('/validate-receipt', protect, async (req, res) => {
     } else {
       console.log(`[IAP] Server-side receipt verified for user ${user._id} via ${platform}`);
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const intervalMap = {
       'afroconnect_premium_daily': 'day',

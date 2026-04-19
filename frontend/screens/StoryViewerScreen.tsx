@@ -96,7 +96,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     const fetchStories = async () => {
       try {
         setLoading(true);
-        // Add a fallback for own stories to ensure they always load
         const isOwn = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id) || (route.params as any)?.isOwnStory === true;
         const endpoint = isOwn ? `/stories/my-stories` : `/stories/user/${userId}`;
         const response = await get<{ stories: Story[]; message?: string }>(endpoint, token);
@@ -116,7 +115,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         }
       } catch (error: any) {
         console.error("Error fetching stories:", error);
-        // If we're looking at our own stories and get a 404/403, just set empty stories
         if (userId === user?.id) {
           setStories([]);
         } else if (error?.response?.status === 403 || error?.message?.includes("403")) {
@@ -209,7 +207,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     if (!token || !currentStory || !editingText.trim()) return;
     setIsSaving(true);
     try {
-      // Create a temporary object to hold the PUT data
       const putData = {
         textContent: editingText,
         backgroundColor: currentStory.backgroundColor
@@ -364,12 +361,9 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       
       if (result.action === Share.sharedAction) {
         if (result.activityType) {
-          // shared with activity type of result.activityType
         } else {
-          // shared
         }
       } else if (result.action === Share.dismissedAction) {
-        // dismissed
       }
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -588,7 +582,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 source={userPhoto ? getPhotoSource(userPhoto) : { uri: "https://via.placeholder.com/40" }}
                 style={styles.userAvatar}
                 onLoad={() => {
-                  // expo-image onLoad
                 }}
               />
               {isOwnStory && (

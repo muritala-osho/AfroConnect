@@ -127,38 +127,31 @@ export default function NotificationSettingsScreen() {
 
   const prefs = (user as any)?.notificationPreferences || {};
 
-  // ── Master toggles ──────────────────────────────────────
   const [pushEnabled, setPushEnabled]   = useState<boolean>(user?.settings?.pushNotifications ?? true);
   const [emailEnabled, setEmailEnabled] = useState<boolean>((user as any)?.settings?.emailNotifications ?? true);
 
-  // ── Per-type preferences ────────────────────────────────
   const [msgEnabled,       setMsgEnabled]       = useState<boolean>(prefs.messagesEnabled   ?? true);
   const [matchEnabled,     setMatchEnabled]      = useState<boolean>(prefs.matchesEnabled    ?? true);
   const [likeEnabled,      setLikeEnabled]       = useState<boolean>(prefs.likesEnabled      ?? true);
   const [voiceEnabled,     setVoiceEnabled]      = useState<boolean>(prefs.voiceCallsEnabled ?? true);
   const [videoEnabled,     setVideoEnabled]      = useState<boolean>(prefs.videoCallsEnabled ?? true);
 
-  // ── Sound & vibration ───────────────────────────────────
   const [soundEnabled,     setSoundEnabled]      = useState<boolean>(prefs.soundEnabled      ?? true);
   const [vibrationEnabled, setVibrationEnabled]  = useState<boolean>(prefs.vibrationEnabled  ?? true);
 
-  // ── Quiet hours ──────────────────────────────────────────
   const [quietEnabled,   setQuietEnabled]   = useState(false);
   const [quietStart,     setQuietStart]     = useState('22:00');
   const [quietEnd,       setQuietEnd]       = useState('08:00');
   const [allowCalls,     setAllowCalls]     = useState(false);
   const [dndLoading,     setDndLoading]     = useState(true);
 
-  // Time picker state
   const [showPicker, setShowPicker]     = useState(false);
   const [pickerTarget, setPickerTarget] = useState<'start' | 'end'>('start');
   const [pickerDate, setPickerDate]     = useState(new Date());
 
-  // Saving indicators
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [savingDnd,   setSavingDnd]   = useState(false);
 
-  // ── Load DND settings on mount ───────────────────────────
   useEffect(() => {
     if (!token) { setDndLoading(false); return; }
     get('/mute/dnd', token).then((res: any) => {
@@ -172,7 +165,6 @@ export default function NotificationSettingsScreen() {
     }).catch(() => {}).finally(() => setDndLoading(false));
   }, []);
 
-  // ── Save master settings ─────────────────────────────────
   const saveMaster = async (field: string, value: boolean, setter: (v: boolean) => void) => {
     setter(value);
     try {
@@ -188,14 +180,11 @@ export default function NotificationSettingsScreen() {
     } catch { setter(!value); }
   };
 
-  // ── Save per-type prefs (debounced-style: save after each change) ────
   const savePrefs = useCallback(async (overrides: Record<string, boolean>) => {
     if (!token) return;
     setSavingPrefs(true);
     try {
       await put('/mute/notification-preferences', overrides, token);
-      // Mirror updated prefs to AsyncStorage so the foreground notification
-      // handler can read them without an API call
       try {
         const existing = await AsyncStorage.getItem('notificationPreferences');
         const current = existing ? JSON.parse(existing) : {};
@@ -214,7 +203,6 @@ export default function NotificationSettingsScreen() {
     savePrefs({ [key]: value });
   };
 
-  // ── Save DND ─────────────────────────────────────────────
   const saveDnd = async (overrides?: Partial<{ enabled: boolean; startTime: string; endTime: string; allowCalls: boolean }>) => {
     if (!token) return;
     const payload = {

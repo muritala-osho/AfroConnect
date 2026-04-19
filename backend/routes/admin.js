@@ -31,7 +31,6 @@ const logAudit = async (req, action, category, severity, targetUser, details, me
   }
 };
 
-// Admin auth middleware
 const isAdmin = async (req, res, next) => {
   if (!req.user.isAdmin) {
     return res.status(403).json({
@@ -42,9 +41,6 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
-// @route   GET /api/admin/reports
-// @desc    Get all reports
-// @access  Private/Admin
 router.get('/reports', protect, isAdmin, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
@@ -68,9 +64,6 @@ router.get('/reports', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/reports/:reportId/resolve
-// @desc    Resolve a report
-// @access  Private/Admin
 router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
   try {
     const { action, notes } = req.body; // action: 'dismiss', 'warn', 'suspend', 'ban'
@@ -118,7 +111,6 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
         } catch (e) { console.error('Ban email failed:', e.message); }
       }
 
-      // Emit real-time socket events so the user is force-logged out instantly if active
       try {
         const ioInstance = req.app.get('io');
         if (ioInstance) {
@@ -161,9 +153,6 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/users
-// @desc    Get all users with search and filters
-// @access  Private/Admin
 router.get('/users', protect, isAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 50, search, gender, minAge, maxAge, status } = req.query;
@@ -213,9 +202,6 @@ router.get('/users', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/users/:userId/ban
-// @desc    Ban/unban a user and send notification email
-// @access  Private/Admin
 router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
   try {
     const { banned, reason } = req.body;
@@ -240,7 +226,6 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
     await user.save();
     await redis.del(`profile:me:${user._id}`);
 
-    // Emit real-time socket event so the user is force-logged out instantly if active
     try {
       const ioInstance = req.app.get('io');
       if (ioInstance) {
@@ -258,7 +243,6 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
       console.error('Failed to emit ban socket event:', socketError);
     }
 
-    // Send email notification
     try {
       const { sendBanNotificationEmail, sendUnbanNotificationEmail } = require('../utils/emailService');
       
@@ -269,7 +253,6 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
       }
     } catch (emailError) {
       console.error('Failed to send ban/unban notification email:', emailError);
-      // Continue anyway - ban was still processed
     }
 
     await logAudit(req, banned ? 'BAN_USER' : 'UNBAN_USER', 'USER_MANAGEMENT', banned ? 'critical' : 'medium', user,
@@ -289,11 +272,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
   }
 });
 
-// (merged into the full /verifications route below)
 
-// @route   PUT /api/admin/verifications/:userId
-// @desc    Approve or reject verification
-// @access  Private/Admin
 router.put('/verifications/:userId', protect, isAdmin, async (req, res) => {
   try {
     const { action } = req.body;
@@ -320,9 +299,6 @@ router.put('/verifications/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/appeals
-// @desc    User submits ban/suspension appeal
-// @access  Private
 router.post('/appeals', protect, async (req, res) => {
   try {
     const { message } = req.body;
@@ -341,12 +317,10 @@ router.post('/appeals', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'You do not have an active ban or suspension to appeal' });
     }
 
-    // Check if already has pending appeal
     if (user.appeal && user.appeal.status === 'pending') {
       return res.status(400).json({ success: false, message: 'You already have a pending appeal' });
     }
 
-    // Check 30-day cooldown after rejection
     if (user.appeal && user.appeal.status === 'rejected' && user.appeal.lastAppealRejectedAt) {
       const daysSinceRejection = (Date.now() - user.appeal.lastAppealRejectedAt) / (1000 * 60 * 60 * 24);
       if (daysSinceRejection < 30) {
@@ -373,9 +347,6 @@ router.post('/appeals', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/appeals
-// @desc    Get all pending appeals
-// @access  Private/Admin
 router.get('/appeals', protect, isAdmin, async (req, res) => {
   try {
     const appeals = await User.find({ 'appeal.status': 'pending' })
@@ -390,9 +361,6 @@ router.get('/appeals', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/appeals/:userId
-// @desc    Review user appeal - approve or reject and send decision email
-// @access  Private/Admin
 router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
   try {
     const { action, adminResponse } = req.body; // action: 'approve', 'reject'
@@ -416,7 +384,6 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
     }
 
     if (action === 'approve') {
-      // Unban/unsuspend the user
       user.banned = false;
       user.bannedAt = null;
       user.banReason = null;
@@ -436,14 +403,12 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
     await user.save();
     await redis.del(`profile:me:${user._id}`);
 
-    // Send appeal decision email
     try {
       const { sendAppealDecisionEmail } = require('../utils/emailService');
       const approved = action === 'approve';
       await sendAppealDecisionEmail(user.email, user.name, approved, adminResponse);
     } catch (emailError) {
       console.error('Failed to send appeal decision email:', emailError);
-      // Continue anyway - appeal was still processed
     }
 
     await logAudit(req, action === 'approve' ? 'APPROVE_APPEAL' : 'REJECT_APPEAL', 'APPEAL',
@@ -461,9 +426,6 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/verifications
-// @desc    Get pending verification requests
-// @access  Private/Admin
 router.get('/verifications', protect, isAdmin, async (req, res) => {
   try {
     const verifications = await User.find({ 
@@ -480,9 +442,6 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/verifications/:userId/approve
-// @desc    Approve user verification
-// @access  Private/Admin
 router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
@@ -510,9 +469,6 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
   }
 });
 
-// @route   PUT /api/admin/verifications/:userId/reject
-// @desc    Reject user verification
-// @access  Private/Admin
 router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) => {
   try {
     const { reason } = req.body;
@@ -539,14 +495,7 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
   }
 });
 
-// @route   GET /api/admin/stats
-// @desc    Get platform statistics
-// @access  Private/Admin
-// (merged into the comprehensive /analytics route below)
 
-// @route   GET /api/admin/subscriptions-revenue
-// @desc    Get subscription analytics and revenue
-// @access  Private/Admin
 router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
   try {
     const activeSubscriptions = await User.countDocuments({ 'premium.isActive': true });
@@ -572,11 +521,7 @@ router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
   }
 });
 
-// (merged into the comprehensive /activity-monitoring route below)
 
-// @route   GET /api/admin/stories-moderation
-// @desc    Get flagged stories for moderation
-// @access  Private/Admin
 router.get('/stories-moderation', protect, isAdmin, async (req, res) => {
   try {
     const Story = require('../models/Story');
@@ -596,9 +541,6 @@ router.get('/stories-moderation', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/boosts-revenue
-// @desc    Get boost usage and revenue
-// @access  Private/Admin
 router.get('/boosts-revenue', protect, isAdmin, async (req, res) => {
   try {
     const users = await User.find().select('boosts premium');
@@ -659,9 +601,6 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/proxy-profile/:userId
-// @desc    Admin proxy to view user profile data as JSON
-// @access  Private/Admin
 router.get('/proxy-profile/:userId', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select('-password');
@@ -672,9 +611,6 @@ router.get('/proxy-profile/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/users/:userId
-// @desc    Get single user detail
-// @access  Private/Admin
 router.get('/users/:userId', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId).select('-password');
@@ -688,9 +624,6 @@ router.get('/users/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/admin/stories/:storyId
-// @desc    Remove a story
-// @access  Private/Admin
 router.delete('/stories/:storyId', protect, isAdmin, async (req, res) => {
   try {
     const Story = require('../models/Story');
@@ -706,9 +639,6 @@ router.delete('/stories/:storyId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/users/:userId/suspend
-// @desc    Suspend or unsuspend a user
-// @access  Private/Admin
 router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
   try {
     const { suspended, days = 7 } = req.body;
@@ -723,7 +653,6 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
     }
     await user.save();
 
-    // Emit real-time socket event so the user is force-logged out instantly if active
     try {
       const ioInstance = req.app.get('io');
       if (ioInstance) {
@@ -755,9 +684,6 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/admin/users/:userId
-// @desc    Permanently delete a user account
-// @access  Private/Admin
 router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
@@ -772,9 +698,6 @@ router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/flagged-content
-// @desc    Get flagged images and stories for moderation
-// @access  Private/Admin
 router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
@@ -825,9 +748,6 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/flagged-content/:contentId
-// @desc    Approve or reject flagged content
-// @access  Private/Admin
 router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => {
   try {
     const { action } = req.body; // 'approve' | 'reject'
@@ -909,12 +829,8 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
   }
 });
 
-// In-memory broadcast history (production: use a DB model)
 const broadcastHistory = [];
 
-// @route   GET /api/admin/broadcasts
-// @desc    Get broadcast history
-// @access  Private/Admin
 router.get('/broadcasts', protect, isAdmin, async (req, res) => {
   try {
     res.json({ success: true, broadcasts: broadcastHistory });
@@ -923,9 +839,6 @@ router.get('/broadcasts', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/broadcasts
-// @desc    Send a broadcast notification to users
-// @access  Private/Admin
 router.post('/broadcasts', protect, isAdmin, async (req, res) => {
   try {
     const { sendSmartNotification } = require('../utils/pushNotifications');
@@ -935,7 +848,6 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Title and body are required' });
     }
 
-    // Build audience query — only users with a valid push token
     let audienceQuery = { pushToken: { $exists: true, $ne: null }, pushNotificationsEnabled: { $ne: false } };
     if (target === 'male' || target === 'female') audienceQuery.gender = target;
     if (target === 'verified') audienceQuery.verified = true;
@@ -968,7 +880,6 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
       `Broadcast sent: "${title}". Target: ${target}. Reach: ${reach} users.`,
       { title, body, target, reach, scheduled });
 
-    // Respond immediately — fire notifications in the background
     res.json({ success: true, message: 'Broadcast dispatched successfully', campaign });
 
     if (!scheduled) {
@@ -1001,7 +912,6 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
   }
 });
 
-// App settings store — exported so server.js can read maintenanceMode for middleware
 let appSettings = {
   appName: 'AfroConnect',
   maintenanceMode: false,
@@ -1018,16 +928,10 @@ let appSettings = {
   signupBonusCoins: 100,
 };
 
-// @route   GET /api/admin/settings
-// @desc    Get app configuration settings
-// @access  Private/Admin
 router.get('/settings', protect, isAdmin, (req, res) => {
   res.json({ success: true, settings: appSettings });
 });
 
-// @route   PUT /api/admin/settings
-// @desc    Update app configuration settings
-// @access  Private/Admin
 router.put('/settings', protect, isAdmin, (req, res) => {
   try {
     const updates = req.body;
@@ -1038,14 +942,10 @@ router.put('/settings', protect, isAdmin, (req, res) => {
   }
 });
 
-// @route   GET /api/admin/analytics
-// @desc    Full platform analytics — daily activity, totals, match rate, profile views
-// @access  Private/Admin
 router.get('/analytics', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
 
-    // ── Last 7 days day-by-day data ──────────────────────────────────────────
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
@@ -1067,7 +967,6 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
       });
     }
 
-    // ── Aggregated totals ────────────────────────────────────────────────────
     const [totalUsers, verifiedUsers, premiumUsers, totalMatches] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ verified: true }),
@@ -1075,7 +974,6 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
       Match.countDocuments({ status: 'active' }),
     ]);
 
-    // ── Profile views this month ─────────────────────────────────────────────
     let profileViewsMonth = 0;
     try {
       const Activity = require('../models/Activity');
@@ -1101,9 +999,6 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/activity-monitoring
-// @desc    Get real-time activity monitoring data
-// @access  Private/Admin
 router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
@@ -1128,9 +1023,6 @@ router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/user-demographics
-// @desc    Gender + age distribution of all users
-// @access  Private/Admin
 router.get('/user-demographics', protect, isAdmin, async (req, res) => {
   try {
     const users = await User.find({}, 'gender age');
@@ -1157,9 +1049,6 @@ router.get('/user-demographics', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/revenue-history
-// @desc    Last 30 days subscription revenue chart data
-// @access  Private/Admin
 router.get('/revenue-history', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
@@ -1191,14 +1080,10 @@ router.get('/revenue-history', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── SUPPORT TICKETS ────────────────────────────────────────────────────────
 
 const SupportTicket = require('../models/SupportTicket');
 const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
 
-// @route   GET /api/admin/support-tickets
-// @desc    Get all support tickets
-// @access  Private/Admin
 router.get('/support-tickets', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
@@ -1213,9 +1098,6 @@ router.get('/support-tickets', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   POST /api/admin/support-tickets/:ticketId/reply
-// @desc    Admin replies to a support ticket — saves to DB and pushes notification to user
-// @access  Private/Admin
 router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, res) => {
   try {
     const { content } = req.body;
@@ -1238,7 +1120,6 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
     ticket.status = 'in-progress';
     await ticket.save();
 
-    // Send push notification to the user if they have a push token
     if (ticket.userId) {
       try {
         const user = await User.findById(ticket.userId).select(
@@ -1257,7 +1138,6 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
       }
     }
 
-    // Send email notification to user
     if (ticket.userId) {
       try {
         const ticketUser = await User.findById(ticket.userId).select('email name');
@@ -1282,9 +1162,6 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
   }
 });
 
-// @route   PUT /api/admin/support-tickets/:ticketId/status
-// @desc    Update ticket status (open | in-progress | closed)
-// @access  Private/Admin
 router.put('/support-tickets/:ticketId/status', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.body;
@@ -1310,13 +1187,10 @@ router.put('/support-tickets/:ticketId/status', protect, isAdmin, async (req, re
   }
 });
 
-// ─── POST /api/admin/kill-switch ─────────────────────────────────────────────
-// Immediately enables maintenance mode, rejects all non-admin API traffic.
 router.post('/kill-switch', protect, isAdmin, async (req, res) => {
   try {
     appSettings.maintenanceMode = true;
 
-    // Log to audit trail
     try {
       const AuditLog = require('../models/AuditLog');
       await AuditLog.create({
@@ -1339,8 +1213,6 @@ router.post('/kill-switch', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── POST /api/admin/kill-switch/deactivate ───────────────────────────────────
-// Restore normal operation.
 router.post('/kill-switch/deactivate', protect, isAdmin, async (req, res) => {
   try {
     appSettings.maintenanceMode = false;
@@ -1366,7 +1238,6 @@ router.post('/kill-switch/deactivate', protect, isAdmin, async (req, res) => {
   }
 });
 
-// Expose a getter so server.js middleware can check maintenanceMode without circular deps
 router.getSettings = () => appSettings;
 
 module.exports = router;

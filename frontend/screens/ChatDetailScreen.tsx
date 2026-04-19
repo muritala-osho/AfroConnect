@@ -169,7 +169,6 @@ export default function ChatDetailScreen({
     setViewOnceMode(next);
   };
 
-  // Load draft + saved translation language on mount
   useEffect(() => {
     const loadDraft = async () => {
       if (!userId) return;
@@ -197,31 +196,26 @@ export default function ChatDetailScreen({
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
-  // Keep matchId accessible in screenshot callback without stale closure
   const matchIdRef = useRef<string | null>(null);
 
   const [typingDotAnim1] = useState(new Animated.Value(0));
   const [typingDotAnim2] = useState(new Animated.Value(0));
   const [typingDotAnim3] = useState(new Animated.Value(0));
-  // FIX: only declared once here â€” was also incorrectly inside WavyWaveform
   const [recordingPulse] = useState(new Animated.Value(1));
 
   useFocusEffect(
     useCallback(() => {
-      // Tell the UnreadContext that the user is viewing a chat — suppress badge counting
       setChatScreenOpen(true);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
       return () => {
         clearTimeout(timer);
-        // User left the chat screen — badge counting can resume
         setChatScreenOpen(false);
       };
     }, [])
   );
 
-  // Typing dots animation
   useEffect(() => {
     if (isTyping) {
       const createDotAnimation = (anim: Animated.Value, delay: number) =>
@@ -243,7 +237,6 @@ export default function ChatDetailScreen({
     }
   }, [isTyping]);
 
-  // Recording pulse animation
   useEffect(() => {
     if (isRecording) {
       const pulse = Animated.loop(
@@ -257,7 +250,6 @@ export default function ChatDetailScreen({
     }
   }, [isRecording]);
 
-  // Track keyboard visibility — removes bottom-inset gap and scrolls to latest message
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
@@ -271,7 +263,6 @@ export default function ChatDetailScreen({
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Web keyboard
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const vv = typeof window !== "undefined" ? (window as any).visualViewport : null;
@@ -285,21 +276,18 @@ export default function ChatDetailScreen({
     return () => { vv.removeEventListener("resize", handleResize); vv.removeEventListener("scroll", handleResize); };
   }, []);
 
-  // Load chat theme
   useEffect(() => {
     AsyncStorage.getItem(`chat_theme_${userId}`)
       .then((v) => { if (v) setChatTheme(v); })
       .catch(() => {});
   }, [userId]);
 
-  // Screenshot protection
   useEffect(() => {
     let subscription: ScreenCapture.Subscription | null = null;
     const setupListener = async () => {
       if (Platform.OS !== "web") {
         try {
           subscription = ScreenCapture.addScreenshotListener(async () => {
-            // Only notify if protection is OFF (if it's ON, screenshot is already blocked by OS)
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
@@ -327,8 +315,6 @@ export default function ChatDetailScreen({
     setupListener();
     return () => {
       if (subscription) subscription.remove();
-      // Only lift the protection on cleanup if it is NOT enabled.
-      // When protection is ON it should remain active app-wide even after navigating away.
       if (Platform.OS !== "web" && !screenshotProtection) {
         try { ScreenCapture.allowScreenCaptureAsync(); } catch (e) {}
       }
@@ -417,7 +403,6 @@ export default function ChatDetailScreen({
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  // â”€â”€â”€ Load chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadChat = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -445,7 +430,6 @@ export default function ChatDetailScreen({
             if (otherUser.lastActive) setLastSeenDate(new Date(otherUser.lastActive));
           }
 
-          // FIX: load ALL messages with high limit
           const messagesResponse = await get<{ messages: Message[]; pagination: any }>(
             `/chat/${mId}?limit=1000`,
             token,
@@ -459,7 +443,6 @@ export default function ChatDetailScreen({
             }
           }
 
-          // Mark all as read on open
           put(`/chat/${mId}/read`, {}, token).catch(() => {});
         }
       }
@@ -474,7 +457,6 @@ export default function ChatDetailScreen({
     loadChat();
   }, [loadChat]);
 
-  // Load older messages when user scrolls to top
   const loadMoreMessages = useCallback(async () => {
     if (!matchId || !token || loadingMore || !hasMoreMessages) return;
     setLoadingMore(true);
@@ -499,7 +481,6 @@ export default function ChatDetailScreen({
     }
   }, [matchId, token, loadingMore, hasMoreMessages, messageSkip, get]);
 
-  // â”€â”€â”€ Socket listeners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!matchId) return;
 
@@ -507,7 +488,6 @@ export default function ChatDetailScreen({
     socketService.joinChat(matchId);
     socketService.markMessagesRead({ chatId: matchId, userId: myId });
 
-    // â”€â”€ New message â”€â”€
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;
@@ -522,15 +502,11 @@ export default function ChatDetailScreen({
       });
       setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
 
-      // Since we are actively in the chat, immediately mark as read
-      // This makes ticks turn blue on sender's side without them refreshing
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
       DeviceEventEmitter.emit("chat:read-local", matchId);
     };
 
-    // â”€â”€ Delivered: sender's single tick â†’ double grey tick â”€â”€
-    // FIX: this listener was completely missing in the original
     const handleMessageDelivered = (data: any) => {
       if (!data.messageId) return;
       setMessages((prev) =>
@@ -542,16 +518,10 @@ export default function ChatDetailScreen({
       );
     };
 
-    // â”€â”€ Read receipt: double grey â†’ double blue â”€â”€
-    // FIX: removed the dangerous `|| (!msgMatchId && !readByUserId)` fallthrough
-    // FIX: works for ALL users not just premium (the backend now emits for everyone)
     const handleMessagesRead = (data: any) => {
       const msgMatchId = data.matchId || data.chatId || data.roomId;
       const readByUserId = data.userId || data.readBy;
 
-      // Only process read receipts from the OTHER user.
-      // When we open the chat, the server emits userId === myId.
-      // We ignore that  our own read action must not flip our sent messages to "seen".
       if (!readByUserId || String(readByUserId) === String(myId)) return;
 
       const matchesByRoom = msgMatchId && msgMatchId === matchId;
@@ -561,7 +531,6 @@ export default function ChatDetailScreen({
       setMessages((prev) =>
         prev.map((m) => {
           const senderId = typeof m.sender === "string" ? m.sender : m.sender?._id;
-          // Only upgrade MY sent messages, never downgrade
           if (String(senderId) === String(myId) && m.status !== "seen") {
             return { ...m, status: "seen" };
           }
@@ -646,7 +615,6 @@ export default function ChatDetailScreen({
     };
   }, [matchId, userId, myId, token, put]);
 
-  // â”€â”€â”€ Send message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const sendMessage = async (content?: string, type: string = "text", extraData?: any) => {
     const textToSend = content || message.trim();
     if (!textToSend && type === "text") return;
@@ -690,8 +658,6 @@ export default function ChatDetailScreen({
         token,
       );
       if (response.success && response.data?.message) {
-        // FIX: preserve "sent" status on replace — socket events will upgrade it
-        // FIX: preserve viewOnce flag from temp message in case server response omits it
         setMessages((prev) =>
           prev.map((m) =>
             m._id === tempMessage._id
@@ -717,9 +683,7 @@ export default function ChatDetailScreen({
 
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
-    // Optimistic update — mark as viewed immediately so placeholder shows right away
     setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
-    // Fire-and-forget API call in background
     fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -728,14 +692,11 @@ export default function ChatDetailScreen({
 
   /** Start the 10-second view-once countdown and handle auto-close. */
   const startViewOnceCountdown = (onClose: () => void) => {
-    // Prevent screenshots while the view-once content is visible
     if (Platform.OS !== "web" && !screenshotProtection) {
       try { ScreenCapture.preventScreenCaptureAsync(); } catch (_) {}
     }
-    // Cancel any existing timers
     if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
     if (viewOnceCountdownRef.current) clearInterval(viewOnceCountdownRef.current);
-    // Reset and start the countdown display
     setViewOnceCountdown(10);
     let remaining = 10;
     viewOnceCountdownRef.current = setInterval(() => {
@@ -746,7 +707,6 @@ export default function ChatDetailScreen({
         viewOnceCountdownRef.current = null;
       }
     }, 1000);
-    // Auto-close after 10 seconds
     viewOnceTimerRef.current = setTimeout(() => {
       onClose();
       viewOnceTimerRef.current = null;
@@ -772,7 +732,6 @@ export default function ChatDetailScreen({
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
 
-  // â”€â”€â”€ Media pickers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -876,7 +835,6 @@ export default function ChatDetailScreen({
     }
   };
 
-  // â”€â”€â”€ Recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const startRecording = async () => {
     if (Platform.OS === "web") { Alert.alert("Not Supported", "Voice recording is only available in the mobile app"); return; }
     if (isRecording || recordingRef.current) return;
@@ -976,7 +934,6 @@ export default function ChatDetailScreen({
     recordingDurationRef.current = 0;
   };
 
-  // â”€â”€â”€ Audio playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const updatePlayingId = (id: string | null) => {
     playingAudioIdRef.current = id;
     setPlayingAudioId(id);
@@ -1049,7 +1006,6 @@ export default function ChatDetailScreen({
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
@@ -1063,7 +1019,6 @@ export default function ChatDetailScreen({
     };
   }, []);
 
-  // â”€â”€â”€ Save media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const saveImage = async (imageUrl: string) => {
     try {
       if (Platform.OS === "web") { const link = document.createElement("a"); link.href = imageUrl; link.download = `afroconnect_${Date.now()}.jpg`; link.target = "_blank"; link.click(); return; }
@@ -1088,14 +1043,12 @@ export default function ChatDetailScreen({
     } catch (error) { logger.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
-  // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchAISuggestions = useCallback(() => {
     setShowAISuggestions(true);
     const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
     setAiSuggestions(shuffled);
   }, []);
 
-  // â”€â”€â”€ Block / Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBlockUser = async () => {
     setShowOptionsMenu(false);
     Alert.alert("Block User", `Are you sure you want to block ${userName}? They won't be able to contact you anymore.`, [
@@ -1111,7 +1064,6 @@ export default function ChatDetailScreen({
     ]);
   };
 
-  // â”€â”€â”€ Message actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleMessageLongPress = useCallback((msg: Message) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedMessage(msg);
@@ -1260,7 +1212,6 @@ export default function ChatDetailScreen({
     finally { setSubmittingReport(false); }
   };
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const formatDateHeader = (dateStr: string) => {
@@ -1290,7 +1241,6 @@ export default function ChatDetailScreen({
     }));
   }, [messages]);
 
-  // Inverted FlatList expects newest-first so the list naturally opens at the bottom
   const invertedMessages = useMemo(
     () => [...enrichedMessages].reverse(),
     [enrichedMessages],
@@ -1318,7 +1268,6 @@ export default function ChatDetailScreen({
     highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500);
   }, [enrichedMessages]);
 
-  // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
     ({ item }: { item: EnrichedMessage }) => {
       const senderId = typeof item.sender === "string" ? item.sender : item.sender?._id;
@@ -1681,7 +1630,6 @@ export default function ChatDetailScreen({
   const currentTheme = CHAT_THEMES.find((t) => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
 
-  // â”€â”€â”€ Chat body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chatContent = (
     <>
       {loading ? (
@@ -1708,7 +1656,6 @@ export default function ChatDetailScreen({
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 300);
           }}
-          // Load older messages when user scrolls to the visual top (end of inverted list)
           onEndReached={loadMoreMessages}
           onEndReachedThreshold={0.1}
           ListFooterComponent={
@@ -1762,7 +1709,6 @@ export default function ChatDetailScreen({
     </>
   );
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER */}
@@ -2448,7 +2394,6 @@ const styles = StyleSheet.create<any>({
   viewOnceLabel: { fontSize: 13, fontWeight: '600' },
   viewOnceSenderBadge: { position: 'absolute', top: 6, right: 6, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3 },
   viewOnceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', marginBottom: 12 },
-  // Persistent chip shown in the input bar while view-once mode is active
   viewOnceChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,107,107,0.12)', borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)', marginRight: 4 },
   viewOnceChipText: { fontSize: 11, color: '#FF6B6B', fontWeight: '600' },
   viewOnceToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },

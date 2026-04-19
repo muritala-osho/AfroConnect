@@ -105,7 +105,6 @@ const LOOKING_FOR_OPTIONS = [
   { label: "🤷 Not sure", value: "Not sure", desc: "Open to anything", color: "#A8E6CF" },
 ];
 
-// Step order: Photos → Basic Info → Interests → Bio → Preferences
 const STEP_META = [
   { icon: "camera", title: "Your Photos", subtitle: "Add at least 4 great photos", color: "#10B981", step: 1 },
   { icon: "user", title: "About You", subtitle: "Let's get to know you", color: "#059669", step: 2 },
@@ -140,7 +139,6 @@ const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
 const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
 const BIG_SLOT_HEIGHT = BIG_SLOT_WIDTH * 1.1;
 
-// ─── Animated Interest Chip ────────────────────────────────────────────────
 function InterestChip({
   item,
   selected,
@@ -332,7 +330,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     }
   };
 
-  // Step 1 = Photos, Step 2 = Basic Info, Step 3 = Interests, Step 4 = Bio, Step 5 = Preferences
   const handleNext = () => {
     if (step === 1) {
       const photoCount = photos.filter((p) => p !== null).length;
@@ -1732,7 +1729,6 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
   },
 
-  // ── Hero Photo ──
   heroPhotoContainer: {
     alignItems: "center",
   },
@@ -1820,7 +1816,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Small photos grid ──
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
@@ -1874,7 +1869,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Photo progress ──
   photoProgressCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
@@ -1911,7 +1905,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Info Cards ──
   infoCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
@@ -1942,7 +1935,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Form inputs ──
   inputGroup: {
     gap: 7,
   },
@@ -1995,7 +1987,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Interests ──
   interestHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2089,7 +2080,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Bio ──
   promptsScroll: {
     marginHorizontal: -Spacing.xl,
   },
@@ -2175,7 +2165,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // ── Preferences ──
   ageRangeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2201,7 +2190,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Celebration ──
   celebrationCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
@@ -2248,7 +2236,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Navigation ──
   navRow: {
     flexDirection: "row",
     gap: Spacing.sm,
@@ -2284,7 +2271,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Modals ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",

@@ -17,7 +17,6 @@ const User = require('../models/User');
 const SupportTicket = require('../models/SupportTicket');
 const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Send optional email alert to admin inbox (non-critical, never crashes a route) */
 async function emailAdmin(subject, body) {
@@ -78,7 +77,6 @@ async function pushToStaff(ticket, title, body) {
   }
 }
 
-// ─── User endpoints ───────────────────────────────────────────────────────────
 
 /**
  * POST /api/support/ticket
@@ -93,7 +91,6 @@ router.post('/ticket', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, email and message are required' });
     }
 
-    // Resolve userId exclusively from auth token — never trust userId from request body
     let resolvedUserId = null;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -126,7 +123,6 @@ router.post('/ticket', async (req, res) => {
     });
     await ticket.save();
 
-    // Notify staff of the new ticket
     await pushToStaff(ticket, '🎫 New Support Ticket', `${name}: ${subject || message.slice(0, 60)}`);
     await emailAdmin(
       `[AfroConnect Support] New Ticket from ${name}`,
@@ -188,7 +184,6 @@ router.get('/ticket/:id', protect, async (req, res) => {
       }
     }
 
-    // Clear unread for the appropriate side
     const unreadUpdate = isStaff ? { unreadByAgent: 0 } : { unreadByUser: 0 };
     await SupportTicket.findByIdAndUpdate(req.params.id, unreadUpdate);
 
@@ -217,7 +212,6 @@ router.get('/unread', protect, async (req, res) => {
   }
 });
 
-// ─── Shared reply endpoint (user / admin / agent) ─────────────────────────────
 
 /**
  * POST /api/support/reply
@@ -234,13 +228,11 @@ router.post('/reply', protect, async (req, res) => {
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-    // Determine sender role
     let senderRole;
     if (req.user.isAdmin) senderRole = 'admin';
     else if (req.user.isSupportAgent) senderRole = 'agent';
     else senderRole = 'user';
 
-    // Access control
     if (senderRole === 'user' && String(ticket.userId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
@@ -263,7 +255,6 @@ router.post('/reply', protect, async (req, res) => {
     });
 
     if (isStaff) {
-      // Staff replied — move to in-progress, increment user's unread badge
       if (ticket.status === 'open') ticket.status = 'in-progress';
       ticket.unreadByUser = (ticket.unreadByUser || 0) + 1;
 
@@ -272,7 +263,6 @@ router.post('/reply', protect, async (req, res) => {
         ticketId: ticket._id.toString(),
       });
 
-      // Email user
       if (ticket.userId) {
         try {
           const ticketUser = await User.findById(ticket.userId).select('email name');
@@ -285,7 +275,6 @@ router.post('/reply', protect, async (req, res) => {
         }
       }
     } else {
-      // User replied — re-open if closed, increment staff unread
       if (ticket.status === 'closed') ticket.status = 'open';
       ticket.unreadByAgent = (ticket.unreadByAgent || 0) + 1;
       await pushToStaff(ticket, '💬 User Reply', `${ticket.userName}: ${content.slice(0, 60)}`);
@@ -299,7 +288,6 @@ router.post('/reply', protect, async (req, res) => {
   }
 });
 
-// ─── Admin / Agent endpoints ──────────────────────────────────────────────────
 
 /**
  * GET /api/support/all
@@ -315,7 +303,6 @@ router.get('/all', protect, isAdminOrAgent, async (req, res) => {
     if (category) query.category = category;
     if (priority) query.priority = priority;
 
-    // Agents only see their own assigned tickets
     if (req.user.isSupportAgent && !req.user.isAdmin) {
       query.assignedTo = req.user._id;
     }
@@ -431,7 +418,6 @@ router.get('/agents', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── Legacy compatibility routes (keep old paths alive) ───────────────────────
 
 router.get('/my-tickets', protect, async (req, res) => {
   try {

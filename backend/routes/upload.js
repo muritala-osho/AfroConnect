@@ -13,7 +13,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Stream-based Cloudinary upload — avoids slow base64 encoding for audio/video
 const uploadBufferToCloudinary = (buffer, options) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(options, (error, result) => {
@@ -94,15 +93,11 @@ const upload = multer({
   },
 });
 
-// Middleware for handling both single fields and generic files
 const multiUpload = (req, res, next) => {
   upload.any()(req, res, (err) => {
     if (err) {
-      // "Request aborted" happens when the client drops the connection mid-upload.
-      // Suppress noisy logging for this expected case; still respond if possible.
       if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
         console.warn('Upload request aborted by client (connection dropped)');
-        // Connection is already closed — safe to just return without sending a response
         if (!res.headersSent) {
           return res.status(499).json({ success: false, message: 'Upload cancelled' });
         }
@@ -112,7 +107,6 @@ const multiUpload = (req, res, next) => {
       return res.status(400).json({ success: false, message: err.message });
     }
     
-    // Normalize req.file if only one file was uploaded
     if (req.files && req.files.length > 0) {
       const photoFile = req.files.find(f => f.fieldname === 'photo' || f.fieldname === 'file');
       const imageFile = req.files.find(f => f.fieldname === 'image');
@@ -138,7 +132,6 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No photo uploaded' });
     }
 
-    // Compress image using sharp
     const compressedBuffer = await sharp(file.buffer)
       .resize(1200, 1500, {
         fit: 'cover',
@@ -151,7 +144,6 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
       })
       .toBuffer();
 
-    // Stream-based upload (no base64 overhead)
     const result = await uploadBufferToCloudinary(compressedBuffer, {
       folder: 'afroconnect/profiles',
       resource_type: 'image',
@@ -187,7 +179,6 @@ router.post('/chat-image', protect, multiUpload, async (req, res) => {
       .jpeg({ quality: 80, progressive: true })
       .toBuffer();
 
-    // Stream-based upload (no base64 overhead)
     const result = await uploadBufferToCloudinary(compressedBuffer, {
       folder: 'afroconnect/chat-images',
       resource_type: 'image',
@@ -211,7 +202,6 @@ router.post('/chat-video', protect, multiUpload, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No video uploaded' });
     }
 
-    // Use streaming upload for speed — no base64 overhead
     const result = await uploadBufferToCloudinary(file.buffer, {
       folder: 'afroconnect/chat-videos',
       resource_type: 'video',
@@ -241,7 +231,6 @@ const handleAudioUpload = async (req, res) => {
       });
     }
 
-    // Use streaming upload — much faster than base64 for audio/video files
     const result = await uploadBufferToCloudinary(req.file.buffer, {
       folder: 'afroconnect/voice-notes',
       resource_type: 'video',
@@ -283,7 +272,6 @@ const audioMultiUpload = (req, res, next) => {
 router.post('/voice', protect, audioMultiUpload, handleAudioUpload);
 router.post('/audio', protect, audioMultiUpload, handleAudioUpload);
 
-// Delete photo - accepts publicId as query param or encoded in URL
 router.delete('/photo', protect, async (req, res) => {
   try {
     const publicId = req.query.publicId || req.body.publicId;
@@ -293,7 +281,6 @@ router.delete('/photo', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Photo ID required' });
     }
 
-    // First, verify the user owns this photo
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
@@ -307,19 +294,16 @@ router.delete('/photo', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Photo not found or not authorized' });
     }
 
-    // Remove from user's photos array first
     user.photos = user.photos.filter(photo => 
       photo.publicId !== publicId && photo._id?.toString() !== publicId
     );
     
-    // Ensure at least one photo remains primary
     if (user.photos.length > 0 && !user.photos.some(p => p.isPrimary)) {
       user.photos[0].isPrimary = true;
     }
     
     await user.save();
 
-    // Delete from Cloudinary after confirming ownership
     try {
       await cloudinary.uploader.destroy(publicId);
     } catch (cloudinaryError) {
@@ -347,7 +331,6 @@ router.post('/file', protect, fileUpload.single('file'), async (req, res) => {
       });
     }
 
-    // Use streaming upload for speed
     const result = await uploadBufferToCloudinary(req.file.buffer, {
       folder: 'afroconnect/files',
       resource_type: 'auto',
@@ -378,7 +361,6 @@ router.post('/video', protect, multiUpload, async (req, res) => {
 
     console.log('Video upload starting for:', file.originalname);
 
-    // Use streaming upload for speed — no base64 overhead
     const result = await uploadBufferToCloudinary(file.buffer, {
       folder: 'afroconnect/stories',
       resource_type: 'auto',

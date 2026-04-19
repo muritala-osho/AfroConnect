@@ -7,7 +7,6 @@ router.get('/available', protect, async (req, res) => {
   try {
     let prompts = await ProfilePrompt.find({ isActive: true }).sort({ category: 1 });
     
-    // Auto-seed if no prompts exist
     if (prompts.length === 0) {
       const defaultPrompts = [
         { category: 'personality', question: "I'm convinced that...", placeholder: "Share a strong belief" },

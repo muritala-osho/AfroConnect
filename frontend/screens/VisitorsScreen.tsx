@@ -283,7 +283,6 @@ const styles = StyleSheet.create({
         filter: 'blur(10px)',
       },
       default: {
-        // For native, we rely on the blurred prop if using expo-image or a container
       }
     })
   },

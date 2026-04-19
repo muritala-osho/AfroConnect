@@ -9,26 +9,20 @@ export const GlobalPlatform = Platform;
 
 
 export const getApiBaseUrl = (): string => {
-  // Explicit env var — set EXPO_PUBLIC_API_URL in your .env file (or Render/EAS env vars).
-  // Example: EXPO_PUBLIC_API_URL=https://your-app.onrender.com
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, ''); // strip trailing slash
   }
 
-  // Replit dev environment — available when Metro bundles inside Replit
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }
 
-  // No URL configured — throw so the problem is immediately visible in logs
-  // rather than failing silently with wrong requests.
   throw new Error(
     '[Config] EXPO_PUBLIC_API_URL is not set. ' +
     'Add it to your .env file: EXPO_PUBLIC_API_URL=https://your-backend-url.onrender.com'
   );
 };
 
-// Log the resolved URL once at startup so it is visible in Metro/device logs
 const _resolvedUrl = getApiBaseUrl();
 console.log(`[Config] API base URL: ${_resolvedUrl}`);
 

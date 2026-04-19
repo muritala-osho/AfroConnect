@@ -6,9 +6,6 @@ const User = require('../models/User');
 const Match = require('../models/Match');
 const Message = require('../models/Message');
 
-// @route   POST /api/block/:userId
-// @desc    Block a user
-// @access  Private
 router.post('/:userId', protect, async (req, res) => {
   try {
     const userToBlock = req.params.userId;
@@ -96,9 +93,6 @@ router.post('/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/block/:userId
-// @desc    Unblock a user - makes them discoverable again but does NOT restore match
-// @access  Private
 router.delete('/:userId', protect, async (req, res) => {
   try {
     const userToUnblock = req.params.userId;
@@ -136,9 +130,6 @@ router.delete('/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/block/list
-// @desc    Get list of blocked users
-// @access  Private
 router.get('/list', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)

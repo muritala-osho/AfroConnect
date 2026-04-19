@@ -81,8 +81,6 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
       tickets.push(...ticketChunk);
     }
 
-    // Build a map of receiptId → pushToken for later receipt lookup.
-    // Also handle immediate ticket-level errors (e.g. DeviceNotRegistered at send time).
     const ticketIdMap = new Map();
     for (const ticket of tickets) {
       if (ticket.status === 'error') {
@@ -95,8 +93,6 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
       }
     }
 
-    // Schedule a delayed receipt check (~20 minutes) — fire and forget.
-    // Expo receipts are not available immediately; 15–30 min is recommended.
     if (ticketIdMap.size > 0) {
       setTimeout(() => checkPushReceipts(ticketIdMap), 20 * 60 * 1000);
     }
@@ -137,7 +133,6 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
 
   const isCall = type === 'voice_call' || type === 'video_call';
 
-  // Per-type preference check
   if (type === 'message'    && prefs.messagesEnabled   === false) {
     console.log(`[Push] Suppressed (messages disabled) — user ${userId}`);
     return false;
@@ -159,7 +154,6 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     return false;
   }
 
-  // Per-user mute check
   if (mutedByUserId && mute.mutedUsers?.length) {
     const muteEntry = mute.mutedUsers.find(
       (m) => m.userId?.toString() === mutedByUserId.toString()
@@ -184,11 +178,8 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     }
   }
 
-  // Global quiet-hours check — use UTC consistently so comparisons
-  // are not skewed by the server's local timezone offset.
   if (mute.globalMute?.enabled) {
     if (isCall && mute.globalMute.allowCalls) {
-      // calls are allowed to break through quiet hours — continue
     } else {
       const now    = new Date();
       const pad    = (n) => String(n).padStart(2, '0');

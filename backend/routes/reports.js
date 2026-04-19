@@ -7,9 +7,6 @@ const User = require('../models/User');
 const Story = require('../models/Story');
 const Message = require('../models/Message');
 
-// @route   POST /api/reports
-// @desc    Report a user
-// @access  Private
 router.post('/', protect, async (req, res) => {
   try {
     const { reportedUserId, reason, description, contentType, contentId, contentUrl, contentPreview } = req.body;
@@ -115,9 +112,6 @@ router.post('/', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/reports/block/:userId
-// @desc    Block a user
-// @access  Private
 router.post('/block/:userId', protect, async (req, res) => {
   try {
     const User = require('../models/User');
@@ -141,9 +135,6 @@ router.post('/block/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/reports/block/:userId
-// @desc    Unblock a user
-// @access  Private
 router.delete('/block/:userId', protect, async (req, res) => {
   try {
     const User = require('../models/User');

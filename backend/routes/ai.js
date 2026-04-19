@@ -3,7 +3,6 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 
-// Language code mapping for MyMemory API
 const LANG_NAME_TO_CODE = {
   'english': 'en', 'french': 'fr', 'spanish': 'es', 'portuguese': 'pt', 'arabic': 'ar',
   'swahili': 'sw', 'amharic': 'am', 'yoruba': 'yo', 'hausa': 'ha', 'igbo': 'ig',
@@ -38,9 +37,6 @@ function getLanguageCode(langName) {
   return null;
 }
 
-// @route   POST /api/ai/translate
-// @desc    Translate text to a target language using MyMemory API
-// @access  Private
 router.post('/translate', protect, async (req, res) => {
   try {
     const { text, targetLanguage, sourceLanguage } = req.body;
@@ -86,7 +82,6 @@ router.post('/translate', protect, async (req, res) => {
   }
 });
 
-// Romantic message templates
 const romanticTemplates = [
   "Hey! Your smile caught my attention. How's your day going? 😊",
   "I couldn't help but notice we share a love for {interest}. What's your favorite thing about it?",
@@ -113,9 +108,6 @@ const iceBreakers = [
   "What's your guilty pleasure TV show?",
 ];
 
-// @route   POST /api/ai/suggest-message
-// @desc    Get template-based message suggestions
-// @access  Private
 router.post('/suggest-message', protect, async (req, res) => {
   try {
     const { targetUserId, messageType } = req.body;
@@ -175,9 +167,6 @@ const chatSuggestionTemplates = [
   "Tell me something that made you smile today! 😊",
 ];
 
-// @route   POST /api/ai/chat-suggestions
-// @desc    Get chat conversation starters (template-based)
-// @access  Private
 router.post('/chat-suggestions', protect, async (req, res) => {
   try {
     const suggestions = chatSuggestionTemplates

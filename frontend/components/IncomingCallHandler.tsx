@@ -137,15 +137,12 @@ export default function IncomingCallHandler() {
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
 
-    // Show the native CallKit (iOS) / ConnectionService (Android) incoming call screen.
-    // This works even when the app is in the foreground — the native UI overlays the app.
     const callerName = data.callerInfo?.name || 'Unknown';
     const hasVideo   = data.callData?.callType === 'video';
     if (Platform.OS !== 'web') {
       displayIncomingCall(data.callerId, callerName, hasVideo);
     }
 
-    // Also play in-app ringtone + show our custom modal as a secondary indicator
     await playRingtone();
 
     Animated.parallel([
@@ -274,7 +271,6 @@ export default function IncomingCallHandler() {
     socketService.on('call:ended', handleCallEnded);
     socketService.on('call:declined', handleCallDeclined);
 
-    // Handle pending VoIP call that woke the app from killed state (iOS)
     const pendingVoip = (global as any).__pendingVoipCall;
     if (pendingVoip) {
       (global as any).__pendingVoipCall = null;
@@ -350,7 +346,6 @@ export default function IncomingCallHandler() {
       callData: call.callData,
     });
 
-    // Dismiss native CallKit/ConnectionService UI
     setCallActive(call.callerId);
 
     setIsVisible(false);
@@ -386,7 +381,6 @@ export default function IncomingCallHandler() {
     await stopRingtone();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // Dismiss native CallKit/ConnectionService UI
     endCallKeepCall(call.callerId);
 
     socketService.declineCall({ callerId: call.callerId });

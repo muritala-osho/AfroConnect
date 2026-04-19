@@ -13,7 +13,6 @@ export type LanguageCode =
   | "am";
 
 export type TranslationKeys = {
-  // Common
   loading: string;
   error: string;
   success: string;
@@ -31,7 +30,6 @@ export type TranslationKeys = {
   ok: string;
   search: string;
   
-  // Auth
   login: string;
   signUp: string;
   logout: string;
@@ -41,13 +39,11 @@ export type TranslationKeys = {
   createAccount: string;
   welcomeBack: string;
   
-  // Navigation
   discovery: string;
   matches: string;
   chats: string;
   profile: string;
   
-  // Discovery Screen
   findingPeople: string;
   highCompatibility: string;
   nearYou: string;
@@ -72,7 +68,6 @@ export type TranslationKeys = {
   lookingForPeople: string;
   goBack: string;
   
-  // Love Radar
   loveRadar: string;
   scanningNearby: string;
   peopleWithinKm: string;
@@ -98,7 +93,6 @@ export type TranslationKeys = {
   women: string;
   men: string;
   
-  // Profile
   myProfile: string;
   editProfile: string;
   changeProfilePicture: string;
@@ -120,7 +114,6 @@ export type TranslationKeys = {
   manage: string;
   primary: string;
   
-  // Settings
   language: string;
   theme: string;
   notifications: string;
@@ -132,7 +125,6 @@ export type TranslationKeys = {
   selectLanguage: string;
   languageChanged: string;
   
-  // Matches & Chat
   newMatch: string;
   noMatches: string;
   noMessages: string;
@@ -152,20 +144,17 @@ export type TranslationKeys = {
   refresh: string;
   adjustPreferences: string;
   
-  // Swipe
   itsAMatch: string;
   startChatting: string;
   keepSwiping: string;
   noMoreProfiles: string;
   checkBackLater: string;
   
-  // Filters
   filters: string;
   ageRange: string;
   maxDistance: string;
   showMe: string;
   
-  // Location
   locationRequired: string;
   locationUpdated: string;
   locationError: string;
@@ -174,11 +163,9 @@ export type TranslationKeys = {
   refreshLocation: string;
   openLoveRadar: string;
   
-  // Logout
   logoutConfirm: string;
   loggingOut: string;
   
-  // Events & Meetups
   events: string;
   eventsAndMeetups: string;
   browseEvents: string;
@@ -214,7 +201,6 @@ export type TranslationKeys = {
   all: string;
   full: string;
   
-  // Success Stories
   stories: string;
   loveStories: string;
   allStories: string;

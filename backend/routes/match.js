@@ -11,9 +11,6 @@ const schemas = require('../validators/schemas');
 const redis = require('../utils/redis');
 const { distanceToUser, extractLatLng, normaliseMaxDistanceKm } = require('../utils/distance');
 
-// @route   GET /api/match/who-likes-me
-// @desc    Get list of users who liked current user (pending friend requests)
-// @access  Private
 router.get('/who-likes-me', protect, async (req, res) => {
   try {
     const FriendRequest = require('../models/FriendRequest');
@@ -22,13 +19,11 @@ router.get('/who-likes-me', protect, async (req, res) => {
     const cached = await redis.get(cacheKey);
     if (cached) return res.json({ success: true, users: cached, fromCache: true });
 
-    // Find pending friend requests where this user is the receiver
     const pendingRequests = await FriendRequest.find({
       receiver: req.user._id,
       status: 'pending'
     }).populate('sender', 'name age bio photos location onlineStatus lastActive interests verified lifestyle gender');
     
-    // Extract the users who sent requests (already plain objects from populate)
     const usersWhoLikedMe = pendingRequests
       .filter(req => req.sender)
       .map(req => req.sender.toObject ? req.sender.toObject() : req.sender);
@@ -37,7 +32,6 @@ router.get('/who-likes-me', protect, async (req, res) => {
       const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
       let score = 0;
       
-      // Compatibility scoring (Worldwide Focus)
       if (req.user.lifestyle?.personalityType && userObj.lifestyle?.personalityType === req.user.lifestyle?.personalityType) {
         score += 100;
       }
@@ -48,7 +42,6 @@ router.get('/who-likes-me', protect, async (req, res) => {
       return { ...userObj, compatibilityScore: score };
     });
 
-    // Sort by compatibility (Worldwide Priority)
     processedUsers.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
     if (!isPremium) {
@@ -85,9 +78,6 @@ router.get('/who-likes-me', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/match/swipe
-// @desc    Swipe right/left/super on a user
-// @access  Private
 router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), async (req, res) => {
   try {
     const { targetUserId, action } = req.body;
@@ -148,7 +138,6 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
         await currentUser.save();
 
-        // Send match push notifications to both users (non-blocking)
         try {
           const { sendSmartNotification } = require('../utils/pushNotifications');
           const [currentUserFull, targetUserFull] = await Promise.all([
@@ -173,7 +162,6 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
           console.error('Match push notification error (non-critical):', pushErr.message);
         }
 
-        // Send match notification emails to both users (non-blocking)
         try {
           const { sendNewMatchEmail } = require('../utils/emailService');
           const currentUserPhoto = currentUser.photos?.[0] || null;
@@ -202,9 +190,6 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
     await currentUser.save();
 
-    // Send like/superlike notification to target user (non-blocking, fire-and-forget).
-    // Only fires for one-way likes — mutual matches already return early above with
-    // their own "It's a Match!" notification.
     if (action === 'like' || action === 'superlike') {
       try {
         const { sendSmartNotification } = require('../utils/pushNotifications');
@@ -231,7 +216,6 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
       }
     }
 
-    // Invalidate who-likes-me cache for target user and my-matches for both
     await Promise.all([
       redis.del(`wholikesme:${targetUserId}:premium`),
       redis.del(`wholikesme:${targetUserId}:free`),
@@ -382,9 +366,6 @@ router.post('/rewind', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/match/cultural-score/:userId
-// @desc    Get cultural compatibility breakdown between current user and another user
-// @access  Private
 router.get('/cultural-score/:userId', protect, async (req, res) => {
   try {
     const cacheKey = `culturalscore:${req.user._id}:${req.params.userId}`;
@@ -406,9 +387,6 @@ router.get('/cultural-score/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/match/daily-match
-// @desc    Get today's single curated match (The One Today)
-// @access  Private
 router.get('/daily-match', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];

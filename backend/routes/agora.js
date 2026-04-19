@@ -3,7 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 
-// Log credentials status on startup
 const AGORA_APP_ID = process.env.AGORA_APP_ID;
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 

@@ -3,9 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 
-// @route   POST /api/mute/user
-// @desc    Mute a specific user
-// @access  Private
 router.post('/user', protect, async (req, res) => {
   try {
     const { userId, muteAll, muteMessages, muteVoiceCalls, muteVideoCalls } = req.body;
@@ -25,7 +22,6 @@ router.post('/user', protect, async (req, res) => {
       });
     }
 
-    // Check if user is already muted
     const existingMute = user.muteSettings.mutedUsers.findIndex(
       m => m.userId.toString() === userId.toString()
     );
@@ -40,10 +36,8 @@ router.post('/user', protect, async (req, res) => {
     };
 
     if (existingMute !== -1) {
-      // Update existing mute
       user.muteSettings.mutedUsers[existingMute] = muteData;
     } else {
-      // Add new mute
       user.muteSettings.mutedUsers.push(muteData);
     }
 
@@ -63,9 +57,6 @@ router.post('/user', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/mute/user/:userId
-// @desc    Unmute a specific user
-// @access  Private
 router.delete('/user/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
@@ -97,9 +88,6 @@ router.delete('/user/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/mute/muted-users
-// @desc    Get list of muted users
-// @access  Private
 router.get('/muted-users', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -125,9 +113,6 @@ router.get('/muted-users', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/mute/dnd
-// @desc    Set Do Not Disturb mode
-// @access  Private
 router.put('/dnd', protect, async (req, res) => {
   try {
     const { enabled, startTime, endTime, allowCalls } = req.body;
@@ -170,9 +155,6 @@ router.put('/dnd', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/mute/dnd
-// @desc    Get DND settings
-// @access  Private
 router.get('/dnd', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -196,9 +178,6 @@ router.get('/dnd', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/mute/notification-preferences
-// @desc    Update notification preferences
-// @access  Private
 router.put('/notification-preferences', protect, async (req, res) => {
   try {
     const {
@@ -243,9 +222,6 @@ router.put('/notification-preferences', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/mute/notification-preferences
-// @desc    Get notification preferences
-// @access  Private
 router.get('/notification-preferences', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -269,9 +245,6 @@ router.get('/notification-preferences', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/mute/is-muted/:userId
-// @desc    Check if a user is muted
-// @access  Private
 router.get('/is-muted/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;

@@ -8,8 +8,6 @@
  * the `compareFaces` export while keeping the same interface.
  */
 
-// Redirect @tensorflow/tfjs-node → pure-CPU @tensorflow/tfjs so no native
-// compile is needed (same patch as poseValidator).
 (function patchTfjsNode() {
   const Module = require('module');
   const orig = Module._resolveFilename.bind(Module);
@@ -29,23 +27,13 @@ const { URL } = require('url');
 
 const MODELS_PATH = path.join(__dirname, '..', 'faceModels');
 
-// ─── Similarity configuration ───────────────────────────────────────────────
-// face-api euclidean distance scale:
-//   0.00 – 0.35  →  very strong match (same photo / near-identical)
-//   0.35 – 0.55  →  likely same person (good lighting, different angles)
-//   0.55+        →  likely different person
-//
-// We map distance → similarity (0–1) linearly over [0, MAX_DIST].
-// Caller's threshold (≥ 0.85) then filters verified users.
 const MAX_DIST = 0.60; // distance at which similarity = 0
 
-// ─── Module-level singletons ─────────────────────────────────────────────────
 let faceapi       = null;
 let tf            = null;
 let modelsLoaded  = false;
 let loadingPromise = null;
 
-// ─── Model loader ─────────────────────────────────────────────────────────────
 async function loadModels() {
   if (modelsLoaded) return true;
   if (loadingPromise) return loadingPromise;
@@ -74,7 +62,6 @@ async function loadModels() {
   return loadingPromise;
 }
 
-// ─── Image helpers ────────────────────────────────────────────────────────────
 
 /**
  * Fetch a remote image and return its raw Buffer.
@@ -114,7 +101,6 @@ async function bufferToTensor(imageBuffer, maxDim = 320) {
   return { tensor, width: info.width, height: info.height };
 }
 
-// ─── Liveness checks ──────────────────────────────────────────────────────────
 
 /**
  * Basic liveness / anti-spoof heuristics:
@@ -150,7 +136,6 @@ function runLivenessChecks(detection, imgWidth, imgHeight) {
     issues.push('Face fills the entire frame — possible photo-of-photo detected');
   }
 
-  // Landmark spread check (real 3-D faces have higher variance)
   const pts = detection.landmarks.positions;
   const xs  = pts.map((p) => p.x);
   const ys  = pts.map((p) => p.y);
@@ -164,13 +149,11 @@ function runLivenessChecks(detection, imgWidth, imgHeight) {
   return { passed: issues.length === 0, issues };
 }
 
-// ─── Distance → similarity mapping ───────────────────────────────────────────
 
 function distanceToSimilarity(distance) {
   return parseFloat(Math.max(0, Math.min(1, 1 - distance / MAX_DIST)).toFixed(4));
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Compare a live selfie buffer against a stored profile photo URL.
@@ -202,7 +185,6 @@ async function compareFaces(selfieBuffer, profilePhotoUrl, verifyThreshold = 0.8
   let profileTensor = null;
 
   try {
-    // ── Optimise & decode images ──────────────────────────────────────────
     const { tensor: st, width: sw, height: sh } = await bufferToTensor(selfieBuffer, 320);
     selfieTensor = st;
 
@@ -212,13 +194,11 @@ async function compareFaces(selfieBuffer, profilePhotoUrl, verifyThreshold = 0.8
 
     const opts = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.35 });
 
-    // ── Detect faces (parallel) ───────────────────────────────────────────
     const [selfieDetection, profileDetection] = await Promise.all([
       faceapi.detectSingleFace(selfieTensor, opts).withFaceLandmarks().withFaceDescriptor(),
       faceapi.detectSingleFace(profileTensor, opts).withFaceLandmarks().withFaceDescriptor(),
     ]);
 
-    // ── Liveness validation ───────────────────────────────────────────────
     const liveness = runLivenessChecks(selfieDetection, sw, sh);
 
     if (!selfieDetection) {
@@ -239,7 +219,6 @@ async function compareFaces(selfieBuffer, profilePhotoUrl, verifyThreshold = 0.8
       };
     }
 
-    // ── Face comparison ───────────────────────────────────────────────────
     const distance   = faceapi.euclideanDistance(selfieDetection.descriptor, profileDetection.descriptor);
     const similarity = distanceToSimilarity(distance);
     const verified   = liveness.passed && similarity >= verifyThreshold;
@@ -282,10 +261,8 @@ async function analyzePose(imageBuffer) {
 
     if (!detection) return { faceDetected: false, yawAngle: 0, smileScore: 0 };
 
-    // ── Extract 68 landmark positions ─────────────────────────────────────
     const pts = detection.landmarks.positions; // array of { x, y }
 
-    // Face width anchors: landmark 0 (left contour) and 16 (right contour)
     const leftX  = pts[0].x;
     const rightX = pts[16].x;
     const faceW  = rightX - leftX; // pixels
@@ -293,24 +270,17 @@ async function analyzePose(imageBuffer) {
 
     const centerX = (leftX + rightX) / 2;
 
-    // Nose tip: landmark 30
     const noseTipX   = pts[30].x;
-    // Relative nose position: 0 = centred, positive = nose right of centre
     const relNose    = (noseTipX - centerX) / faceW; // [-0.5 … +0.5]
-    // Scale to degrees.  A fully side-facing head ~ 0.35 offset → ~35°
     const yawAngle   = relNose * 90;   // rough degrees
 
-    // ── Smile score from mouth width ───────────────────────────────────────
-    // Landmarks 48 (left mouth corner) and 54 (right mouth corner)
     const mouthLeft  = pts[48];
     const mouthRight = pts[54];
     const mouthW     = Math.sqrt(
       Math.pow(mouthRight.x - mouthLeft.x, 2) +
       Math.pow(mouthRight.y - mouthLeft.y, 2)
     );
-    // At rest ~ 0.28–0.32; smiling ~ 0.40+
     const smileRatio = mouthW / faceW;
-    // Map [0.28, 0.50] → [0, 1]
     const smileScore = Math.max(0, Math.min(1, (smileRatio - 0.28) / 0.22));
 
     return { faceDetected: true, yawAngle, smileScore };

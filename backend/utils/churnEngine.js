@@ -16,10 +16,6 @@ const Match = require('../models/Match');
 const { sendSmartNotification } = require('./pushNotifications');
 const { sendInactivityEmail }   = require('./emailService');
 
-// ─── Feature Weights ──────────────────────────────────────────────────────────
-// Each weight represents how much that signal contributes to churn risk (0–1).
-// These are calibrated heuristics; replace with learned weights once you have
-// enough labelled data to train a logistic-regression model.
 
 const WEIGHTS = {
   daysSinceLastActive:          0.30,  // strongest signal
@@ -30,10 +26,8 @@ const WEIGHTS = {
   lowNotificationEngagement:    0.10,  // ignoring all pushes
 };
 
-// Minimum hours between any intervention for the same user
 const MIN_HOURS_BETWEEN_INTERVENTIONS = 72;
 
-// ─── Score Calculator ─────────────────────────────────────────────────────────
 /**
  * Produces a 0–1 churn risk score for a single user doc (must have
  * swipedRight, premium, lastActive, notificationEngagement populated).
@@ -41,25 +35,18 @@ const MIN_HOURS_BETWEEN_INTERVENTIONS = 72;
 const computeChurnScore = (user, matchCount, silentMatchCount, recentSwipes, olderSwipes, daysSinceLastMsg) => {
   const now = Date.now();
 
-  // --- 1. Days since last active (cap at 30) --------------------------------
   const daysSinceActive = Math.min(
     (now - new Date(user.lastActive).getTime()) / (1000 * 60 * 60 * 24),
     30
   );
   const activeScore = daysSinceActive / 30; // 0 = very active, 1 = gone 30+ days
 
-  // --- 2. Uncontacted matches -----------------------------------------------
-  // Users who have matches but never messaged them are disengaged
   const silentMatchRatio = matchCount > 0 ? Math.min(silentMatchCount / matchCount, 1) : 0;
 
-  // --- 3. Match rate (swipes → matches) -------------------------------------
   const totalSwipes = (user.swipedRight?.length || 0) + (user.swipedLeft?.length || 0);
   const matchRate   = totalSwipes > 0 ? Math.min(matchCount / totalSwipes, 1) : 0;
-  // Low match rate = frustration signal; we invert it
   const lowMatchRateScore = totalSwipes < 5 ? 0 : Math.max(0, 1 - matchRate * 5);
 
-  // --- 4. Swipe volume decline ----------------------------------------------
-  // recentSwipes = swipes in last 7 days, olderSwipes = 7–14 days ago
   let swipeDeclineScore = 0;
   if (olderSwipes > 0) {
     swipeDeclineScore = Math.max(0, Math.min(1, 1 - recentSwipes / olderSwipes));
@@ -67,19 +54,16 @@ const computeChurnScore = (user, matchCount, silentMatchCount, recentSwipes, old
     swipeDeclineScore = 0.5; // no swipes ever → moderate signal
   }
 
-  // --- 5. Days since last message (cap at 14) --------------------------------
   const msgInactiveScore = daysSinceLastMsg !== null
     ? Math.min(daysSinceLastMsg / 14, 1)
     : 0.3; // never messaged anyone → slight signal
 
-  // --- 6. Notification engagement rate --------------------------------------
   const engagement = user.notificationEngagement || [];
   const totalSent   = engagement.reduce((s, e) => s + (e.sent || 0), 0);
   const totalOpened = engagement.reduce((s, e) => s + (e.opened || 0), 0);
   const openRate    = totalSent > 0 ? totalOpened / totalSent : null;
   const notifScore  = openRate !== null ? Math.max(0, 1 - openRate * 2) : 0.2;
 
-  // --- Weighted sum ----------------------------------------------------------
   const rawScore =
     WEIGHTS.daysSinceLastActive       * activeScore +
     WEIGHTS.noMessagedMatches         * silentMatchRatio +
@@ -88,17 +72,14 @@ const computeChurnScore = (user, matchCount, silentMatchCount, recentSwipes, old
     WEIGHTS.daysSinceLastMessage      * msgInactiveScore +
     WEIGHTS.lowNotificationEngagement * notifScore;
 
-  // Premium users churn ~40% less — apply a dampening factor
   const premiumDampening = user.premium?.isActive ? 0.6 : 1.0;
 
-  // New users (< 7 days old) have a natural "honeymoon" period
   const accountAgedays = (now - new Date(user.createdAt).getTime()) / (1000 * 60 * 60 * 24);
   const newUserDampening = accountAgedays < 7 ? 0.4 : 1.0;
 
   return Math.min(1, rawScore * premiumDampening * newUserDampening);
 };
 
-// ─── Intervention Dispatcher ─────────────────────────────────────────────────
 const TIER_1_MESSAGES = [
   { title: '💚 You have new likes waiting!',      body: 'Someone on AfroConnect likes you. Open the app to find out who.' },
   { title: '🔥 Your profile is getting attention', body: 'People have been viewing your profile. Come see who\'s interested!' },
@@ -114,7 +95,6 @@ const pickRandom = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 const executeIntervention = async (user, score) => {
   if (score >= 0.80) {
-    // Tier 3: Boost + Push + Email
     await sendSmartNotification(user, {
       title: '🚀 We\'ve given you a free Boost!',
       body: 'Your profile is now boosted for 24 hours — enjoy the extra visibility!',
@@ -123,12 +103,10 @@ const executeIntervention = async (user, score) => {
     }, 'system');
     await sendInactivityEmail(user.email, user.name);
 
-    // Mark a free boost (app can check this field on next login)
     user.churnInterventionTier = 'boost';
     user.freeBoostGrantedAt = new Date();
 
   } else if (score >= 0.65) {
-    // Tier 2: Push + Email
     const msg = pickRandom(TIER_2_MESSAGES);
     await sendSmartNotification(user, {
       title: msg.title,
@@ -142,7 +120,6 @@ const executeIntervention = async (user, score) => {
     user.churnInterventionTier = 'email';
 
   } else {
-    // Tier 1: Subtle push only
     const msg = pickRandom(TIER_1_MESSAGES);
     await sendSmartNotification(user, {
       title: msg.title,
@@ -158,14 +135,12 @@ const executeIntervention = async (user, score) => {
   await user.save();
 };
 
-// ─── Main Job ─────────────────────────────────────────────────────────────────
 const runChurnPrediction = async () => {
   console.log('[ChurnEngine] Starting churn prediction run...');
   const now = Date.now();
   let processed = 0, intervened = 0;
 
   try {
-    // Pull active users who: verified email, not banned/suspended, have a push token or email
     const users = await User.find({
       emailVerified: true,
       banned: false,
@@ -180,24 +155,20 @@ const runChurnPrediction = async () => {
       try {
         processed++;
 
-        // Guard: don't intervene more than once every 72 hours
         if (user.churnInterventionSentAt) {
           const hoursSince = (now - new Date(user.churnInterventionSentAt).getTime()) / (1000 * 60 * 60);
           if (hoursSince < MIN_HOURS_BETWEEN_INTERVENTIONS) continue;
         }
 
-        // --- Fetch signals that require extra queries -------------------------
         const [matches, silentMatches, allMessages] = await Promise.all([
           Match.find({ users: user._id, status: 'active' }).select('lastMessageAt').lean(),
           Match.find({ users: user._id, status: 'active', lastMessageAt: null }).countDocuments(),
-          // Approximation: use swipedRight as proxy for recent activity periods
           Promise.resolve(null),
         ]);
 
         const matchCount       = matches.length;
         const silentMatchCount = silentMatches;
 
-        // Days since last message across all matches
         const lastMsgDates = matches
           .filter(m => m.lastMessageAt)
           .map(m => new Date(m.lastMessageAt).getTime());
@@ -205,13 +176,10 @@ const runChurnPrediction = async () => {
           ? (now - Math.max(...lastMsgDates)) / (1000 * 60 * 60 * 24)
           : null;
 
-        // Swipe volume: we don't have per-swipe timestamps in this model,
-        // so we use daysSinceLastActive as the proxy for decline
         const recentSwipes = user.lastActive && (now - new Date(user.lastActive).getTime()) < 7 * 24 * 60 * 60 * 1000
           ? user.swipedRight?.length || 0 : 0;
         const olderSwipes = user.swipedRight?.length || 0;
 
-        // --- Compute score ---------------------------------------------------
         const score = computeChurnScore(
           user,
           matchCount,
@@ -221,10 +189,8 @@ const runChurnPrediction = async () => {
           daysSinceLastMsg
         );
 
-        // Update stored score regardless of intervention
         user.churnScore = score;
 
-        // Only intervene if score >= 0.50
         if (score >= 0.50) {
           await executeIntervention(user, score);
           intervened++;

@@ -18,7 +18,6 @@
 
 const MAX_SCORE = 100;
 
-// ─── Pillar helpers ────────────────────────────────────────────────────────────
 
 /**
  * Distance score (0–30).
@@ -140,7 +139,6 @@ function scoreGoalAlignment(candidate, currentUser) {
   return relaxedMatch ? 2 : 0;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
  * Compute a normalised 0–100 match score for a candidate relative to the

@@ -78,7 +78,6 @@ const EDUCATION_LABELS: { [key: string]: string } = {
 
 
 const LIFESTYLE_LABELS: { [key: string]: string } = {
-  // Drinking / Smoking / Workout frequency
   never: 'Never',
   socially: 'Socially',
   regularly: 'Regularly',
@@ -88,13 +87,11 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   sometimes: 'Sometimes',
   prefer_not_to_say: 'Prefer not to say',
 
-  // Personality type
   introverted: 'Introverted',
   ambiverted: 'Ambiverted',
   ambivert: 'Ambivert',
   extroverted: 'Extroverted',
 
-  // Love style
   romantic: 'Romantic',
   playful: 'Playful',
   passionate: 'Passionate',
@@ -109,13 +106,11 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   quality_time: 'Quality Time',
   gift_giving: 'Gift Giving',
 
-  // Communication style
   big_talker: 'Big Talker',
   listener: 'Good Listener',
   texter: 'Texter',
   caller: 'Phone Caller',
 
-  // Religion
   christian: 'Christian',
   muslim: 'Muslim',
   traditional: 'Traditional',
@@ -127,26 +122,22 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   agnostic: 'Agnostic',
   other: 'Other',
 
-  // Kids
   yes: 'Yes',
   no: 'No',
   open_to_it: 'Open to it',
   not_sure: 'Not sure',
 
-  // Pets
   none: 'No pets',
   dog: 'Dog lover',
   cat: 'Cat lover',
   parrot: 'Parrot',
   allergic: 'Allergic to pets',
 
-  // Ethnicity
   african: 'African',
   african_american: 'African American',
   caribbean: 'Caribbean',
   mixed: 'Mixed',
 
-  // Relationship goal
   short_term: 'Short-term Dating',
   long_term: 'Long-term Relationship',
   friendship: 'Friendship',
@@ -156,12 +147,10 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   open_to_everything: 'Open to Everything',
   not_sure_yet: 'Not Sure Yet',
 
-  // Looking for
   relationship: 'Relationship',
   hookup: 'Hookup',
   both: 'Both',
 
-  // Diaspora generation
   first: '1st Generation',
   second: '2nd Generation',
   third: '3rd+ Generation',
@@ -267,7 +256,6 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const tapX = evt.nativeEvent.locationX;
     const tapY = evt.nativeEvent.locationY;
     
-    // If tapping the top area or indicators, don't trigger photo change
     if (tapY < 60) return;
 
     if (totalPhotos <= 1) return;

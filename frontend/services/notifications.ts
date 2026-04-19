@@ -4,8 +4,6 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Dynamically check the user's notification preferences before showing
-// foreground notifications so that sound/alert toggles are respected.
 Notifications.setNotificationHandler({
   handleNotification: async () => {
     try {
@@ -13,7 +11,6 @@ Notifications.setNotificationHandler({
       const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
       const pushEnabled = await AsyncStorage.getItem('pushNotificationsEnabled');
 
-      // If the user has globally disabled push notifications, suppress everything
       if (pushEnabled === 'false') {
         return {
           shouldShowAlert: false,
@@ -34,7 +31,6 @@ Notifications.setNotificationHandler({
         shouldShowList: true,
       };
     } catch {
-      // Fall back to showing the notification if preferences can't be read
       return {
         shouldShowAlert: true,
         shouldPlaySound: true,
@@ -46,9 +42,6 @@ Notifications.setNotificationHandler({
   },
 });
 
-// Detect Expo Go using the non-deprecated API (SDK 50+).
-// Constants.appOwnership is deprecated and returns null in SDK 50+.
-// executionEnvironment is 'storeClient' in Expo Go, 'bare' in dev/prod builds.
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 export async function registerForPushNotificationsAsync(authTokenOverride?: string) {
@@ -59,8 +52,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
 
   let token: string | undefined;
 
-  // Always set up Android notification channels — they must exist before any
-  // notification arrives, regardless of whether token registration succeeds.
   if (Platform.OS === 'android') {
     console.log('[Notifications] Setting up Android channels…');
     await setupAndroidChannels();
@@ -76,7 +67,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
     return;
   }
 
-  // ── Permission check ────────────────────────────────────────────────────────
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   console.log('[Notifications] Existing permission status:', existingStatus);
   let finalStatus = existingStatus;
@@ -95,7 +85,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
 
   console.log('[Notifications] ✅ Permission granted.');
 
-  // ── Token retrieval ─────────────────────────────────────────────────────────
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId;
     console.log('[Notifications] EAS projectId:', projectId || 'NOT FOUND');
@@ -106,10 +95,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
         token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
       } catch (tokenErr: any) {
         const errMsg = tokenErr?.message || String(tokenErr);
-        // Common GMS failure messages on Tecno / budget Android phones:
-        //   "SERVICE_NOT_AVAILABLE" — GMS is installed but outdated / not running
-        //   "MISSING_INSTANCEID_SERVICE" — GMS package is corrupt or incomplete
-        //   "Google Play services not available" — GMS missing entirely
         if (
           errMsg.includes('SERVICE_NOT_AVAILABLE') ||
           errMsg.includes('MISSING_INSTANCEID') ||
@@ -134,8 +119,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
         }
       }
     } else {
-      // In Expo Go or when projectId is missing: get token without projectId
-      // This produces a valid test token you can use at expo.dev/notifications
       token = (await Notifications.getExpoPushTokenAsync()).data;
     }
     console.log('[Notifications] ✅ Token obtained:', token);
@@ -148,21 +131,14 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
       return;
     }
 
-    // ── Backend registration ──────────────────────────────────────────────────
     const storedToken = await AsyncStorage.getItem('pushToken');
     console.log('[Notifications] Previously stored token:', storedToken ? storedToken.slice(0, 40) + '…' : 'none');
 
     await AsyncStorage.setItem('pushToken', token);
 
-    // Always register with the backend on every launch.
-    // The backend upsert is idempotent — this ensures the token is saved
-    // even if a previous attempt failed (e.g. MongoDB was down, Expo Go
-    // was blocked, or the user's DB record predates token registration).
     const tokenChanged = token !== storedToken;
     console.log('[Notifications] Registering token with backend (changed:', tokenChanged, ')…');
 
-    // Prefer the token passed directly from the auth context (avoids AsyncStorage timing gaps).
-    // Fall back to AsyncStorage for cases like foreground re-registration.
     const authToken = authTokenOverride || await AsyncStorage.getItem('auth_token');
 
     if (!authToken) {
@@ -221,7 +197,6 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
 }
 
 async function setupAndroidChannels() {
-  // General / default
   await Notifications.setNotificationChannelAsync('default', {
     name: 'General',
     importance: Notifications.AndroidImportance.HIGH,
@@ -230,7 +205,6 @@ async function setupAndroidChannels() {
     sound: 'default',
   });
 
-  // Messages
   await Notifications.setNotificationChannelAsync('messages', {
     name: 'Messages',
     importance: Notifications.AndroidImportance.HIGH,
@@ -239,7 +213,6 @@ async function setupAndroidChannels() {
     sound: 'default',
   });
 
-  // Matches & Likes
   await Notifications.setNotificationChannelAsync('matches', {
     name: 'Matches & Likes',
     importance: Notifications.AndroidImportance.HIGH,
@@ -255,7 +228,6 @@ async function setupAndroidChannels() {
     lightColor: '#FF6B9D',
   });
 
-  // Incoming calls — maximum priority, bypasses DND, visible on lock screen
   await Notifications.setNotificationChannelAsync('calls', {
     name: 'Incoming Calls',
     importance: Notifications.AndroidImportance.MAX,
@@ -269,7 +241,6 @@ async function setupAndroidChannels() {
     showBadge: true,
   });
 
-  // Support
   await Notifications.setNotificationChannelAsync('support', {
     name: 'Support',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -277,7 +248,6 @@ async function setupAndroidChannels() {
     lightColor: '#FF6B9D',
   });
 
-  // Re-engagement / churn engine notifications
   await Notifications.setNotificationChannelAsync('engagement', {
     name: 'Activity & Updates',
     importance: Notifications.AndroidImportance.DEFAULT,

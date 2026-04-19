@@ -2,7 +2,6 @@
 const express = require('express');
 const router = express.Router();
 
-// Privacy Policy Content
 const PRIVACY_POLICY = {
   lastUpdated: "2025-01-25",
   content: `
@@ -48,7 +47,6 @@ We may update this policy and will notify you of significant changes.
   `
 };
 
-// Terms of Service Content
 const TERMS_OF_SERVICE = {
   lastUpdated: "2025-01-25",
   content: `
@@ -108,9 +106,6 @@ These terms are governed by applicable laws.
   `
 };
 
-// @route   GET /api/legal/privacy-policy
-// @desc    Get privacy policy
-// @access  Public
 router.get('/privacy-policy', (req, res) => {
   res.json({
     success: true,
@@ -118,9 +113,6 @@ router.get('/privacy-policy', (req, res) => {
   });
 });
 
-// @route   GET /api/legal/terms-of-service
-// @desc    Get terms of service
-// @access  Public
 router.get('/terms-of-service', (req, res) => {
   res.json({
     success: true,
@@ -128,9 +120,6 @@ router.get('/terms-of-service', (req, res) => {
   });
 });
 
-// @route   GET /api/legal/community-guidelines
-// @desc    Get community guidelines
-// @access  Public
 router.get('/community-guidelines', (req, res) => {
   res.json({
     success: true,

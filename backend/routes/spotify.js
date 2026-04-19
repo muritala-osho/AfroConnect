@@ -84,9 +84,6 @@ async function getValidAccessToken(user) {
   return await refreshSpotifyToken(user);
 }
 
-// @route   GET /api/spotify/auth-url
-// @desc    Get Spotify OAuth authorization URL
-// @access  Private
 router.get('/auth-url', protect, async (req, res) => {
   if (!SPOTIFY_CLIENT_ID || !SPOTIFY_REDIRECT_URI) {
     return res.status(503).json({ success: false, message: 'Spotify integration not configured' });
@@ -104,9 +101,6 @@ router.get('/auth-url', protect, async (req, res) => {
   res.json({ success: true, authUrl });
 });
 
-// @route   GET /api/spotify/callback
-// @desc    Handle Spotify OAuth callback
-// @access  Public
 router.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
   if (error) {
@@ -178,9 +172,6 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// @route   DELETE /api/spotify/disconnect
-// @desc    Disconnect Spotify account
-// @access  Private
 router.delete('/disconnect', protect, async (req, res) => {
   try {
     await User.findByIdAndUpdate(req.user._id, {
@@ -198,9 +189,6 @@ router.delete('/disconnect', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/spotify/search?q=query
-// @desc    Search Spotify for tracks
-// @access  Private
 router.get('/search', protect, async (req, res) => {
   const { q } = req.query;
   if (!q || !q.trim()) {
@@ -235,9 +223,6 @@ router.get('/search', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/spotify/set-song
-// @desc    Save a song to user's profile
-// @access  Private
 router.post('/set-song', protect, async (req, res) => {
   const { title, artist, spotifyUri, albumArt, previewUrl } = req.body;
   if (!title) {
@@ -264,9 +249,6 @@ router.post('/set-song', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/spotify/track/:trackId
-// @desc    Get a single track's details including preview URL
-// @access  Private
 router.get('/track/:trackId', protect, async (req, res) => {
   const { trackId } = req.params;
   if (!trackId) {
@@ -303,9 +285,6 @@ router.get('/track/:trackId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/spotify/status
-// @desc    Get current user's Spotify connection status
-// @access  Private
 router.get('/status', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('spotify favoriteSong');

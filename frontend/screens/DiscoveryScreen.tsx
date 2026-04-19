@@ -193,7 +193,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       logger.log(`[DISCOVERY RADAR] Received ${data.users?.length || 0} users from radar`);
       if (data.success && data.users?.length > 0) {
         const radarUsers: DiscoverUser[] = data.users.map((u: any) => {
-          // Use profilePhoto URL directly, or fallback to photos array
           const photoUrl = u.profilePhoto || (u.photos?.[0]?.url || u.photos?.[0]);
           return {
             id: u.id || u._id,
@@ -220,16 +219,13 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             if (Platform.OS !== 'web') {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
-            // Clear loading state since we now have users
             setLoading(false);
             return [...prev, ...newUsers];
           }
           return prev;
         });
-        // If radar returned users but none were new, still clear loading
         setLoading(false);
       } else {
-        // No users from radar, still clear loading
         setLoading(false);
       }
     } catch (error) {
@@ -319,7 +315,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             logger.log(`[DISCOVERY] User ${u._id} has NO photos in raw data`);
           }
           
-          // Flatten photos if they are objects with url property
           const processedPhotos = userPhotos.map((p: any) => {
             if (typeof p === 'string') return p;
             if (p && typeof p === 'object' && p.url) return p.url;
@@ -333,11 +328,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           const theirInterests = u.interests || [];
           const sharedInterests = theirInterests.filter((i: string) => myInterests.has(i));
           
-          // Personality match logic
           const personalityMatch = (user as any).personalityType && (u as any).personalityType && (user as any).personalityType === (u as any).personalityType;
           const personalityBonus = personalityMatch ? 20 : 0;
 
-          // Similarity based on interests + personality
           const similarityScore = myInterests.size > 0
             ? Math.min(100, ((sharedInterests.length / Math.max(myInterests.size, theirInterests.length)) * 100) + personalityBonus)
             : personalityBonus;
@@ -382,27 +375,21 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       }
     } catch (error) {
       logger.error("[DISCOVERY] Error loading nearby users:", error);
-      // Don't set users to empty - leave existing users from radar
     } finally {
       setLoading(false);
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry]);
 
-  // Stable reference to track if initial load happened
   const hasInitiallyLoaded = useRef(false);
-  // Track the preferences that should trigger a reload
   const preferencesRef = useRef<string>('');
   
   useEffect(() => {
     if (!user?.id || !token) return;
     
-    // Check if user has photos, if not, they might be blocked by the verification screen
-    // but we want to make sure discovery still tries to load
     if (user?.photos?.length === 0) {
       logger.log('[DISCOVERY] User has no photos, might be stuck');
     }
 
-    // Create a hash of current preferences to detect changes
     const prefs = user?.preferences as any;
     const lifestyle = (user as any)?.lifestyle;
     const currentPrefs = JSON.stringify({
@@ -424,14 +411,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       selectedCountry: selectedCountry,
     });
     
-    // Load on initial mount or when preferences actually change
     if (!hasInitiallyLoaded.current || currentPrefs !== preferencesRef.current) {
       hasInitiallyLoaded.current = true;
       preferencesRef.current = currentPrefs;
       
       const loadData = async () => {
         setLoading(true);
-        // Load from both sources in parallel for faster results
         await Promise.all([
           loadPotentialMatches(),
           fetchRadarNearbyUsers()
@@ -441,21 +426,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
 
-  // Radar scanning on focus - reduced dependencies to prevent infinite loops
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   useFocusEffect(
     useCallback(() => {
       checkLocationPermission();
       
-      // Initial radar scan with delay
       const initialScanTimeout = setTimeout(() => {
         if (hasLocationPermission !== false && token) {
           fetchRadarNearbyUsers();
         }
       }, 1000);
       
-      // Setup interval for periodic scans
       radarIntervalRef.current = setInterval(() => {
         if (hasLocationPermission !== false && token) {
           fetchRadarNearbyUsers();
@@ -795,7 +777,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (!user || !token) return;
     
     try {
-      // Send a match request (auto-accepts if they already liked you)
       const response = await api.post<{ success: boolean; isMatch?: boolean; friendRequest?: any; matchedUser?: any; message?: string }>(
         '/friends/request',
         { receiverId: targetUser.id },
@@ -808,7 +789,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
         
         if (response.data?.isMatch) {
-          // It's a mutual match! Navigate to the match popup
           navigation.navigate('MatchPopup', {
             currentUser: {
               id: user.id,
@@ -998,7 +978,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (currentIndex >= users.length) return;
     const targetUser = users[currentIndex];
     
-    // Check premium status before making API call
     if (!user?.premium?.isActive) {
       showAlert(
         'Premium Feature', 

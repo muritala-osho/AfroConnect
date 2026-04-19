@@ -9,9 +9,6 @@ const redis = require("../utils/redis");
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
-// @route   GET /api/chat/conversations
-// @desc    Get all conversations for user sorted by latest message (WhatsApp-style)
-// @access  Private
 router.get("/conversations", protect, async (req, res) => {
   try {
     const { search, page = 1, limit = 500 } = req.query;
@@ -19,7 +16,6 @@ router.get("/conversations", protect, async (req, res) => {
     const limitNum = Math.min(parseInt(limit), 1000);
     const userId = req.user._id.toString();
 
-    // Serve from Redis cache for non-search, non-paginated requests
     const cacheKey = `conversations:${userId}`;
     if (!search && pageNum === 1) {
       const cached = await redis.get(cacheKey);
@@ -28,7 +24,6 @@ router.get("/conversations", protect, async (req, res) => {
       }
     }
 
-    // Get current user's blocked list
     const currentUser = await User.findById(req.user._id)
       .select("blockedUsers")
       .lean();
@@ -36,8 +31,6 @@ router.get("/conversations", protect, async (req, res) => {
       id.toString(),
     );
 
-    // Fetch ALL matches sorted by lastMessageAt desc (most recent chat first)
-    // Include both active and unmatched so old conversations remain visible
     const matches = await Match.find({ users: req.user._id, status: { $in: ['active', 'unmatched'] } })
       .populate(
         "users",
@@ -52,10 +45,8 @@ router.get("/conversations", protect, async (req, res) => {
       return res.json({ success: true, conversations: [] });
     }
 
-    // Get all match IDs for batch query
     const matchIds = matches.map((m) => m._id);
 
-    // Batch query: Get last messages for all matches at once using aggregation
     const lastMessagesAgg = await Message.aggregate([
       {
         $match: {
@@ -70,7 +61,6 @@ router.get("/conversations", protect, async (req, res) => {
       lastMessagesAgg.map((m) => [m._id.toString(), m.lastMessage]),
     );
 
-    // Batch query: Get unread counts for all matches at once
     const unreadCountsAgg = await Message.aggregate([
       {
         $match: {
@@ -86,7 +76,6 @@ router.get("/conversations", protect, async (req, res) => {
       unreadCountsAgg.map((m) => [m._id.toString(), m.count]),
     );
 
-    // Build conversations
     const onlineUsers = req.app.get("onlineUsers");
     const currentUserId = req.user._id.toString();
     const conversations = matches.map((match) => {
@@ -95,14 +84,12 @@ router.get("/conversations", protect, async (req, res) => {
       );
       if (!otherUser) return null;
 
-      // Filter out blocked users (both directions)
       if (blockedUserIds.includes(otherUser._id.toString())) return null;
       const otherUserBlockedMe = (otherUser.blockedUsers || []).some(
         (id) => id.toString() === req.user._id.toString(),
       );
       if (otherUserBlockedMe) return null;
 
-      // Search filter
       if (
         search &&
         !otherUser.name.toLowerCase().includes(search.toLowerCase())
@@ -133,7 +120,6 @@ router.get("/conversations", protect, async (req, res) => {
       };
     });
 
-    // Filter nulls and deduplicate by user ID (keep first occurrence — already sorted)
     const seenUserIds = new Set();
     const filteredConversations = conversations
       .filter((c) => c !== null)
@@ -144,7 +130,6 @@ router.get("/conversations", protect, async (req, res) => {
         return true;
       });
 
-    // Cache for 30 seconds (non-search results only)
     if (!search && pageNum === 1) {
       await redis.set(cacheKey, filteredConversations, 30);
     }
@@ -156,9 +141,6 @@ router.get("/conversations", protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/chat/mark-all-read
-// @desc    Mark all messages as read
-// @access  Private
 router.put("/mark-all-read", protect, async (req, res) => {
   try {
     await Message.updateMany(
@@ -171,9 +153,6 @@ router.put("/mark-all-read", protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/chat/delete-all
-// @desc    Delete all chats for user (soft delete)
-// @access  Private
 router.delete("/delete-all", protect, async (req, res) => {
   try {
     await Message.updateMany(
@@ -186,9 +165,6 @@ router.delete("/delete-all", protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/chat/unread-count
-// @desc    Total number of unseen messages across all conversations
-// @access  Private
 router.get("/unread-count", protect, async (req, res) => {
   try {
     const count = await Message.countDocuments({
@@ -202,10 +178,6 @@ router.get("/unread-count", protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/chat/:matchId
-// @desc    Get messages for a match
-// @access  Private
-// FIX: Increased default limit to 1000 so all messages load, added proper pagination support
 router.get("/:matchId", protect, async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -213,7 +185,6 @@ router.get("/:matchId", protect, async (req, res) => {
     const pageSize = Math.min(parseInt(limit) || 1000, 2000);
     const skipAmount = Math.max(0, parseInt(skip) || 0);
 
-    // Verify user is part of the match
     const match = await Match.findById(matchId);
     if (!match || !match.users.includes(req.user._id)) {
       return res
@@ -252,9 +223,6 @@ router.get("/:matchId", protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/chat/:matchId
-// @desc    Send a message (text, image, audio, file)
-// @access  Private
 router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -273,7 +241,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       callType,
     } = req.body;
 
-    // Direct Messaging Check (Premium Only)
     if (matchId === "direct") {
       if (!req.user.premium?.isActive) {
         return res
@@ -286,7 +253,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       }
     }
 
-    // Verify match exists and user is part of it
     const match = await Match.findById(matchId);
     if (!match || !match.users.includes(req.user._id)) {
       return res
@@ -294,14 +260,12 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         .json({ success: false, message: "Not authorized" });
     }
 
-    // Block messages on expired matches that haven't had a first message yet
     if (!match.hasFirstMessage && match.expiresAt && new Date(match.expiresAt) < new Date()) {
       return res.status(403).json({ success: false, message: "This match has expired. You can no longer send messages." });
     }
 
     const receiver = match.users.find((id) => !id.equals(req.user._id));
 
-    // Create system message for call history
     if (type === "call") {
       const messageData = {
         matchId,
@@ -326,7 +290,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       return res.status(201).json({ success: true, message });
     }
 
-    // Check if either user has blocked the other
     const currentUser = await User.findById(req.user._id).select(
       "blockedUsers",
     );
@@ -384,7 +347,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
     const message = await Message.create(messageData);
     await message.populate("sender", "name photos");
 
-    // Enforce Voice Note Limits for free users
     if (type === "audio") {
       const freeLimit = 30;
       const isPremium = req.user.premium?.isActive;
@@ -398,14 +360,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       }
     }
 
-    // Update lastMessageAt on the Match so conversations sort correctly
-    // Also mark hasFirstMessage so expiry countdown stops
     const wasFirstMessage = !match.hasFirstMessage;
     await Match.findByIdAndUpdate(matchId, {
       $set: { lastMessageAt: new Date(), hasFirstMessage: true }
     });
 
-    // Invalidate conversation caches for both users so next fetch is fresh
     await redis.del(`conversations:${req.user._id.toString()}`);
     await redis.del(`conversations:${receiver.toString()}`);
 
@@ -415,14 +374,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
 
-      // If this is the first message, notify both users' personal rooms so their
-      // Matches screen clears the expiry countdown immediately
       if (wasFirstMessage) {
         const firstMsgPayload = { matchId: matchId.toString() };
         io.to(req.user._id.toString()).emit("match:first-message", firstMsgPayload);
         io.to(receiver.toString()).emit("match:first-message", firstMsgPayload);
       }
-      // Tell the sender their message was delivered to receiver's device
       io.to(receiver.toString()).emit("chat:message-delivered", {
         messageId: message._id,
         chatId: matchId,
@@ -431,7 +387,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       });
     }
 
-    // Push notification for offline receiver
     const onlineUsers = req.app.get("onlineUsers");
     const isReceiverOnline =
       onlineUsers && onlineUsers.has(receiver.toString());
@@ -480,10 +435,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
   }
 });
 
-// @route   PUT /api/chat/:matchId/read
-// @desc    Mark all messages in chat as read
-// @access  Private
-// FIX: Removed premium gate — read receipts now work for ALL users (free and premium)
 router.put("/:matchId/read", protect, async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -501,8 +452,6 @@ router.put("/:matchId/read", protect, async (req, res) => {
     );
 
     const io = req.app.get("io");
-    // FIX: emit for ALL users regardless of premium status
-    // Also emit even if modifiedCount is 0, in case client needs to sync
     if (io) {
       const otherUserId = match.users.find((id) => !id.equals(req.user._id));
 
@@ -513,11 +462,8 @@ router.put("/:matchId/read", protect, async (req, res) => {
         readAt: new Date().toISOString(),
       };
 
-      // Emit to the chat room so sender's open ChatDetailScreen updates instantly
       io.to(matchId.toString()).emit("chat:message-read", payload);
 
-      // Also emit directly to sender's personal socket room
-      // so they get it even if they navigated away from the chat
       if (otherUserId) {
         io.to(otherUserId.toString()).emit("chat:message-read", payload);
       }
@@ -530,9 +476,6 @@ router.put("/:matchId/read", protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/chat/message/:messageId/seen
-// @desc    Mark a single message as seen
-// @access  Private
 router.put("/message/:messageId/seen", protect, async (req, res) => {
   try {
     const message = await Message.findById(req.params.messageId);
@@ -559,7 +502,6 @@ router.put("/message/:messageId/seen", protect, async (req, res) => {
         readAt: new Date().toISOString(),
       };
       io.to(message.matchId.toString()).emit("chat:message-read", payload);
-      // Also emit to sender's personal room
       io.to(message.sender.toString()).emit("chat:message-read", payload);
     }
 
@@ -569,9 +511,6 @@ router.put("/message/:messageId/seen", protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/chat/message/:messageId
-// @desc    Delete message for self or everyone
-// @access  Private
 router.delete("/message/:messageId", protect, async (req, res) => {
   try {
     const { deleteForEveryone } = req.query;
@@ -581,7 +520,6 @@ router.delete("/message/:messageId", protect, async (req, res) => {
         .status(404)
         .json({ success: false, message: "Message not found" });
 
-    // Delete for everyone (only sender can do this, within 15 minutes, premium only)
     if (deleteForEveryone === "true") {
       if (!message.sender.equals(req.user._id)) {
         return res
@@ -626,7 +564,6 @@ router.delete("/message/:messageId", protect, async (req, res) => {
       });
     }
 
-    // Delete for self only
     if (
       !message.sender.equals(req.user._id) &&
       !message.receiver.equals(req.user._id)
@@ -646,9 +583,6 @@ router.delete("/message/:messageId", protect, async (req, res) => {
   }
 });
 
-// @route   PATCH /api/chat/message/:messageId
-// @desc    Edit a sent text message (sender only, within 15 minutes)
-// @access  Private
 router.patch("/message/:messageId", protect, async (req, res) => {
   try {
     const { content } = req.body;
@@ -688,9 +622,6 @@ router.patch("/message/:messageId", protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/chat/:matchId/message
-// @desc    Send a message (text, image, audio, location) — used by ChatDetailScreen
-// @access  Private
 router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -766,7 +697,6 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       const msgPayload = { message, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
-      // Tell sender their message reached receiver's device
       io.to(receiver.toString()).emit("chat:message-delivered", {
         messageId: message._id,
         chatId: matchId,
@@ -775,7 +705,6 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       });
     }
 
-    // Push notification for offline receiver
     const onlineUsers = req.app.get("onlineUsers");
     const isReceiverOnline =
       onlineUsers && onlineUsers.has(receiver.toString());
@@ -824,9 +753,6 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
   }
 });
 
-// @route   POST /api/chat/:matchId/location
-// @desc    Send location message
-// @access  Private
 router.post("/:matchId/location", protect, async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -873,9 +799,6 @@ router.post("/:matchId/location", protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/chat/:matchId
-// @desc    Delete a specific chat (soft delete for user)
-// @access  Private
 router.delete("/:matchId", protect, async (req, res) => {
   try {
     const { matchId } = req.params;

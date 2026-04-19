@@ -16,16 +16,12 @@ const {
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
-// Generate JWT token
 const generateToken = (userId) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || "30d",
   });
 };
 
-// @route   POST /api/auth/signup
-// @desc    Register new user and send OTP
-// @access  Public
 router.post(
   "/signup",
   authLimiter,
@@ -34,8 +30,6 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      // Validation — only email and password are required at signup
-      // Name and other profile fields are collected later during profile setup
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -58,10 +52,8 @@ router.post(
         });
       }
 
-      // Check if user exists
       let existingUser = await User.findOne({ email });
 
-      // If user exists and has verified their email, they should login instead
       if (existingUser && existingUser.emailVerified) {
         return res.status(400).json({
           success: false,
@@ -69,18 +61,14 @@ router.post(
         });
       }
 
-      // If user exists but email not verified (abandoned signup), delete and recreate
       if (existingUser && !existingUser.emailVerified) {
         await User.deleteOne({ _id: existingUser._id });
         logger.log("Deleted unverified user for re-registration (user ID redacted).");
       }
 
-      // Generate OTP
       const { generateOTP, sendOTP } = require("../utils/emailService");
       const otpCode = generateOTP();
 
-      // Create user with minimal data - not verified yet
-      // Name/age/gender/etc. will be filled in during profile setup after OTP verification
       const user = await User.create({
         name: "User",
         email,
@@ -96,12 +84,10 @@ router.post(
         verificationOTPExpire: Date.now() + 10 * 60 * 1000, // 10 minutes
       });
 
-      // Send OTP email
       try {
         await sendOTP(email, otpCode);
       } catch (emailError) {
         logger.error("Failed to send OTP email:", emailError);
-        // Continue anyway - user can request resend
       }
 
       res.status(201).json({
@@ -120,9 +106,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/verify-otp
-// @desc    Verify OTP and complete registration
-// @access  Public
 router.post("/verify-otp", otpLimiter, async (req, res) => {
   try {
     const { userId, otp } = req.body;
@@ -146,7 +129,6 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
     user.expireAt = undefined; // Stop auto-deletion once verified
     await user.save();
 
-    // Send welcome email — fire and forget, don't block the response
     sendWelcomeEmail(user.email, user.name || "there").catch((err) =>
       logger.error("Welcome email failed (non-blocking):", err.message),
     );
@@ -176,9 +158,6 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/resend-otp
-// @desc    Resend OTP
-// @access  Public
 router.post("/resend-otp", otpLimiter, async (req, res) => {
   try {
     const { userId } = req.body;
@@ -220,9 +199,6 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/login
-// @desc    Login user
-// @access  Public
 router.post(
   "/login",
   authLimiter,
@@ -231,7 +207,6 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      // Validation
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -239,7 +214,6 @@ router.post(
         });
       }
 
-      // Check user exists
       const user = await User.findOne({ email }).select("+password");
       if (!user) {
         return res.status(401).json({
@@ -248,9 +222,7 @@ router.post(
         });
       }
 
-      // Check if user is banned
       if (user.banned) {
-        // Generate a short-lived appeal token (15 minutes)
         const appealToken = jwt.sign(
           { id: user._id, purpose: "appeal", email: user.email },
           process.env.JWT_SECRET,
@@ -270,7 +242,6 @@ router.post(
         });
       }
 
-      // Check password
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
         return res.status(401).json({
@@ -279,7 +250,6 @@ router.post(
         });
       }
 
-      // Update last active
       user.lastActive = Date.now();
       user.onlineStatus = "online";
       await user.save();
@@ -319,9 +289,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/forgot-password
-// @desc    Request password reset via OTP
-// @access  Public
 router.post(
   "/forgot-password",
   forgotPasswordLimiter,
@@ -333,7 +300,6 @@ router.post(
 
       const user = await User.findOne({ email: normalizedEmail });
 
-      // Always return the same response to prevent email enumeration
       if (!user) {
         return res.json({
           success: true,
@@ -368,9 +334,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/reset-password
-// @desc    Step 3: Reset password with OTP and new password
-// @access  Public
 router.post(
   "/reset-password",
   validate(schemas.auth.resetPassword),
@@ -400,7 +363,6 @@ router.post(
         });
       }
 
-      // Only accept the dedicated password reset OTP — never cross-accept signup OTPs
       const matchesOTP =
         user.resetPasswordOTP && user.resetPasswordOTP === providedOTP;
 
@@ -439,9 +401,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/appeal
-// @desc    Submit a ban appeal
-// @access  Public (via appeal token)
 router.post("/appeal", async (req, res) => {
   try {
     const { appealToken, message } = req.body;
@@ -467,7 +426,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Verify the appeal token
     let decoded;
     try {
       decoded = jwt.verify(appealToken, process.env.JWT_SECRET);
@@ -479,7 +437,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Ensure it's an appeal token
     if (decoded.purpose !== "appeal") {
       return res.status(401).json({
         success: false,
@@ -502,7 +459,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Check if already has pending appeal
     if (user.appeal && user.appeal.status === "pending") {
       return res.status(400).json({
         success: false,
@@ -510,7 +466,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Check 30-day cooldown after rejection ONLY
     if (
       user.appeal &&
       user.appeal.status === "rejected" &&
@@ -527,7 +482,6 @@ router.post("/appeal", async (req, res) => {
       }
     }
 
-    // Note: If appeal was accepted, user can appeal again if banned again later
 
     user.appeal = {
       status: "pending",

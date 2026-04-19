@@ -10,9 +10,6 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
-// @route   GET /api/admin/audit-log
-// @desc    Fetch paginated audit log with filters
-// @access  Private/Admin
 router.get('/', protect, isAdmin, async (req, res) => {
   try {
     const {
@@ -76,9 +73,6 @@ router.get('/', protect, isAdmin, async (req, res) => {
   }
 });
 
-// @route   GET /api/admin/audit-log/stats
-// @desc    Get audit log summary stats for the last 30 days
-// @access  Private/Admin
 router.get('/stats', protect, isAdmin, async (req, res) => {
   try {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Dimensions, Platform, ScrollView, Modal } from "react-native";
 
-// ActionSheetIOS is iOS-only, use dynamic check to avoid webpack warnings on web
 const ActionSheetIOS = Platform.OS === 'ios' ? require('react-native').ActionSheetIOS : null;
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -103,7 +102,6 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
       
-      // Use 'file' as the field name as expected by the backend's catch-all upload field
       formData.append('file', {
         uri,
         name: filename,

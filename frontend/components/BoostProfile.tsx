@@ -193,7 +193,6 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
     }
   };
 
-  // Active boost indicator (compact view)
   if (activeBoost) {
     return (
       <TouchableOpacity
@@ -309,7 +308,6 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
     );
   }
 
-  // Boost button (when no active boost)
   return (
     <>
       <TouchableOpacity
@@ -447,7 +445,6 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
   );
 };
 
-// Boosted indicator badge for discovery cards
 interface BoostedBadgeProps {
   multiplier?: number;
 }
