@@ -404,6 +404,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  voipPushToken: {
+    type: String,
+    default: null,
+  },
   pushNotificationsEnabled: {
     type: Boolean,
     default: true,

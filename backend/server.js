@@ -755,16 +755,40 @@ io.on('connection', (socket) => {
           const callType = callData?.callType || 'voice';
           const notifType = callType === 'video' ? 'video_call' : 'voice_call';
           const targetUser = await User.findById(targetUserId).select(
-            'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+            'pushToken voipPushToken pushNotificationsEnabled muteSettings notificationPreferences'
           );
           const callerName = callerInfo?.name || 'Someone';
+
+          // 1) iOS — VoIP (PushKit) push: wakes the app even when killed and triggers native CallKit UI
+          if (targetUser?.voipPushToken) {
+            try {
+              const { sendVoipPush } = require('./utils/voipPush');
+              await sendVoipPush(targetUser.voipPushToken, {
+                callerId,
+                callerName,
+                callType,
+                callData,
+              });
+            } catch (voipErr) {
+              console.error('[VoIP Push] Error:', voipErr?.message || voipErr);
+            }
+          }
+
+          // 2) Regular Expo push (covers Android and iOS as fallback)
           const { sendSmartNotification } = require('./utils/pushNotifications');
           await sendSmartNotification(
             targetUser,
             {
               title: `Incoming ${callType} call`,
               body: `${callerName} is calling you...`,
-              data: { type: 'call', callerId, callType, callData, callerName, callerPhoto: callerInfo?.photo || '' },
+              data: {
+                type: 'call',
+                callerId,
+                callType,
+                callData,
+                callerName,
+                callerPhoto: callerInfo?.photo || '',
+              },
             },
             notifType,
             callerId,

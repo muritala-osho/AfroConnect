@@ -1,6 +1,20 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **CallKit (iOS) / ConnectionService (Android) — native call UI when app is killed**:
+  - Installed `react-native-callkeep` (wraps CallKit on iOS and ConnectionService on Android) and `react-native-voip-push-notification` (PushKit VoIP token for iOS).
+  - `frontend/services/callkeep.ts` (NEW): Wrapper service — `initCallKeep()`, `displayIncomingCall()`, `endCallKeepCall()`, `reportCallEnded()`, `setCallActive()`, `setupCallKeepListeners()`, `removeCallKeepListeners()`. Calls `RNCallKeep.displayIncomingCall()` so the OS-level native incoming call screen appears regardless of app state.
+  - `frontend/services/voipPush.ts` (NEW): Registers for iOS PushKit VoIP push token and handles `notification` events when the app is killed — immediately calls `displayIncomingCall()` to show CallKit UI before any JS UI renders.
+  - `frontend/components/IncomingCallHandler.tsx` (UPDATED): Now calls `displayIncomingCall()` on every incoming call for both foreground and background. Sets up `setupCallKeepListeners` to handle native Accept/Decline button presses. In-app modal and native CallKit screen are shown simultaneously — native accept/decline routes through socket then navigates to the call screen.
+  - `frontend/App.tsx` (UPDATED): `initCallKeep('AfroConnect')` called at module level (before any auth). `registerVoipPushNotifications()` called after user authenticates; the received VoIP token is POSTed to `/api/notifications/register-voip-token`.
+  - `frontend/index.js` (UPDATED): Registers a `BackgroundCallTask` headless task on Android — triggered by native background FCM data messages to call `displayIncomingCall` and set `global.__pendingVoipCall` before the React tree mounts.
+  - `frontend/app.json` (UPDATED): iOS — added `backgroundModes: ['voip','audio','fetch','remote-notification']`, `UIBackgroundModes`, CallKit entitlement. Android — added `MANAGE_OWN_CALLS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`, `CALL_PHONE`, `READ_PHONE_STATE`, `READ_PHONE_NUMBERS`, `BIND_TELECOM_CONNECTION_SERVICE` permissions.
+  - `frontend/plugins/withCallKeep.js` (NEW): Expo config plugin that injects `RNCallKeepConnectionService` into AndroidManifest.xml and adds the `android.hardware.telephony` `<uses-feature>`.
+  - `backend/utils/voipPush.js` (NEW): Sends APNs VoIP pushes via `node-apn`. Reads `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`, `APNS_BUNDLE_ID` env vars; logs a warning and skips gracefully if unconfigured.
+  - `backend/models/User.js` (UPDATED): Added `voipPushToken` field.
+  - `backend/routes/notifications.js` (UPDATED): Added `POST /api/notifications/register-voip-token` endpoint.
+  - `backend/server.js` (UPDATED): On `call:initiate`, if target user has a `voipPushToken` the server now sends a VoIP push (wakes killed iOS app → triggers CallKit UI) before the regular Expo push.
+  - **To enable iOS VoIP push for killed-app ringing**: set `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (contents of your .p8 key), and optionally `APNS_BUNDLE_ID` in environment variables. The app otherwise functions normally via the Expo notification fallback.
 - **Admin support and moderation fixes**:
   - `admin-dashboard/App.tsx` and `admin-dashboard/constants.tsx`: Support agents no longer land on the admin-only dashboard or user search; they are routed to "My Tickets" to avoid misleading backend/API errors after successful support login.
   - `backend/models/Report.js`, `backend/routes/reports.js`, and `backend/routes/admin.js`: Content Moderation is now end-to-end wired to real report records with `contentType`, `contentId`, and `contentUrl`. Admins can approve/reject reported profile photos, stories, and chat image messages; reject removes the real source content and resolves the report.

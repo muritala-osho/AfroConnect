@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import { StyleSheet, View, Text, TouchableOpacity, AppState } from "react-native";
+import { StyleSheet, View, Text, TouchableOpacity, AppState, Platform } from "react-native";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -8,6 +8,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { Ionicons } from "@expo/vector-icons";
+import { initCallKeep } from "@/services/callkeep";
+import { registerVoipPushNotifications } from "@/services/voipPush";
 
 import RootNavigator from "@/navigation/RootNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -29,6 +31,12 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 SplashScreen.preventAutoHideAsync();
+
+// Initialize CallKit (iOS) / ConnectionService (Android) as early as possible
+// so the native call infrastructure is ready before the first call arrives.
+if (Platform.OS !== 'web') {
+  initCallKeep('AfroConnect');
+}
 
 export const navigationRef = createNavigationContainerRef<any>();
 
@@ -109,6 +117,28 @@ function AppContent() {
         // Register for push notifications — pass token directly so we
         // don't rely on AsyncStorage timing after a fresh login
         await registerForPushNotificationsAsync(token ?? undefined);
+
+        // Register VoIP push token (iOS only) for native CallKit incoming call
+        // screen even when the app is completely killed.
+        if (Platform.OS === 'ios') {
+          registerVoipPushNotifications(async (voipToken) => {
+            try {
+              const authToken = token || (await AsyncStorage.getItem('auth_token'));
+              if (!authToken) return;
+              await fetch(`${getApiBaseUrl()}/api/notifications/register-voip-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ voipToken }),
+              });
+              console.log('[App] VoIP push token registered with backend.');
+            } catch (err) {
+              console.warn('[App] Failed to register VoIP token:', err);
+            }
+          });
+        }
 
         // Handle a notification that launched the app from a killed state
         const lastResponse = await Notifications.getLastNotificationResponseAsync();

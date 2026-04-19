@@ -10,7 +10,14 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.afroconnect.app"
+      "bundleIdentifier": "com.afroconnect.app",
+      "backgroundModes": ["voip", "audio", "fetch", "remote-notification"],
+      "infoPlist": {
+        "UIBackgroundModes": ["voip", "audio", "fetch", "remote-notification"]
+      },
+      "entitlements": {
+        "com.apple.developer.telephony.call-capability": "com.apple.developer.telephony.call-capability"
+      }
     },
     "android": {
       "package": "com.afroconnect.app",
@@ -35,7 +42,14 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE"
       ]
     },
     "web": {
@@ -43,6 +57,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withCallKeep",
       [
         "expo-splash-screen",
         {

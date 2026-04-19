@@ -57,6 +57,29 @@ router.post('/register-token', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/notifications/register-voip-token
+// @desc    Register iOS VoIP (PushKit) push token for native CallKit support
+// @access  Private
+router.post('/register-voip-token', protect, async (req, res) => {
+  const userId = req.user?._id;
+  console.log(`[Notifications] register-voip-token — userId: ${userId}`);
+
+  try {
+    const { voipToken } = req.body;
+
+    if (!voipToken) {
+      return res.status(400).json({ success: false, message: 'voipToken is required' });
+    }
+
+    await User.findByIdAndUpdate(userId, { voipPushToken: voipToken });
+    console.log(`[Notifications] ✅ VoIP token stored for user ${userId}: ${voipToken.slice(0, 20)}…`);
+    res.json({ success: true, message: 'VoIP token registered' });
+  } catch (error) {
+    console.error(`[Notifications] register-voip-token error for user ${userId}:`, error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @route   POST /api/notifications/send
 // @desc    Send push notification to a specific user (admin/system use)
 // @access  Private
