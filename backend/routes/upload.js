@@ -94,7 +94,13 @@ const upload = multer({
 });
 
 const multiUpload = (req, res, next) => {
-  upload.any()(req, res, (err) => {
+  upload.fields([
+    { name: 'photo', maxCount: 1 },
+    { name: 'image', maxCount: 1 },
+    { name: 'video', maxCount: 1 },
+    { name: 'audio', maxCount: 1 },
+    { name: 'file',  maxCount: 1 },
+  ])(req, res, (err) => {
     if (err) {
       if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
         console.warn('Upload request aborted by client (connection dropped)');
@@ -106,20 +112,17 @@ const multiUpload = (req, res, next) => {
       console.error('Multer error:', err);
       return res.status(400).json({ success: false, message: err.message });
     }
-    
-    if (req.files && req.files.length > 0) {
-      const photoFile = req.files.find(f => f.fieldname === 'photo' || f.fieldname === 'file');
-      const imageFile = req.files.find(f => f.fieldname === 'image');
-      const videoFile = req.files.find(f => f.fieldname === 'video');
-      const audioFile = req.files.find(f => f.fieldname === 'audio');
-      
-      if (photoFile) req.file = photoFile;
-      else if (imageFile) req.file = imageFile;
-      else if (videoFile) req.file = videoFile;
-      else if (audioFile) req.file = audioFile;
-      else req.file = req.files[0];
+
+    if (req.files && typeof req.files === 'object') {
+      req.file =
+        req.files.photo?.[0] ||
+        req.files.image?.[0] ||
+        req.files.video?.[0] ||
+        req.files.audio?.[0] ||
+        req.files.file?.[0] ||
+        null;
     }
-    
+
     next();
   });
 };

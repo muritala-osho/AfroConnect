@@ -12,7 +12,7 @@
  *   APNS_BUNDLE_ID — iOS bundle identifier (default: com.afroconnect.app)
  */
 
-const apn = require('node-apn');
+const apn = require('@parse/node-apn');
 
 let _provider = null;
 
