@@ -92,6 +92,9 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ...lifestyleUpdate
           };
         } else if (field === 'privacySettings' && updates.privacySettings) {
+          if (updates.privacySettings.incognitoMode === true && !user.premium?.isActive) {
+            return res.status(403).json({ success: false, message: 'Incognito mode is a premium feature' });
+          }
           user.privacySettings = {
             ...(user.privacySettings || {}),
             ...updates.privacySettings
@@ -558,14 +561,17 @@ router.get('/:id', protect, async (req, res) => {
     }
 
     if (req.user._id.toString() !== req.params.id) {
-      await User.findByIdAndUpdate(req.params.id, {
-        $push: {
-          profileViews: {
-            user: req.user._id,
-            viewedAt: new Date()
+      const viewerIncognito = req.user.privacySettings?.incognitoMode === true;
+      if (!viewerIncognito) {
+        await User.findByIdAndUpdate(req.params.id, {
+          $push: {
+            profileViews: {
+              user: req.user._id,
+              viewedAt: new Date()
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     const isPremium = req.user.premium?.isActive;
