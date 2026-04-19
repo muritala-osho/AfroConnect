@@ -11,7 +11,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { getPhotoSource } from "@/utils/photos";
 
@@ -282,6 +282,40 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
     } else {
       navigation.goBack();
     }
+  };
+
+  const handleQuickReport = async () => {
+    const currentProfile = potentialMatches[currentIndex];
+    if (!currentProfile || !token) return;
+    Alert.alert(
+      'Report Profile',
+      `Report ${currentProfile.name}'s profile?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post('/reports', {
+                reportedUserId: currentProfile.id,
+                reason: 'inappropriate',
+                contentType: 'user',
+                description: 'Reported from discovery',
+              }, token);
+              Alert.alert('Reported', 'Thank you. We will review this profile.');
+              if (currentIndex < potentialMatches.length - 1) {
+                setCurrentIndex(currentIndex + 1);
+              } else {
+                loadPotentialMatches();
+              }
+            } catch {
+              Alert.alert('Error', 'Could not submit report. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleRewind = async () => {

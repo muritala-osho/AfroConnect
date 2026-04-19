@@ -420,6 +420,37 @@ export default function SuccessStoriesScreen() {
     );
   };
 
+  const handleReportStory = (item: SuccessStory) => {
+    Alert.alert(
+      'Report Story',
+      'Is this story inappropriate or misleading?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const reportedUserId = item.couple?.[0]?._id;
+              if (!reportedUserId || !token) return;
+              await post('/reports', {
+                reportedUserId,
+                reason: 'inappropriate',
+                contentType: 'success_story',
+                contentId: item._id,
+                contentPreview: item.title,
+                description: 'Success story report',
+              }, token);
+              Alert.alert('Reported', 'Thank you. We will review this story.');
+            } catch {
+              Alert.alert('Error', 'Could not submit report. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -751,6 +782,15 @@ export default function SuccessStoriesScreen() {
               onPress={() => handleDeleteStory(item._id)}
             >
               <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+            </TouchableOpacity>
+          )}
+          {!item.isOwn && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleReportStory(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="flag-outline" size={17} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>

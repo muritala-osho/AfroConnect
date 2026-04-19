@@ -42,7 +42,7 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    let normalizedContentType = ['profile_photo', 'story', 'message_image', 'user'].includes(contentType)
+    let normalizedContentType = ['profile_photo', 'story', 'message_image', 'user', 'comment', 'voice_bio', 'success_story'].includes(contentType)
       ? contentType
       : 'user';
     let normalizedContentId = contentId ? String(contentId) : undefined;

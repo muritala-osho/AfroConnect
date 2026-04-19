@@ -89,8 +89,39 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
     }
   };
 
+  const handleReportComment = (item: Comment) => {
+    if (!token) return;
+    Alert.alert(
+      'Report Comment',
+      `Report this comment by ${item.authorName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await post('/reports', {
+                reportedUserId: item.authorId,
+                reason: 'inappropriate',
+                contentType: 'comment',
+                contentId: item._id,
+                contentPreview: item.text.slice(0, 100),
+                description: `Comment on profile`,
+              }, token);
+              Alert.alert('Reported', 'Thank you. We will review this comment.');
+            } catch {
+              Alert.alert('Error', 'Could not submit report. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderCommentItem = ({ item }: { item: Comment }) => {
     const photoSource = getPhotoSource(item.authorPhoto);
+    const isOwnComment = currentUser && item.authorId === (currentUser as any)._id;
     return (
       <View style={[styles.commentCard, { backgroundColor: theme.surface }]}>
         <View style={styles.commentHeader}>
@@ -104,6 +135,15 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
               {new Date(item.createdAt).toLocaleDateString()}
             </Text>
           </View>
+          {!isOwnComment && (
+            <TouchableOpacity
+              onPress={() => handleReportComment(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.flagButton}
+            >
+              <Feather name="flag" size={14} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={[styles.commentText, { color: theme.text }]}>{item.text}</Text>
       </View>
@@ -195,6 +235,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     marginBottom: 8,
+  },
+  flagButton: {
+    marginLeft: 'auto',
+    padding: 4,
   },
   authorPhoto: {
     width: 32,

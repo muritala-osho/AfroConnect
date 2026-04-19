@@ -700,6 +700,36 @@ export default function ProfileDetailScreen() {
                   voiceBioUrl={(user as any).voiceBio.url}
                   duration={(user as any).voiceBio.duration || 0}
                   isOwn={false}
+                  onReport={() => {
+                    Alert.alert(
+                      'Report Voice Bio',
+                      'Report this voice bio as inappropriate?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Report',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              if (token) {
+                                await post('/reports', {
+                                  reportedUserId: userId,
+                                  reason: 'inappropriate',
+                                  contentType: 'voice_bio',
+                                  contentId: userId,
+                                  contentUrl: (user as any).voiceBio.url,
+                                  description: 'Voice bio report',
+                                }, token);
+                              }
+                              Alert.alert('Reported', 'Thank you. We will review this voice bio.');
+                            } catch {
+                              Alert.alert('Error', 'Could not submit report.');
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
                 />
               </View>
             )}

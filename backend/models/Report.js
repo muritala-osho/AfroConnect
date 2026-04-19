@@ -29,7 +29,7 @@ const reportSchema = new mongoose.Schema({
   },
   contentType: {
     type: String,
-    enum: ['user', 'profile_photo', 'story', 'message_image'],
+    enum: ['user', 'profile_photo', 'story', 'message_image', 'comment', 'voice_bio', 'success_story'],
     default: 'user'
   },
   contentId: {
