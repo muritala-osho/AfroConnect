@@ -12,17 +12,21 @@ const redis = require('../utils/redis');
 // @access  Private
 router.get('/me', protect, async (req, res) => {
   try {
-    // Ensure the user has verified their email before returning profile
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
+    const cacheKey = `profile:me:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, user: cached.user, needsVerification: cached.needsVerification, profileIncomplete: cached.profileIncomplete, fromCache: true });
+
     const user = await User.findById(req.user._id);
-    res.json({ 
-      success: true, 
+    const payload = {
       user,
       needsVerification: !user.verified,
       profileIncomplete: !user.photos || user.photos.length === 0
-    });
+    };
+    await redis.set(cacheKey, payload, 60);
+    res.json({ success: true, ...payload });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -31,7 +35,7 @@ router.get('/me', protect, async (req, res) => {
 // @route   PUT /api/users/me
 // @desc    Update current user profile
 // @access  Private
-router.put('/me', protect, async (req, res) => {
+router.put('/me', protect, require('../middleware/validate')(require('../validators/schemas').updateProfile), async (req, res) => {
   try {
     // Ensure the user has verified their email before allowing profile updates
     if (!req.user.emailVerified) {
@@ -42,9 +46,10 @@ router.put('/me', protect, async (req, res) => {
     const allowedUpdates = [
       'name', 'age', 'gender', 'bio', 'interests', 'photos', 'lookingFor', 
       'preferences', 'location', 'favoriteSong', 'zodiacSign', 'relationshipGoal',
-      'jobTitle', 'education', 'livingIn', 'lifestyle', 'ethnicity', 
+      'jobTitle', 'education', 'school', 'livingIn', 'lifestyle', 'ethnicity', 
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
-      'pets', 'relationshipStatus'
+      'pets', 'relationshipStatus',
+      'height', 'countryOfOrigin', 'tribe', 'languages', 'diasporaGeneration', 'language',
     ];
 
     const user = await User.findById(req.user._id);
@@ -64,14 +69,14 @@ router.put('/me', protect, async (req, res) => {
         else if (field === 'preferences') {
           // Merge preferences instead of replacing
           const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language'];
-          Object.keys(updates.preferences).forEach(prefKey => {
-            if (!allowedPrefKeys.includes(prefKey)) return;
+          allowedPrefKeys.forEach(prefKey => {
+            if (updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
               user.preferences.ageRange = {
                 ...(user.preferences.ageRange || {}),
                 ...updates.preferences.ageRange
               };
-            } else if (updates.preferences[prefKey] !== undefined) {
+            } else {
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
           });
@@ -94,6 +99,8 @@ router.put('/me', protect, async (req, res) => {
     });
 
     await user.save();
+    // Invalidate own profile cache on update
+    await redis.del(`profile:me:${req.user._id}`);
 
     res.json({ 
       success: true, 
@@ -282,7 +289,7 @@ router.get('/nearby', protect, async (req, res) => {
 
     if (isGlobal) {
       if (countryFilter) {
-        query['location.country'] = { $regex: new RegExp(countryFilter, 'i') };
+        query['location.country'] = { $regex: new RegExp(countryFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       }
     } else {
       const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
@@ -405,6 +412,10 @@ router.get('/profile-views', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Who viewed me is a Premium feature' });
     }
 
+    const cacheKey = `profileviews:${req.user._id}`;
+    const cachedViews = await redis.get(cacheKey);
+    if (cachedViews) return res.json({ success: true, views: cachedViews, fromCache: true });
+
     const user = await User.findById(req.user._id)
       .populate('profileViews.user', 'name username photos age gender');
     
@@ -419,6 +430,7 @@ router.get('/profile-views', protect, async (req, res) => {
       }
     });
 
+    await redis.set(cacheKey, uniqueViews, 60);
     res.json({
       success: true,
       views: uniqueViews
@@ -432,6 +444,9 @@ router.get('/profile-views', protect, async (req, res) => {
 router.get('/who-viewed-me', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
+    const cacheKey = `whoviewedme:${req.user._id}:${isPremium ? 'premium' : 'free'}`;
+    const cachedWVM = await redis.get(cacheKey);
+    if (cachedWVM) return res.json({ success: true, ...cachedWVM, fromCache: true });
 
     const user = await User.findById(req.user._id)
       .populate('profileViews.user', 'name username photos age gender verified');
@@ -485,8 +500,7 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       createdAt: { $gte: oneWeekAgo }
     });
 
-    res.json({
-      success: true,
+    const wvmPayload = {
       views: processedViews,
       isPremium,
       totalCount: processedViews.length,
@@ -494,7 +508,9 @@ router.get('/who-viewed-me', protect, async (req, res) => {
         viewsThisWeek: weeklyViewCount,
         almostLikedYou: almostLiked
       }
-    });
+    };
+    await redis.set(cacheKey, wvmPayload, 60);
+    res.json({ success: true, ...wvmPayload });
   } catch (error) {
     console.error('Who viewed me error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -506,9 +522,15 @@ router.get('/who-viewed-me', protect, async (req, res) => {
 // @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
-    // Ensure the user has verified their email before fetching other users
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
+    }
+
+    const isOwnProfileCheck = req.user._id.toString() === req.params.id;
+    const cacheKey = `profile:${req.params.id}:viewer:${req.user._id}`;
+    if (!isOwnProfileCheck) {
+      const cachedProfile = await redis.get(cacheKey);
+      if (cachedProfile) return res.json({ success: true, user: cachedProfile, fromCache: true });
     }
 
     const user = await User.findById(req.params.id);
@@ -563,6 +585,9 @@ router.get('/:id', protect, async (req, res) => {
       return false;
     });
 
+    if (!isOwnProfileCheck) {
+      await redis.set(cacheKey, otherUserInfo, 120);
+    }
     res.json({ success: true, user: otherUserInfo });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });

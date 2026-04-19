@@ -11,6 +11,7 @@ import AdminProfile from './views/AdminProfile';
 import Broadcasts from './views/Broadcasts';
 import ContentModeration from './views/ContentModeration';
 import SupportDesk from './views/SupportDesk';
+import AgentDashboard from './views/AgentDashboard';
 import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
 import { AuthState, AdminRole } from './types';
@@ -18,7 +19,7 @@ import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'appeals', 'churn'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -133,23 +134,27 @@ const App: React.FC = () => {
     setLoginError('');
     try {
       const data = await adminApi.login(loginEmail, loginPassword);
-      if (!data.user?.isAdmin) {
+      const isAdmin = data.user?.isAdmin;
+      const isAgent = data.user?.isSupportAgent;
+      if (!isAdmin && !isAgent) {
         clearToken();
-        setLoginError('Access denied. Admin privileges required.');
+        setLoginError('Access denied. Staff privileges required.');
         setLoginLoading(false);
         return;
       }
+      const role = isAdmin ? AdminRole.SUPER_ADMIN : AdminRole.SUPPORT;
       setLoginAttempts(0);
       setAuth({
         isAuthenticated: true,
         user: {
           name: data.user.name,
-          role: AdminRole.SUPER_ADMIN,
+          role,
           email: data.user.email,
           avatar: data.user.photos?.[0] || undefined,
         },
       });
-      showToast('Access authorized. Welcome back.', 'success');
+      if (!isAdmin && isAgent) setActiveTab('agent');
+      showToast(`Access authorized. Welcome back${isAdmin ? '' : ', ' + data.user.name}.`, 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed. Please try again.';
       const next = loginAttempts + 1;
@@ -189,7 +194,7 @@ const App: React.FC = () => {
               <img src="/afroconnect-logo.png" alt="AfroConnect" className="w-full h-full object-cover" />
             </div>
             <h2 className="text-3xl font-black tracking-tight">AfroConnect</h2>
-            <p className="text-teal-100 text-[10px] font-black uppercase tracking-[0.2em] mt-2 opacity-80">Admin Command Center</p>
+            <p className="text-teal-100 text-[10px] font-black uppercase tracking-[0.2em] mt-2 opacity-80">Staff Command Center</p>
           </div>
 
           <form className="p-10 space-y-8" onSubmit={handleLogin}>
@@ -310,6 +315,7 @@ const App: React.FC = () => {
             {activeTab === 'reports'      && canAccessTab('reports')      && <ReportsQueue />}
             {activeTab === 'content'      && canAccessTab('content')      && <ContentModeration showToast={showToast} />}
             {activeTab === 'support'      && canAccessTab('support')      && <SupportDesk showToast={showToast} />}
+            {activeTab === 'agent'        && canAccessTab('agent')        && <AgentDashboard showToast={showToast} />}
             {activeTab === 'settings'     && canAccessTab('settings')     && <SystemSettings showToast={showToast} />}
             {activeTab === 'verification' && canAccessTab('verification') && <IDVerification />}
             {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}

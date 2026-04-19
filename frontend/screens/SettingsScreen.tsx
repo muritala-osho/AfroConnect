@@ -549,85 +549,91 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         </Pressable>
       </Modal>
 
-      <Modal visible={contactModalVisible} transparent animationType="slide">
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
-          style={{ flex: 1 }}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      <Modal visible={contactModalVisible} transparent animationType="slide" onRequestClose={() => setContactModalVisible(false)}>
+        <KeyboardAvoidingView
+          behavior="padding"
+          style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}
         >
-          <ScrollView 
-            contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Pressable style={[styles.modalBody, { backgroundColor: theme.surface, width: '90%' }]} onPress={(e) => e.stopPropagation()}>
-              <ThemedText style={styles.modalTitle}>Contact Us</ThemedText>
-              <ThemedText style={{ color: theme.textSecondary, marginBottom: 15, textAlign: 'center' }}>
-                How can we help you today?
-              </ThemedText>
-              <TextInput
-                style={{ 
-                  height: 120, 
-                  backgroundColor: theme.background, 
-                  color: theme.text, 
-                  borderRadius: 12, 
-                  paddingHorizontal: 15,
-                  paddingTop: 15,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                  marginBottom: 20,
-                  textAlignVertical: 'top'
-                }}
-                placeholder="Type your message here..."
-                placeholderTextColor={theme.textSecondary}
-                multiline
-                value={contactMessage}
-                onChangeText={setContactMessage}
-                onFocus={() => {}}
-              />
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <Pressable 
-                  style={{ flex: 1, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.border }}
-                  onPress={() => setContactModalVisible(false)}
-                >
-                  <ThemedText style={{ fontWeight: '600' }}>Cancel</ThemedText>
-                </Pressable>
-                <Pressable 
-                  style={{ flex: 1, height: 50, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.primary }}
-                  onPress={async () => {
-                    if (contactMessage.trim()) {
-                      try {
-                        const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
-                          method: 'POST',
-                          headers: { 
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                          },
-                          body: JSON.stringify({
-                            name: user?.name || 'User',
-                            email: user?.email || '',
-                            message: contactMessage.trim(),
-                            userId: user?.id
-                          })
-                        });
-                        const data = await response.json();
-                        if (data.success) {
-                          Alert.alert("Success", "Your message has been sent!");
-                          setContactMessage("");
-                          setContactModalVisible(false);
-                        } else {
-                          Alert.alert("Error", data.message || "Failed to send message");
-                        }
-                      } catch (e) {
-                        Alert.alert("Error", "Network error. Please try again.");
+          <Pressable style={{ flex: 1 }} onPress={() => setContactModalVisible(false)} />
+          <View style={[styles.contactSheet, { backgroundColor: theme.surface }]}>
+            <View style={styles.contactSheetHandle} />
+            <View style={styles.contactSheetHeader}>
+              <Feather name="message-circle" size={22} color={theme.primary} />
+              <ThemedText style={[styles.modalTitle, { marginBottom: 0 }]}>Contact Support</ThemedText>
+              <Pressable onPress={() => setContactModalVisible(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ThemedText style={{ color: theme.textSecondary, marginBottom: 14, fontSize: 14 }}>
+              How can we help you today? We'll get back to you soon.
+            </ThemedText>
+            <TextInput
+              style={{
+                minHeight: 110,
+                maxHeight: 180,
+                backgroundColor: theme.background,
+                color: theme.text,
+                borderRadius: 14,
+                paddingHorizontal: 16,
+                paddingTop: 14,
+                paddingBottom: 14,
+                borderWidth: 1.5,
+                borderColor: contactMessage.length > 0 ? theme.primary : theme.border,
+                marginBottom: 16,
+                textAlignVertical: 'top',
+                fontSize: 15,
+                lineHeight: 22,
+              }}
+              placeholder="Describe your issue or question..."
+              placeholderTextColor={theme.textSecondary}
+              multiline
+              value={contactMessage}
+              onChangeText={setContactMessage}
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={{ flex: 1, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }}
+                onPress={() => setContactModalVisible(false)}
+              >
+                <ThemedText style={{ fontWeight: '600', color: theme.text }}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                style={{ flex: 2, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: contactMessage.trim() ? theme.primary : theme.border, flexDirection: 'row', gap: 8 }}
+                onPress={async () => {
+                  if (contactMessage.trim()) {
+                    try {
+                      const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                          name: user?.name || 'User',
+                          email: user?.email || '',
+                          message: contactMessage.trim(),
+                          userId: user?.id
+                        })
+                      });
+                      const data = await response.json();
+                      if (data.success) {
+                        Alert.alert("Message Sent", "We'll get back to you as soon as possible!");
+                        setContactMessage("");
+                        setContactModalVisible(false);
+                      } else {
+                        Alert.alert("Error", data.message || "Failed to send message");
                       }
+                    } catch (e) {
+                      Alert.alert("Error", "Network error. Please try again.");
                     }
-                  }}
-                >
-                  <ThemedText style={{ color: '#FFF', fontWeight: '600' }}>Send</ThemedText>
-                </Pressable>
-              </View>
-            </Pressable>
-          </ScrollView>
+                  }
+                }}
+              >
+                <Feather name="send" size={16} color="#FFF" />
+                <ThemedText style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Send Message</ThemedText>
+              </Pressable>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -677,5 +683,25 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 20, textAlign: 'center' },
   optionItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15 },
-  optionLabel: { flex: 1, fontSize: 16 }
+  optionLabel: { flex: 1, fontSize: 16 },
+  contactSheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+  },
+  contactSheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(128,128,128,0.3)',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  contactSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
 });

@@ -1,8 +1,22 @@
-import React, { useState, useEffect } from "react";
-import { View, StyleSheet, TextInput, Pressable, Alert, ActivityIndicator, Dimensions, Platform, Modal, StatusBar, SafeAreaView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  View,
+  StyleSheet,
+  TextInput,
+  Pressable,
+  Alert,
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  Modal,
+  StatusBar,
+  SafeAreaView,
+  Animated,
+  ScrollView,
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const ActionSheetIOS = Platform.OS === 'ios' ? require('react-native').ActionSheetIOS : null;
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -11,64 +25,202 @@ import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareS
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { Spacing, BorderRadius, Typography } from "@/constants/theme";
+import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
 
-type ProfileSetupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "ProfileSetup">;
+const ActionSheetIOS = Platform.OS === "ios" ? require("react-native").ActionSheetIOS : null;
+const { width } = Dimensions.get("window");
 
+type ProfileSetupScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "ProfileSetup">;
 interface ProfileSetupScreenProps {
   navigation: ProfileSetupScreenNavigationProp;
 }
 
-type PhotoPrivacy = 'public' | 'friends' | 'private';
-
+type PhotoPrivacy = "public" | "friends" | "private";
 interface PhotoItem {
   url: string;
   publicId?: string;
   privacy: PhotoPrivacy;
 }
-
 type PhotoSlot = PhotoItem | null;
 
 const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
-const INTERESTS_OPTIONS = [
-  "Music", "Travel", "Food", "Sports", "Art", "Movies", "Reading", "Gaming",
-  "Fitness", "Photography", "Dancing", "Cooking", "Fashion", "Technology"
+const INTEREST_CATEGORIES = [
+  {
+    category: "🎵 Music & Arts",
+    color: "#FF6B6B",
+    items: [
+      { label: "🎵 Music", value: "Music" },
+      { label: "🎸 Guitar", value: "Guitar" },
+      { label: "💃 Dancing", value: "Dancing" },
+      { label: "🎨 Art", value: "Art" },
+      { label: "🎭 Theatre", value: "Theatre" },
+      { label: "🎬 Movies", value: "Movies" },
+    ],
+  },
+  {
+    category: "⚽ Sports & Fitness",
+    color: "#4ECDC4",
+    items: [
+      { label: "⚽ Sports", value: "Sports" },
+      { label: "💪 Fitness", value: "Fitness" },
+      { label: "🏄 Surfing", value: "Surfing" },
+      { label: "🏊 Swimming", value: "Swimming" },
+      { label: "🧘 Yoga", value: "Yoga" },
+      { label: "🏃 Running", value: "Running" },
+    ],
+  },
+  {
+    category: "✈️ Lifestyle & Social",
+    color: "#F59E0B",
+    items: [
+      { label: "✈️ Travel", value: "Travel" },
+      { label: "🍕 Food", value: "Food" },
+      { label: "👨‍🍳 Cooking", value: "Cooking" },
+      { label: "👗 Fashion", value: "Fashion" },
+      { label: "🌿 Nature", value: "Nature" },
+      { label: "🐾 Pets", value: "Pets" },
+    ],
+  },
+  {
+    category: "💻 Creative & Tech",
+    color: "#74B9FF",
+    items: [
+      { label: "💻 Technology", value: "Technology" },
+      { label: "📸 Photography", value: "Photography" },
+      { label: "📚 Reading", value: "Reading" },
+      { label: "🎮 Gaming", value: "Gaming" },
+      { label: "🎙️ Podcasts", value: "Podcasts" },
+      { label: "✍️ Writing", value: "Writing" },
+    ],
+  },
 ];
+
+const INTERESTS_OPTIONS = INTEREST_CATEGORIES.flatMap((cat) =>
+  cat.items.map((item) => ({ ...item, color: cat.color }))
+);
 
 const ZODIAC_SIGNS = [
-  { value: 'aries', label: 'Aries' },
-  { value: 'taurus', label: 'Taurus' },
-  { value: 'gemini', label: 'Gemini' },
-  { value: 'cancer', label: 'Cancer' },
-  { value: 'leo', label: 'Leo' },
-  { value: 'virgo', label: 'Virgo' },
-  { value: 'libra', label: 'Libra' },
-  { value: 'scorpio', label: 'Scorpio' },
-  { value: 'sagittarius', label: 'Sagittarius' },
-  { value: 'capricorn', label: 'Capricorn' },
-  { value: 'aquarius', label: 'Aquarius' },
-  { value: 'pisces', label: 'Pisces' },
+  { value: "aries", label: "♈ Aries" },
+  { value: "taurus", label: "♉ Taurus" },
+  { value: "gemini", label: "♊ Gemini" },
+  { value: "cancer", label: "♋ Cancer" },
+  { value: "leo", label: "♌ Leo" },
+  { value: "virgo", label: "♍ Virgo" },
+  { value: "libra", label: "♎ Libra" },
+  { value: "scorpio", label: "♏ Scorpio" },
+  { value: "sagittarius", label: "♐ Sagittarius" },
+  { value: "capricorn", label: "♑ Capricorn" },
+  { value: "aquarius", label: "♒ Aquarius" },
+  { value: "pisces", label: "♓ Pisces" },
 ];
 
-const EDUCATION_OPTIONS = [
-  { value: 'high_school', label: 'High School' },
-  { value: 'some_college', label: 'Some College' },
-  { value: 'bachelors', label: "Bachelor's Degree" },
-  { value: 'masters', label: "Master's Degree" },
-  { value: 'doctorate', label: 'Doctorate' },
-  { value: 'trade_school', label: 'Trade School' },
-  { value: 'other', label: 'Other' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
 
 const PRIVACY_OPTIONS: { value: PhotoPrivacy; label: string; icon: string; description: string }[] = [
-  { value: 'public', label: 'Public', icon: 'globe', description: 'Everyone can see' },
-  { value: 'friends', label: 'Friends Only', icon: 'users', description: 'Only matches can see' },
-  { value: 'private', label: 'Private', icon: 'lock', description: 'Only you can see' },
+  { value: "public", label: "Public", icon: "globe", description: "Everyone can see" },
+  { value: "friends", label: "Friends Only", icon: "users", description: "Only matches can see" },
+  { value: "private", label: "Private", icon: "lock", description: "Only you can see" },
 ];
+
+const LOOKING_FOR_OPTIONS = [
+  { label: "💍 Relationship", value: "Relationship", desc: "Serious & long-term", color: "#FF6B6B" },
+  { label: "👯 Friendship", value: "Friendship", desc: "Platonic connection", color: "#4ECDC4" },
+  { label: "😊 Casual", value: "Casual", desc: "Keeping it light", color: "#FFE66D" },
+  { label: "🤷 Not sure", value: "Not sure", desc: "Open to anything", color: "#A8E6CF" },
+];
+
+// Step order: Photos → Basic Info → Interests → Bio → Preferences
+const STEP_META = [
+  { icon: "camera", title: "Your Photos", subtitle: "Add at least 4 great photos", color: "#10B981", step: 1 },
+  { icon: "user", title: "About You", subtitle: "Let's get to know you", color: "#059669", step: 2 },
+  { icon: "heart", title: "Your Vibe", subtitle: "What are you into?", color: "#0D9488", step: 3 },
+  { icon: "edit-3", title: "Your Story", subtitle: "Write something that shows your personality", color: "#10B981", step: 4 },
+  { icon: "sliders", title: "Preferences", subtitle: "Who would you like to meet?", color: "#059669", step: 5 },
+];
+
+const RELIGION_OPTIONS = [
+  { value: "christian", label: "Christian" },
+  { value: "muslim", label: "Muslim" },
+  { value: "traditional", label: "Traditional" },
+  { value: "atheist", label: "Atheist" },
+  { value: "agnostic", label: "Agnostic" },
+  { value: "spiritual", label: "Spiritual" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+
+const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
+const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
+const BIG_SLOT_HEIGHT = BIG_SLOT_WIDTH * 1.1;
+
+// ─── Animated Interest Chip ────────────────────────────────────────────────
+function InterestChip({
+  item,
+  selected,
+  onPress,
+}: {
+  item: { label: string; value: string; color: string };
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.spring(scale, {
+        toValue: selected ? 0.88 : 1.18,
+        useNativeDriver: true,
+        friction: 3,
+        tension: 400,
+      }),
+      Animated.spring(scale, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 4,
+        tension: 200,
+      }),
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Animated.View
+        style={[
+          {
+            paddingHorizontal: 14,
+            paddingVertical: 9,
+            borderRadius: 999,
+            borderWidth: 1.5,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            transform: [{ scale }],
+          },
+          selected
+            ? { backgroundColor: item.color, borderColor: item.color }
+            : { backgroundColor: `${item.color}14`, borderColor: `${item.color}50` },
+        ]}
+      >
+        {selected && (
+          <Feather name="check" size={11} color="#fff" />
+        )}
+        <ThemedText
+          style={{
+            fontSize: 13,
+            fontWeight: selected ? "700" : "500",
+            color: selected ? "#fff" : item.color,
+          }}
+        >
+          {item.label}
+        </ThemedText>
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenProps) {
   const { theme } = useTheme();
@@ -87,21 +239,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [education, setEducation] = useState("");
   const [livingIn, setLivingIn] = useState("");
   const [religion, setReligion] = useState("");
-  const [religionModalVisible, setReligionModalVisible] = useState(false);
   const [ethnicity, setEthnicity] = useState("");
-
-  const RELIGION_OPTIONS = [
-    { value: 'christian', label: 'Christian' },
-    { value: 'muslim', label: 'Muslim' },
-    { value: 'traditional', label: 'Traditional' },
-    { value: 'atheist', label: 'Atheist' },
-    { value: 'agnostic', label: 'Agnostic' },
-    { value: 'spiritual', label: 'Spiritual' },
-    { value: 'other', label: 'Other' },
-    { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-  ];
-  const [communicationStyle, setCommunicationStyle] = useState("");
-  const [loveStyle, setLoveStyle] = useState("");
   const [personalityType, setPersonalityType] = useState("");
   const [smoking, setSmoking] = useState("");
   const [drinking, setDrinking] = useState("");
@@ -117,11 +255,28 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [preferredGenders, setPreferredGenders] = useState<string[]>([]);
   const [favoriteSongTitle, setFavoriteSongTitle] = useState("");
   const [favoriteSongArtist, setFavoriteSongArtist] = useState("");
+  const [communicationStyle, setCommunicationStyle] = useState("");
+  const [loveStyle, setLoveStyle] = useState("");
+
   const [zodiacModalVisible, setZodiacModalVisible] = useState(false);
-  const [educationModalVisible, setEducationModalVisible] = useState(false);
-  const [ethnicityModalVisible, setEthnicityModalVisible] = useState(false);
+  const [reorderSource, setReorderSource] = useState<number | null>(null);
+
+  const [religionModalVisible, setReligionModalVisible] = useState(false);
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
   const [photoPickerSlotIndex, setPhotoPickerSlotIndex] = useState<number>(0);
+
+  const progressAnim = useRef(new Animated.Value(1 / 5)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: step / 5,
+      duration: 400,
+      useNativeDriver: false,
+    }).start();
+  }, [step]);
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -148,9 +303,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
           setPreferredGenders(data.preferredGenders || []);
           setStep(data.step || 1);
         }
-      } catch (error) {
-        console.error("Failed to load profile draft:", error);
-      }
+      } catch {}
     };
     loadDraft();
   }, []);
@@ -160,80 +313,92 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       try {
         const data = {
           name, age, gender, zodiacSign, jobTitle, education, livingIn, religion, ethnicity,
-          bio, lookingFor, interests, photos, minAge, maxAge, maxDistance, preferredGenders, step
+          bio, lookingFor, interests, photos, minAge, maxAge, maxDistance, preferredGenders, step,
         };
         await AsyncStorage.setItem(PROFILE_SETUP_STORAGE_KEY, JSON.stringify(data));
-      } catch (error) {
-        console.error("Failed to save profile draft:", error);
-      }
+      } catch {}
     };
     saveDraft();
   }, [name, age, gender, zodiacSign, jobTitle, education, livingIn, religion, ethnicity, bio, lookingFor, interests, photos, minAge, maxAge, maxDistance, preferredGenders, step]);
 
+  const animateToStep = (newStep: number, direction: "forward" | "back") => {
+    const startX = direction === "forward" ? 60 : -60;
+    slideAnim.setValue(startX);
+    fadeAnim.setValue(0);
+    scaleAnim.setValue(0.96);
+    setStep(newStep);
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, friction: 9, tension: 65, useNativeDriver: true }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 9, tension: 65, useNativeDriver: true }),
+    ]).start();
+  };
+
   const toggleInterest = (interest: string) => {
     if (interests.includes(interest)) {
-      setInterests(interests.filter(i => i !== interest));
+      setInterests(interests.filter((i) => i !== interest));
     } else if (interests.length < 5) {
+      Haptics.selectionAsync();
       setInterests([...interests, interest]);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     }
   };
 
+  // Step 1 = Photos, Step 2 = Basic Info, Step 3 = Interests, Step 4 = Bio, Step 5 = Preferences
   const handleNext = () => {
     if (step === 1) {
+      const photoCount = photos.filter((p) => p !== null).length;
+      if (photoCount < 4) {
+        Alert.alert("More Photos Needed", "Please add at least 4 photos to continue");
+        return;
+      }
+    } else if (step === 2) {
       const trimmedName = name.trim();
       const trimmedAge = age.trim();
-      const trimmedJob = jobTitle.trim();
-      const trimmedLiving = livingIn.trim();
-
-      if (!trimmedName || !trimmedAge || !gender || !trimmedJob || !education || !trimmedLiving || !ethnicity) {
-        Alert.alert("Error", "All fields are required (Name, Age, Gender, Job Title, Education, Living In, Ethnicity)");
+      if (!trimmedName || !trimmedAge || !gender || !jobTitle.trim() || !livingIn.trim() || !ethnicity) {
+        Alert.alert("Required Fields", "Please fill in all required fields (Name, Age, Gender, Job Title, Living In, Ethnicity)");
         return;
       }
-
       if (!/^\d+$/.test(trimmedAge)) {
-        Alert.alert("Error", "Age must contain only numbers");
+        Alert.alert("Invalid Age", "Age must be a number");
         return;
       }
-
       const ageNum = parseInt(trimmedAge, 10);
       if (isNaN(ageNum) || ageNum < 18 || ageNum > 99) {
-        Alert.alert("Error", "Please enter a valid age (18-99)");
+        Alert.alert("Invalid Age", "Please enter a valid age (18–99)");
         return;
       }
-
       setName(trimmedName);
       setAge(trimmedAge);
-      setStep(2);
-    } else if (step === 2) {
-      if (!bio.trim()) {
-        Alert.alert("Error", "Please add a bio");
-        return;
-      }
-      setBio(bio.trim());
-      setStep(3);
     } else if (step === 3) {
-      const photoCount = photos.filter(p => p !== null).length;
-      if (photoCount < 4) {
-        Alert.alert("Error", "Please add at least 4 photos to continue");
-        return;
-      }
-      setStep(4);
-    } else if (step === 4) {
       if (interests.length < 3) {
-        Alert.alert("Error", "Please select at least 3 interests");
+        Alert.alert("More Interests Needed", "Please select at least 3 interests");
         return;
       }
       if (!lookingFor) {
-        Alert.alert("Error", "Please select what you're looking for");
+        Alert.alert("Looking For?", "Please select what you're looking for");
         return;
       }
-      setStep(5);
+    } else if (step === 4) {
+      if (!bio.trim()) {
+        Alert.alert("Bio Required", "Please add a short bio");
+        return;
+      }
+      setBio(bio.trim());
     }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    animateToStep(step + 1, "forward");
+  };
+
+  const handleBack = () => {
+    Haptics.selectionAsync();
+    animateToStep(step - 1, "back");
   };
 
   const togglePreferredGender = (g: string) => {
     if (preferredGenders.includes(g)) {
-      setPreferredGenders(preferredGenders.filter(pg => pg !== g));
+      setPreferredGenders(preferredGenders.filter((pg) => pg !== g));
     } else {
       setPreferredGenders([...preferredGenders, g]);
     }
@@ -241,40 +406,20 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
   const uploadPhoto = async (uri: string): Promise<{ url: string; publicId: string } | null> => {
     try {
-      console.log('Starting photo upload to:', `${getApiBaseUrl()}/api/upload/photo`);
-      console.log('Token available:', !!token);
-
       const formData = new FormData();
-      const filename = uri.split('/').pop() || 'photo.jpg';
+      const filename = uri.split("/").pop() || "photo.jpg";
       const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-      formData.append('file', {
-        uri,
-        name: filename,
-        type,
-      } as any);
-
+      const type = match ? `image/${match[1]}` : "image/jpeg";
+      formData.append("file", { uri, name: filename, type } as any);
       const response = await fetch(`${getApiBaseUrl()}/api/upload/photo`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Accept': 'application/json',
-        },
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         body: formData,
       });
-
-      console.log('Upload response status:', response.status);
       const data = await response.json();
-      console.log('Upload response data:', JSON.stringify(data));
-
-      if (data.success && data.url) {
-        return { url: data.url, publicId: data.publicId };
-      }
-      console.log('Upload failed - success:', data.success, 'url:', data.url);
+      if (data.success && data.url) return { url: data.url, publicId: data.publicId };
       return null;
-    } catch (error) {
-      console.error('Upload error:', error);
+    } catch {
       return null;
     }
   };
@@ -283,59 +428,37 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     const permission = useCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
     if (!permission.granted) {
-      Alert.alert("Permission required", `Please allow access to your ${useCamera ? 'camera' : 'photo library'}`);
+      Alert.alert("Permission required", `Please allow access to your ${useCamera ? "camera" : "photo library"}`);
       return;
     }
-
     const result = useCamera
-      ? await ImagePicker.launchCameraAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [4, 5],
-          quality: 0.8,
-        })
-      : await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ['images'],
-          allowsEditing: true,
-          aspect: [4, 5],
-          quality: 0.8,
-        });
-
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 5], quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], allowsEditing: true, aspect: [4, 5], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
       setUploadingPhoto(slotIndex);
       const uploaded = await uploadPhoto(result.assets[0].uri);
       setUploadingPhoto(null);
-
       if (uploaded) {
         const newPhotos = [...photos];
         const existingPhoto = newPhotos[slotIndex];
-        newPhotos[slotIndex] = { 
-          ...uploaded, 
-          privacy: existingPhoto?.privacy || 'public' 
-        };
+        newPhotos[slotIndex] = { ...uploaded, privacy: existingPhoto?.privacy || "public" };
         setPhotos(newPhotos);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
-        Alert.alert("Upload failed", "Could not upload photo. Please try again.");
+        Alert.alert("Upload Failed", "Could not upload photo. Please try again.");
       }
     }
   };
 
   const showPhotoOptions = (slotIndex: number) => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take Photo', 'Choose from Library'],
-          cancelButtonIndex: 0,
-        },
+        { options: ["Cancel", "Take Photo", "Choose from Library"], cancelButtonIndex: 0 },
         (buttonIndex: number) => {
-          if (buttonIndex === 1) {
-            pickImage(true, slotIndex);
-          } else if (buttonIndex === 2) {
-            pickImage(false, slotIndex);
-          }
-        }
+          if (buttonIndex === 1) pickImage(true, slotIndex);
+          else if (buttonIndex === 2) pickImage(false, slotIndex);
+        },
       );
     } else {
       setPhotoPickerSlotIndex(slotIndex);
@@ -346,15 +469,32 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const removePhoto = (index: number) => {
     const newPhotos = [...photos];
     newPhotos[index] = null;
-
-    // Compact the array: shift all photos forward to fill gaps
     const validPhotos = newPhotos.filter((p): p is PhotoItem => p !== null);
-    const compactedPhotos: PhotoSlot[] = [null, null, null, null, null, null];
-    validPhotos.forEach((photo, i) => {
-      compactedPhotos[i] = photo;
-    });
+    const compacted: PhotoSlot[] = [null, null, null, null, null, null];
+    validPhotos.forEach((photo, i) => { compacted[i] = photo; });
+    setPhotos(compacted);
+    if (reorderSource === index) setReorderSource(null);
+  };
 
-    setPhotos(compactedPhotos);
+  const handlePhotoLongPress = (index: number) => {
+    if (!photos[index]) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setReorderSource(reorderSource === index ? null : index);
+  };
+
+  const handlePhotoTapInReorderMode = (index: number) => {
+    if (reorderSource === null) return;
+    if (reorderSource === index) {
+      setReorderSource(null);
+      return;
+    }
+    const newPhotos = [...photos];
+    const temp = newPhotos[reorderSource];
+    newPhotos[reorderSource] = newPhotos[index];
+    newPhotos[index] = temp;
+    setPhotos(newPhotos);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setReorderSource(null);
   };
 
   const openPrivacyModal = (index: number) => {
@@ -366,7 +506,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     if (selectedPhotoIndex === null) return;
     const photo = photos[selectedPhotoIndex];
     if (!photo) return;
-
     const newPhotos = [...photos];
     newPhotos[selectedPhotoIndex] = { ...photo, privacy };
     setPhotos(newPhotos);
@@ -376,48 +515,42 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
   const getPrivacyIcon = (privacy: PhotoPrivacy): string => {
     switch (privacy) {
-      case 'public': return 'globe';
-      case 'friends': return 'users';
-      case 'private': return 'lock';
-      default: return 'globe';
+      case "public": return "globe";
+      case "friends": return "users";
+      case "private": return "lock";
+      default: return "globe";
     }
   };
 
   const handleComplete = async () => {
     if (preferredGenders.length === 0) {
-      Alert.alert("Error", "Please select at least one preferred gender");
+      Alert.alert("Show Me", "Please select at least one preferred gender");
       return;
     }
-
     const minAgeNum = parseInt(minAge, 10);
     const maxAgeNum = parseInt(maxAge, 10);
     const maxDistanceNum = parseInt(maxDistance, 10);
-
     if (isNaN(minAgeNum) || minAgeNum < 18 || minAgeNum > 99) {
-      Alert.alert("Error", "Minimum age must be between 18 and 99");
+      Alert.alert("Invalid Age Range", "Minimum age must be between 18 and 99");
       return;
     }
-
     if (isNaN(maxAgeNum) || maxAgeNum < 18 || maxAgeNum > 99) {
-      Alert.alert("Error", "Maximum age must be between 18 and 99");
+      Alert.alert("Invalid Age Range", "Maximum age must be between 18 and 99");
       return;
     }
-
     if (minAgeNum > maxAgeNum) {
-      Alert.alert("Error", "Minimum age cannot be greater than maximum age");
+      Alert.alert("Invalid Age Range", "Minimum age cannot be greater than maximum age");
       return;
     }
-
     if (isNaN(maxDistanceNum) || maxDistanceNum < 1 || maxDistanceNum > 500) {
-      Alert.alert("Error", "Max distance must be between 1 and 500 km");
+      Alert.alert("Invalid Distance", "Max distance must be between 1 and 500 km");
       return;
     }
 
-    const trimmedAge = age.trim();
-    const ageNum = parseInt(trimmedAge, 10);
-
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
+      const ageNum = parseInt(age.trim(), 10);
       const validPhotos = photos.filter((p): p is PhotoItem => p !== null);
       const formattedPhotos = validPhotos.map((photo, index) => ({
         url: photo.url,
@@ -426,11 +559,10 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         isPrimary: index === 0,
         order: index,
       }));
-
-      const finalGender = gender.toLowerCase() === 'other' ? 'other' : gender.toLowerCase();
-      const finalPreferredGenders = preferredGenders.length > 0 
-        ? preferredGenders.map(g => g.toLowerCase())
-        : [finalGender === 'male' ? 'female' : 'male'];
+      const finalGender = gender.toLowerCase() === "other" ? "other" : gender.toLowerCase();
+      const finalPreferredGenders = preferredGenders.length > 0
+        ? preferredGenders.map((g) => g.toLowerCase())
+        : [finalGender === "male" ? "female" : "male"];
 
       await completeProfileSetup({
         name: name.trim(),
@@ -438,7 +570,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         gender: finalGender,
         zodiacSign: zodiacSign || undefined,
         jobTitle: jobTitle.trim() || undefined,
-        education: education || undefined,
+        school: education || undefined,
         livingIn: livingIn.trim() || undefined,
         religion: religion || undefined,
         ethnicity: ethnicity.trim() || undefined,
@@ -446,26 +578,16 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         loveStyle: loveStyle || undefined,
         personalityType: personalityType.trim() || undefined,
         lifestyle: {
-          hasKids: hasKids,
-          hasPets: hasPets,
-          smoking: smoking,
-          drinking: drinking,
-          religion: religion,
-          ethnicity: ethnicity.trim(),
-          personalityType: personalityType.trim(),
+          smoking: smoking || undefined,
+          drinking: drinking || undefined,
+          religion: religion || undefined,
         },
         bio: bio.trim(),
         interests,
-        lookingFor: lookingFor.toLowerCase() || 'friends',
+        lookingFor: lookingFor.toLowerCase() || "friends",
         photos: formattedPhotos,
-        favoriteSong: favoriteSongTitle.trim() ? {
-          title: favoriteSongTitle.trim(),
-          artist: favoriteSongArtist.trim(),
-        } : undefined,
-        location: { 
-          type: 'Point',
-          coordinates: [3.3792, 6.5244],
-        },
+        favoriteSong: favoriteSongTitle.trim() ? { title: favoriteSongTitle.trim(), artist: favoriteSongArtist.trim() } : undefined,
+        location: { type: "Point", coordinates: [3.3792, 6.5244] },
         preferences: {
           ageRange: { min: minAgeNum, max: maxAgeNum },
           maxDistance: maxDistanceNum * 1000,
@@ -474,1209 +596,1786 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       });
       await AsyncStorage.removeItem(PROFILE_SETUP_STORAGE_KEY);
     } catch (error: any) {
-      Alert.alert("Error", error.message || "Failed to save profile");
+      Alert.alert("Error", error.message || "Failed to save profile. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const STEP_META: Record<number, { title: string; subtitle: string }> = {
-    1: { title: 'Tell us about yourself', subtitle: 'Basic information to get started' },
-    2: { title: 'Describe yourself', subtitle: 'Write a bio that shows your personality' },
-    3: { title: 'Add your photos', subtitle: 'Upload 1-6 photos. Tap the lock icon to set privacy.' },
-    4: { title: 'Your interests', subtitle: 'Select at least 3 interests (max 5)' },
-    5: { title: 'Your preferences', subtitle: 'Who would you like to meet?' },
-  };
+  const stepMeta = STEP_META[step - 1];
+  const progressWidth = progressAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0%", "100%"],
+  });
+  const photoCount = photos.filter((p) => p !== null).length;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* Fixed header — stays put when keyboard opens */}
-      <View style={styles.header}>
-        <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: theme.backgroundSecondary }]}>
-            <View
-              style={[
-                styles.progressFill,
-                { backgroundColor: theme.primary, width: `${(step / 5) * 100}%` },
-              ]}
-            />
+      <StatusBar barStyle="light-content" />
+
+      {/* ── Gradient Header ── */}
+      <LinearGradient
+        colors={["#10B981", "#059669"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientHeader}
+      >
+        {/* Top row */}
+        <View style={styles.stepCounterRow}>
+          <View style={styles.stepBadge}>
+            <ThemedText style={styles.stepBadgeText}>{step} / 5</ThemedText>
           </View>
-          <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
-            Step {step} of 5
-          </ThemedText>
+          <View style={styles.stepIconBubble}>
+            <Feather name={stepMeta.icon as any} size={15} color="#fff" />
+          </View>
         </View>
-        <ThemedText style={[styles.title, { color: theme.text, marginTop: Spacing.md }]}>
-          {STEP_META[step].title}
-        </ThemedText>
-        <ThemedText style={[styles.subtitle, { color: theme.textSecondary }]}>
-          {STEP_META[step].subtitle}
-        </ThemedText>
-      </View>
 
+        {/* Animated Progress Bar */}
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, { width: progressWidth }]}>
+            <View style={styles.progressGlow} />
+          </Animated.View>
+        </View>
+
+        {/* Step dots */}
+        <View style={styles.stepDots}>
+          {[1, 2, 3, 4, 5].map((s) => (
+            <Animated.View
+              key={s}
+              style={[
+                styles.stepDot,
+                s === step && styles.stepDotActive,
+                s < step && styles.stepDotDone,
+              ]}
+            >
+              {s < step && <Feather name="check" size={7} color="#fff" />}
+            </Animated.View>
+          ))}
+        </View>
+
+        {/* Title & subtitle */}
+        <ThemedText style={styles.headerTitle}>{stepMeta.title}</ThemedText>
+        <ThemedText style={styles.headerSubtitle}>{stepMeta.subtitle}</ThemedText>
+      </LinearGradient>
+
+      {/* ── Scrollable Content ── */}
       <ScreenKeyboardAwareScrollView contentContainerStyle={{ paddingTop: 0 }}>
-      <View style={styles.content}>
-        {step === 1 ? (
-          <>
+        <Animated.View
+          style={[
+            styles.content,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
+            },
+          ]}
+        >
 
+          {/* ════════════════════════════════════════════
+              STEP 1 — Photos
+          ════════════════════════════════════════════ */}
+          {step === 1 && (
             <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Name</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="Your name"
-                  placeholderTextColor={theme.textSecondary}
-                  value={name}
-                  onChangeText={setName}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Age</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="18"
-                  placeholderTextColor={theme.textSecondary}
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Gender</ThemedText>
-                <View style={styles.genderButtons}>
-                  {["Male", "Female", "Other"].map((g) => (
-                    <Pressable
-                      key={g}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        gender.toLowerCase() === g.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => setGender(g)}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.genderButtonText,
-                          { color: theme.text },
-                          gender.toLowerCase() === g.toLowerCase() && { color: theme.buttonText },
-                        ]}
-                      >
-                        {g}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Zodiac Sign</ThemedText>
+              {/* Hero photo slot */}
+              <View style={styles.heroPhotoContainer}>
                 <Pressable
-                  style={[styles.selectButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => setZodiacModalVisible(true)}
-                >
-                  <ThemedText style={[styles.selectButtonText, { color: zodiacSign ? theme.text : theme.textSecondary }]}>
-                    {zodiacSign ? ZODIAC_SIGNS.find(z => z.value === zodiacSign)?.label : 'Select your sign'}
-                  </ThemedText>
-                  <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Job Title</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="e.g. Software Engineer"
-                  placeholderTextColor={theme.textSecondary}
-                  value={jobTitle}
-                  onChangeText={setJobTitle}
-                  maxLength={100}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Education</ThemedText>
-                <Pressable
-                  style={[styles.selectButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => setEducationModalVisible(true)}
-                >
-                  <ThemedText style={[styles.selectButtonText, { color: education ? theme.text : theme.textSecondary }]}>
-                    {education ? EDUCATION_OPTIONS.find(e => e.value === education)?.label : 'Select education level'}
-                  </ThemedText>
-                  <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Living In</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="e.g. Lagos, Nigeria"
-                  placeholderTextColor={theme.textSecondary}
-                  value={livingIn}
-                  onChangeText={setLivingIn}
-                  maxLength={100}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Religion</ThemedText>
-                <Pressable
-                  style={[styles.selectButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => setReligionModalVisible(true)}
-                >
-                  <ThemedText style={[styles.selectButtonText, { color: religion ? theme.text : theme.textSecondary }]}>
-                    {religion ? RELIGION_OPTIONS.find(r => r.value === religion)?.label : 'Select religion'}
-                  </ThemedText>
-                  <Feather name="chevron-down" size={20} color={theme.textSecondary} />
-                </Pressable>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Ethnicity</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="e.g. Yoruba, Igbo"
-                  placeholderTextColor={theme.textSecondary}
-                  value={ethnicity}
-                  onChangeText={setEthnicity}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Personality Type</ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="e.g. INFJ, ENFP"
-                  placeholderTextColor={theme.textSecondary}
-                  value={personalityType}
-                  onChangeText={setPersonalityType}
-                  maxLength={4}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Smoking</ThemedText>
-                <View style={styles.genderButtons}>
-                  {["Never", "Socially", "Regularly"].map((s) => (
-                    <Pressable
-                      key={s}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        smoking === s.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => setSmoking(s.toLowerCase())}
-                    >
-                      <ThemedText style={[styles.genderButtonText, { color: theme.text }, smoking === s.toLowerCase() && { color: theme.buttonText }]}>{s}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Drinking</ThemedText>
-                <View style={styles.genderButtons}>
-                  {["Never", "Socially", "Regularly"].map((d) => (
-                    <Pressable
-                      key={d}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        drinking === d.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => setDrinking(d.toLowerCase())}
-                    >
-                      <ThemedText style={[styles.genderButtonText, { color: theme.text }, drinking === d.toLowerCase() && { color: theme.buttonText }]}>{d}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Have Kids?</ThemedText>
-                <View style={styles.genderButtons}>
-                  {[ {l: "Yes", v: true}, {l: "No", v: false} ].map((item) => (
-                    <Pressable
-                      key={item.l}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        hasKids === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => setHasKids(item.v)}
-                    >
-                      <ThemedText style={[styles.genderButtonText, { color: theme.text }, hasKids === item.v && { color: theme.buttonText }]}>{item.l}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Have Pets?</ThemedText>
-                <View style={styles.genderButtons}>
-                  {[ {l: "Yes", v: true}, {l: "No", v: false} ].map((item) => (
-                    <Pressable
-                      key={item.l}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        hasPets === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => setHasPets(item.v)}
-                    >
-                      <ThemedText style={[styles.genderButtonText, { color: theme.text }, hasPets === item.v && { color: theme.buttonText }]}>{item.l}</ThemedText>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            </View>
-          </>
-        ) : step === 2 ? (
-          <>
-            <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>Bio</ThemedText>
-                <TextInput
                   style={[
-                    styles.input,
-                    styles.bioInput,
-                    { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border },
+                    styles.heroPhotoSlot,
+                    {
+                      borderColor: reorderSource === 0 ? "#FFC629" : photos[0] ? theme.primary : theme.border,
+                      backgroundColor: theme.surface,
+                      borderWidth: reorderSource === 0 ? 3 : 2,
+                      opacity: reorderSource === 0 ? 0.75 : 1,
+                    },
                   ]}
-                  placeholder="Tell people about yourself, your interests, and what makes you unique..."
-                  placeholderTextColor={theme.textSecondary}
-                  value={bio}
-                  onChangeText={setBio}
-                  multiline
-                  numberOfLines={5}
-                  maxLength={300}
-                  textAlignVertical="top"
-                />
-                <ThemedText style={[styles.charCount, { color: theme.textSecondary }]}>
-                  {bio.length}/300
-                </ThemedText>
+                  onPress={() => {
+                    if (reorderSource !== null) {
+                      handlePhotoTapInReorderMode(0);
+                    } else {
+                      showPhotoOptions(0);
+                    }
+                  }}
+                  onLongPress={() => handlePhotoLongPress(0)}
+                  delayLongPress={400}
+                  disabled={uploadingPhoto === 0}
+                >
+                  {photos[0] ? (
+                    <>
+                      <Image source={{ uri: photos[0].url }} style={styles.heroPhotoImage} contentFit="cover" />
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.55)"]}
+                        style={styles.heroGradientOverlay}
+                      />
+                      <Pressable
+                        style={[styles.heroRemoveBtn, { backgroundColor: theme.error }]}
+                        onPress={() => removePhoto(0)}
+                      >
+                        <Feather name="x" size={13} color="#fff" />
+                      </Pressable>
+                      <View style={styles.heroBadge}>
+                        <Feather name="star" size={11} color="#FFD700" />
+                        <ThemedText style={styles.heroBadgeText}>Main Photo</ThemedText>
+                      </View>
+                      <Pressable
+                        style={styles.heroPrivacyBtn}
+                        onPress={() => openPrivacyModal(0)}
+                      >
+                        <Feather
+                          name={getPrivacyIcon(photos[0].privacy) as any}
+                          size={13}
+                          color={photos[0].privacy === "private" ? "#FF6B6B" : photos[0].privacy === "friends" ? "#FFC629" : "#10B981"}
+                        />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <View style={styles.heroEmptyState}>
+                      {uploadingPhoto === 0 ? (
+                        <ActivityIndicator color={theme.primary} size="large" />
+                      ) : (
+                        <>
+                          <LinearGradient
+                            colors={["#10B981", "#059669"]}
+                            style={styles.heroAddIcon}
+                          >
+                            <Feather name="camera" size={28} color="#fff" />
+                          </LinearGradient>
+                          <ThemedText style={[styles.heroEmptyTitle, { color: theme.text }]}>Add your best photo</ThemedText>
+                          <ThemedText style={[styles.heroEmptySubtitle, { color: theme.textSecondary }]}>
+                            This will be your main profile photo
+                          </ThemedText>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Pressable>
               </View>
-            </View>
-          </>
-        ) : step === 3 ? (
-          <>
-            <View style={styles.form}>
-              <View style={styles.photoGrid}>
-                {/* 2x3 Grid - 2 photos per row, 3 rows */}
-                {[[0, 1], [2, 3], [4, 5]].map((rowIndices, rowIndex) => (
-                  <View key={rowIndex} style={styles.photoRow}>
-                    {rowIndices.map((slotIndex) => {
-                      const photo = photos[slotIndex];
-                      const isUploading = uploadingPhoto === slotIndex;
-                      const isProfilePhoto = slotIndex === 0;
-                      return (
-                        <View key={slotIndex} style={[
-                          styles.photoItem,
-                          { width: '48%' },
-                          isProfilePhoto && { borderColor: theme.primary, borderWidth: 3 }
-                        ]}>
-                          {photo ? (
-                            <>
-                              <Image source={{ uri: photo.url }} style={styles.photoImage} contentFit="cover" />
-                              <Pressable style={[styles.removePhotoButton, { backgroundColor: theme.error }]} onPress={() => removePhoto(slotIndex)}>
-                                <Feather name="x" size={14} color="#fff" />
-                              </Pressable>
-                              {isProfilePhoto ? (
-                                <View style={[styles.profilePhotoBadge, { backgroundColor: theme.primary }]}>
-                                  <ThemedText style={[styles.profilePhotoBadgeText, { color: theme.buttonText }]}>Profile</ThemedText>
-                                </View>
-                              ) : (
-                                <View style={[styles.selectedBadge, { backgroundColor: theme.primary }]}>
-                                  <ThemedText style={[styles.selectedBadgeText, { color: theme.buttonText }]}>{slotIndex + 1}</ThemedText>
-                                </View>
-                              )}
-                              <Pressable style={[styles.privacyButton, { backgroundColor: theme.surface }]} onPress={() => openPrivacyModal(slotIndex)}>
-                                <Feather name={getPrivacyIcon(photo.privacy) as any} size={14} color={photo.privacy === 'private' ? theme.error : photo.privacy === 'friends' ? theme.warning : theme.primary} />
-                              </Pressable>
-                            </>
+
+              {/* Additional photos grid */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+                <ThemedText style={[styles.sectionLabel, { color: theme.textSecondary, marginBottom: 0 }]}>
+                  {reorderSource !== null ? "📍 Tap a slot to swap position" : "Add more photos"}
+                </ThemedText>
+                {reorderSource !== null && (
+                  <Pressable onPress={() => setReorderSource(null)} hitSlop={8}>
+                    <ThemedText style={{ fontSize: 12, color: theme.error, fontWeight: "600" }}>Cancel</ThemedText>
+                  </Pressable>
+                )}
+              </View>
+              <View style={styles.smallPhotoGrid}>
+                {[1, 2, 3, 4, 5].map((slotIndex) => {
+                  const photo = photos[slotIndex];
+                  const isUploading = uploadingPhoto === slotIndex;
+                  const isReorderSrc = reorderSource === slotIndex;
+                  const isReorderTarget = reorderSource !== null && reorderSource !== slotIndex;
+                  return (
+                    <Pressable
+                      key={slotIndex}
+                      style={[
+                        styles.smallPhotoSlot,
+                        {
+                          borderColor: isReorderSrc
+                            ? theme.primary
+                            : isReorderTarget && photo
+                            ? "#FFC629"
+                            : photo
+                            ? theme.primary
+                            : theme.border,
+                          backgroundColor: theme.surface,
+                          borderWidth: isReorderSrc ? 2.5 : 1.5,
+                          opacity: isReorderSrc ? 0.7 : 1,
+                        },
+                      ]}
+                      onPress={() => {
+                        if (reorderSource !== null) {
+                          handlePhotoTapInReorderMode(slotIndex);
+                        } else {
+                          showPhotoOptions(slotIndex);
+                        }
+                      }}
+                      onLongPress={() => handlePhotoLongPress(slotIndex)}
+                      delayLongPress={400}
+                      disabled={isUploading}
+                    >
+                      {photo ? (
+                        <>
+                          <Image source={{ uri: photo.url }} style={styles.smallPhotoImage} contentFit="cover" />
+                          {isReorderSrc ? (
+                            <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.35)", borderRadius: 12 }]}>
+                              <Feather name="move" size={18} color="#fff" />
+                            </View>
                           ) : (
-                            <Pressable
-                              style={[styles.emptyPhotoSlot, { backgroundColor: theme.surface, borderColor: isProfilePhoto ? theme.primary : theme.border }]}
-                              onPress={() => showPhotoOptions(slotIndex)}
-                              disabled={isUploading}
-                            >
-                              {isUploading ? <ActivityIndicator color={theme.primary} /> : (
-                                <>
-                                  <Feather name={isProfilePhoto ? "user" : "plus"} size={28} color={theme.primary} />
-                                  <ThemedText style={[styles.slotNumber, { color: isProfilePhoto ? theme.primary : theme.textSecondary }]}>
-                                    {isProfilePhoto ? "Profile" : slotIndex + 1}
-                                  </ThemedText>
-                                </>
+                            <>
+                              {reorderSource === null && (
+                                <Pressable
+                                  style={[styles.smallRemoveBtn, { backgroundColor: theme.error }]}
+                                  onPress={() => removePhoto(slotIndex)}
+                                >
+                                  <Feather name="x" size={9} color="#fff" />
+                                </Pressable>
                               )}
+                              {isReorderTarget && (
+                                <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,198,41,0.25)", borderRadius: 12 }]}>
+                                  <Feather name="corner-left-down" size={16} color="#FFC629" />
+                                </View>
+                              )}
+                            </>
+                          )}
+                          {!isReorderSrc && reorderSource === null && (
+                            <Pressable
+                              style={styles.smallPrivacyBtn}
+                              onPress={() => openPrivacyModal(slotIndex)}
+                            >
+                              <Feather
+                                name={getPrivacyIcon(photo.privacy) as any}
+                                size={10}
+                                color={photo.privacy === "private" ? "#FF6B6B" : photo.privacy === "friends" ? "#FFC629" : "#10B981"}
+                              />
                             </Pressable>
                           )}
+                        </>
+                      ) : isUploading ? (
+                        <ActivityIndicator color={theme.primary} size="small" />
+                      ) : (
+                        <View style={[styles.smallAddIcon, { backgroundColor: reorderSource !== null ? `${theme.primary}08` : `${theme.primary}15` }]}>
+                          <Feather name={reorderSource !== null ? "corner-left-down" : "plus"} size={18} color={reorderSource !== null ? "#FFC629" : theme.primary} />
                         </View>
-                      );
-                    })}
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {reorderSource === null && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 }}>
+                  <Feather name="move" size={11} color={theme.textSecondary} />
+                  <ThemedText style={{ fontSize: 11, color: theme.textSecondary }}>Long press any photo to reorder</ThemedText>
+                </View>
+              )}
+
+              {/* Photo progress indicator */}
+              <View style={[styles.photoProgressCard, {
+                backgroundColor: photoCount >= 4 ? `${theme.primary}12` : theme.surface,
+                borderColor: photoCount >= 4 ? theme.primary : theme.border,
+              }]}>
+                <View style={styles.photoProgressDots}>
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.photoProgressDot,
+                        { backgroundColor: i <= photoCount ? theme.primary : theme.border },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <ThemedText style={[styles.photoProgressText, { color: photoCount >= 4 ? theme.primary : theme.textSecondary }]}>
+                  {photoCount >= 4
+                    ? `${photoCount} photos added ✓ Ready to continue`
+                    : `${photoCount}/4 photos — need ${4 - photoCount} more`}
+                </ThemedText>
+              </View>
+
+              {/* Privacy legend */}
+              <View style={styles.privacyLegend}>
+                {[
+                  { icon: "globe", color: theme.primary, label: "Public" },
+                  { icon: "users", color: "#FFC629", label: "Friends" },
+                  { icon: "lock", color: "#FF6B6B", label: "Private" },
+                ].map((item) => (
+                  <View key={item.label} style={styles.legendItem}>
+                    <Feather name={item.icon as any} size={12} color={item.color} />
+                    <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>{item.label}</ThemedText>
                   </View>
                 ))}
               </View>
-              <ThemedText style={[styles.photoHint, { color: theme.textSecondary }]}>
-                {photos.filter(p => p !== null).length}/6 photos added. First photo will be your main profile picture.
-              </ThemedText>
+            </View>
+          )}
 
-              <View style={styles.privacyLegend}>
-                <View style={styles.legendItem}>
-                  <Feather name="globe" size={14} color={theme.primary} />
-                  <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>Public</ThemedText>
+          {/* ════════════════════════════════════════════
+              STEP 2 — Basic Info
+          ════════════════════════════════════════════ */}
+          {step === 2 && (
+            <View style={styles.form}>
+              {/* Name & Age row */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#10B98120" }]}>
+                    <Feather name="user" size={14} color={theme.primary} />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Identity</ThemedText>
                 </View>
-                <View style={styles.legendItem}>
-                  <Feather name="users" size={14} color={theme.warning} />
-                  <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>Friends</ThemedText>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Full Name *</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="Your name"
+                    placeholderTextColor={theme.textSecondary}
+                    value={name}
+                    onChangeText={setName}
+                  />
                 </View>
-                <View style={styles.legendItem}>
-                  <Feather name="lock" size={14} color={theme.error} />
-                  <ThemedText style={[styles.legendText, { color: theme.textSecondary }]}>Private</ThemedText>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Age *</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="18"
+                      placeholderTextColor={theme.textSecondary}
+                      value={age}
+                      onChangeText={setAge}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Personality</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="INFJ, ENFP..."
+                      placeholderTextColor={theme.textSecondary}
+                      value={personalityType}
+                      onChangeText={setPersonalityType}
+                      maxLength={4}
+                      autoCapitalize="characters"
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Gender *</ThemedText>
+                  <View style={styles.pillRow}>
+                    {["Male", "Female", "Other"].map((g) => (
+                      <Pressable
+                        key={g}
+                        style={[
+                          styles.pill,
+                          { borderColor: theme.border, backgroundColor: theme.background },
+                          gender.toLowerCase() === g.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        ]}
+                        onPress={() => { Haptics.selectionAsync(); setGender(g); }}
+                      >
+                        <ThemedText style={[styles.pillText, { color: gender.toLowerCase() === g.toLowerCase() ? "#fff" : theme.text }]}>
+                          {g}
+                        </ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              {/* Background card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#4ECDC420" }]}>
+                    <Feather name="map-pin" size={14} color="#4ECDC4" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Background</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Ethnicity *</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. Yoruba, Igbo, Ashanti"
+                    placeholderTextColor={theme.textSecondary}
+                    value={ethnicity}
+                    onChangeText={setEthnicity}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Living In *</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. Lagos, Nigeria"
+                    placeholderTextColor={theme.textSecondary}
+                    value={livingIn}
+                    onChangeText={setLivingIn}
+                    maxLength={100}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Religion</ThemedText>
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setReligionModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: religion ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {religion ? RELIGION_OPTIONS.find((r) => r.value === religion)?.label : "Select religion"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Zodiac Sign</ThemedText>
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setZodiacModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: zodiacSign ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {zodiacSign ? ZODIAC_SIGNS.find((z) => z.value === zodiacSign)?.label : "Select your sign"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* Career card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#FFE66D30" }]}>
+                    <Feather name="briefcase" size={14} color="#F0A500" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Career</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Job Title *</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. Software Engineer"
+                    placeholderTextColor={theme.textSecondary}
+                    value={jobTitle}
+                    onChangeText={setJobTitle}
+                    maxLength={100}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>School / University</ThemedText>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                    placeholder="e.g. University of Lagos"
+                    placeholderTextColor={theme.textSecondary}
+                    value={education}
+                    onChangeText={setEducation}
+                    maxLength={150}
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+
+              {/* Lifestyle card */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#DDA0DD30" }]}>
+                    <Feather name="coffee" size={14} color="#DDA0DD" />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Lifestyle</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Smoking</ThemedText>
+                  <View style={styles.pillRow}>
+                    {["Never", "Socially", "Regularly"].map((s) => (
+                      <Pressable
+                        key={s}
+                        style={[
+                          styles.pill,
+                          { borderColor: theme.border, backgroundColor: theme.background },
+                          smoking === s.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        ]}
+                        onPress={() => setSmoking(s.toLowerCase())}
+                      >
+                        <ThemedText style={[styles.pillText, { color: smoking === s.toLowerCase() ? "#fff" : theme.text }]}>{s}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Drinking</ThemedText>
+                  <View style={styles.pillRow}>
+                    {["Never", "Socially", "Regularly"].map((d) => (
+                      <Pressable
+                        key={d}
+                        style={[
+                          styles.pill,
+                          { borderColor: theme.border, backgroundColor: theme.background },
+                          drinking === d.toLowerCase() && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        ]}
+                        onPress={() => setDrinking(d.toLowerCase())}
+                      >
+                        <ThemedText style={[styles.pillText, { color: drinking === d.toLowerCase() ? "#fff" : theme.text }]}>{d}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.binaryRow}>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Have Kids?</ThemedText>
+                    <View style={styles.pillRow}>
+                      {[{ l: "Yes", v: true }, { l: "No", v: false }].map((item) => (
+                        <Pressable
+                          key={item.l}
+                          style={[
+                            styles.pill,
+                            { flex: 1, borderColor: theme.border, backgroundColor: theme.background },
+                            hasKids === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
+                          ]}
+                          onPress={() => setHasKids(item.v)}
+                        >
+                          <ThemedText style={[styles.pillText, { color: hasKids === item.v ? "#fff" : theme.text }]}>{item.l}</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Have Pets?</ThemedText>
+                    <View style={styles.pillRow}>
+                      {[{ l: "Yes", v: true }, { l: "No", v: false }].map((item) => (
+                        <Pressable
+                          key={item.l}
+                          style={[
+                            styles.pill,
+                            { flex: 1, borderColor: theme.border, backgroundColor: theme.background },
+                            hasPets === item.v && { backgroundColor: theme.primary, borderColor: theme.primary },
+                          ]}
+                          onPress={() => setHasPets(item.v)}
+                        >
+                          <ThemedText style={[styles.pillText, { color: hasPets === item.v ? "#fff" : theme.text }]}>{item.l}</ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
                 </View>
               </View>
             </View>
+          )}
 
-            <Modal
-              visible={privacyModalVisible}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setPrivacyModalVisible(false)}
-            >
-              <Pressable 
-                style={styles.modalOverlay} 
-                onPress={() => setPrivacyModalVisible(false)}
-              >
-                <View style={[styles.privacyModal, { backgroundColor: theme.background }]}>
-                  <ThemedText style={[styles.modalTitle, { color: theme.text }]}>
-                    Photo Privacy
+          {/* ════════════════════════════════════════════
+              STEP 3 — Interests & Looking For
+          ════════════════════════════════════════════ */}
+          {step === 3 && (
+            <View style={styles.form}>
+              {/* Selection counter badge */}
+              <View style={styles.interestHeader}>
+                <ThemedText style={[styles.interestTitle, { color: theme.text }]}>Pick your interests</ThemedText>
+                <View style={[styles.selectionBadge, {
+                  backgroundColor: interests.length >= 3 ? theme.primary : theme.surface,
+                  borderColor: interests.length >= 3 ? theme.primary : theme.border,
+                }]}>
+                  <ThemedText style={[styles.selectionBadgeText, {
+                    color: interests.length >= 3 ? "#fff" : theme.textSecondary,
+                  }]}>
+                    {interests.length} / 5
                   </ThemedText>
-                  <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                    Who can see this photo?
-                  </ThemedText>
+                </View>
+              </View>
 
-                  {PRIVACY_OPTIONS.map((option) => {
-                    const isSelected = selectedPhotoIndex !== null && photos[selectedPhotoIndex]?.privacy === option.value;
+              <ThemedText style={[styles.interestSubtitle, { color: theme.textSecondary }]}>
+                Select 3–5 things you love
+              </ThemedText>
+
+              <View style={styles.chipsWrap}>
+                {INTERESTS_OPTIONS.map((item) => {
+                  const selected = interests.includes(item.value);
+                  return (
+                    <InterestChip
+                      key={item.value}
+                      item={item}
+                      selected={selected}
+                      onPress={() => toggleInterest(item.value)}
+                    />
+                  );
+                })}
+              </View>
+
+              {/* Looking For section */}
+              <View style={styles.lookingForSection}>
+                <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Looking for</ThemedText>
+                <ThemedText style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>What kind of connection?</ThemedText>
+
+                <View style={styles.lookingForGrid}>
+                  {LOOKING_FOR_OPTIONS.map((opt) => {
+                    const selected = lookingFor === opt.value;
                     return (
                       <Pressable
-                        key={option.value}
+                        key={opt.value}
                         style={[
-                          styles.privacyOption,
-                          { borderColor: theme.border },
-                          isSelected && { borderColor: theme.primary, backgroundColor: theme.primaryLight },
+                          styles.lookingForCard,
+                          {
+                            borderColor: selected ? opt.color : theme.border,
+                            backgroundColor: selected ? `${opt.color}18` : theme.surface,
+                          },
                         ]}
-                        onPress={() => setPhotoPrivacy(option.value)}
+                        onPress={() => { Haptics.selectionAsync(); setLookingFor(opt.value); }}
                       >
-                        <View style={styles.privacyOptionContent}>
-                          <View style={[styles.privacyIconContainer, { backgroundColor: theme.surface }]}>
-                            <Feather 
-                              name={option.icon as any} 
-                              size={20} 
-                              color={option.value === 'private' ? theme.error : option.value === 'friends' ? theme.warning : theme.primary} 
-                            />
+                        <ThemedText style={styles.lookingForEmoji}>{opt.label.split(" ")[0]}</ThemedText>
+                        <ThemedText style={[styles.lookingForLabel, { color: selected ? opt.color : theme.text }]}>
+                          {opt.label.split(" ").slice(1).join(" ")}
+                        </ThemedText>
+                        <ThemedText style={[styles.lookingForDesc, { color: theme.textSecondary }]}>{opt.desc}</ThemedText>
+                        {selected && (
+                          <View style={[styles.lookingForCheck, { backgroundColor: opt.color }]}>
+                            <Feather name="check" size={9} color="#fff" />
                           </View>
-                          <View style={styles.privacyOptionText}>
-                            <ThemedText style={[styles.privacyOptionLabel, { color: theme.text }]}>
-                              {option.label}
-                            </ThemedText>
-                            <ThemedText style={[styles.privacyOptionDesc, { color: theme.textSecondary }]}>
-                              {option.description}
-                            </ThemedText>
-                          </View>
-                        </View>
-                        {isSelected ? (
-                          <Feather name="check-circle" size={22} color={theme.primary} />
-                        ) : null}
+                        )}
                       </Pressable>
                     );
                   })}
                 </View>
-              </Pressable>
-            </Modal>
-          </>
-        ) : step === 4 ? (
-          <>
+              </View>
+            </View>
+          )}
+
+          {/* ════════════════════════════════════════════
+              STEP 4 — Bio
+          ════════════════════════════════════════════ */}
+          {step === 4 && (
             <View style={styles.form}>
-              <View style={styles.interestsGrid}>
-                {INTERESTS_OPTIONS.map((interest) => (
+              {/* Bio prompt cards */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.promptsScroll}
+                contentContainerStyle={styles.promptsScrollContent}
+              >
+                {[
+                  { emoji: "🌍", text: "Share your culture" },
+                  { emoji: "😂", text: "What makes you laugh?" },
+                  { emoji: "🔥", text: "Your passion project" },
+                  { emoji: "✨", text: "Something unique" },
+                ].map((prompt) => (
                   <Pressable
-                    key={interest}
-                    style={[
-                      styles.interestChip,
-                      { borderColor: theme.border, backgroundColor: theme.surface },
-                      interests.includes(interest) && {
-                        backgroundColor: theme.primary,
-                        borderColor: theme.primary,
-                      },
-                    ]}
-                    onPress={() => toggleInterest(interest)}
+                    key={prompt.text}
+                    style={[styles.promptChip, { backgroundColor: `${theme.primary}12`, borderColor: `${theme.primary}30` }]}
+                    onPress={() => setBio(bio ? bio + " " + prompt.text : prompt.text)}
                   >
-                    <ThemedText
-                      style={[
-                        styles.interestText,
-                        { color: theme.text },
-                        interests.includes(interest) && { color: theme.buttonText },
-                      ]}
-                    >
-                      {interest}
-                    </ThemedText>
+                    <ThemedText style={styles.promptEmoji}>{prompt.emoji}</ThemedText>
+                    <ThemedText style={[styles.promptText, { color: theme.primary }]}>{prompt.text}</ThemedText>
                   </Pressable>
+                ))}
+              </ScrollView>
+
+              {/* Bio text area */}
+              <View style={[styles.bioCard, { backgroundColor: theme.surface, borderColor: bio.length > 0 ? theme.primary : theme.border }]}>
+                <TextInput
+                  style={[styles.bioInput, { color: theme.text }]}
+                  placeholder="Tell people about yourself, your culture, your passions, and what makes you unique..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  maxLength={300}
+                  textAlignVertical="top"
+                />
+                <View style={styles.bioFooter}>
+                  <View style={[styles.bioMeter, { backgroundColor: theme.border }]}>
+                    <View style={[
+                      styles.bioMeterFill,
+                      {
+                        width: `${(bio.length / 300) * 100}%` as any,
+                        backgroundColor: bio.length < 50 ? theme.error : bio.length < 150 ? "#FFC629" : theme.primary,
+                      },
+                    ]} />
+                  </View>
+                  <ThemedText style={[styles.charCount, { color: bio.length > 250 ? theme.primary : theme.textSecondary }]}>
+                    {bio.length}/300
+                  </ThemedText>
+                </View>
+              </View>
+
+              {/* Tips */}
+              <View style={[styles.bioTipsCard, { backgroundColor: `${theme.primary}08`, borderColor: `${theme.primary}20` }]}>
+                <ThemedText style={[styles.bioTipsTitle, { color: theme.primary }]}>✨ Great bios mention...</ThemedText>
+                {[
+                  "Your cultural background & roots",
+                  "Something that makes you laugh",
+                  "A passion or side project",
+                  "What you're looking for here",
+                ].map((tip) => (
+                  <View key={tip} style={styles.bioTipRow}>
+                    <View style={[styles.bioTipDot, { backgroundColor: theme.primary }]} />
+                    <ThemedText style={[styles.bioTipText, { color: theme.text }]}>{tip}</ThemedText>
+                  </View>
                 ))}
               </View>
 
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>
-                  Looking for
-                </ThemedText>
-                <View style={styles.lookingForButtons}>
-                  {["Relationship", "Friendship", "Casual", "Not sure"].map((option) => (
-                    <Pressable
-                      key={option}
-                      style={[
-                        styles.lookingForButton,
-                        { borderColor: theme.border },
-                        lookingFor === option && {
-                          backgroundColor: theme.primary,
-                          borderColor: theme.primary,
-                        },
-                      ]}
-                      onPress={() => setLookingFor(option)}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.lookingForText,
-                          { color: theme.text },
-                          lookingFor === option && { color: theme.buttonText },
-                        ]}
-                      >
-                        {option}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
+              {/* Favorite Song (optional) */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#FF6B6B20" }]}>
+                    <ThemedText style={{ fontSize: 13 }}>🎵</ThemedText>
+                  </View>
+                  <View>
+                    <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Anthem</ThemedText>
+                    <ThemedText style={[styles.cardSectionSubtitle, { color: theme.textSecondary }]}>Optional</ThemedText>
+                  </View>
+                </View>
+                <View style={styles.rowInputs}>
+                  <View style={[styles.inputGroup, { flex: 1.4 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Song Title</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Song name"
+                      placeholderTextColor={theme.textSecondary}
+                      value={favoriteSongTitle}
+                      onChangeText={setFavoriteSongTitle}
+                      maxLength={100}
+                    />
+                  </View>
+                  <View style={[styles.inputGroup, { flex: 1 }]}>
+                    <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Artist</ThemedText>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="Artist"
+                      placeholderTextColor={theme.textSecondary}
+                      value={favoriteSongArtist}
+                      onChangeText={setFavoriteSongArtist}
+                      maxLength={100}
+                    />
+                  </View>
                 </View>
               </View>
             </View>
-          </>
-        ) : (
-          <>
+          )}
+
+          {/* ════════════════════════════════════════════
+              STEP 5 — Preferences
+          ════════════════════════════════════════════ */}
+          {step === 5 && (
             <View style={styles.form}>
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>
-                  Age range
-                </ThemedText>
-                <View style={styles.ageRangeContainer}>
+              {/* Discovery Preferences */}
+              <View style={[styles.infoCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <View style={styles.cardSectionHeader}>
+                  <View style={[styles.cardSectionIcon, { backgroundColor: "#10B98120" }]}>
+                    <Feather name="search" size={14} color={theme.primary} />
+                  </View>
+                  <ThemedText style={[styles.cardSectionTitle, { color: theme.text }]}>Discovery Settings</ThemedText>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Show Me</ThemedText>
+                  <View style={styles.pillRow}>
+                    {["Male", "Female", "Other"].map((g) => (
+                      <Pressable
+                        key={g}
+                        style={[
+                          styles.pill,
+                          { borderColor: theme.border, backgroundColor: theme.background },
+                          preferredGenders.includes(g) && { backgroundColor: theme.primary, borderColor: theme.primary },
+                        ]}
+                        onPress={() => { Haptics.selectionAsync(); togglePreferredGender(g); }}
+                      >
+                        <ThemedText style={[styles.pillText, { color: preferredGenders.includes(g) ? "#fff" : theme.text }]}>{g}</ThemedText>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Age Range</ThemedText>
+                  <View style={styles.ageRangeRow}>
+                    <TextInput
+                      style={[styles.ageInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="18"
+                      placeholderTextColor={theme.textSecondary}
+                      value={minAge}
+                      onChangeText={setMinAge}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                    <View style={styles.ageRangeSepContainer}>
+                      <ThemedText style={[styles.rangeSep, { color: theme.textSecondary }]}>—</ThemedText>
+                    </View>
+                    <TextInput
+                      style={[styles.ageInput, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
+                      placeholder="50"
+                      placeholderTextColor={theme.textSecondary}
+                      value={maxAge}
+                      onChangeText={setMaxAge}
+                      keyboardType="number-pad"
+                      maxLength={2}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Max Distance (km)</ThemedText>
                   <TextInput
-                    style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                    placeholder="18"
-                    placeholderTextColor={theme.textSecondary}
-                    value={minAge}
-                    onChangeText={setMinAge}
-                    keyboardType="number-pad"
-                    maxLength={2}
-                  />
-                  <ThemedText style={{ color: theme.text }}>to</ThemedText>
-                  <TextInput
-                    style={[styles.ageInput, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
+                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
                     placeholder="50"
                     placeholderTextColor={theme.textSecondary}
-                    value={maxAge}
-                    onChangeText={setMaxAge}
+                    value={maxDistance}
+                    onChangeText={setMaxDistance}
                     keyboardType="number-pad"
-                    maxLength={2}
+                    maxLength={3}
                   />
                 </View>
               </View>
 
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>
-                  Maximum distance (km)
+              {/* Completion celebration card */}
+              <View style={[styles.celebrationCard, { backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}25` }]}>
+                <ThemedText style={styles.celebrationEmoji}>🎉</ThemedText>
+                <ThemedText style={[styles.celebrationTitle, { color: theme.text }]}>You're almost there!</ThemedText>
+                <ThemedText style={[styles.celebrationDesc, { color: theme.textSecondary }]}>
+                  Hit Complete Profile to start discovering amazing connections.
                 </ThemedText>
-                <TextInput
-                  style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                  placeholder="50"
-                  placeholderTextColor={theme.textSecondary}
-                  value={maxDistance}
-                  onChangeText={setMaxDistance}
-                  keyboardType="number-pad"
-                  maxLength={3}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <ThemedText style={[styles.label, { color: theme.text }]}>
-                  Show me
-                </ThemedText>
-                <View style={styles.genderButtons}>
-                  {["Male", "Female", "Other"].map((g) => (
-                    <Pressable
-                      key={g}
-                      style={[
-                        styles.genderButton,
-                        { borderColor: theme.border },
-                        preferredGenders.includes(g) && { backgroundColor: theme.primary, borderColor: theme.primary },
-                      ]}
-                      onPress={() => togglePreferredGender(g)}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.genderButtonText,
-                          { color: theme.text },
-                          preferredGenders.includes(g) && { color: theme.buttonText },
-                        ]}
-                      >
-                        {g}
+                <View style={styles.completeChecklist}>
+                  {[
+                    { label: "Photos added", done: photoCount >= 4 },
+                    { label: "Basic info filled", done: !!name && !!age && !!gender },
+                    { label: "Interests selected", done: interests.length >= 3 },
+                    { label: "Bio written", done: bio.length > 0 },
+                  ].map((item) => (
+                    <View key={item.label} style={styles.checklistRow}>
+                      <View style={[styles.checklistDot, {
+                        backgroundColor: item.done ? theme.primary : theme.border,
+                      }]}>
+                        {item.done && <Feather name="check" size={9} color="#fff" />}
+                      </View>
+                      <ThemedText style={[styles.checklistText, {
+                        color: item.done ? theme.text : theme.textSecondary,
+                        textDecorationLine: item.done ? "none" : "none",
+                      }]}>
+                        {item.label}
                       </ThemedText>
-                    </Pressable>
+                    </View>
                   ))}
                 </View>
               </View>
             </View>
-          </>
-        )}
-
-        <View style={styles.buttonContainer}>
-          {step > 1 && (
-            <Pressable
-              style={[styles.button, styles.secondaryButton, { borderColor: theme.border }]}
-              onPress={() => setStep(step - 1)}
-            >
-              <ThemedText style={[styles.buttonText, { color: theme.text }]}>
-                Back
-              </ThemedText>
-            </Pressable>
           )}
-          <Pressable
-            style={[styles.button, styles.primaryButton, { backgroundColor: theme.primary }]}
-            onPress={step < 5 ? handleNext : handleComplete}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.buttonText} />
-            ) : (
-              <ThemedText style={[styles.buttonText, { color: theme.buttonText }]}>
-                {step < 5 ? "Next" : "Complete"}
-              </ThemedText>
+
+          {/* ── Navigation Buttons ── */}
+          <View style={styles.navRow}>
+            {step > 1 && (
+              <Pressable
+                style={[styles.backBtn, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={handleBack}
+              >
+                <Feather name="arrow-left" size={18} color={theme.text} />
+              </Pressable>
             )}
-          </Pressable>
-        </View>
-      </View>
-
-      {/* Zodiac Sign Modal */}
-      <Modal
-        visible={zodiacModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setZodiacModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Select Zodiac Sign</ThemedText>
-              <Pressable onPress={() => setZodiacModalVisible(false)}>
-                <Feather name="x" size={24} color={theme.text} />
-              </Pressable>
-            </View>
-            <View style={styles.zodiacGrid}>
-              {ZODIAC_SIGNS.map((sign) => (
-                <Pressable
-                  key={sign.value}
-                  style={[
-                    styles.zodiacItem,
-                    { borderColor: theme.border },
-                    zodiacSign === sign.value && { backgroundColor: theme.primary, borderColor: theme.primary },
-                  ]}
-                  onPress={() => {
-                    setZodiacSign(sign.value);
-                    setZodiacModalVisible(false);
-                  }}
-                >
-                  <ThemedText style={[styles.zodiacLabel, { color: zodiacSign === sign.value ? theme.buttonText : theme.text }]}>
-                    {sign.label}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
+            <Pressable
+              style={[styles.nextBtn, { flex: 1 }]}
+              onPress={step < 5 ? handleNext : handleComplete}
+              disabled={loading}
+            >
+              <LinearGradient
+                colors={["#10B981", "#059669"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.nextBtnGradient}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <ThemedText style={styles.nextBtnText}>
+                      {step < 5 ? "Continue" : "Complete Profile"}
+                    </ThemedText>
+                    <Feather name={step < 5 ? "arrow-right" : "check"} size={18} color="#fff" style={{ marginLeft: 8 }} />
+                  </>
+                )}
+              </LinearGradient>
+            </Pressable>
           </View>
-        </View>
-      </Modal>
+        </Animated.View>
+      </ScreenKeyboardAwareScrollView>
 
-      {/* Education Modal */}
-      <Modal
-        visible={educationModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEducationModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
-            <View style={styles.modalHeader}>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Select Education Level</ThemedText>
-              <Pressable onPress={() => setEducationModalVisible(false)}>
-                <Feather name="x" size={24} color={theme.text} />
-              </Pressable>
-            </View>
-            <View style={styles.educationList}>
-              {EDUCATION_OPTIONS.map((option) => (
+      {/* ── Privacy Modal ── */}
+      <Modal visible={privacyModalVisible} transparent animationType="fade" onRequestClose={() => setPrivacyModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setPrivacyModalVisible(false)}>
+          <View style={[styles.sheetModal, { backgroundColor: theme.background }]}>
+            <View style={styles.sheetHandle} />
+            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Photo Privacy</ThemedText>
+            <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Who can see this photo?</ThemedText>
+            {PRIVACY_OPTIONS.map((option) => {
+              const isSelected = selectedPhotoIndex !== null && photos[selectedPhotoIndex]?.privacy === option.value;
+              const iconColor = option.value === "private" ? "#FF6B6B" : option.value === "friends" ? "#FFC629" : theme.primary;
+              return (
                 <Pressable
                   key={option.value}
-                  style={[
-                    styles.educationItem,
-                    { borderColor: theme.border },
-                    education === option.value && { backgroundColor: theme.primary, borderColor: theme.primary },
-                  ]}
-                  onPress={() => {
-                    setEducation(option.value);
-                    setEducationModalVisible(false);
-                  }}
+                  style={[styles.privacyOption, { borderColor: isSelected ? theme.primary : theme.border, backgroundColor: isSelected ? `${theme.primary}10` : theme.surface }]}
+                  onPress={() => setPhotoPrivacy(option.value)}
                 >
-                  <ThemedText style={[styles.educationLabel, { color: education === option.value ? theme.buttonText : theme.text }]}>
-                    {option.label}
-                  </ThemedText>
+                  <View style={[styles.privacyIconBox, { backgroundColor: `${iconColor}15` }]}>
+                    <Feather name={option.icon as any} size={20} color={iconColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.privacyLabel, { color: theme.text }]}>{option.label}</ThemedText>
+                    <ThemedText style={[styles.privacyDesc, { color: theme.textSecondary }]}>{option.description}</ThemedText>
+                  </View>
+                  {isSelected && <Feather name="check-circle" size={20} color={theme.primary} />}
                 </Pressable>
-              ))}
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Zodiac Modal ── */}
+      <Modal visible={zodiacModalVisible} transparent animationType="slide" onRequestClose={() => setZodiacModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.listModal, { backgroundColor: theme.background }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Zodiac Sign</ThemedText>
+              <Pressable onPress={() => setZodiacModalVisible(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.text} />
+              </Pressable>
             </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.zodiacGrid}>
+                {ZODIAC_SIGNS.map((sign) => (
+                  <Pressable
+                    key={sign.value}
+                    style={[
+                      styles.zodiacChip,
+                      { borderColor: zodiacSign === sign.value ? theme.primary : theme.border, backgroundColor: zodiacSign === sign.value ? theme.primary : theme.surface },
+                    ]}
+                    onPress={() => { setZodiacSign(sign.value); setZodiacModalVisible(false); }}
+                  >
+                    <ThemedText style={[styles.zodiacText, { color: zodiacSign === sign.value ? "#fff" : theme.text }]}>{sign.label}</ThemedText>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Religion Modal */}
-      <Modal
-        visible={religionModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setReligionModalVisible(false)}
-      >
+
+      {/* ── Religion Modal ── */}
+      <Modal visible={religionModalVisible} transparent animationType="slide" onRequestClose={() => setReligionModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.surface }]}>
+          <View style={[styles.listModal, { backgroundColor: theme.background }]}>
             <View style={styles.modalHeader}>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Select Religion</ThemedText>
-              <Pressable onPress={() => setReligionModalVisible(false)}>
-                <Feather name="x" size={24} color={theme.text} />
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Religion</ThemedText>
+              <Pressable onPress={() => setReligionModalVisible(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.text} />
               </Pressable>
             </View>
-            <View style={styles.educationList}>
+            <ScrollView showsVerticalScrollIndicator={false}>
               {RELIGION_OPTIONS.map((option) => (
                 <Pressable
                   key={option.value}
                   style={[
-                    styles.educationItem,
-                    { borderColor: theme.border },
-                    religion === option.value && { backgroundColor: theme.primary, borderColor: theme.primary },
+                    styles.listItem,
+                    { borderColor: religion === option.value ? theme.primary : theme.border, backgroundColor: religion === option.value ? `${theme.primary}10` : theme.surface },
                   ]}
-                  onPress={() => {
-                    setReligion(option.value);
-                    setReligionModalVisible(false);
-                  }}
+                  onPress={() => { setReligion(option.value); setReligionModalVisible(false); }}
                 >
-                  <ThemedText style={[styles.educationLabel, { color: religion === option.value ? theme.buttonText : theme.text }]}>
-                    {option.label}
-                  </ThemedText>
+                  <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
+                  {religion === option.value && <Feather name="check" size={18} color={theme.primary} />}
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {/* Photo Picker Modal (Android) */}
-      <Modal
-        visible={photoPickerModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPhotoPickerModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.photoPickerModal, { backgroundColor: theme.surface }]}>
-            <View style={styles.photoPickerHeader}>
-              <View style={[styles.photoPickerIconContainer, { backgroundColor: `${theme.primary}20` }]}>
-                <Feather name="camera" size={28} color={theme.primary} />
-              </View>
-              <ThemedText style={[styles.photoPickerTitle, { color: theme.text }]}>Add Photo</ThemedText>
-              <ThemedText style={[styles.photoPickerSubtitle, { color: theme.textSecondary }]}>
-                Choose how you want to add your photo
-              </ThemedText>
-            </View>
-
-            <View style={styles.photoPickerOptions}>
-              <Pressable
-                style={[styles.photoPickerOption, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
-                onPress={() => {
-                  setPhotoPickerModalVisible(false);
-                  pickImage(true, photoPickerSlotIndex);
-                }}
-              >
-                <View style={[styles.photoPickerOptionIcon, { backgroundColor: `${theme.primary}15` }]}>
-                  <Feather name="camera" size={24} color={theme.primary} />
-                </View>
-                <View style={styles.photoPickerOptionText}>
-                  <ThemedText style={[styles.photoPickerOptionTitle, { color: theme.text }]}>Take Photo</ThemedText>
-                  <ThemedText style={[styles.photoPickerOptionDesc, { color: theme.textSecondary }]}>Use your camera</ThemedText>
-                </View>
-                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-              </Pressable>
-
-              <Pressable
-                style={[styles.photoPickerOption, { backgroundColor: theme.backgroundSecondary, borderColor: theme.border }]}
-                onPress={() => {
-                  setPhotoPickerModalVisible(false);
-                  pickImage(false, photoPickerSlotIndex);
-                }}
-              >
-                <View style={[styles.photoPickerOptionIcon, { backgroundColor: `${theme.secondary}15` }]}>
-                  <Feather name="image" size={24} color={theme.secondary} />
-                </View>
-                <View style={styles.photoPickerOptionText}>
-                  <ThemedText style={[styles.photoPickerOptionTitle, { color: theme.text }]}>Choose from Library</ThemedText>
-                  <ThemedText style={[styles.photoPickerOptionDesc, { color: theme.textSecondary }]}>Select from your photos</ThemedText>
-                </View>
-                <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
+      {/* ── Photo Picker Modal (Android) ── */}
+      <Modal visible={photoPickerModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoPickerModalVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setPhotoPickerModalVisible(false)}>
+          <View style={[styles.sheetModal, { backgroundColor: theme.background }]}>
+            <View style={styles.sheetHandle} />
+            <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Add Photo</ThemedText>
             <Pressable
-              style={[styles.photoPickerCancelButton, { borderColor: theme.border }]}
-              onPress={() => setPhotoPickerModalVisible(false)}
+              style={[styles.photoPickerRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={() => { setPhotoPickerModalVisible(false); pickImage(true, photoPickerSlotIndex); }}
             >
-              <ThemedText style={[styles.photoPickerCancelText, { color: theme.textSecondary }]}>Cancel</ThemedText>
+              <View style={[styles.photoPickerRowIcon, { backgroundColor: `${theme.primary}15` }]}>
+                <Feather name="camera" size={22} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.photoPickerRowTitle, { color: theme.text }]}>Take Photo</ThemedText>
+                <ThemedText style={[styles.photoPickerRowDesc, { color: theme.textSecondary }]}>Use your camera</ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+            </Pressable>
+            <Pressable
+              style={[styles.photoPickerRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={() => { setPhotoPickerModalVisible(false); pickImage(false, photoPickerSlotIndex); }}
+            >
+              <View style={[styles.photoPickerRowIcon, { backgroundColor: "#00B2FF15" }]}>
+                <Feather name="image" size={22} color="#00B2FF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.photoPickerRowTitle, { color: theme.text }]}>Choose from Library</ThemedText>
+                <ThemedText style={[styles.photoPickerRowDesc, { color: theme.textSecondary }]}>Select from your photos</ThemedText>
+              </View>
+              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
             </Pressable>
           </View>
-        </View>
+        </Pressable>
       </Modal>
-      </ScreenKeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.lg,
+  gradientHeader: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.xl,
   },
-  progressContainer: {
-    gap: Spacing.sm,
+  stepCounterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
   },
-  progressBar: {
-    height: 4,
-    borderRadius: 2,
+  stepBadge: {
+    backgroundColor: "rgba(255,255,255,0.22)",
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  stepBadgeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  stepIconBubble: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 3,
     overflow: "hidden",
+    marginBottom: Spacing.md,
   },
   progressFill: {
     height: "100%",
-    borderRadius: 2,
+    backgroundColor: "#fff",
+    borderRadius: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
   },
-  progressText: {
-    ...Typography.small,
+  progressGlow: {
+    width: 8,
+    height: "100%",
+    backgroundColor: "rgba(255,255,255,0.6)",
+    borderRadius: 3,
+  },
+  stepDots: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: Spacing.md,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepDotActive: {
+    width: 28,
+    backgroundColor: "#fff",
+  },
+  stepDotDone: {
+    backgroundColor: "rgba(255,255,255,0.7)",
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.5,
+    marginBottom: 3,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.82)",
+    fontWeight: "500",
   },
   content: {
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
-  },
-  title: {
-    ...Typography.h1,
-    marginBottom: Spacing.sm,
-  },
-  subtitle: {
-    ...Typography.body,
-    marginBottom: Spacing.xl,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
   },
   form: {
     gap: Spacing.lg,
   },
-  inputContainer: {
-    gap: Spacing.sm,
+
+  // ── Hero Photo ──
+  heroPhotoContainer: {
+    alignItems: "center",
   },
-  label: {
-    ...Typography.body,
-    fontWeight: "500",
+  heroPhotoSlot: {
+    width: BIG_SLOT_WIDTH,
+    height: BIG_SLOT_HEIGHT,
+    borderRadius: BorderRadius.xxl,
+    overflow: "hidden",
+    borderWidth: 2,
+    ...Shadow.medium,
   },
-  input: {
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    ...Typography.body,
-    borderWidth: 1,
+  heroPhotoImage: {
+    width: "100%",
+    height: "100%",
   },
-  bioInput: {
-    height: 120,
-    paddingTop: Spacing.md,
+  heroGradientOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 80,
   },
-  charCount: {
-    ...Typography.small,
-    textAlign: "right",
+  heroRemoveBtn: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadow.small,
   },
-  genderButtons: {
+  heroBadge: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
     flexDirection: "row",
-    gap: Spacing.sm,
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: BorderRadius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  genderButton: {
-    flex: 1,
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
+  heroBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+  },
+  heroPrivacyBtn: {
+    position: "absolute",
+    bottom: 12,
+    right: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
   },
-  genderButtonText: {
-    ...Typography.body,
-    fontWeight: "500",
-  },
-  ageRangeContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  ageInput: {
+  heroEmptyState: {
     flex: 1,
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    ...Typography.body,
-    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    padding: Spacing.xl,
+  },
+  heroAddIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    ...Shadow.medium,
+  },
+  heroEmptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
     textAlign: "center",
   },
-  interestsGrid: {
+  heroEmptySubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    textAlign: "center",
+  },
+
+  // ── Small photos grid ──
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginTop: 4,
+  },
+  smallPhotoGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
     gap: Spacing.sm,
   },
-  interestChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-  },
-  interestText: {
-    ...Typography.caption,
-    fontWeight: "500",
-  },
-  lookingForButtons: {
-    gap: Spacing.sm,
-  },
-  lookingForButton: {
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  lookingForText: {
-    ...Typography.body,
-    fontWeight: "500",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginTop: Spacing.xl,
-  },
-  button: {
-    flex: 1,
-    height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  primaryButton: {},
-  secondaryButton: {
-    borderWidth: 2,
-  },
-  buttonText: {
-    ...Typography.body,
-    fontWeight: "600",
-  },
-  photoGrid: {
-    gap: Spacing.md,
-  },
-  photoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.md,
-  },
-  photoItem: {
+  smallPhotoSlot: {
+    width: SMALL_SLOT,
     aspectRatio: 3 / 4,
     borderRadius: BorderRadius.lg,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 2,
-    borderColor: "transparent",
+    overflow: "hidden",
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  photoImage: {
+  smallPhotoImage: {
     width: "100%",
     height: "100%",
   },
-  selectedBadge: {
+  smallRemoveBtn: {
     position: "absolute",
-    top: Spacing.xs,
-    right: Spacing.xs,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: 5,
+    right: 5,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
   },
-  selectedBadgeText: {
-    ...Typography.small,
-    fontWeight: "700",
-  },
-  photoHint: {
-    ...Typography.small,
-    textAlign: "center",
-    marginTop: Spacing.sm,
-  },
-  addPhotoButton: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderStyle: "dashed",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-  },
-  addPhotoText: {
-    ...Typography.small,
-    fontWeight: "500",
-  },
-  removePhotoButton: {
+  smallPrivacyBtn: {
     position: "absolute",
-    top: Spacing.xs,
-    left: Spacing.xs,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    bottom: 5,
+    right: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
   },
-  emptyPhotoSlot: {
-    width: "100%",
-    height: "100%",
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    borderStyle: "dashed",
+  smallAddIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.xs,
   },
-  profilePhotoBadge: {
-    position: "absolute",
-    bottom: Spacing.sm,
-    left: Spacing.sm,
-    right: Spacing.sm,
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: BorderRadius.sm,
+
+  // ── Photo progress ──
+  photoProgressCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.md,
+    gap: Spacing.sm,
     alignItems: "center",
   },
-  profilePhotoBadgeText: {
-    ...Typography.small,
-    fontWeight: "700",
+  photoProgressDots: {
+    flexDirection: "row",
+    gap: 5,
   },
-  slotNumber: {
-    ...Typography.small,
+  photoProgressDot: {
+    width: 20,
+    height: 6,
+    borderRadius: 3,
+  },
+  photoProgressText: {
+    fontSize: 13,
     fontWeight: "600",
-  },
-  privacyButton: {
-    position: "absolute",
-    bottom: Spacing.xs,
-    right: Spacing.xs,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
+    textAlign: "center",
   },
   privacyLegend: {
     flexDirection: "row",
+    gap: Spacing.xl,
     justifyContent: "center",
-    gap: Spacing.lg,
-    marginTop: Spacing.md,
-    paddingVertical: Spacing.sm,
   },
   legendItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.xs,
+    gap: 5,
   },
   legendText: {
-    ...Typography.small,
+    fontSize: 12,
+    fontWeight: "500",
   },
+
+  // ── Info Cards ──
+  infoCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.lg,
+    gap: Spacing.lg,
+    ...Shadow.small,
+  },
+  cardSectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginBottom: -Spacing.xs,
+  },
+  cardSectionIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardSectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+  cardSectionSubtitle: {
+    fontSize: 11,
+    fontWeight: "500",
+  },
+
+  // ── Form inputs ──
+  inputGroup: {
+    gap: 7,
+  },
+  rowInputs: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  binaryRow: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginLeft: 2,
+  },
+  input: {
+    height: 52,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    fontSize: 15,
+    fontWeight: "500",
+    borderWidth: 1.5,
+  },
+  dropdownButton: {
+    height: 52,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    borderWidth: 1.5,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pillRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+  },
+  pill: {
+    flex: 1,
+    height: 46,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pillText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  // ── Interests ──
+  interestHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  interestTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  selectionBadge: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+  },
+  selectionBadgeText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  interestSubtitle: {
+    fontSize: 14,
+    fontWeight: "400",
+    marginTop: -Spacing.sm,
+  },
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  lookingForSection: {
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.3,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: "400",
+    marginTop: -4,
+  },
+  lookingForGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  lookingForCard: {
+    width: (width - Spacing.xl * 2 - Spacing.sm) / 2,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    padding: Spacing.md,
+    position: "relative",
+    ...Shadow.small,
+  },
+  lookingForEmoji: {
+    fontSize: 24,
+    marginBottom: 6,
+  },
+  lookingForLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  lookingForDesc: {
+    fontSize: 12,
+    fontWeight: "400",
+    lineHeight: 16,
+  },
+  lookingForCheck: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  // ── Bio ──
+  promptsScroll: {
+    marginHorizontal: -Spacing.xl,
+  },
+  promptsScrollContent: {
+    paddingHorizontal: Spacing.xl,
+    gap: Spacing.sm,
+  },
+  promptChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+  },
+  promptEmoji: {
+    fontSize: 14,
+  },
+  promptText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  bioCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 2,
+    padding: Spacing.lg,
+    minHeight: 170,
+    ...Shadow.small,
+  },
+  bioInput: {
+    fontSize: 15,
+    fontWeight: "400",
+    lineHeight: 22,
+    minHeight: 120,
+  },
+  bioFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Spacing.sm,
+  },
+  bioMeter: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    marginRight: Spacing.sm,
+    overflow: "hidden",
+  },
+  bioMeterFill: {
+    height: "100%",
+    borderRadius: 2,
+  },
+  charCount: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  bioTipsCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    padding: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  bioTipsTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  bioTipRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  bioTipDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    flexShrink: 0,
+  },
+  bioTipText: {
+    fontSize: 13,
+    fontWeight: "400",
+    flex: 1,
+  },
+
+  // ── Preferences ──
+  ageRangeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  ageRangeSepContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: 4,
+  },
+  ageInput: {
+    flex: 1,
+    height: 52,
+    borderRadius: BorderRadius.lg,
+    paddingHorizontal: Spacing.md,
+    fontSize: 16,
+    fontWeight: "600",
+    borderWidth: 1.5,
+    textAlign: "center",
+  },
+  rangeSep: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+
+  // ── Celebration ──
+  celebrationCard: {
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1,
+    padding: Spacing.xl,
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  celebrationEmoji: {
+    fontSize: 40,
+  },
+  celebrationTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    textAlign: "center",
+    letterSpacing: -0.3,
+  },
+  celebrationDesc: {
+    fontSize: 14,
+    fontWeight: "400",
+    textAlign: "center",
+    lineHeight: 20,
+    marginBottom: Spacing.sm,
+  },
+  completeChecklist: {
+    width: "100%",
+    gap: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  checklistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  checklistDot: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  checklistText: {
+    fontSize: 14,
+    fontWeight: "500",
+  },
+
+  // ── Navigation ──
+  navRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.xxl,
+  },
+  backBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  nextBtn: {
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  nextBtnGradient: {
+    height: 56,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  nextBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.2,
+  },
+
+  // ── Modals ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    justifyContent: "flex-end",
     alignItems: "center",
-    padding: Spacing.lg,
   },
-  privacyModal: {
+  sheetModal: {
     width: "100%",
-    maxWidth: 340,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
+    gap: Spacing.md,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(0,0,0,0.12)",
+    alignSelf: "center",
+    marginBottom: Spacing.sm,
+  },
+  listModal: {
+    width: "100%",
+    maxHeight: "70%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: Spacing.xl,
+    paddingBottom: Spacing.xxxl,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.lg,
   },
   modalTitle: {
-    ...Typography.h2,
-    textAlign: "center",
-    marginBottom: Spacing.xs,
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.3,
   },
   modalSubtitle: {
-    ...Typography.body,
-    textAlign: "center",
-    marginBottom: Spacing.lg,
+    fontSize: 13,
+    fontWeight: "400",
+    marginTop: -Spacing.xs,
+    marginBottom: Spacing.xs,
   },
   privacyOption: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    marginBottom: Spacing.sm,
-  },
-  privacyOptionContent: {
-    flexDirection: "row",
-    alignItems: "center",
     gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
   },
-  privacyIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  privacyIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
   },
-  privacyOptionText: {
-    gap: 2,
+  privacyLabel: {
+    fontSize: 15,
+    fontWeight: "700",
   },
-  privacyOptionLabel: {
-    ...Typography.body,
-    fontWeight: "600",
-  },
-  privacyOptionDesc: {
-    ...Typography.small,
-  },
-  selectButton: {
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: Spacing.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  selectButtonText: {
-    ...Typography.body,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 400,
-    borderRadius: BorderRadius.lg,
-    padding: Spacing.lg,
-    maxHeight: "80%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: Spacing.lg,
+  privacyDesc: {
+    fontSize: 12,
+    fontWeight: "400",
   },
   zodiacGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.sm,
-    justifyContent: "center",
+    paddingBottom: Spacing.xl,
   },
-  zodiacItem: {
-    width: 80,
-    height: 48,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  zodiacChip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
   },
-  zodiacLabel: {
-    ...Typography.small,
+  zodiacText: {
+    fontSize: 14,
     fontWeight: "500",
   },
-  educationList: {
-    gap: Spacing.sm,
-  },
-  educationItem: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-  },
-  educationLabel: {
-    ...Typography.body,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  photoPickerModal: {
-    width: "100%",
-    maxWidth: 340,
-    borderRadius: BorderRadius.xl,
-    padding: Spacing.xl,
-  },
-  photoPickerHeader: {
-    alignItems: "center",
-    marginBottom: Spacing.xl,
-  },
-  photoPickerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.md,
-  },
-  photoPickerTitle: {
-    ...Typography.h2,
-    marginBottom: Spacing.xs,
-  },
-  photoPickerSubtitle: {
-    ...Typography.body,
-    textAlign: "center",
-  },
-  photoPickerOptions: {
-    gap: Spacing.md,
-    marginBottom: Spacing.lg,
-  },
-  photoPickerOption: {
+  listItem: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1.5,
+    marginBottom: Spacing.sm,
   },
-  photoPickerOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  listItemText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  photoPickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+  },
+  photoPickerRowIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: "center",
     justifyContent: "center",
   },
-  photoPickerOptionText: {
-    flex: 1,
+  photoPickerRowTitle: {
+    fontSize: 15,
+    fontWeight: "700",
   },
-  photoPickerOptionTitle: {
-    ...Typography.body,
-    fontWeight: "600",
-    marginBottom: 2,
-  },
-  photoPickerOptionDesc: {
-    ...Typography.small,
-  },
-  photoPickerCancelButton: {
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    borderTopWidth: 1,
-    marginTop: Spacing.sm,
-  },
-  photoPickerCancelText: {
-    ...Typography.body,
-    fontWeight: "500",
+  photoPickerRowDesc: {
+    fontSize: 12,
+    fontWeight: "400",
   },
 });

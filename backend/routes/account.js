@@ -37,7 +37,7 @@ router.delete('/delete', protect, async (req, res) => {
     }
     
     // Log deletion reason for analytics
-    console.log('Account deletion - User:', user.email, 'Reason:', reason);
+    console.log('Account deletion - User ID:', user._id, 'Reason:', reason);
     
     // Delete all user data
     await Promise.all([
@@ -375,7 +375,7 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
       });
     }
     
-    console.log('Account deletion with OTP - User:', user.email, 'Reason:', reason);
+    console.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
     
     await Promise.all([
       User.deleteOne({ _id: user._id }),

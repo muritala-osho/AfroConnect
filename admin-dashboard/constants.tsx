@@ -13,6 +13,7 @@ import {
   LifeBuoy,
   Gavel,
   TrendingDown,
+  Headphones,
 } from 'lucide-react';
 import { User, AdminRole, PushTemplate } from './types';
 
@@ -24,7 +25,8 @@ export const NAV_ITEMS = [
   { id: 'appeals',           label: 'Appeals Queue',      icon: <Gavel size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'churn',             label: 'Churn Intelligence', icon: <TrendingDown size={20} />,    roles: [AdminRole.SUPER_ADMIN] },
   { id: 'content',           label: 'Content Moderation', icon: <ImageOff size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
-  { id: 'support',           label: 'Support Desk',       icon: <LifeBuoy size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
+  { id: 'support',           label: 'Support Desk',       icon: <LifeBuoy size={20} />,        roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'agent',             label: 'My Tickets',         icon: <Headphones size={20} />,      roles: [AdminRole.SUPPORT] },
   { id: 'payments',          label: 'Finances',           icon: <CreditCard size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'analytics',         label: 'Intelligence',       icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
   { id: 'broadcasts',        label: 'Broadcasts',         icon: <Megaphone size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },

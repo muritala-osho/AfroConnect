@@ -8,6 +8,10 @@ const Message = require('../models/Message');
 const validate = require('../middleware/validate');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const schemas = require('../validators/schemas');
+const redis = require('../utils/redis');
+
+const STORY_ACTIVE_TTL = 30;   // seconds — active feed refreshes quickly
+const STORY_USER_TTL   = 60;   // seconds — single-user story list
 
 // @route   POST /api/stories
 // @desc    Create a new story
@@ -42,6 +46,12 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
 
     await story.populate('user', 'name photos');
 
+    // Invalidate story caches so the new story appears immediately
+    await Promise.all([
+      redis.del(`stories:active:${req.user._id}`),
+      redis.del(`stories:mine:${req.user._id}`),
+    ]);
+
     res.status(201).json({ success: true, story });
   } catch (error) {
     console.error('Create story error:', error);
@@ -54,6 +64,10 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
 // @access  Private
 router.get('/active', protect, async (req, res) => {
   try {
+    const cacheKey = `stories:active:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, stories: cached, fromCache: true });
+
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
     const blockedUserIds = (currentUser?.blockedUsers || []).map(id => id.toString());
     
@@ -123,14 +137,15 @@ router.get('/active', protect, async (req, res) => {
       }
     });
 
-    res.json({ 
-      success: true, 
-      stories: Array.from(userStoryMap.values()).sort((a, b) => {
-        if (a.isSelf) return -1;
-        if (b.isSelf) return 1;
-        return 0;
-      })
+    const result = Array.from(userStoryMap.values()).sort((a, b) => {
+      if (a.isSelf) return -1;
+      if (b.isSelf) return 1;
+      return 0;
     });
+
+    await redis.set(cacheKey, result, STORY_ACTIVE_TTL);
+
+    res.json({ success: true, stories: result });
   } catch (error) {
     console.error('Get active stories error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -188,6 +203,10 @@ router.get('/friends', protect, async (req, res) => {
 // @access  Private
 router.get('/my-stories', protect, async (req, res) => {
   try {
+    const cacheKey = `stories:mine:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, stories: cached, fromCache: true });
+
     const stories = await Story.find({
       user: req.user._id,
       expiresAt: { $gt: Date.now() }
@@ -198,26 +217,27 @@ router.get('/my-stories', protect, async (req, res) => {
     // Premium feature: see who viewed story
     const isPremium = req.user.premium?.isActive;
 
-    res.json({ 
-      success: true, 
-      stories: stories.map(s => {
-        const storyObj = s.toObject();
-        const viewCount = s.views ? s.views.length : 0;
-        return {
-          ...storyObj,
-          imageUrl: s.imageUrl || s.mediaUrl,
-          mediaUrl: s.mediaUrl || s.imageUrl,
-          viewCount,
-          viewedBy: s.views.map(v => v.user?._id?.toString()),
-          viewers: isPremium ? s.views.map(v => ({
-            id: v.user?._id,
-            name: v.user?.name,
-            photo: v.user?.photos?.[0]?.url || v.user?.photos?.[0],
-            viewedAt: v.viewedAt
-          })) : []
-        };
-      })
+    const result = stories.map(s => {
+      const storyObj = s.toObject();
+      const viewCount = s.views ? s.views.length : 0;
+      return {
+        ...storyObj,
+        imageUrl: s.imageUrl || s.mediaUrl,
+        mediaUrl: s.mediaUrl || s.imageUrl,
+        viewCount,
+        viewedBy: s.views.map(v => v.user?._id?.toString()),
+        viewers: isPremium ? s.views.map(v => ({
+          id: v.user?._id,
+          name: v.user?.name,
+          photo: v.user?.photos?.[0]?.url || v.user?.photos?.[0],
+          viewedAt: v.viewedAt
+        })) : []
+      };
     });
+
+    await redis.set(cacheKey, result, STORY_ACTIVE_TTL);
+
+    res.json({ success: true, stories: result });
   } catch (error) {
     console.error('Get my stories error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -230,7 +250,10 @@ router.get('/my-stories', protect, async (req, res) => {
 router.get('/user/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
-    
+    const cacheKey = `stories:user:${userId}:viewer:${req.user._id}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) return res.json({ success: true, stories: cached, fromCache: true });
+
     // Check if user is blocked
     const currentUser = await User.findById(req.user._id).select('blockedUsers');
     const targetUserCheck = await User.findById(userId).select('blockedUsers');
@@ -248,19 +271,19 @@ router.get('/user/:userId', protect, async (req, res) => {
       .populate('views.user', 'name photos')
       .sort({ createdAt: -1 });
 
-      return res.json({ 
-        success: true, 
-        stories: stories.map(s => ({
-          _id: s._id,
-          type: s.type,
-          imageUrl: s.imageUrl || s.mediaUrl,
-          mediaUrl: s.mediaUrl || s.imageUrl,
-          textContent: s.textContent,
-          backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
-          createdAt: s.createdAt,
-          viewedBy: s.views.map(v => v.user?._id?.toString())
-        }))
-      });
+      const result = stories.map(s => ({
+        _id: s._id,
+        type: s.type,
+        imageUrl: s.imageUrl || s.mediaUrl,
+        mediaUrl: s.mediaUrl || s.imageUrl,
+        textContent: s.textContent,
+        backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
+        createdAt: s.createdAt,
+        viewedBy: s.views.map(v => v.user?._id?.toString())
+      }));
+
+      await redis.set(cacheKey, result, STORY_USER_TTL);
+      return res.json({ success: true, stories: result });
     }
     
     const stories = await Story.find({
@@ -269,19 +292,20 @@ router.get('/user/:userId', protect, async (req, res) => {
     })
     .sort({ createdAt: -1 });
 
-    res.json({ 
-      success: true, 
-      stories: stories.map(s => ({
-        _id: s._id,
-        type: s.type,
-        imageUrl: s.imageUrl || s.mediaUrl,
-        mediaUrl: s.mediaUrl || s.imageUrl,
-        textContent: s.textContent,
-        backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
-        createdAt: s.createdAt,
-        viewedBy: s.views.map(v => v.user?.toString())
-      }))
-    });
+    const result = stories.map(s => ({
+      _id: s._id,
+      type: s.type,
+      imageUrl: s.imageUrl || s.mediaUrl,
+      mediaUrl: s.mediaUrl || s.imageUrl,
+      textContent: s.textContent,
+      backgroundColor: s.backgroundColor ? [s.backgroundColor, s.backgroundColor] : undefined,
+      createdAt: s.createdAt,
+      viewedBy: s.views.map(v => v.user?.toString())
+    }));
+
+    await redis.set(cacheKey, result, STORY_USER_TTL);
+
+    res.json({ success: true, stories: result });
   } catch (error) {
     console.error('Get user stories error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -630,6 +654,13 @@ router.delete('/:storyId', protect, async (req, res) => {
     }
 
     await story.deleteOne();
+
+    // Invalidate caches so deletion is reflected immediately
+    await Promise.all([
+      redis.del(`stories:active:${req.user._id}`),
+      redis.del(`stories:mine:${req.user._id}`),
+      redis.del(`stories:user:${req.user._id}:viewer:${req.user._id}`),
+    ]);
 
     res.json({ success: true, message: 'Story deleted' });
   } catch (error) {

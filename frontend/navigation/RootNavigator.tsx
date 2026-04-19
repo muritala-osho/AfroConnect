@@ -43,6 +43,7 @@ import ProfileCommentsScreen from "@/screens/ProfileCommentsScreen";
 import MatchPopupScreen from "@/screens/MatchPopupScreen";
 import CustomizeInterfaceScreen from "@/screens/CustomizeInterfaceScreen";
 import SocialMediaScreen from "@/screens/SocialMediaScreen";
+import DailyMatchScreen from "@/screens/DailyMatchScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -63,8 +64,8 @@ export type RootStackParamList = {
   UserDistanceMap: { otherUser: any };
   ProfileDetail: { userId: string; isFromLikes?: boolean; likeUserId?: string };
   ChatDetail: { userId: string; userName: string; userPhoto?: string };
-  VoiceCall: { userId: string; userName: string; userPhoto?: string };
-  VideoCall: { userId: string; userName: string; userPhoto?: string };
+  VoiceCall: { userId?: string; userName: string; userPhoto?: string; isIncoming?: boolean; callData?: any; callerId?: string; matchId?: string; callAccepted?: boolean; returnToCall?: boolean };
+  VideoCall: { userId?: string; userName: string; userPhoto?: string; isIncoming?: boolean; callData?: any; callerId?: string; matchId?: string };
   EditProfile: undefined;
   Settings: undefined;
   FriendRequests: undefined;
@@ -102,6 +103,7 @@ export type RootStackParamList = {
   };
   CustomizeInterface: undefined;
   SocialMedia: undefined;
+  DailyMatch: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -202,6 +204,7 @@ export default function RootNavigator() {
             <Stack.Screen name="AppealBanned" component={AppealBannedScreen} />
             <Stack.Screen name="CustomizeInterface" component={CustomizeInterfaceScreen} options={{ headerShown: false }} />
             <Stack.Screen name="SocialMedia" component={SocialMediaScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DailyMatch" component={DailyMatchScreen} options={{ presentation: "fullScreenModal" }} />
           </>
         )}
       </Stack.Navigator>

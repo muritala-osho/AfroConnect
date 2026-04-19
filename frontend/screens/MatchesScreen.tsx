@@ -549,6 +549,20 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
           <ThemedText style={styles.headerTitle}>{t('matches')}</ThemedText>
         </View>
 
+        <Pressable
+          style={[styles.dailyMatchBanner, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40' }]}
+          onPress={() => navigation.navigate('DailyMatch' as any)}
+        >
+          <View style={[styles.dailyMatchIconWrap, { backgroundColor: theme.primary }]}>
+            <Feather name="star" size={16} color="#FFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={[styles.dailyMatchTitle, { color: theme.text }]}>Today's Match</ThemedText>
+            <ThemedText style={[styles.dailyMatchSub, { color: theme.textSecondary }]}>Your daily curated match — 1 person per day</ThemedText>
+          </View>
+          <Feather name="chevron-right" size={18} color={theme.primary} />
+        </Pressable>
+
         <View style={styles.tabs}>
           <Pressable 
             style={[styles.tab, activeTab === 'matches' && { borderBottomColor: theme.primary, borderBottomWidth: 2 }]}
@@ -605,7 +619,31 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#OOA61",
+  },
+  dailyMatchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    gap: 12,
+  },
+  dailyMatchIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dailyMatchTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  dailyMatchSub: {
+    fontSize: 12,
+    marginTop: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.lg,

@@ -49,6 +49,7 @@ export interface User {
   zodiacSign?: string;
   jobTitle?: string;
   education?: string;
+  school?: string;
   livingIn?: string;
   privacySettings?: {
     hideAge?: boolean;
@@ -109,8 +110,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Only connect socket when user is fully authenticated (profile complete)
   const userProfileComplete = useMemo(() => {
     const hasPhotos = !!user?.photos && Array.isArray(user.photos) && user.photos.length > 0;
-    return !!user && !!user.name && hasPhotos;
-  }, [user?.photos, user?.name, user]);
+    return !!user && hasPhotos;
+  }, [user?.photos, user]);
   
   useEffect(() => {
     // Connect socket for real-time features

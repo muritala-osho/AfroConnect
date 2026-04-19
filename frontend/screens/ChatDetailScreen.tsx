@@ -51,6 +51,7 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
+import { setChatScreenOpen } from "@/context/UnreadContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -75,7 +76,7 @@ interface Message {
   sender: string | { _id: string };
   content?: string;
   text?: string;
-  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call";
+  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply";
   imageUrl?: string;
   videoUrl?: string;
   audioUrl?: string;
@@ -93,18 +94,28 @@ interface Message {
   deletedForEveryone?: boolean;
   deletedFor?: string[];
   reactions?: MessageReaction[];
+  viewOnce?: boolean;
+  viewOnceOpenedBy?: string[];
+  edited?: boolean;
+  editedAt?: string;
+  storyReaction?: {
+    storyId: string;
+    emoji?: string;
+    storyType?: string;
+    storyPreview?: string;
+  };
 }
 
 const EMOJI_LIST = [
-  "ðŸ˜€","ðŸ˜‚","ðŸ˜","ðŸ¥°","ðŸ˜˜","ðŸ¤—","ðŸ˜Š","ðŸ™‚","ðŸ˜‰","ðŸ˜Ž","ðŸ¤©","ðŸ¥³","ðŸ˜‹","ðŸ¤¤",
-  "ðŸ˜œ","ðŸ¤ª","ðŸ˜","ðŸ¤‘","ðŸ¤”","ðŸ¤­","ðŸ¤«","ðŸ¤","ðŸ˜","ðŸ˜Œ","ðŸ˜”","ðŸ˜ª","ðŸ¤’","ðŸ˜·",
-  "ðŸ¤•","ðŸ¤¢","ðŸ¤®","ðŸ¥µ","ðŸ¥¶","ðŸ˜±","ðŸ˜¨","ðŸ˜°","ðŸ˜¥","ðŸ˜¢","ðŸ˜­","ðŸ˜¤","ðŸ˜ ","ðŸ¤¬",
-  "ðŸ˜ˆ","ðŸ‘¿","ðŸ’€","â˜ ï¸","ðŸ’©","ðŸ¤¡","ðŸ‘¹","ðŸ‘º","ðŸ‘»","ðŸ‘½","ðŸ‘¾","ðŸ¤–","ðŸŽƒ","ðŸ˜º",
-  "ðŸ˜¸","ðŸ˜¹","ðŸ˜»","ðŸ˜¼","ðŸ˜½","ðŸ™€","ðŸ˜¿","ðŸ˜¾","â¤ï¸","ðŸ§¡","ðŸ’›","ðŸ’š","ðŸ’™","ðŸ’œ",
-  "ðŸ–¤","ðŸ¤","ðŸ¤Ž","ðŸ’”","â£ï¸","ðŸ’•","ðŸ’ž","ðŸ’“","ðŸ’—","ðŸ’–","ðŸ’˜","ðŸ’","ðŸ‘","ðŸ‘Ž",
-  "ðŸ‘","ðŸ™Œ","ðŸ¤","ðŸ¤²","ðŸ™","âœŒï¸","ðŸ¤Ÿ","ðŸ¤˜","ðŸ¤™","ðŸ‘‹","ðŸ–ï¸","âœ‹","ðŸ‘Œ","ðŸ¤Œ",
-  "ðŸ”¥","âœ¨","â­","ðŸŒŸ","ðŸ’«","ðŸ’¥","ðŸ’¢","ðŸ’¦","ðŸ’¨","ðŸŽ‰","ðŸŽŠ","ðŸŽ","ðŸŽˆ","ðŸŽ€",
-  "ðŸ†","ðŸ¥‡","ðŸ¥ˆ","ðŸ¥‰",
+  "😀","😂","😍","🥰","😘","🤗","😊","🙂","😉","😎","🤩","🥳","😋","🤤",
+  "😜","🤪","😏","😌","😓","😪","🤒","😷",
+  "🤕","🤢","🤮","🥵","🥶","😱","😨","😰","😥","😢","😭","😤","😠","🤬",
+  "😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖","🎃","😺",
+  "😸","😹","😻","😼","😽","🙀","😿","😾","❤️","🧡","💛","💚","💙","💜",
+  "🖤","🤍","🤎","💓","💕","💕","💞","💓","💗","💖","💘","💑","💎",
+  "👍","🙌","🤝","✌️","🤟","🤘","🤙","👋","🖖","✋","👌","🤌",
+  "🔥","✨","⭐","🎈","🎀",
+  "🏆","🥇","🥈","🥉",
 ];
 
 const REPORT_REASONS = [
@@ -136,19 +147,17 @@ const CHAT_THEMES = [
 ];
 
 const AI_SUGGESTIONS = [
-  "Hey! How's your day going? ðŸ˜Š",
+  "Hey! How's your day going? 😊",
   "I love your profile! What are your hobbies?",
   "What's your favorite thing to do on weekends?",
   "I noticed we have similar interests! Tell me more about yourself",
   "You seem really interesting! What do you do for fun?",
-  "Hi there! What made you swipe right on me? ðŸ˜„",
+  "Hi there! What made you swipe right on me? 😄",
   "I'd love to get to know you better!",
   "What's the best trip you've ever taken?",
 ];
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// SwipeableMessage
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 const SwipeableMessage = React.memo(
   ({
     item,
@@ -221,86 +230,128 @@ const SwipeableMessage = React.memo(
   },
 );
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// WavyWaveform â€” FIX: removed duplicate recordingPulse that was here before
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+const WAVEFORM_HEIGHTS = [
+  0.3, 0.5, 0.8, 0.6, 1.0, 0.7, 0.4, 0.9, 0.5, 0.7,
+  1.0, 0.6, 0.4, 0.8, 0.5, 0.9, 0.6, 0.3, 0.7, 0.5,
+  0.8, 1.0, 0.4, 0.6, 0.9, 0.5, 0.7, 0.3, 0.8, 0.6,
+];
+
 const WavyWaveform = ({
   isPlaying,
   progress,
   isMe,
   theme,
+  duration,
 }: {
   isPlaying: boolean;
   progress: number;
   isMe: boolean;
   theme: any;
+  duration?: number;
 }) => {
+  const BAR_COUNT = 30;
   const [animations] = useState(() =>
-    Array.from({ length: 20 }).map(() => new Animated.Value(1)),
+    WAVEFORM_HEIGHTS.slice(0, BAR_COUNT).map((h) => new Animated.Value(h)),
   );
+  const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
 
   useEffect(() => {
     if (isPlaying) {
-      const loops = animations.map((anim) => {
-        return Animated.loop(
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = animations.map((anim, i) => {
+        const baseH = WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length];
+        const loop = Animated.loop(
           Animated.sequence([
             Animated.timing(anim, {
-              toValue: Math.random() * 1.5 + 0.5,
-              duration: 300 + Math.random() * 200,
+              toValue: baseH * (0.3 + Math.random() * 0.7) + 0.4,
+              duration: 200 + (i % 5) * 60,
               useNativeDriver: false,
             }),
             Animated.timing(anim, {
-              toValue: 1,
-              duration: 300 + Math.random() * 200,
+              toValue: baseH * 0.6,
+              duration: 180 + (i % 4) * 50,
               useNativeDriver: false,
             }),
           ]),
         );
+        loop.start();
+        return loop;
       });
-      loops.forEach((l) => l.start());
-      return () => loops.forEach((l) => l.stop());
     } else {
-      animations.forEach((anim) =>
-        Animated.spring(anim, { toValue: 1, useNativeDriver: false }).start(),
-      );
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = [];
+      animations.forEach((anim, i) => {
+        Animated.spring(anim, {
+          toValue: WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length],
+          useNativeDriver: false,
+          tension: 60,
+          friction: 8,
+        }).start();
+      });
     }
+    return () => {
+      loopsRef.current.forEach((l) => l.stop());
+      loopsRef.current = [];
+    };
   }, [isPlaying]);
 
+  const formatDuration = (secs?: number) => {
+    if (!secs) return "";
+    const m = Math.floor(secs / 60);
+    const s = Math.round(secs % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
+
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        height: 24,
-        gap: 2,
-        flex: 1,
-        overflow: "hidden",
-      }}
-    >
-      {animations.map((anim, i) => {
-        const isActive = i / 20 <= progress;
-        return (
-          <Animated.View
-            key={i}
-            style={{
-              width: 3,
-              height: 12,
-              transform: [{ scaleY: anim }],
-              backgroundColor: isActive
-                ? isMe ? "#FFF" : theme.primary
-                : isMe ? "rgba(255,255,255,0.3)" : "rgba(0,0,0,0.2)",
-              borderRadius: 2,
-            }}
-          />
-        );
-      })}
+    <View style={{ flex: 1 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          height: 28,
+          gap: 2,
+          flex: 1,
+          overflow: "hidden",
+        }}
+      >
+        {animations.map((anim, i) => {
+          const barProgress = i / BAR_COUNT;
+          const isActive = barProgress <= progress;
+          const isPast = progress > 0 && barProgress < progress;
+          return (
+            <Animated.View
+              key={i}
+              style={{
+                width: 3,
+                borderRadius: 2,
+                height: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [3, 22],
+                }),
+                backgroundColor: isPast || isActive
+                  ? isMe ? "rgba(255,255,255,0.95)" : theme.primary
+                  : isMe ? "rgba(255,255,255,0.35)" : theme.border + "AA",
+              }}
+            />
+          );
+        })}
+      </View>
+      {duration !== undefined && duration > 0 && (
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
+          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
+            {progress > 0 ? formatDuration(progress * duration) : "0:00"}
+          </ThemedText>
+          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
+            {formatDuration(duration)}
+          </ThemedText>
+        </View>
+      )}
     </View>
   );
 };
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// ChatDetailScreen
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 export default function ChatDetailScreen({
   navigation,
   route,
@@ -315,7 +366,7 @@ export default function ChatDetailScreen({
   const insets = useSafeAreaInsets();
   const { user, token } = useAuth();
   const { userId, userName, userPhoto } = route.params as any;
-  const { get, post, put } = useApi();
+  const { get, post, put, patch } = useApi();
 
   const myId = useMemo(() => (user as any)?._id || user?.id || "", [user]);
 
@@ -326,7 +377,8 @@ export default function ChatDetailScreen({
   const [sending, setSending] = useState(false);
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
@@ -361,17 +413,39 @@ export default function ChatDetailScreen({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showTranslateModal, setShowTranslateModal] = useState(false);
   const [translatedText, setTranslatedText] = useState("");
+  const [savedTranslateLang, setSavedTranslateLang] = useState("");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [submittingEdit, setSubmittingEdit] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateTargetLang, setTranslateTargetLang] = useState("");
   const [screenshotProtection, setScreenshotProtection] = useState(false);
+  const [viewOnceMode, setViewOnceMode] = useState(false);
+  const viewOnceModeRef = React.useRef(false);
+  const [viewOnceSent, setViewOnceSent] = useState(false);
+  const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
+  const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
+  const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Load draft on mount
+  
+  const setViewOnceModeSync = (val: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof val === 'function' ? val(viewOnceModeRef.current) : val;
+    viewOnceModeRef.current = next;
+    setViewOnceMode(next);
+  };
+
+  // Load draft + saved translation language on mount
   useEffect(() => {
     const loadDraft = async () => {
       if (!userId) return;
       try {
-        const savedDraft = await AsyncStorage.getItem(`chat_draft_${userId}`);
+        const [savedDraft, savedLang] = await Promise.all([
+          AsyncStorage.getItem(`chat_draft_${userId}`),
+          AsyncStorage.getItem("@afroconnect_translate_lang"),
+        ]);
         if (savedDraft) setMessage(savedDraft);
+        if (savedLang) setSavedTranslateLang(savedLang);
       } catch (error) {
         console.error("Failed to load draft:", error);
       }
@@ -382,6 +456,7 @@ export default function ChatDetailScreen({
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const recordingDurationRef = useRef<number>(0);
@@ -399,10 +474,16 @@ export default function ChatDetailScreen({
 
   useFocusEffect(
     useCallback(() => {
+      // Tell the UnreadContext that the user is viewing a chat — suppress badge counting
+      setChatScreenOpen(true);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        // User left the chat screen — badge counting can resume
+        setChatScreenOpen(false);
+      };
     }, [])
   );
 
@@ -442,16 +523,18 @@ export default function ChatDetailScreen({
     }
   }, [isRecording]);
 
-  // Android keyboard
+  // Track keyboard visibility — removes bottom-inset gap and scrolls to latest message
   useEffect(() => {
-    if (Platform.OS === "android") {
-      const showSub = Keyboard.addListener("keyboardDidShow", (e) => {
-        setKeyboardHeight(e.endCoordinates.height);
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, () => {
+      setIsKeyboardVisible(true);
+      if (Platform.OS === "android") {
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-      });
-      const hideSub = Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0));
-      return () => { showSub.remove(); hideSub.remove(); };
-    }
+      }
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
   // Web keyboard
@@ -461,7 +544,6 @@ export default function ChatDetailScreen({
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      setKeyboardHeight(kbHeight > 50 ? kbHeight + 10 : 0);
       if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     };
     vv.addEventListener("resize", handleResize);
@@ -487,7 +569,7 @@ export default function ChatDetailScreen({
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
-                content: "ðŸ“¸ A screenshot was taken!",
+                content: "📸 A screenshot was taken!",
                 type: "system",
                 sender: myId,
                 matchId: matchIdRef.current,
@@ -495,7 +577,7 @@ export default function ChatDetailScreen({
                 status: "sent",
               };
               setMessages((prev) => [...prev, systemMsg as any]);
-              post(`/chat/${matchIdRef.current}/message`, { content: "ðŸ“¸ A screenshot was taken!", type: "system" }, token).catch(() => {});
+              post(`/chat/${matchIdRef.current}/message`, { content: "📸 A screenshot was taken!", type: "system" }, token).catch(() => {});
             }
           });
           if (screenshotProtection) {
@@ -797,6 +879,17 @@ export default function ChatDetailScreen({
     socketService.on("chat:read", handleMessagesRead);
     socketService.on("chat:message-updated", handleMessageUpdated);
     socketService.on("chat:message-deleted", handleMessageDeleted);
+    socketService.on("chat:message-edited", (data: any) => {
+      if (data.messageId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === data.messageId
+              ? { ...m, content: data.content, edited: true, editedAt: data.editedAt }
+              : m
+          )
+        );
+      }
+    });
     socketService.on("chat:user-typing", handleTyping);
     socketService.on("chat:recording-voice", handleRecordingVoice);
     socketService.on("message:reaction", (data: { messageId: string; reactions: MessageReaction[] }) => {
@@ -812,6 +905,7 @@ export default function ChatDetailScreen({
       socketService.off("chat:read");
       socketService.off("chat:message-updated");
       socketService.off("chat:message-deleted");
+      socketService.off("chat:message-edited");
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
@@ -880,6 +974,17 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
+  const handleMarkViewOnce = (messageId: string) => {
+    if (!token || openedViewOnceIds.has(messageId)) return;
+    // Optimistic update — mark as viewed immediately so placeholder shows right away
+    setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
+    // Fire-and-forget API call in background
+    fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    }).catch(e => console.error("View once mark error:", e));
+  };
+
   const handleTypingIndicator = useCallback(() => {
     if (matchId && token) {
       socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: true });
@@ -907,8 +1012,11 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
-        else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
+        if (uploadData.success && uploadData.url) {
+          const isVOImg = viewOnceModeRef.current;
+          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
+          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
+        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
         console.error("Image upload error:", error);
         Alert.alert("Error", "Failed to upload image. Check your connection.");
@@ -933,8 +1041,11 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸŽ¬ Video", "video", { videoUrl: uploadData.url });
-        else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
+        if (uploadData.success && uploadData.url) {
+          const isVOVid = viewOnceModeRef.current;
+          await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
+          if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
+        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
         console.error("Video upload error:", error);
         Alert.alert("Error", "Failed to upload video. Check your connection.");
@@ -957,7 +1068,11 @@ export default function ChatDetailScreen({
           body: formData,
         });
         const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) await sendMessage("ðŸ“· Photo", "image", { imageUrl: uploadData.url });
+        if (uploadData.success && uploadData.url) {
+          const isVOImg = viewOnceModeRef.current;
+          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
+          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
+        }
       } catch (error) {
         Alert.alert("Error", "Failed to upload photo");
       }
@@ -976,7 +1091,7 @@ export default function ChatDetailScreen({
         const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
         if (geocode) address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(", ");
       } catch (e) {}
-      await sendMessage(`ðŸ“ ${address}`, "location", { latitude, longitude, address });
+      await sendMessage(`📍 ${address}`, "location", { latitude, longitude, address });
     } catch (error) {
       Alert.alert("Error", "Could not get your location");
     }
@@ -1042,7 +1157,7 @@ export default function ChatDetailScreen({
             body: formData,
           });
           const uploadData = await uploadResponse.json();
-          if (uploadData.success && uploadData.url) await sendMessage(`ðŸŽ¤ Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
+          if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
           else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
         } catch (error) {
           console.error("Voice upload error:", error);
@@ -1195,18 +1310,11 @@ export default function ChatDetailScreen({
   };
 
   // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  const fetchAISuggestions = async () => {
-    if (!token) return;
+  const fetchAISuggestions = useCallback(() => {
     setShowAISuggestions(true);
-    try {
-      const response = await post<{ suggestions: string[] }>(
-        "/ai/chat-suggestions",
-        { recipientName: userName, context: messages.slice(-5).map((m) => m.content).join(" ") },
-        token,
-      );
-      if (response.success && response.data?.suggestions) setAiSuggestions(response.data.suggestions);
-    } catch (error) { setAiSuggestions(AI_SUGGESTIONS); }
-  };
+    const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
+    setAiSuggestions(shuffled);
+  }, []);
 
   // â”€â”€â”€ Block / Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBlockUser = async () => {
@@ -1269,12 +1377,51 @@ export default function ChatDetailScreen({
     setSelectedMessage(null);
   }, [selectedMessage, token]);
 
+  const handleEditOpen = useCallback(() => {
+    if (!selectedMessage) return;
+    setShowMessageMenu(false);
+    setEditText(selectedMessage.content || selectedMessage.text || "");
+    setEditingMessage(selectedMessage);
+    setShowEditModal(true);
+  }, [selectedMessage]);
+
+  const handleEditSubmit = useCallback(async () => {
+    if (!editingMessage || !token || !editText.trim()) return;
+    setSubmittingEdit(true);
+    try {
+      const response = await patch<{ message: any }>(
+        `/chat/message/${editingMessage._id}`,
+        { content: editText.trim() },
+        token
+      );
+      if (response.success) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === editingMessage._id
+              ? { ...m, content: editText.trim(), edited: true, editedAt: new Date().toISOString() }
+              : m
+          )
+        );
+        setShowEditModal(false);
+        setEditingMessage(null);
+        setEditText("");
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert("Cannot edit", response.message || response.error || "Failed to edit message");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to edit message");
+    } finally {
+      setSubmittingEdit(false);
+    }
+  }, [editingMessage, token, editText, patch]);
+
   const handleTranslateOpen = useCallback(() => {
     setShowMessageMenu(false);
     setTranslatedText("");
-    setTranslateTargetLang("");
+    setTranslateTargetLang(savedTranslateLang);
     setShowTranslateModal(true);
-  }, []);
+  }, [savedTranslateLang]);
 
   const handleTranslate = useCallback(async (targetLanguage: string) => {
     if (!selectedMessage || !token) return;
@@ -1282,9 +1429,12 @@ export default function ChatDetailScreen({
     if (!textToTranslate) return;
     setTranslating(true);
     try {
-      const response = await post<{ translatedText: string }>("/ai/translate", { text: textToTranslate, targetLanguage, sourceLanguage: "en" }, token);
-      if (response.success && response.data?.translatedText) setTranslatedText(response.data.translatedText);
-      else Alert.alert("Error", response.message || "Translation failed");
+      const response = await post<{ translatedText: string }>("/ai/translate", { text: textToTranslate, targetLanguage, sourceLanguage: "auto" }, token);
+      if (response.success && response.data?.translatedText) {
+        setTranslatedText(response.data.translatedText);
+        setSavedTranslateLang(targetLanguage);
+        AsyncStorage.setItem("@afroconnect_translate_lang", targetLanguage).catch(() => {});
+      } else Alert.alert("Error", response.message || "Translation failed");
     } catch (error) { Alert.alert("Error", (error as any)?.message || "Translation failed"); }
     finally { setTranslating(false); }
   }, [selectedMessage, token, post]);
@@ -1342,6 +1492,17 @@ export default function ChatDetailScreen({
     return new Date(currentMsg.createdAt).toDateString() !== new Date(prevMsg.createdAt).toDateString();
   };
 
+  type EnrichedMessage = Message & { _showDateHeader: boolean };
+
+  const enrichedMessages = useMemo<EnrichedMessage[]>(
+    () =>
+      messages.map((msg, index) => ({
+        ...msg,
+        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
+      })),
+    [messages],
+  );
+
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -1350,13 +1511,25 @@ export default function ChatDetailScreen({
 
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
+  const scrollToMessage = useCallback((messageId: string) => {
+    const index = messages.findIndex(m => m._id === messageId);
+    if (index === -1) return;
+    try {
+      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    } catch {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }
+    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+    setHighlightedMessageId(messageId);
+    highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500);
+  }, [messages]);
+
   // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
-    ({ item, index }: { item: Message; index: number }) => {
+    ({ item }: { item: EnrichedMessage }) => {
       const senderId = typeof item.sender === "string" ? item.sender : item.sender?._id;
       const isMe = String(senderId) === String(myId);
-      const prevMessage = index > 0 ? messages[index - 1] : null;
-      const showDateHeader = shouldShowDateHeader(item, prevMessage);
+      const showDateHeader = item._showDateHeader;
       const messageText = item.deletedForEveryone ? "This message was deleted" : item.content || item.text || "";
 
       return (
@@ -1394,69 +1567,205 @@ export default function ChatDetailScreen({
                       chatBubbleStyle === "minimal" && { borderRadius: 14, borderBottomRightRadius: isMe ? 14 : undefined, borderBottomLeftRadius: !isMe ? 14 : undefined },
                       (item.type === "image" || item.type === "video") && !messageText ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
                       item.type === "location" ? { paddingHorizontal: 4, paddingTop: 4, paddingBottom: 0 } : {},
+                      item._id === highlightedMessageId && { borderWidth: 2, borderColor: isMe ? "rgba(255,255,255,0.7)" : theme.primary },
                     ]}
                   >
                     {item.replyTo && (
-                      <View style={[styles.replyPreviewInBubble, { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary }]}>
+                      <Pressable
+                        onPress={() => scrollToMessage(item.replyTo!.messageId)}
+                        style={({ pressed }) => [
+                          styles.replyPreviewInBubble,
+                          { backgroundColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.06)", borderLeftColor: isMe ? "#FFF" : theme.primary, opacity: pressed ? 0.7 : 1 }
+                        ]}
+                      >
                         <ThemedText style={[styles.replyPreviewName, { color: isMe ? "rgba(255,255,255,0.9)" : theme.primary }]} numberOfLines={1}>{item.replyTo.senderName}</ThemedText>
                         <ThemedText style={[styles.replyPreviewText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]} numberOfLines={2}>
-                          {item.replyTo.type === "image" ? "ðŸ“· Photo" : item.replyTo.type === "video" ? "ðŸŽ¬ Video" : item.replyTo.type === "audio" ? "ðŸŽ¤ Voice message" : item.replyTo.content}
+                          {item.replyTo.type === "image" ? "📷 Photo" : item.replyTo.type === "video" ? "🎬 Video" : item.replyTo.type === "audio" ? "🎤 Voice message" : item.replyTo.content}
                         </ThemedText>
+                      </Pressable>
+                    )}
+
+                    {/* ── Story reaction / reply bubble ── */}
+                    {(item.type === "story_reaction" || item.type === "story_reply") && (
+                      <View style={[
+                        styles.storyContextCard,
+                        { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)",
+                          borderColor: isMe ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.08)" }
+                      ]}>
+                        {/* Story icon + label */}
+                        <View style={styles.storyContextHeader}>
+                          <Ionicons
+                            name={item.type === "story_reaction" ? "heart" : "chatbubble-ellipses"}
+                            size={12}
+                            color={isMe ? "rgba(255,255,255,0.8)" : theme.primary}
+                          />
+                          <ThemedText style={[styles.storyContextLabel, { color: isMe ? "rgba(255,255,255,0.75)" : theme.textSecondary }]}>
+                            {item.type === "story_reaction" ? "Reacted to your story" : "Replied to your story"}
+                          </ThemedText>
+                        </View>
+
+                        {/* Story preview snippet */}
+                        {item.storyReaction?.storyPreview ? (
+                          <View style={styles.storyPreviewRow}>
+                            {/* If it's an image/video URL, show a thumbnail */}
+                            {item.storyReaction.storyPreview.startsWith("http") ? (
+                              <View style={[styles.storyThumbnail, { backgroundColor: "rgba(0,0,0,0.2)" }]}>
+                                <Ionicons name="images-outline" size={18} color="rgba(255,255,255,0.6)" />
+                              </View>
+                            ) : (
+                              <ThemedText
+                                style={[styles.storyPreviewText, { color: isMe ? "rgba(255,255,255,0.65)" : theme.textSecondary }]}
+                                numberOfLines={2}
+                              >
+                                {item.storyReaction.storyPreview}
+                              </ThemedText>
+                            )}
+                            {/* Emoji for reactions */}
+                            {item.type === "story_reaction" && item.storyReaction.emoji && (
+                              <ThemedText style={styles.storyEmoji}>{item.storyReaction.emoji}</ThemedText>
+                            )}
+                          </View>
+                        ) : null}
                       </View>
                     )}
 
-                    {item.type === "image" && item.imageUrl && (
-                      <Pressable onPress={() => setViewingImage(item.imageUrl!)} onLongPress={() => saveImage(item.imageUrl!)}>
-                        <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                        <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                          <Ionicons name="download-outline" size={16} color="#FFF" />
-                        </Pressable>
-                      </Pressable>
-                    )}
-
-                    {item.type === "video" && (item.videoUrl || item.imageUrl) && (
-                      <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) setViewingVideo(url); }} style={styles.videoContainer}>
-                        {failedThumbnails.has(item._id) ? (
-                          <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
-                            <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
-                            <ThemedText style={{ color: "#FFF", fontSize: 12, marginTop: 4 }}>Tap to play</ThemedText>
+                    {item.type === "image" && item.imageUrl && (() => {
+                      const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
+                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && !isSender && isViewedByMe) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
+                            <Ionicons name="eye-off-outline" size={20} color="rgba(128,128,128,0.6)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.textSecondary }]}>Photo opened</ThemedText>
                           </View>
-                        ) : (
-                          <Image
-                            source={{ uri: (() => { const url = item.videoUrl || item.imageUrl || ""; if (url.includes("cloudinary.com")) return url.replace("/upload/", "/upload/so_0,w_400,h_300,c_fill/").replace(/\.(mp4|mov|avi|webm)$/i, ".jpg"); return url.replace(/\.[^.]+$/, ".jpg"); })() }}
-                            style={styles.videoThumbnail} contentFit="cover"
-                            onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
-                          />
-                        )}
-                        <View style={styles.videoOverlay}>
-                          <View style={styles.videoPlayButton}>
-                            <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
-                          </View>
-                        </View>
-                        <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
-                          <Ionicons name="download-outline" size={16} color="#FFF" />
+                        );
+                      }
+                      if (item.viewOnce && !isSender && !isViewedByMe) {
+                        return (
+                          <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
+                            onPress={() => {
+                              handleMarkViewOnce(item._id);
+                              setViewOnceViewerActive(true);
+                              setViewingImage(item.imageUrl!);
+                              if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+                              viewOnceTimerRef.current = setTimeout(() => {
+                                setViewingImage(null);
+                                setViewOnceViewerActive(false);
+                              }, 10000);
+                            }}>
+                            <Ionicons name="eye-outline" size={22} color={theme.primary} />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={!item.viewOnce ? () => saveImage(item.imageUrl!) : undefined}>
+                          {item.viewOnce && isSender && (
+                            <View style={styles.viewOnceSenderBadge}>
+                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          )}
+                          <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
+                          {!item.viewOnce && (
+                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
                         </Pressable>
-                      </Pressable>
-                    )}
+                      );
+                    })()}
+                    {item.type === "video" && (item.videoUrl || item.imageUrl) && (() => {
+                      const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
+                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && !isSender && isViewedByMe) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
+                            <Ionicons name="eye-off-outline" size={20} color="rgba(128,128,128,0.6)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.textSecondary }]}>Video opened</ThemedText>
+                          </View>
+                        );
+                      }
+                      if (item.viewOnce && !isSender && !isViewedByMe) {
+                        return (
+                          <Pressable style={[styles.viewOnceTap, { backgroundColor: theme.primary + '18', borderColor: theme.primary + '40' }]}
+                            onPress={() => {
+                              const url = item.videoUrl || item.imageUrl;
+                              if (url) {
+                                handleMarkViewOnce(item._id);
+                                setViewOnceViewerActive(true);
+                                setViewingVideo(url);
+                                if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+                                viewOnceTimerRef.current = setTimeout(() => {
+                                  setViewingVideo(null);
+                                  setViewOnceViewerActive(false);
+                                }, 10000);
+                              }
+                            }}>
+                            <Ionicons name="eye-outline" size={22} color={theme.primary} />
+                            <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
+                          </Pressable>
+                        );
+                      }
+                      return (
+                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
+                          {item.viewOnce && isSender && (
+                            <View style={styles.viewOnceSenderBadge}>
+                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          )}
+                          {failedThumbnails.has(item._id) ? (
+                            <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
+                              <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
+                              <ThemedText style={{ color: "#FFF", fontSize: 12, marginTop: 4 }}>Tap to play</ThemedText>
+                            </View>
+                          ) : (
+                            <Image
+                              source={{ uri: (() => { const url = item.videoUrl || item.imageUrl || ""; if (url.includes("cloudinary.com")) return url.replace("/upload/", "/upload/so_0,w_400,h_300,c_fill/").replace(/.(mp4|mov|avi|webm)$/i, ".jpg"); return url.replace(/.[^.]+$/, ".jpg"); })() }}
+                              style={styles.videoThumbnail} contentFit="cover"
+                              onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
+                            />
+                          )}
+                          <View style={styles.videoOverlay}>
+                            <View style={styles.videoPlayButton}>
+                              <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                            </View>
+                          </View>
+                          {!item.viewOnce && (
+                            <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
+                        </Pressable>
+                      );
+                    })()}
 
                     {item.type === "audio" && item.audioUrl && (
                       <Pressable
-                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.06)" }]}
+                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
                         onPress={() => playAudio(item.audioUrl!, item._id)}
                       >
-                        <Ionicons
-                          name={playingAudioId === item._id ? "pause" : "play"}
-                          size={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? 26 : 22}
-                          color={isMe ? "#FFF" : theme.primary}
-                        />
+                        <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
+                          <Ionicons
+                            name={
+                              playingAudioId === item._id
+                                ? "pause"
+                                : playingAudioId === "paused:" + item._id
+                                ? "play"
+                                : "play"
+                            }
+                            size={18}
+                            color={isMe ? "#FFF" : theme.primary}
+                          />
+                        </View>
                         <View style={styles.audioWaveform}>
                           <WavyWaveform
                             isPlaying={playingAudioId === item._id}
                             progress={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? audioProgress : 0}
-                            isMe={isMe} theme={theme}
+                            isMe={isMe}
+                            theme={theme}
+                            duration={(item as any).audioDuration}
                           />
                         </View>
-                        <Ionicons name="mic" size={14} color={isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary} />
                       </Pressable>
                     )}
 
@@ -1526,6 +1835,9 @@ export default function ChatDetailScreen({
                     ) : null}
 
                     <View style={styles.messageFooter}>
+                      {item.edited && (
+                        <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.55)" : theme.textSecondary, fontStyle: "italic", marginRight: 4 }]}>edited</ThemedText>
+                      )}
                       <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>{formatTime(item.createdAt)}</ThemedText>
                       {isMe && (
                         <Ionicons
@@ -1566,10 +1878,10 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, messages, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
   );
 
-  const keyExtractor = useCallback((item: Message) => item._id, []);
+  const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);
   const currentTheme = CHAT_THEMES.find((t) => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
 
@@ -1583,16 +1895,23 @@ export default function ChatDetailScreen({
       ) : (
         <FlatList
           ref={flatListRef}
-          data={messages}
+          data={enrichedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
-          extraData={[playingAudioId, audioProgress]}
+          extraData={[playingAudioId, audioProgress, highlightedMessageId]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
-          maxToRenderPerBatch={20}
-          windowSize={15}
-          removeClippedSubviews={false}
+          initialNumToRender={20}
+          maxToRenderPerBatch={10}
+          updateCellsBatchingPeriod={50}
+          windowSize={10}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+            }, 300);
+          }}
           // FIX: load more old messages when user scrolls to top
           onStartReached={loadMoreMessages}
           onStartReachedThreshold={0.1}
@@ -1680,7 +1999,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "padding"} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} enabled={Platform.OS !== "web"}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0} enabled={Platform.OS !== "web"}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
@@ -1724,14 +2043,14 @@ export default function ChatDetailScreen({
                 {(() => { const sid = typeof replyingTo.sender === "string" ? replyingTo.sender : replyingTo.sender?._id; return String(sid) === String(myId) ? "You" : userName; })()}
               </ThemedText>
               <ThemedText style={[styles.replyBarText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {replyingTo.type === "image" ? "ðŸ“· Photo" : replyingTo.type === "video" ? "ðŸŽ¬ Video" : replyingTo.type === "audio" ? "ðŸŽ¤ Voice message" : replyingTo.content || replyingTo.text || ""}
+                {replyingTo.type === "image" ? "📷 Photo" : replyingTo.type === "video" ? "🎬 Video" : replyingTo.type === "audio" ? "🎤 Voice message" : replyingTo.content || replyingTo.text || ""}
               </ThemedText>
             </View>
             <Pressable onPress={() => setReplyingTo(null)} style={styles.replyBarClose}><Feather name="x" size={20} color={theme.textSecondary} /></Pressable>
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: keyboardHeight > 0 ? 5 : Math.max(insets.bottom, 15), marginBottom: 0, minHeight: 60 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
@@ -1744,6 +2063,25 @@ export default function ChatDetailScreen({
             </View>
           ) : (
             <>
+              {/* View-once active indicator — visible in the input bar when toggle is ON.
+                  Persists after the attachment menu closes so the user always knows
+                  the next media will be sent as view-once. Tap it to cancel. */}
+              {viewOnceSent ? (
+                <View style={[styles.viewOnceChip, { backgroundColor: '#22C55E18', borderColor: '#22C55E40' }]}>
+                  <Ionicons name="checkmark-circle-outline" size={13} color="#22C55E" />
+                  <ThemedText style={[styles.viewOnceChipText, { color: '#22C55E' }]}>Saved & Sent</ThemedText>
+                </View>
+              ) : viewOnceMode && (
+                <Pressable
+                  style={styles.viewOnceChip}
+                  onPress={() => setViewOnceModeSync(false)}
+                  accessibilityLabel="View Once active — tap to disable"
+                >
+                  <Ionicons name="eye-outline" size={13} color="#FF6B6B" />
+                  <ThemedText style={styles.viewOnceChipText}>View Once</ThemedText>
+                  <Feather name="x" size={11} color="#FF6B6B" />
+                </Pressable>
+              )}
               <Pressable style={styles.attachButton} onPress={() => setShowAttachmentMenu(true)}><Feather name="plus-circle" size={26} color={theme.primary} /></Pressable>
               <View style={[styles.inputWrapper, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
                 <TextInput
@@ -1789,6 +2127,19 @@ export default function ChatDetailScreen({
         <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>
           <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
             <ThemedText style={[styles.attachmentTitle, { color: theme.text }]}>Send Attachment</ThemedText>
+            <Pressable style={[styles.viewOnceToggleRow, viewOnceMode && { backgroundColor: '#FF6B6B12', borderColor: '#FF6B6B40' }]}
+              onPress={() => setViewOnceModeSync(v => !v)}>
+              <View style={styles.viewOnceToggleLeft}>
+                <Ionicons name="eye-outline" size={18} color={viewOnceMode ? '#FF6B6B' : theme.textSecondary} />
+                <View>
+                  <ThemedText style={[styles.viewOnceToggleTitle, { color: viewOnceMode ? '#FF6B6B' : theme.text }]}>View Once</ThemedText>
+                  <ThemedText style={[styles.viewOnceToggleDesc, { color: theme.textSecondary }]}>Photo/video disappears after being opened</ThemedText>
+                </View>
+              </View>
+              <View style={[styles.viewOnceTogglePill, { backgroundColor: viewOnceMode ? '#FF6B6B' : theme.border }]}>
+                <ThemedText style={styles.viewOnceTogglePillText}>{viewOnceMode ? 'ON' : 'OFF'}</ThemedText>
+              </View>
+            </Pressable>
             <View style={styles.attachmentOptions}>
               <Pressable style={styles.attachmentOption} onPress={handleTakePhoto}>
                 <View style={[styles.attachmentIcon, { backgroundColor: "#FF6B6B20" }]}><Feather name="camera" size={24} color="#FF6B6B" /></View>
@@ -1901,24 +2252,42 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => setViewingImage(null)}>
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => setViewingImage(null)}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          <View style={styles.imageViewerActions}>
-            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-          </View>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          {viewOnceViewerActive ? (
+            <View style={styles.imageViewerActions}>
+              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
+                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.imageViewerActions}>
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+            </View>
+          )}
           {viewingImage && <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />}
         </View>
       </Modal>
 
       {/* Video viewer */}
-      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => setViewingVideo(null)}>
+      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => setViewingVideo(null)}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          <View style={styles.imageViewerActions}>
-            <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-          </View>
-          {viewingVideo && <Video source={{ uri: viewingVideo }} style={{ width: "100%", height: "80%" }} useNativeControls resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} />}
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          {viewOnceViewerActive ? (
+            <View style={styles.imageViewerActions}>
+              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
+                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.imageViewerActions}>
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+            </View>
+          )}
+          {viewingVideo && <Video source={{ uri: viewingVideo }} style={{ width: "100%", height: "80%" }} useNativeControls={!viewOnceViewerActive} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} />}
         </View>
       </Modal>
 
@@ -1929,18 +2298,25 @@ export default function ChatDetailScreen({
             {selectedMessage && (
               <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
                 <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
-                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "ðŸ“· Photo" : selectedMessage.type === "video" ? "ðŸŽ¬ Video" : "ðŸŽ¤ Voice")}
+                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "📷 Photo" : selectedMessage.type === "video" ? "🎬 Video" : "🎤 Voice")}
                 </ThemedText>
               </View>
             )}
 
-            <View style={styles.quickReactionBar}>
-              {["â¤ï¸","ðŸ˜‚","ðŸ˜","ðŸ˜®","ðŸ˜¢","ðŸ”¥","ðŸ‘","ðŸ’¯"].map(emoji => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.quickReactionBar}
+              contentContainerStyle={{ paddingHorizontal: 8, alignItems: 'center' }}
+              scrollEnabled
+              onStartShouldSetResponder={() => true}
+            >
+              {["❤️","😂","😍","😮","😢","🔥","👍","💯","🥰","😭","😤","🤣","💀","🥺","🤩","😎","🙌","👏","💪","🫶","🎉","✨","💅","🤔","😏","🤯","💔","🤍","😇","🥳"].map(emoji => (
                 <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
                   <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
 
             <Pressable style={styles.messageMenuItem} onPress={handleReply}>
               <Feather name="corner-up-left" size={22} color={theme.primary} />
@@ -1950,6 +2326,15 @@ export default function ChatDetailScreen({
               <MaterialCommunityIcons name="translate" size={22} color={theme.primary} />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Translate</ThemedText>
             </Pressable>
+            {selectedMessage && (() => {
+              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
+              return String(sid) === String(myId) && selectedMessage.type === "text" && !selectedMessage.deletedForEveryone;
+            })() && (
+              <Pressable style={styles.messageMenuItem} onPress={handleEditOpen}>
+                <Feather name="edit-3" size={22} color={theme.primary} />
+                <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Edit Message</ThemedText>
+              </Pressable>
+            )}
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
               <Feather name="trash-2" size={22} color="#FF9800" />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
@@ -1967,8 +2352,54 @@ export default function ChatDetailScreen({
         </Pressable>
       </Modal>
 
+      {/* Edit message modal */}
+      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setEditingMessage(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+          <Pressable style={styles.modalOverlay} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+            <Pressable style={[styles.translateModal, { backgroundColor: theme.background }]} onPress={() => {}}>
+              <View style={styles.translateHeader}>
+                <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Edit Message</ThemedText>
+                <Pressable onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <TextInput
+                style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", minHeight: 80, textAlignVertical: "top", paddingTop: 12 }]}
+                value={editText}
+                onChangeText={setEditText}
+                multiline
+                autoFocus
+                placeholderTextColor={theme.textSecondary}
+                placeholder="Edit your message..."
+              />
+              <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary, fontSize: 11, marginTop: 4 }]}>Messages can only be edited within 15 minutes of sending</ThemedText>
+              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+                <Pressable style={[styles.cancelButton, { flex: 1, borderColor: theme.border }]} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
+                  <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  style={[styles.translateButton, { flex: 1, backgroundColor: editText.trim() ? theme.primary : theme.primary + "55", marginTop: 0 }]}
+                  onPress={handleEditSubmit}
+                  disabled={!editText.trim() || submittingEdit}
+                >
+                  {submittingEdit ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Feather name="check" size={18} color="#FFF" />
+                      <ThemedText style={styles.translateButtonText}>Save</ThemedText>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Translate modal */}
       <Modal visible={showTranslateModal} transparent animationType="slide" onRequestClose={() => { setShowTranslateModal(false); setSelectedMessage(null); }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.translateModal, { backgroundColor: theme.background }]}>
             <View style={styles.translateHeader}>
@@ -1988,17 +2419,34 @@ export default function ChatDetailScreen({
               </View>
             ) : translatedText ? (
               <View style={[styles.translateResult, { backgroundColor: theme.primary + "15", borderColor: theme.primary }]}>
-                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation</ThemedText>
+                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation ({translateTargetLang})</ThemedText>
                 <ThemedText style={[styles.translateResultText, { color: theme.text }]}>{translatedText}</ThemedText>
-                <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary }]} onPress={handleCopyTranslation}>
-                  <Feather name="copy" size={16} color="#FFF" />
-                  <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
-                </Pressable>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary, flex: 1 }]} onPress={handleCopyTranslation}>
+                    <Feather name="copy" size={16} color="#FFF" />
+                    <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
+                  </Pressable>
+                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: isDark ? "#333" : "#E0E0E0", flex: 1 }]} onPress={() => { setTranslatedText(""); setTranslateTargetLang(savedTranslateLang); }}>
+                    <MaterialCommunityIcons name="translate" size={16} color={theme.text} />
+                    <ThemedText style={[styles.translateCopyText, { color: theme.text }]}>Retranslate</ThemedText>
+                  </Pressable>
+                </View>
               </View>
             ) : (
               <View>
-                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Enter target language</ThemedText>
-                <TextInput style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Type any language (e.g., Swahili, Korean, Tagalog...)" placeholderTextColor={theme.textSecondary} value={translateTargetLang} onChangeText={setTranslateTargetLang} autoFocus />
+                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Quick pick or type a language</ThemedText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                  {["English","French","Swahili","Yoruba","Hausa","Amharic","Arabic","Zulu","Somali","Igbo","Portuguese","Spanish"].map((lang) => (
+                    <Pressable
+                      key={lang}
+                      style={[{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: translateTargetLang === lang ? theme.primary : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"), backgroundColor: translateTargetLang === lang ? theme.primary + "22" : "transparent" }]}
+                      onPress={() => setTranslateTargetLang(lang)}
+                    >
+                      <ThemedText style={{ fontSize: 13, color: translateTargetLang === lang ? theme.primary : theme.textSecondary }}>{lang}</ThemedText>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <TextInput style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Or type any language..." placeholderTextColor={theme.textSecondary} value={translateTargetLang} onChangeText={setTranslateTargetLang} />
                 <Pressable style={[styles.translateButton, { backgroundColor: theme.primary, opacity: translateTargetLang.trim() ? 1 : 0.5 }]} onPress={() => translateTargetLang.trim() && handleTranslate(translateTargetLang.trim())} disabled={!translateTargetLang.trim()}>
                   <MaterialCommunityIcons name="translate" size={20} color="#FFF" />
                   <ThemedText style={styles.translateButtonText}>Translate</ThemedText>
@@ -2007,6 +2455,7 @@ export default function ChatDetailScreen({
             )}
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ThemedView>
   );
@@ -2068,7 +2517,7 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, paddingBottom: Platform.OS === "android" ? 20 : 12, borderTopWidth: 1, borderTopColor: "#1c1f26", backgroundColor: "#0a0d14" },
+  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, borderTopWidth: 1 },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -2116,11 +2565,12 @@ const styles = StyleSheet.create<any>({
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
+  audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 2 },
   reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3 },
   reactionEmoji: { fontSize: 14 },
   reactionCount: { fontSize: 11, fontWeight: "600" },
-  quickReactionBar: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
+  quickReactionBar: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
   quickReactionBtn: { padding: 6 },
   quickReactionEmoji: { fontSize: 26 },
   audioWaveform: { flex: 1 },
@@ -2181,4 +2631,55 @@ const styles = StyleSheet.create<any>({
   locationAddress: { fontSize: 13, fontWeight: "600", flex: 1, lineHeight: 17 },
   locationTapHint: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   locationTapText: { fontSize: 10 },
+
+  viewOncePlaceholder: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, minWidth: 140 },
+  viewOnceTap: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, borderWidth: 1, minWidth: 160 },
+  viewOnceLabel: { fontSize: 13, fontWeight: '600' },
+  viewOnceSenderBadge: { position: 'absolute', top: 6, right: 6, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3 },
+  viewOnceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', marginBottom: 12 },
+  // Persistent chip shown in the input bar while view-once mode is active
+  viewOnceChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,107,107,0.12)', borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)', marginRight: 4 },
+  viewOnceChipText: { fontSize: 11, color: '#FF6B6B', fontWeight: '600' },
+  viewOnceToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  viewOnceToggleTitle: { fontSize: 13, fontWeight: '700' },
+  viewOnceToggleDesc: { fontSize: 11, marginTop: 1 },
+  viewOnceTogglePill: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
+  viewOnceTogglePillText: { fontSize: 10, fontWeight: '800', color: '#fff' },
+
+  storyContextCard: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 8,
+    marginBottom: 6,
+  },
+  storyContextHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 5,
+  },
+  storyContextLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  storyPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  storyThumbnail: {
+    width: 36,
+    height: 36,
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  storyPreviewText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  storyEmoji: {
+    fontSize: 22,
+  },
 });

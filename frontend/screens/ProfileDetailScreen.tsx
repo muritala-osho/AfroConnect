@@ -26,6 +26,7 @@ import ProfilePrompts from "@/components/ProfilePrompts";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
+import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -605,6 +606,20 @@ export default function ProfileDetailScreen() {
                     </Pressable>
                   ))}
                 </ScrollView>
+              </View>
+            )}
+
+            {(user as any).voiceBio?.url && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="mic-outline" size={18} color={theme.primary} />
+                  <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Voice Bio</ThemedText>
+                </View>
+                <VoiceBio
+                  voiceBioUrl={(user as any).voiceBio.url}
+                  duration={(user as any).voiceBio.duration || 0}
+                  isOwn={false}
+                />
               </View>
             )}
 

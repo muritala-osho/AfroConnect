@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Pressable, StyleSheet, Platform, Text } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
@@ -11,6 +11,7 @@ import Animated, {
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import * as Haptics from 'expo-haptics';
+import { useUnread } from '@/context/UnreadContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -26,6 +27,7 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 export default function AnimatedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
+  const { unreadCount } = useUnread();
 
   return (
     <View
@@ -41,6 +43,8 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
         const icon = TAB_ICONS[route.name] || 'circle';
+        // Show the unread badge only on the Chats tab
+        const showBadge = route.name === 'Chats' && unreadCount > 0;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -65,6 +69,7 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
             onPress={onPress}
             theme={theme}
             label={route.name}
+            badgeCount={showBadge ? unreadCount : 0}
           />
         );
       })}
@@ -78,12 +83,14 @@ function TabButton({
   onPress,
   theme,
   label,
+  badgeCount,
 }: {
   icon: keyof typeof Feather.glyphMap;
   isFocused: boolean;
   onPress: () => void;
   theme: any;
   label: string;
+  badgeCount: number;
 }) {
   const scale = useSharedValue(1);
   const rotation = useSharedValue(0);
@@ -106,8 +113,8 @@ function TabButton({
   }));
 
   const containerAnimatedStyle = useAnimatedStyle(() => ({
-    backgroundColor: isFocused 
-      ? withSpring(`${theme.primary}15`) 
+    backgroundColor: isFocused
+      ? withSpring(`${theme.primary}15`)
       : withSpring('transparent'),
   }));
 
@@ -118,24 +125,38 @@ function TabButton({
       onPressOut={handlePressOut}
       style={[styles.tabButton, containerAnimatedStyle]}
     >
-      <Animated.View style={animatedStyle}>
-        <Feather
-          name={icon}
-          size={22}
-          color={isFocused ? theme.primary : theme.textSecondary}
-        />
-      </Animated.View>
-      <Animated.Text 
+      {/* Icon + optional unread badge */}
+      <View style={styles.iconWrapper}>
+        <Animated.View style={animatedStyle}>
+          <Feather
+            name={icon}
+            size={22}
+            color={isFocused ? theme.primary : theme.textSecondary}
+          />
+        </Animated.View>
+
+        {/* Unread message count badge */}
+        {badgeCount > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText} numberOfLines={1}>
+              {badgeCount > 99 ? '99+' : String(badgeCount)}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      <Animated.Text
         style={[
-          styles.tabLabel, 
-          { 
+          styles.tabLabel,
+          {
             color: isFocused ? theme.primary : theme.textSecondary,
-            fontWeight: isFocused ? '600' : '400'
-          }
+            fontWeight: isFocused ? '600' : '400',
+          },
         ]}
       >
         {label}
       </Animated.Text>
+
       {isFocused && (
         <View style={[styles.activeIndicator, { backgroundColor: theme.primary }]} />
       )}
@@ -157,6 +178,27 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 16,
     position: 'relative',
+  },
+  iconWrapper: {
+    position: 'relative',
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 11,
   },
   activeIndicator: {
     position: 'absolute',

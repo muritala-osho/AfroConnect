@@ -278,6 +278,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         .json({ success: false, message: "Not authorized" });
     }
 
+    // Block messages on expired matches that haven't had a first message yet
+    if (!match.hasFirstMessage && match.expiresAt && new Date(match.expiresAt) < new Date()) {
+      return res.status(403).json({ success: false, message: "This match has expired. You can no longer send messages." });
+    }
+
     const receiver = match.users.find((id) => !id.equals(req.user._id));
 
     // Create system message for call history
@@ -319,7 +324,7 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         .json({ success: false, message: "Cannot send message to this user" });
     }
 
-    const { replyTo } = req.body;
+    const { replyTo, viewOnce } = req.body;
 
     const messageData = {
       matchId,
@@ -333,10 +338,12 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
     if (type === "text") messageData.content = content;
     else if (type === "image") {
       messageData.imageUrl = imageUrl;
-      messageData.content = "📷 Photo";
+      messageData.content = viewOnce ? "📷 View Once Photo" : "📷 Photo";
+      if (viewOnce) messageData.viewOnce = true;
     } else if (type === "video") {
       messageData.videoUrl = videoUrl;
-      messageData.content = "🎥 Video";
+      messageData.content = viewOnce ? "🎥 View Once Video" : "🎥 Video";
+      if (viewOnce) messageData.viewOnce = true;
     } else if (type === "audio") {
       messageData.audioUrl = audioUrl;
       messageData.audioDuration = audioDuration || 0;
@@ -615,6 +622,48 @@ router.delete("/message/:messageId", protect, async (req, res) => {
   }
 });
 
+// @route   PATCH /api/chat/message/:messageId
+// @desc    Edit a sent text message (sender only, within 15 minutes)
+// @access  Private
+router.patch("/message/:messageId", protect, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ success: false, message: "Content is required" });
+    }
+    const message = await Message.findById(req.params.messageId);
+    if (!message) return res.status(404).json({ success: false, message: "Message not found" });
+    if (!message.sender.equals(req.user._id)) {
+      return res.status(403).json({ success: false, message: "Only the sender can edit a message" });
+    }
+    if (message.type !== "text") {
+      return res.status(400).json({ success: false, message: "Only text messages can be edited" });
+    }
+    const fifteenMinutes = 15 * 60 * 1000;
+    if (Date.now() - new Date(message.createdAt).getTime() > fifteenMinutes) {
+      return res.status(400).json({ success: false, message: "Messages can only be edited within 15 minutes of sending" });
+    }
+    message.content = content.trim();
+    message.edited = true;
+    message.editedAt = new Date();
+    await message.save();
+    const io = req.app.get("io");
+    if (io) {
+      io.to(message.matchId.toString()).emit("chat:message-edited", {
+        messageId: message._id,
+        matchId: message.matchId,
+        content: message.content,
+        edited: true,
+        editedAt: message.editedAt,
+      });
+    }
+    return res.json({ success: true, message: "Message updated", data: message });
+  } catch (error) {
+    console.error("Edit message error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 // @route   POST /api/chat/:matchId/message
 // @desc    Send a message (text, image, audio, location) — used by ChatDetailScreen
 // @access  Private
@@ -870,6 +919,35 @@ router.get('/:matchId/messages/:messageId/reactions', protect, matchParticipant,
     if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
     res.json({ success: true, reactions: message.reactions });
   } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/messages/:messageId/view-once', protect, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+
+    if (!message.viewOnce) {
+      return res.status(400).json({ success: false, message: 'This is not a view-once message' });
+    }
+
+    if (message.sender.toString() === userId.toString()) {
+      return res.json({ success: true, alreadyViewed: false });
+    }
+
+    const alreadyViewed = message.viewOnceOpenedBy.some(id => id.toString() === userId.toString());
+    if (!alreadyViewed) {
+      message.viewOnceOpenedBy.push(userId);
+      await message.save();
+    }
+
+    res.json({ success: true, alreadyViewed, openedAt: new Date() });
+  } catch (error) {
+    console.error('View once error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

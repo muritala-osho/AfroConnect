@@ -45,6 +45,12 @@ const userSchema = new mongoose.Schema({
     enum: ['aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces'],
     default: null
   },
+  height: {
+    type: Number,
+    min: 100,
+    max: 250,
+    default: null
+  },
   jobTitle: {
     type: String,
     maxlength: 100,
@@ -55,6 +61,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['high_school', 'some_college', 'bachelors', 'masters', 'doctorate', 'trade_school', 'other', 'prefer_not_to_say'],
     default: null
+  },
+  school: {
+    type: String,
+    maxlength: 150,
+    trim: true,
+    default: ''
   },
   livingIn: {
     type: String,
@@ -305,6 +317,10 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  lastSwipeAction: {
+    targetId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    direction: { type: String, enum: ['right', 'left'], default: null }
+  },
   superLiked: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -356,6 +372,11 @@ const userSchema = new mongoose.Schema({
     }
   },
   isAdmin: {
+    type: Boolean,
+    default: false
+  },
+  // Support agent role — can view assigned tickets and reply, not full admin
+  isSupportAgent: {
     type: Boolean,
     default: false
   },
@@ -469,6 +490,42 @@ const userSchema = new mongoose.Schema({
       unsendLimit: { type: Number, default: 15 } 
     }
   },
+  // ── Cultural Identity ────────────────────────────────────────────────────────
+  countryOfOrigin: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  tribe: {
+    type: String,
+    maxlength: 100,
+    trim: true,
+    default: ''
+  },
+  languages: [{
+    type: String,
+    trim: true
+  }],
+  diasporaGeneration: {
+    type: String,
+    enum: ['1st_gen', '2nd_gen', '3rd_gen_plus', 'born_in_africa', 'not_applicable'],
+    default: null
+  },
+
+  // ── Voice Bio ────────────────────────────────────────────────────────────────
+  voiceBio: {
+    url: { type: String, default: null },
+    publicId: { type: String, default: null },
+    duration: { type: Number, default: 0 }
+  },
+
+  // ── Daily Curated Match ──────────────────────────────────────────────────────
+  dailyMatch: {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    date: { type: String, default: null }
+  },
+
   storyPrivacy: {
     blockedUsers: [{
       type: mongoose.Schema.Types.ObjectId,

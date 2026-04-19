@@ -191,6 +191,7 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  // ─── Legacy admin support routes (kept for backward compat) ───────────────
   getSupportTickets: async (status?: string) => {
     const query = status ? `?status=${status}` : '';
     const res = await fetch(`${API_BASE}/admin/support-tickets${query}`, { headers: authHeaders() });
@@ -215,6 +216,62 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  // ─── Unified support system endpoints ─────────────────────────────────────
+
+  // GET /api/support/all — admin sees all, agent sees assigned only
+  getAllSupportTickets: async (params?: { status?: string; category?: string; priority?: string; page?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.category) query.set('category', params.category);
+    if (params?.priority) query.set('priority', params.priority);
+    if (params?.page) query.set('page', String(params.page));
+    const res = await fetch(`${API_BASE}/support/all?${query}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  // GET /api/support/ticket/:id — fetch single ticket with messages
+  getSupportTicket: async (ticketId: string) => {
+    const res = await fetch(`${API_BASE}/support/ticket/${ticketId}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  // POST /api/support/reply — unified reply for admin/agent/user
+  replySupportUnified: async (ticketId: string, content: string) => {
+    const res = await fetch(`${API_BASE}/support/reply`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ ticketId, content }),
+    });
+    return handleResponse(res);
+  },
+
+  // PATCH /api/support/status — update ticket status
+  updateSupportStatus: async (ticketId: string, status: string) => {
+    const res = await fetch(`${API_BASE}/support/status`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ ticketId, status }),
+    });
+    return handleResponse(res);
+  },
+
+  // PATCH /api/support/assign — assign ticket to agent (admin only)
+  assignSupportTicket: async (ticketId: string, agentId: string | null) => {
+    const res = await fetch(`${API_BASE}/support/assign`, {
+      method: 'PATCH',
+      headers: authHeaders(),
+      body: JSON.stringify({ ticketId, agentId }),
+    });
+    return handleResponse(res);
+  },
+
+  // GET /api/support/agents — list all staff users
+  getSupportAgents: async () => {
+    const res = await fetch(`${API_BASE}/support/agents`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  // ─── Churn & appeals ──────────────────────────────────────────────────────
   getChurnOverview: async () => {
     const res = await fetch(`${API_BASE}/engagement/admin/churn-overview`, { headers: authHeaders() });
     return handleResponse(res);

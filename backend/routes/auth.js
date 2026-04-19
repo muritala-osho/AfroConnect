@@ -31,9 +31,10 @@ router.post(
   validate(schemas.auth.signup),
   async (req, res) => {
     try {
-      const { email, password, confirmPassword } = req.body;
+      const { email, password } = req.body;
 
-      // Validation
+      // Validation — only email and password are required at signup
+      // Name and other profile fields are collected later during profile setup
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -41,15 +42,19 @@ router.post(
         });
       }
 
-      // Check if username is taken
-      if (username) {
-        const usernameExists = await User.findOne({ username });
-        if (usernameExists) {
-          return res.status(400).json({
-            success: false,
-            message: "Username is already taken",
-          });
-        }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid email address",
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "Password must be at least 6 characters",
+        });
       }
 
       // Check if user exists
@@ -66,7 +71,7 @@ router.post(
       // If user exists but email not verified (abandoned signup), delete and recreate
       if (existingUser && !existingUser.emailVerified) {
         await User.deleteOne({ _id: existingUser._id });
-        console.log("Deleted unverified user for re-registration:", email);
+        console.log("Deleted unverified user for re-registration (user ID redacted).");
       }
 
       // Generate OTP
@@ -74,16 +79,16 @@ router.post(
       const otpCode = generateOTP();
 
       // Create user with minimal data - not verified yet
+      // Name/age/gender/etc. will be filled in during profile setup after OTP verification
       const user = await User.create({
-        name: name || "User",
-        username,
+        name: "User",
         email,
         password,
-        age: age || 18,
-        gender: gender || "other",
+        age: 18,
+        gender: "other",
         location: {
           type: "Point",
-          coordinates: [0, 0], // Temporary location
+          coordinates: [0, 0],
         },
         verified: false,
         verificationOTP: otpCode,
@@ -158,6 +163,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
         age: user.age,
         gender: user.gender,
         isAdmin: user.isAdmin || false,
+        isSupportAgent: user.isSupportAgent || false,
       },
     });
   } catch (error) {
@@ -294,6 +300,7 @@ router.post(
           photos: user.photos,
           verified: user.verified,
           isAdmin: user.isAdmin || false,
+          isSupportAgent: user.isSupportAgent || false,
           location: user.location,
           lookingFor: user.lookingFor,
           preferences: user.preferences,
@@ -385,7 +392,7 @@ router.post(
       });
 
       if (!user) {
-        console.log("[RESET_PASSWORD] User not found:", normalizedEmail);
+        console.log("[RESET_PASSWORD] User not found for provided email.");
         return res.status(400).json({
           success: false,
           message: "Invalid verification code",

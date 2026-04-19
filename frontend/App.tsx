@@ -13,7 +13,10 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
+import { UnreadProvider } from "@/context/UnreadContext";
+import { CallProvider } from "@/contexts/CallContext";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
+import FloatingCallBar from "@/components/FloatingCallBar";
 import {
   registerForPushNotificationsAsync,
   setupNotificationListeners,
@@ -118,11 +121,14 @@ function AppContent() {
   return (
     <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
       <KeyboardProvider>
-        <NavigationContainer>
-          <RootNavigator />
-          <IncomingCallHandler />
-        </NavigationContainer>
-        <StatusBar style={isDark ? "light" : "dark"} />
+        <CallProvider>
+          <NavigationContainer>
+            <RootNavigator />
+            <IncomingCallHandler />
+            <FloatingCallBar />
+          </NavigationContainer>
+          <StatusBar style={isDark ? "light" : "dark"} />
+        </CallProvider>
       </KeyboardProvider>
     </GestureHandlerRootView>
   );
@@ -135,8 +141,10 @@ export default function App() {
         <ThemeProvider>
           <LanguageProvider>
             <AuthProvider>
-              <LanguageSync />
-              <AppContent />
+              <UnreadProvider>
+                <LanguageSync />
+                <AppContent />
+              </UnreadProvider>
             </AuthProvider>
           </LanguageProvider>
         </ThemeProvider>

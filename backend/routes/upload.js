@@ -30,7 +30,7 @@ const uploadBufferToCloudinary = (buffer, options) => {
 const storage = multer.memoryStorage();
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/x-caf', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/mp4a-latm', 'audio/3gpp', 'audio/3gpp2', 'audio/amr', 'application/octet-stream'];
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/x-caf', 'audio/wav', 'audio/webm', 'audio/ogg', 'audio/aac', 'audio/mp4a-latm', 'audio/3gpp', 'audio/3gpp2', 'audio/amr', 'video/mp4', 'video/quicktime', 'application/octet-stream'];
 const ALLOWED_FILE_TYPES = [
   'application/pdf',
   'application/msword',
@@ -392,6 +392,71 @@ router.post('/video', protect, multiUpload, async (req, res) => {
   } catch (error) {
     console.error('Video upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
+
+router.post('/voice-bio', protect, audioUpload.single('audio'), async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ success: false, message: 'No audio file uploaded' });
+    }
+
+    const MAX_VOICE_BIO_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_VOICE_BIO_SIZE) {
+      return res.status(400).json({ success: false, message: 'Voice bio must be under 5MB (30 seconds)' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.voiceBio?.publicId) {
+      try {
+        await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
+      } catch (e) {
+        console.log('Could not delete old voice bio from cloudinary:', e.message);
+      }
+    }
+
+    const result = await uploadBufferToCloudinary(file.buffer, {
+      folder: 'afroconnect/voice-bios',
+      resource_type: 'video',
+      format: 'mp3',
+    });
+
+    const duration = req.body.duration ? parseFloat(req.body.duration) : 0;
+
+    user.voiceBio = { url: result.secure_url, publicId: result.public_id, duration };
+    await user.save();
+
+    res.json({ success: true, url: result.secure_url, publicId: result.public_id, duration });
+  } catch (error) {
+    console.error('Voice bio upload error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Upload failed' });
+  }
+});
+
+router.delete('/voice-bio', protect, async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.voiceBio?.publicId) {
+      try {
+        await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
+      } catch (e) {
+        console.log('Could not delete voice bio from cloudinary:', e.message);
+      }
+    }
+
+    user.voiceBio = { url: null, publicId: null, duration: 0 };
+    await user.save();
+    res.json({ success: true, message: 'Voice bio removed' });
+  } catch (error) {
+    console.error('Voice bio delete error:', error);
+    res.status(500).json({ success: false, message: error.message || 'Delete failed' });
   }
 });
 

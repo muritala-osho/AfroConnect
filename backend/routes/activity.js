@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
+const redis = require('../utils/redis');
 
 router.put('/status', protect, async (req, res) => {
   try {
@@ -17,6 +18,7 @@ router.put('/status', protect, async (req, res) => {
     };
 
     await User.findByIdAndUpdate(req.user.id, updateData);
+    await redis.del(`activity:status:${req.user.id}`);
 
     res.json({
       success: true,
@@ -31,6 +33,9 @@ router.put('/status', protect, async (req, res) => {
 router.get('/status/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
+    const cacheKey = `activity:status:${userId}`;
+    const cachedStatus = await redis.get(cacheKey);
+    if (cachedStatus) return res.json({ success: true, data: cachedStatus, fromCache: true });
     
     const user = await User.findById(userId).select('onlineStatus lastActive privacySettings');
     
@@ -39,14 +44,13 @@ router.get('/status/:userId', protect, async (req, res) => {
     }
 
     const privacy = user.privacySettings || {};
-    
-    res.json({
-      success: true,
-      data: {
-        onlineStatus: privacy.showOnlineStatus === false ? null : user.onlineStatus,
-        lastActive: privacy.showLastActive === false ? null : user.lastActive
-      }
-    });
+    const statusData = {
+      onlineStatus: privacy.showOnlineStatus === false ? null : user.onlineStatus,
+      lastActive: privacy.showLastActive === false ? null : user.lastActive
+    };
+
+    await redis.set(cacheKey, statusData, 30);
+    res.json({ success: true, data: statusData });
   } catch (error) {
     console.error('Get activity status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -59,6 +63,7 @@ router.put('/heartbeat', protect, async (req, res) => {
       onlineStatus: 'online',
       lastActive: new Date()
     });
+    await redis.del(`activity:status:${req.user.id}`);
 
     res.json({ success: true });
   } catch (error) {

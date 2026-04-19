@@ -1,11 +1,29 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
-- **Chat (backend)**: `backend/routes/chat.js` — Conversations query now includes `status: 'unmatched'` so old chat histories remain visible (previously only `status: 'active'` matches were returned, hiding any conversations where someone unmatched).
-- **VerificationScreen** (`frontend/screens/VerificationScreen.tsx`): Full layout redesign — gradient hero card, 2×2 benefits grid, numbered steps card, improved camera selfie UI with corner bracket face guide overlay.
-- **LoveRadarScreen** (`frontend/screens/LoveRadarScreen.tsx`): Added missing gender filter pills (Everyone / Women / Men) to the filter panel. Gender was in state but had no UI.
-- **FiltersScreen** (`frontend/screens/FiltersScreen.tsx`): Fixed `disabled={!!isPremium}` on the Verified Only card (was blocking Switch interaction on Android for premium users). Non-premium users still see the lock badge and are redirected to Premium on tap.
-- **ChatsScreen** (`frontend/screens/ChatsScreen.tsx`): Tinder/Bumble-style flat conversation rows — 60px avatars, subtle bottom-border dividers instead of individual cards, unread timestamp coloured in theme primary.
+- **Centralized Support System** — full implementation across all three layers:
+  - `backend/models/SupportTicket.js`: Extended model — added `assignedTo`, `unreadByUser`, `unreadByAgent` fields; `pending` status; `agent` role in messages; `senderName`/`senderId` fields.
+  - `backend/models/User.js`: Added `isSupportAgent` boolean field for support agent role.
+  - `backend/middleware/supportAccess.js`: New middleware — `isAdmin`, `isAgent`, `isAdminOrAgent` guards.
+  - `backend/routes/support.js`: Fully rewritten. New endpoints: `POST /ticket`, `GET /user`, `GET /ticket/:id`, `GET /unread`, `POST /reply`, `GET /all`, `PATCH /status`, `PATCH /assign`, `GET /agents`. All legacy routes preserved.
+  - `admin-dashboard/services/adminApi.ts`: New methods: `getAllSupportTickets`, `getSupportTicket`, `replySupportUnified`, `updateSupportStatus`, `assignSupportTicket`, `getSupportAgents`.
+  - `admin-dashboard/types.ts`: Extended `SupportTicket` type with full fields; added `TicketMessage`, `SupportAgent` interfaces.
+  - `admin-dashboard/views/SupportDesk.tsx`: Fully rewritten — real API (no mocks), 15-second polling, assign-to-agent dropdown, all 4 statuses, unread badges, optimistic updates.
+  - `admin-dashboard/views/AgentDashboard.tsx`: NEW — agent-only interface showing assigned tickets only, with chat thread and status controls.
+  - `admin-dashboard/App.tsx`: Added `agent` tab + `AgentDashboard` import.
+  - `admin-dashboard/constants.tsx`: Added "My Tickets" nav item for Support role.
+  - `frontend/screens/SupportMessagesScreen.tsx`: Complete rewrite — ticket list with unread badges, create ticket form with category chips, chat thread with polling every 10 s, reply sending with optimistic update.
+- **Auth signup fix** (`backend/routes/auth.js`): Removed Joi `validate(schemas.auth.signup)` middleware from the signup route — replaced with inline email/password validation only. Eliminates spurious "name is required" error caused by stale cached Joi schema.
+- **Voice bio MIME fix** (`backend/routes/upload.js`): Added `video/mp4` and `video/quicktime` to `ALLOWED_AUDIO_TYPES` (React Native sends m4a files with these MIME types on some Android devices).
+- **Voice bio parse fix** (`frontend/screens/EditProfileScreen.tsx`): Changed audio upload MIME type to `audio/mp4`, added content-type check before calling `res.json()` to handle HTML error responses without crashing.
+- **Daily match route** (`backend/routes/match.js`): Added null check for `me`, wrapped cache lookup and score calculation in try/catch, reduced candidates limit 100→30, always returns JSON even on error.
+- **MyProfileScreen redesign** (`frontend/screens/MyProfileScreen.tsx`): Replaced flat "Profile Details" list and "Personality Prompt" section with organized sections matching EditProfileScreen: Dating Preferences, Personality, Lifestyle, Cultural Identity, Background, Work & Location, Soundtrack, Interests. Each section uses colored icon bubbles matching EditProfile colors.
+- **EditProfileScreen fix** (`frontend/screens/EditProfileScreen.tsx`): Removed duplicate `container` and `header` style definitions in StyleSheet.create.
+- **Chat (backend)**: `backend/routes/chat.js` — Conversations query now includes `status: 'unmatched'` so old chat histories remain visible.
+- **VerificationScreen** (`frontend/screens/VerificationScreen.tsx`): Full layout redesign — gradient hero card, 2×2 benefits grid, numbered steps card.
+- **LoveRadarScreen** (`frontend/screens/LoveRadarScreen.tsx`): Added missing gender filter pills.
+- **FiltersScreen** (`frontend/screens/FiltersScreen.tsx`): Fixed disabled logic on Verified Only card.
+- **ChatsScreen** (`frontend/screens/ChatsScreen.tsx`): Tinder/Bumble-style flat conversation rows.
 
 ## Overview
 AfroConnect is a dating/social app for the African diaspora. It consists of three independent folders:

@@ -1,6 +1,17 @@
 const nodemailer = require('nodemailer');
 const path = require('path');
 
+// Escape user-supplied strings before embedding them in HTML email bodies
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || 'gmail',
   auth: {
@@ -36,7 +47,7 @@ const emailHeader = (title, subtitle = '') => `
       <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.3px;">
         ${title}
       </h1>
-      ${subtitle ? `<p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.88); font-size: 15px;">${subtitle}</p>` : ''}
+      ${subtitle ? `<p style="margin: 10px 0 0 0; color: rgba(255,255,255,0.88); font-size: 15px;">${escapeHtml(subtitle)}</p>` : ''}
     </td>
   </tr>
 `;
@@ -746,7 +757,7 @@ const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => email
         Hi ${userName},
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
-        Our support team has replied to your ticket${ticketSubject ? ` regarding <strong>"${ticketSubject}"</strong>` : ''}.
+        Our support team has replied to your ticket${ticketSubject ? ` regarding <strong>&ldquo;${escapeHtml(ticketSubject)}&rdquo;</strong>` : ''}.
         Here is their message:
       </p>
       <div style="background-color: #F8F9FA; border: 1px solid #E9ECEF; border-radius: 12px;

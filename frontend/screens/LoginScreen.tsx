@@ -1,30 +1,102 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
   TextInput,
   Pressable,
   ActivityIndicator,
-  Image,
   Alert,
+  Platform,
+  Animated,
+  KeyboardAvoidingView,
+  ScrollView,
+  Dimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
+import * as Haptics from "expo-haptics";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
-import { ScreenKeyboardAwareScrollView } from "@/components/ScreenKeyboardAwareScrollView";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
+import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather } from "@expo/vector-icons";
 
-type LoginScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  "Login"
->;
+const { width } = Dimensions.get("window");
+
+type LoginScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "Login">;
 
 interface LoginScreenProps {
   navigation: LoginScreenNavigationProp;
+}
+
+function AnimatedInput({
+  icon,
+  placeholder,
+  value,
+  onChangeText,
+  secureTextEntry,
+  keyboardType,
+  autoComplete,
+  autoCapitalize,
+  keyboardAppearance,
+  rightElement,
+  theme,
+}: any) {
+  const focusAnim = useRef(new Animated.Value(0)).current;
+
+  const onFocus = () => {
+    Animated.spring(focusAnim, { toValue: 1, useNativeDriver: false, friction: 6 }).start();
+  };
+  const onBlur = () => {
+    Animated.spring(focusAnim, { toValue: 0, useNativeDriver: false, friction: 6 }).start();
+  };
+
+  const borderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [theme.border, theme.primary],
+  });
+
+  const shadowOpacity = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.18],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.inputWrapper,
+        {
+          backgroundColor: theme.surface,
+          borderColor,
+          shadowColor: theme.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity,
+          shadowRadius: 10,
+          elevation: 2,
+        },
+      ]}
+    >
+      <Feather name={icon} size={18} color={theme.textSecondary} style={styles.inputIcon} />
+      <TextInput
+        style={[styles.input, { color: theme.text }]}
+        placeholder={placeholder}
+        placeholderTextColor={theme.textSecondary}
+        value={value}
+        onChangeText={onChangeText}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoComplete={autoComplete}
+        autoCapitalize={autoCapitalize}
+        keyboardAppearance={keyboardAppearance}
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      {rightElement}
+    </Animated.View>
+  );
 }
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
@@ -36,24 +108,36 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
+  const buttonScale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, friction: 8, tension: 60, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  const onButtonPressIn = () => {
+    Animated.spring(buttonScale, { toValue: 0.96, useNativeDriver: true, friction: 6 }).start();
+  };
+  const onButtonPressOut = () => {
+    Animated.spring(buttonScale, { toValue: 1, useNativeDriver: true, friction: 6 }).start();
+  };
+
   const handleLogin = async () => {
     if (!email || !password) {
-      showAlert(
-        "Error",
-        "Please fill in all fields",
-        [{ text: "OK", style: "default" }],
-        "alert-circle",
-      );
+      showAlert("Missing Fields", "Please fill in all fields", [{ text: "OK", style: "default" }], "alert-circle");
       return;
     }
 
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
     try {
       await login(email.trim().toLowerCase(), password);
     } catch (error: any) {
-      console.log("Login error:", error);
       const errorMsg = error.message || "Invalid email or password";
-
       if (
         error.isBanned ||
         error.status === 403 ||
@@ -61,9 +145,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         errorMsg.toLowerCase().includes("suspended")
       ) {
         setLoading(false);
-        // Use native Alert for reliable navigation
-        const banReason =
-          error.banReason || "Violation of community guidelines";
+        const banReason = error.banReason || "Violation of community guidelines";
         Alert.alert(
           "Account Suspended",
           `Your account has been suspended.\n\nReason: ${banReason}\n\nYou can submit an appeal to request reinstatement.`,
@@ -83,14 +165,9 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             { text: "Cancel", style: "cancel" },
           ],
         );
-        return; // Exit early to prevent any other error handling
+        return;
       } else {
-        showAlert(
-          "Error",
-          errorMsg,
-          [{ text: "OK", style: "default" }],
-          "alert-circle",
-        );
+        showAlert("Sign In Failed", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
       }
     } finally {
       setLoading(false);
@@ -98,286 +175,322 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
   };
 
   return (
-    <ScreenKeyboardAwareScrollView>
-      <View style={styles.header}>
-        <Pressable
-          style={[styles.backButton, { backgroundColor: theme.surface }]}
-          onPress={() => navigation.goBack()}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Gradient Header */}
+        <LinearGradient
+          colors={["#10B981", "#059669", "#0D9488"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientHeader}
         >
-          <Feather name="arrow-left" size={20} color={theme.text} />
-        </Pressable>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.logoSection}>
-          <Image
-            source={require("@/assets/afroconnect-logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <View style={styles.titleSection}>
-          <ThemedText style={[styles.welcomeEmoji]}>👋</ThemedText>
-          <ThemedText
-            style={[styles.title, { color: theme.text, fontWeight: "800" }]}
+          <Pressable
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={12}
           >
-            Welcome back
-          </ThemedText>
-          <ThemedText
-            style={[
-              styles.subtitle,
-              { color: theme.textSecondary, fontWeight: "700" },
-            ]}
-          >
-            Please enter your details to sign in
-          </ThemedText>
-        </View>
+            <Feather name="arrow-left" size={22} color="#fff" />
+          </Pressable>
 
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <ThemedText
-              style={[styles.label, { color: theme.text, fontWeight: "700" }]}
-            >
-              Email
-            </ThemedText>
-            <View
-              style={[
-                styles.inputWrapper,
-                {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                  borderWidth: 1.5,
-                },
-              ]}
-            >
-              <Feather
-                name="mail"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.text, fontWeight: "600" }]}
-                placeholder="Enter your email"
-                placeholderTextColor={theme.textSecondary}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                keyboardAppearance={themeMode === "dark" ? "dark" : "light"}
-              />
+          <Animated.View
+            style={[styles.headerContent, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}
+          >
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCard}>
+                <Image
+                  source={require("@/assets/logo-new.png")}
+                  style={styles.logo}
+                  contentFit="contain"
+                />
+              </View>
             </View>
+            <ThemedText style={styles.greetingEmoji}>👋</ThemedText>
+            <ThemedText style={styles.headerTitle}>Welcome back</ThemedText>
+            <ThemedText style={styles.headerSubtitle}>
+              Sign in to continue your journey
+            </ThemedText>
+          </Animated.View>
+        </LinearGradient>
+
+        {/* Form Card */}
+        <Animated.View
+          style={[
+            styles.formCard,
+            { backgroundColor: theme.background, opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          {/* Email */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
+              Email Address
+            </ThemedText>
+            <AnimatedInput
+              icon="mail"
+              placeholder="you@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoComplete="email"
+              autoCapitalize="none"
+              keyboardAppearance={themeMode === "dark" ? "dark" : "light"}
+              theme={theme}
+            />
           </View>
 
-          <View style={styles.inputContainer}>
-            <ThemedText
-              style={[styles.label, { color: theme.text, fontWeight: "700" }]}
-            >
+          {/* Password */}
+          <View style={styles.fieldGroup}>
+            <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>
               Password
             </ThemedText>
-            <View
-              style={[
-                styles.inputWrapper,
-                {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                  borderWidth: 1.5,
-                },
-              ]}
-            >
-              <Feather
-                name="lock"
-                size={20}
-                color={theme.textSecondary}
-                style={styles.inputIcon}
-              />
-              <TextInput
-                style={[styles.input, { color: theme.text, fontWeight: "600" }]}
-                placeholder="Enter your password"
-                placeholderTextColor={theme.textSecondary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-              <Pressable
-                style={styles.eyeButton}
-                onPress={() => setShowPassword(!showPassword)}
-              >
-                <Feather
-                  name={showPassword ? "eye-off" : "eye"}
-                  size={20}
-                  color={theme.textSecondary}
-                />
-              </Pressable>
-            </View>
+            <AnimatedInput
+              icon="lock"
+              placeholder="Enter your password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="current-password"
+              autoCapitalize="none"
+              keyboardAppearance={themeMode === "dark" ? "dark" : "light"}
+              theme={theme}
+              rightElement={
+                <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn} hitSlop={8}>
+                  <Feather
+                    name={showPassword ? "eye-off" : "eye"}
+                    size={18}
+                    color={theme.textSecondary}
+                  />
+                </Pressable>
+              }
+            />
           </View>
 
+          {/* Links row */}
           <View style={styles.linksRow}>
-            <Pressable
-              onPress={() =>
-                navigation.navigate("Legal" as any, { type: "terms" })
-              }
-            >
-              <ThemedText
-                style={[styles.forgotPasswordText, { color: theme.primary }]}
-              >
+            <Pressable onPress={() => navigation.navigate("Legal" as any, { type: "terms" })}>
+              <ThemedText style={[styles.linkText, { color: theme.textSecondary }]}>
                 Terms of Service
               </ThemedText>
             </Pressable>
             <Pressable onPress={() => navigation.navigate("ForgotPassword")}>
-              <ThemedText
-                style={[styles.forgotPasswordText, { color: theme.primary }]}
-              >
+              <ThemedText style={[styles.linkText, { color: theme.primary, fontWeight: "600" }]}>
                 Forgot password?
               </ThemedText>
             </Pressable>
           </View>
 
-          <Pressable
-            style={[
-              styles.button,
-              { backgroundColor: theme.primary },
-              Shadow.button,
-            ]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={theme.buttonText} />
-            ) : (
-              <ThemedText
-                style={[styles.buttonText, { color: theme.buttonText }]}
+          {/* CTA Button */}
+          <Animated.View style={{ transform: [{ scale: buttonScale }] }}>
+            <Pressable
+              onPressIn={onButtonPressIn}
+              onPressOut={onButtonPressOut}
+              onPress={handleLogin}
+              disabled={loading}
+              style={({ pressed }) => [styles.ctaButton, pressed && { opacity: 0.95 }]}
+            >
+              <LinearGradient
+                colors={["#10B981", "#059669"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
               >
-                Sign In
-              </ThemedText>
-            )}
-          </Pressable>
+                {loading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <ThemedText style={styles.ctaText}>Sign In</ThemedText>
+                    <Feather name="arrow-right" size={18} color="#fff" style={{ marginLeft: 6 }} />
+                  </>
+                )}
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
 
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <ThemedText style={[styles.dividerText, { color: theme.textSecondary }]}>or</ThemedText>
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+          </View>
+
+          {/* Switch to signup */}
           <Pressable
-            style={styles.signupLink}
+            style={[styles.signupOutlineBtn, { borderColor: theme.border }]}
             onPress={() => navigation.navigate("SignUp")}
           >
-            <ThemedText
-              style={[styles.signupLinkText, { color: theme.textSecondary }]}
-            >
+            <ThemedText style={[styles.signupOutlineText, { color: theme.text }]}>
               Don't have an account?{" "}
-              <ThemedText style={{ color: theme.primary, fontWeight: "600" }}>
-                Sign up
-              </ThemedText>
+              <ThemedText style={{ color: theme.primary, fontWeight: "700" }}>Sign Up</ThemedText>
             </ThemedText>
           </Pressable>
-        </View>
-      </View>
+        </Animated.View>
+      </ScrollView>
       <AlertComponent />
-    </ScreenKeyboardAwareScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
+  gradientHeader: {
+    paddingTop: Platform.OS === "ios" ? 60 : 44,
+    paddingBottom: 44,
+    paddingHorizontal: Spacing.xl,
     alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.xl + Spacing.md,
-    paddingBottom: Spacing.sm,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
   },
   backButton: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 44,
+    left: Spacing.xl,
     width: 40,
     height: 40,
-    borderRadius: BorderRadius.full,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
   },
-  content: {
-    paddingHorizontal: Spacing.xl,
-    paddingTop: Spacing.md,
-  },
-  logoSection: {
+  headerContent: {
     alignItems: "center",
-    marginBottom: Spacing.lg,
+    marginTop: Spacing.lg,
+  },
+  logoContainer: {
+    marginBottom: Spacing.md,
+  },
+  logoCard: {
+    width: 110,
+    height: 110,
+    borderRadius: 28,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
   logo: {
-    width: 120,
-    height: 140,
-    borderRadius: BorderRadius.lg,
+    width: 88,
+    height: 88,
   },
-  titleSection: {
-    alignItems: "center",
-    marginBottom: Spacing.xxl,
+  greetingEmoji: {
+    fontSize: 28,
+    marginBottom: 4,
   },
-  welcomeEmoji: {
-    fontSize: 40,
-    marginBottom: Spacing.sm,
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.5,
+    marginBottom: 4,
   },
-  title: {
-    ...Typography.h1,
-    marginBottom: Spacing.sm,
+  headerSubtitle: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    fontWeight: "500",
   },
-  subtitle: {
-    ...Typography.body,
-    textAlign: "center",
-  },
-  form: {
+  formCard: {
+    flex: 1,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xxl,
+    paddingBottom: Spacing.xxxl,
     gap: Spacing.lg,
   },
-  inputContainer: {
-    gap: Spacing.sm,
+  fieldGroup: {
+    gap: Spacing.xs + 2,
   },
-  label: {
-    ...Typography.captionBold,
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginLeft: 2,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 2,
-    paddingHorizontal: Spacing.md,
+    height: 56,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    paddingHorizontal: Spacing.lg,
   },
   inputIcon: {
     marginRight: Spacing.sm,
   },
   input: {
     flex: 1,
-    ...Typography.body,
-    height: "100%",
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: "500",
+    height: "100%",
   },
-  eyeButton: {
+  eyeBtn: {
     padding: Spacing.xs,
-    paddingRight: Spacing.md,
+    marginLeft: Spacing.xs,
   },
   linksRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginTop: -Spacing.xs,
   },
-  forgotPasswordText: {
-    ...Typography.caption,
-    fontWeight: "600",
+  linkText: {
+    fontSize: 13,
+    fontWeight: "500",
   },
-  button: {
-    height: Spacing.buttonHeight,
-    borderRadius: BorderRadius.xxl,
+  ctaButton: {
+    borderRadius: BorderRadius.full,
+    overflow: "hidden",
+    marginTop: Spacing.sm,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  ctaGradient: {
+    height: 58,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: Spacing.sm,
+    flexDirection: "row",
   },
-  buttonText: {
-    ...Typography.bodyBold,
+  ctaText: {
     fontSize: 17,
+    fontWeight: "700",
+    color: "#fff",
+    letterSpacing: 0.3,
   },
-  signupLink: {
+  dividerRow: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingVertical: Spacing.lg,
+    gap: Spacing.md,
+    marginVertical: Spacing.xs,
   },
-  signupLinkText: {
-    ...Typography.body,
+  divider: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  signupOutlineBtn: {
+    height: 54,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: Spacing.lg,
+  },
+  signupOutlineText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });

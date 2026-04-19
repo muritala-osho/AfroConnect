@@ -53,6 +53,8 @@ const messageSchema = new mongoose.Schema({
       return this.type === 'text' || this.type === 'system';
     }
   },
+  edited: { type: Boolean, default: false },
+  editedAt: { type: Date },
   imageUrl: {
     type: String
   },
@@ -114,6 +116,14 @@ const messageSchema = new mongoose.Schema({
   reactions: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     emoji: { type: String }
+  }],
+  viewOnce: {
+    type: Boolean,
+    default: false
+  },
+  viewOnceOpenedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }]
 }, {
   timestamps: true
