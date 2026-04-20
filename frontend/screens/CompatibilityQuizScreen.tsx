@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -103,7 +104,7 @@ export default function CompatibilityQuizScreen({ navigation }: any) {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch quiz questions:', err);
+      logger.error('Failed to fetch quiz questions:', err);
       setError('Failed to load quiz. Please try again.');
     } finally {
       setLoading(false);
@@ -190,7 +191,7 @@ export default function CompatibilityQuizScreen({ navigation }: any) {
         setError(response.message || 'Failed to submit quiz');
       }
     } catch (err) {
-      console.error('Failed to submit quiz:', err);
+      logger.error('Failed to submit quiz:', err);
       setError('Failed to submit. Please try again.');
     } finally {
       setSubmitting(false);

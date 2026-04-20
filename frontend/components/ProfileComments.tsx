@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -51,7 +52,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
         ));
       }
     } catch (error) {
-      console.error('Error fetching comments:', error);
+      logger.error('Error fetching comments:', error);
     } finally {
       setLoading(false);
     }
@@ -82,7 +83,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
         Alert.alert('Error', response.message || 'Failed to post comment');
       }
     } catch (error) {
-      console.error('Post comment error:', error);
+      logger.error('Post comment error:', error);
       Alert.alert('Error', 'Something went wrong');
     } finally {
       setSubmitting(false);

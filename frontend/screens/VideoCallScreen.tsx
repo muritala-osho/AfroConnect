@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -58,7 +59,7 @@ if (!isExpoGo && Platform.OS !== "web") {
     OrientationMode      = agora.OrientationMode;
     DegradationPreference = agora.DegradationPreference;
   } catch (e) {
-    console.log("[VideoCall] Native Agora not available — using fallback");
+    logger.log("[VideoCall] Native Agora not available — using fallback");
   }
 }
 
@@ -283,7 +284,7 @@ export default function VideoCallScreen() {
       await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
-      console.error("Video ringtone error:", err);
+      logger.error("Video ringtone error:", err);
       if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
   }, [isIncoming, stopRingtone]);
@@ -337,7 +338,7 @@ export default function VideoCallScreen() {
       engine.startPreview();
       setEngineReady(true);
     } catch (e) {
-      console.error("[VideoCall] Engine init error:", e);
+      logger.error("[VideoCall] Engine init error:", e);
     }
   }, []);
 
@@ -378,7 +379,7 @@ export default function VideoCallScreen() {
             joinUid   = 0;
           }
         } catch {
-          console.log("Video token fallback");
+          logger.log("Video token fallback");
         }
       }
 
@@ -391,7 +392,7 @@ export default function VideoCallScreen() {
           autoSubscribeVideo:     true,
         });
       } catch (e) {
-        console.error("[VideoCall] joinChannel error:", e);
+        logger.error("[VideoCall] joinChannel error:", e);
       }
     },
     [isIncoming, authToken, get, initEngine],

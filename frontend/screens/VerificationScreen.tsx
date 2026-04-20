@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
@@ -80,7 +81,7 @@ export default function VerificationScreen() {
         setVerificationState(resData.data as any);
       }
     } catch (error) {
-      console.error('Failed to fetch verification status:', error);
+      logger.error('Failed to fetch verification status:', error);
     } finally {
       setLoading(false);
     }
@@ -131,7 +132,7 @@ export default function VerificationScreen() {
         setShowCamera(false);
       }
     } catch (error) {
-      console.error('Failed to record video:', error);
+      logger.error('Failed to record video:', error);
       Alert.alert('Error', 'Failed to record verification video. Please try again.');
     } finally {
       if (submitDelayRef.current) clearTimeout(submitDelayRef.current);
@@ -184,7 +185,7 @@ export default function VerificationScreen() {
           approvedAt: null,
           rejectionReason: null,
         }));
-        fetchUser().catch(error => console.error('Failed to refresh user after verification upload:', error));
+        fetchUser().catch(error => logger.error('Failed to refresh user after verification upload:', error));
         Alert.alert(
           'Submitted!',
           'Your verification video has been sent to the admin review queue. Our team will compare it with your profile photos and award your verified badge within 24 hours.',

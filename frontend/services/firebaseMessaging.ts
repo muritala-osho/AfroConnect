@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 /**
  * Firebase Cloud Messaging background handler
  *
@@ -39,7 +40,7 @@ function getMessaging() {
     _messaging = require('@react-native-firebase/messaging').default;
     return _messaging;
   } catch (err) {
-    console.warn('[FCM] @react-native-firebase/messaging not available:', err);
+    logger.warn('[FCM] @react-native-firebase/messaging not available:', err);
     return null;
   }
 }
@@ -56,7 +57,7 @@ export function registerFirebaseBackgroundHandler() {
 
   messaging().setBackgroundMessageHandler(async (remoteMessage: any) => {
     const data = remoteMessage?.data;
-    console.log('[FCM] Background/killed message received:', data);
+    logger.log('[FCM] Background/killed message received:', data);
 
     if (data?.type !== 'call' && data?.type !== 'voice_call' && data?.type !== 'video_call') {
       return;
@@ -79,7 +80,7 @@ export function registerFirebaseBackgroundHandler() {
     };
   });
 
-  console.log('[FCM] Background message handler registered.');
+  logger.log('[FCM] Background message handler registered.');
 }
 
 /**
@@ -97,16 +98,16 @@ export async function requestFCMPermissionAndGetToken(): Promise<string | null> 
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
         authStatus === messaging.AuthorizationStatus.PROVISIONAL;
       if (!granted) {
-        console.warn('[FCM] iOS permission denied.');
+        logger.warn('[FCM] iOS permission denied.');
         return null;
       }
     }
 
     const token = await messaging().getToken();
-    console.log('[FCM] Token:', token);
+    logger.log('[FCM] Token:', token);
     return token;
   } catch (err) {
-    console.warn('[FCM] Failed to get token:', err);
+    logger.warn('[FCM] Failed to get token:', err);
     return null;
   }
 }

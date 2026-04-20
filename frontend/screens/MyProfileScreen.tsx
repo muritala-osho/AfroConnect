@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useRef, useEffect } from "react";
 import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
@@ -229,7 +230,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               }
             } catch (error) {
-              console.error('Delete photo error:', error);
+              logger.error('Delete photo error:', error);
               showAlert(t('error'), 'Failed to delete photo', [{ text: t('ok'), style: 'default' }], 'alert-circle');
             }
           },

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useRef, useEffect } from "react";
 import {
   View,
@@ -199,7 +200,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
       } as any);
       navigation.goBack();
     } catch (error) {
-      console.error("Filter update error:", error);
+      logger.error("Filter update error:", error);
     } finally {
       setSaving(false);
     }

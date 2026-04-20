@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 
 const express = require('express');
 const router = express.Router();
@@ -9,7 +10,7 @@ const User = require('../models/User');
 router.post('/request', protect, async (req, res) => {
   try {
     const { receiverId, message } = req.body;
-    console.log('[MATCH] User', req.user._id, 'liking user', receiverId);
+    logger.log('[MATCH] User', req.user._id, 'liking user', receiverId);
 
     if (receiverId === req.user._id.toString()) {
       return res.status(400).json({ success: false, message: 'Cannot send request to yourself' });
@@ -21,7 +22,7 @@ router.post('/request', protect, async (req, res) => {
     });
 
     if (existingRequest) {
-      console.log('[MATCH] Request already exists, status:', existingRequest.status);
+      logger.log('[MATCH] Request already exists, status:', existingRequest.status);
       
       if (existingRequest.status === 'accepted') {
         let existingMatch = await Match.findOne({
@@ -36,14 +37,14 @@ router.post('/request', protect, async (req, res) => {
               isSuperLike: false,
               status: 'active'
             });
-            console.log('[MATCH] Created missing match document:', existingMatch._id);
+            logger.log('[MATCH] Created missing match document:', existingMatch._id);
           } catch (createErr) {
-            console.error('[MATCH] Error creating match:', createErr);
+            logger.error('[MATCH] Error creating match:', createErr);
           }
         }
         
         const matchedUser = await User.findById(receiverId).select('name photos age');
-        console.log('[MATCH] Already matched! Returning match info');
+        logger.log('[MATCH] Already matched! Returning match info');
         return res.status(200).json({ 
           success: true, 
           isMatch: true,
@@ -54,7 +55,7 @@ router.post('/request', protect, async (req, res) => {
       }
       
       if (existingRequest.status === 'pending') {
-        console.log('[MATCH] Request still pending');
+        logger.log('[MATCH] Request still pending');
         return res.status(200).json({ success: true, isMatch: false, message: 'Request already sent, waiting for response' });
       }
       
@@ -68,7 +69,7 @@ router.post('/request', protect, async (req, res) => {
     }).populate('sender', 'name photos age');
 
     if (reverseRequest) {
-      console.log('[MATCH] Mutual like detected! Creating match between', req.user._id, 'and', receiverId);
+      logger.log('[MATCH] Mutual like detected! Creating match between', req.user._id, 'and', receiverId);
       reverseRequest.status = 'accepted';
       await reverseRequest.save();
 
@@ -88,9 +89,9 @@ router.post('/request', protect, async (req, res) => {
             isSuperLike: false,
             status: 'active'
           });
-          console.log('Match created successfully:', match._id, 'between', userId1, 'and', userId2);
+          logger.log('Match created successfully:', match._id, 'between', userId1, 'and', userId2);
         } catch (matchError) {
-          console.error('Error creating match:', matchError);
+          logger.error('Error creating match:', matchError);
           return res.status(200).json({ 
             success: true, 
             isMatch: true,
@@ -119,7 +120,7 @@ router.post('/request', protect, async (req, res) => {
 
     res.status(201).json({ success: true, friendRequest, isMatch: false });
   } catch (error) {
-    console.error('Send friend request error:', error);
+    logger.error('Send friend request error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -181,7 +182,7 @@ router.put('/request/:requestId', protect, async (req, res) => {
       isMatch: action === 'accept'
     });
   } catch (error) {
-    console.error('Accept/reject request error:', error);
+    logger.error('Accept/reject request error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

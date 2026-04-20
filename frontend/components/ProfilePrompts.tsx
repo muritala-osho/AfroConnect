@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -87,7 +88,7 @@ export default function ProfilePrompts({ userId, isOwnProfile = false, onRespons
         onResponsesChange?.(result.data.responses.length);
       }
     } catch (error) {
-      console.error('Fetch responses error:', error);
+      logger.error('Fetch responses error:', error);
     }
   }, [userId, token, get, onResponsesChange]);
 
@@ -100,7 +101,7 @@ export default function ProfilePrompts({ userId, isOwnProfile = false, onRespons
         setAvailablePrompts(result.data.prompts);
       }
     } catch (error) {
-      console.error('Fetch prompts error:', error);
+      logger.error('Fetch prompts error:', error);
     }
   }, [token, get]);
 
@@ -180,7 +181,7 @@ export default function ProfilePrompts({ userId, isOwnProfile = false, onRespons
         }
       }
     } catch (error) {
-      console.error('Save answer error:', error);
+      logger.error('Save answer error:', error);
       Alert.alert('Error', 'Failed to save answer');
     } finally {
       setSaving(false);
@@ -210,7 +211,7 @@ export default function ProfilePrompts({ userId, isOwnProfile = false, onRespons
                 fetchAvailablePrompts();
               }
             } catch (error) {
-              console.error('Delete response error:', error);
+              logger.error('Delete response error:', error);
               Alert.alert('Error', 'Failed to delete response');
             }
           },

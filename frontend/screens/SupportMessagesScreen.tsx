@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 /**
  * SupportMessagesScreen.tsx — User-facing support hub
  *
@@ -121,7 +122,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
       const data = await res.json();
       if (data.success) setTickets(data.tickets || []);
     } catch (e) {
-      console.error('[Support] fetchTickets error:', e);
+      logger.error('[Support] fetchTickets error:', e);
     } finally {
       setListLoading(false);
     }
@@ -140,7 +141,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
         setTickets(prev => prev.map(t => t._id === ticketId ? { ...t, unreadByUser: 0 } : t));
       }
     } catch (e) {
-      console.error('[Support] fetchThread error:', e);
+      logger.error('[Support] fetchThread error:', e);
     } finally {
       setThreadLoading(false);
     }

@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const multer = require('multer');
 const sharp = require('sharp');
@@ -103,13 +104,13 @@ const multiUpload = (req, res, next) => {
   ])(req, res, (err) => {
     if (err) {
       if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
-        console.warn('Upload request aborted by client (connection dropped)');
+        logger.warn('Upload request aborted by client (connection dropped)');
         if (!res.headersSent) {
           return res.status(499).json({ success: false, message: 'Upload cancelled' });
         }
         return;
       }
-      console.error('Multer error:', err);
+      logger.error('Multer error:', err);
       return res.status(400).json({ success: false, message: err.message });
     }
 
@@ -131,7 +132,7 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
   try {
     const file = req.file;
     if (!file) {
-      console.log('No file in photo request:', { body: req.body, files: !!req.files, file: !!req.file });
+      logger.log('No file in photo request:', { body: req.body, files: !!req.files, file: !!req.file });
       return res.status(400).json({ success: false, message: 'No photo uploaded' });
     }
 
@@ -165,7 +166,7 @@ router.post('/photo', protect, multiUpload, async (req, res) => {
       compressedSize: compressedBuffer.length
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -193,7 +194,7 @@ router.post('/chat-image', protect, multiUpload, async (req, res) => {
       publicId: result.public_id
     });
   } catch (error) {
-    console.error('Chat image upload error:', error);
+    logger.error('Chat image upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -216,7 +217,7 @@ router.post('/chat-video', protect, multiUpload, async (req, res) => {
       publicId: result.public_id
     });
   } catch (error) {
-    console.error('Chat video upload error:', error);
+    logger.error('Chat video upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -247,7 +248,7 @@ const handleAudioUpload = async (req, res) => {
       size: req.file.size,
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 };
@@ -256,13 +257,13 @@ const audioMultiUpload = (req, res, next) => {
   audioUpload.any()(req, res, (err) => {
     if (err) {
       if (err.message === 'Request aborted' || err.code === 'ECONNRESET') {
-        console.warn('Audio upload request aborted by client');
+        logger.warn('Audio upload request aborted by client');
         if (!res.headersSent) {
           return res.status(499).json({ success: false, message: 'Upload cancelled' });
         }
         return;
       }
-      console.error('Audio multer error:', err);
+      logger.error('Audio multer error:', err);
       return res.status(400).json({ success: false, message: err.message });
     }
     if (req.files && req.files.length > 0) {
@@ -310,12 +311,12 @@ router.delete('/photo', protect, async (req, res) => {
     try {
       await cloudinary.uploader.destroy(publicId);
     } catch (cloudinaryError) {
-      console.log('Cloudinary delete error (may not exist):', cloudinaryError.message);
+      logger.log('Cloudinary delete error (may not exist):', cloudinaryError.message);
     }
 
     res.json({ success: true, message: 'Photo deleted successfully' });
   } catch (error) {
-    console.error('Delete photo error:', error);
+    logger.error('Delete photo error:', error);
     res.status(500).json({ success: false, message: error.message || 'Delete failed' });
   }
 });
@@ -349,7 +350,7 @@ router.post('/file', protect, fileUpload.single('file'), async (req, res) => {
       fileType: req.file.mimetype,
     });
   } catch (error) {
-    console.error('Upload error:', error);
+    logger.error('Upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -362,7 +363,7 @@ router.post('/video', protect, multiUpload, async (req, res) => {
       return res.status(400).json({ success: false, message: 'No video uploaded' });
     }
 
-    console.log('Video upload starting for:', file.originalname);
+    logger.log('Video upload starting for:', file.originalname);
 
     const result = await uploadBufferToCloudinary(file.buffer, {
       folder: 'afroconnect/stories',
@@ -375,7 +376,7 @@ router.post('/video', protect, multiUpload, async (req, res) => {
       publicId: result.public_id
     });
   } catch (error) {
-    console.error('Video upload error:', error);
+    logger.error('Video upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -400,7 +401,7 @@ router.post('/voice-bio', protect, audioUpload.single('audio'), async (req, res)
       try {
         await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
       } catch (e) {
-        console.log('Could not delete old voice bio from cloudinary:', e.message);
+        logger.log('Could not delete old voice bio from cloudinary:', e.message);
       }
     }
 
@@ -417,7 +418,7 @@ router.post('/voice-bio', protect, audioUpload.single('audio'), async (req, res)
 
     res.json({ success: true, url: result.secure_url, publicId: result.public_id, duration });
   } catch (error) {
-    console.error('Voice bio upload error:', error);
+    logger.error('Voice bio upload error:', error);
     res.status(500).json({ success: false, message: error.message || 'Upload failed' });
   }
 });
@@ -432,7 +433,7 @@ router.delete('/voice-bio', protect, async (req, res) => {
       try {
         await cloudinary.uploader.destroy(user.voiceBio.publicId, { resource_type: 'video' });
       } catch (e) {
-        console.log('Could not delete voice bio from cloudinary:', e.message);
+        logger.log('Could not delete voice bio from cloudinary:', e.message);
       }
     }
 
@@ -440,7 +441,7 @@ router.delete('/voice-bio', protect, async (req, res) => {
     await user.save();
     res.json({ success: true, message: 'Voice bio removed' });
   } catch (error) {
-    console.error('Voice bio delete error:', error);
+    logger.error('Voice bio delete error:', error);
     res.status(500).json({ success: false, message: error.message || 'Delete failed' });
   }
 });

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -85,7 +86,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to submit appeal. Please try again.');
-      console.error('Appeal error:', error);
+      logger.error('Appeal error:', error);
     } finally {
       setLoading(false);
     }

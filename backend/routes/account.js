@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 
 const express = require('express');
 const router = express.Router();
@@ -32,7 +33,7 @@ router.delete('/delete', protect, async (req, res) => {
       });
     }
     
-    console.log('Account deletion - User ID:', user._id, 'Reason:', reason);
+    logger.log('Account deletion - User ID:', user._id, 'Reason:', reason);
     
     await Promise.all([
       User.deleteOne({ _id: user._id }),
@@ -55,7 +56,7 @@ router.delete('/delete', protect, async (req, res) => {
       message: 'Your account and all associated data have been permanently deleted'
     });
   } catch (error) {
-    console.error('Account deletion error:', error);
+    logger.error('Account deletion error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete account'
@@ -102,7 +103,7 @@ router.post('/export-data', protect, async (req, res) => {
       data: exportData
     });
   } catch (error) {
-    console.error('Data export error:', error);
+    logger.error('Data export error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to export data'
@@ -129,7 +130,7 @@ router.get('/privacy-settings', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get privacy settings error:', error);
+    logger.error('Get privacy settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get privacy settings'
@@ -173,7 +174,7 @@ router.put('/privacy-settings', protect, async (req, res) => {
       privacySettings: user.privacySettings
     });
   } catch (error) {
-    console.error('Privacy settings error:', error);
+    logger.error('Privacy settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update privacy settings'
@@ -224,7 +225,7 @@ router.put('/change-password', protect, async (req, res) => {
       message: 'Password changed successfully'
     });
   } catch (error) {
-    console.error('Change password error:', error);
+    logger.error('Change password error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to change password'
@@ -260,7 +261,7 @@ router.put('/settings', protect, async (req, res) => {
       settings: user.settings
     });
   } catch (error) {
-    console.error('Settings update error:', error);
+    logger.error('Settings update error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update settings'
@@ -278,7 +279,7 @@ router.get('/settings', protect, async (req, res) => {
       privacySettings: user.privacySettings || {}
     });
   } catch (error) {
-    console.error('Get settings error:', error);
+    logger.error('Get settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get settings'
@@ -304,7 +305,7 @@ router.post('/request-deletion-otp', protect, async (req, res) => {
       message: 'Verification code sent to your email'
     });
   } catch (error) {
-    console.error('Request deletion OTP error:', error);
+    logger.error('Request deletion OTP error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send verification code'
@@ -339,7 +340,7 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
       });
     }
     
-    console.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
+    logger.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
     
     await Promise.all([
       User.deleteOne({ _id: user._id }),
@@ -355,7 +356,7 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
       message: 'Your account and all associated data have been permanently deleted'
     });
   } catch (error) {
-    console.error('Account deletion with OTP error:', error);
+    logger.error('Account deletion with OTP error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete account'
@@ -373,7 +374,7 @@ router.get('/check-auth-method', protect, async (req, res) => {
       isOAuthUser: !!user.googleId
     });
   } catch (error) {
-    console.error('Check auth method error:', error);
+    logger.error('Check auth method error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to check authentication method'

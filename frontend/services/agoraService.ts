@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import { Platform } from 'react-native';
 
 let AgoraRTC: any = null;
@@ -24,7 +25,7 @@ class AgoraService {
       this.initialized = true;
       return true;
     } catch (error) {
-      console.error('Failed to load Agora SDK:', error);
+      logger.error('Failed to load Agora SDK:', error);
       return false;
     }
   }
@@ -39,7 +40,7 @@ class AgoraService {
       await this.client.publish([this.localAudioTrack]);
       return true;
     } catch (error) {
-      console.error('Agora voice join error:', error);
+      logger.error('Agora voice join error:', error);
       return false;
     }
   }
@@ -55,7 +56,7 @@ class AgoraService {
       await this.client.publish([this.localAudioTrack, this.localVideoTrack]);
       return { audioTrack: this.localAudioTrack, videoTrack: this.localVideoTrack };
     } catch (error) {
-      console.error('Agora video join error:', error);
+      logger.error('Agora video join error:', error);
       return { audioTrack: null, videoTrack: null };
     }
   }
@@ -109,7 +110,7 @@ class AgoraService {
           await this.localVideoTrack.setDevice(nextDevice.deviceId);
         }
       } catch (e) {
-        console.log('Camera switch not supported:', e);
+        logger.log('Camera switch not supported:', e);
       }
     }
   }
@@ -131,7 +132,7 @@ class AgoraService {
         this.client = null;
       }
     } catch (error) {
-      console.error('Agora leave error:', error);
+      logger.error('Agora leave error:', error);
     }
     this.onRemoteUserJoined = null;
     this.onRemoteUserLeft = null;

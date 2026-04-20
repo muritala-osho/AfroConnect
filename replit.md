@@ -1,6 +1,12 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Code quality / production cleanup pass**:
+  - Replaced all `console.log/warn/info/error` calls with the `logger` utility across **60+ files**: all 11 backend route files, `server.js`, `broadcastScheduler.js`, and 6 backend utils; all frontend services, hooks, components, and 32 screens. Logger is gated on `NODE_ENV !== production` for `.log/.warn/.info` and always-on for `.error`.
+  - Fixed 2 empty `catch {}` blocks in `admin.js` kill-switch routes — now log a non-critical warning via `logger.warn`.
+  - Verified central error middleware already in place at `server.js` line 1008 — already using `logger.error`.
+  - Removed all `via.placeholder.com` fallback URLs from `ChatDetailScreen`, `BlockedUsersScreen`, and `StoryViewerScreen` — replaced with `require('../assets/icon.png')`.
+  - Removed all Unsplash photo URLs from `DUMMY_SUCCESS_STORIES` in `SuccessStoriesScreen` — set `photos: []` to avoid external dependencies and copyright exposure in mock data.
 - **Support flow, admin status controls, profile parity**:
   - `frontend/screens/WelcomeScreen.tsx`: Public contact form now fetches `/api/support/challenge`, displays the math security challenge, and submits `challengeToken`/`challengeAnswer` with unauthenticated support requests.
   - `backend/routes/support.js`: Challenge tokens now use JWT when `JWT_SECRET` exists and a short-lived in-memory local token in development when it does not, preventing the challenge endpoint from crashing in local setup.

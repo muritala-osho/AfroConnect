@@ -1,3 +1,4 @@
+const logger = require('./utils/logger');
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -107,7 +108,7 @@ const setUserBusy = async (userId, isBusy) => {
       await redisClient.del(key);
     }
   } catch (err) {
-    console.error('Redis busy flag error:', err);
+    logger.error('Redis busy flag error:', err);
   }
 };
 
@@ -117,7 +118,7 @@ const isUserBusy = async (userId) => {
     const value = await redisClient.get(`busy:${userId}`);
     return !!value;
   } catch (err) {
-    console.error('Redis busy flag read error:', err);
+    logger.error('Redis busy flag read error:', err);
     return false;
   }
 };
@@ -133,7 +134,7 @@ const setupRedisAdapter = async () => {
     const { createAdapter } = require('@socket.io/redis-adapter');
 
     redisClient = createClient({ url: redisUrl });
-    redisClient.on('error', (err) => console.error('Redis client error:', err));
+    redisClient.on('error', (err) => logger.error('Redis client error:', err));
     await redisClient.connect();
 
     redisPubClient = redisClient.duplicate();
@@ -141,9 +142,9 @@ const setupRedisAdapter = async () => {
     await Promise.all([redisPubClient.connect(), redisSubClient.connect()]);
 
     io.adapter(createAdapter(redisPubClient, redisSubClient));
-    console.log('✅ Socket.IO Redis adapter enabled');
+    logger.log('✅ Socket.IO Redis adapter enabled');
   } catch (err) {
-    console.error('❌ Failed to initialize Redis adapter:', err);
+    logger.error('❌ Failed to initialize Redis adapter:', err);
   }
 };
 
@@ -182,7 +183,7 @@ app.use(cors(corsOptions));
 // Lightweight request logging (non-production: log everything; production: log notification routes always)
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
-    console.log(`[BACKEND] ${req.method} ${req.url}`);
+    logger.log(`[BACKEND] ${req.method} ${req.url}`);
     next();
   });
 } else {
@@ -190,7 +191,7 @@ if (process.env.NODE_ENV !== 'production') {
   // diagnose delivery issues without enabling full verbose logging.
   app.use((req, res, next) => {
     if (req.url.startsWith('/api/notifications') || req.url.startsWith('/api/engagement')) {
-      console.log(`[BACKEND] ${req.method} ${req.url}`);
+      logger.log(`[BACKEND] ${req.method} ${req.url}`);
     }
     next();
   });
@@ -296,7 +297,7 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
       socketTimeoutMS: 45000,
     })
       .then(async () => {
-        console.log('✅ MongoDB Connected');
+        logger.log('✅ MongoDB Connected');
         try {
           const User = require('./models/User');
           const result = await User.updateMany(
@@ -304,7 +305,7 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
             { $unset: { expireAt: 1 } }
           );
           if (result.modifiedCount > 0) {
-            console.log(`🔧 Cleared expireAt for ${result.modifiedCount} verified users`);
+            logger.log(`🔧 Cleared expireAt for ${result.modifiedCount} verified users`);
           }
           try {
             const collection = mongoose.connection.collection('users');
@@ -313,23 +314,23 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
             if (ttlIndex && ttlIndex.expireAfterSeconds !== 86400) {
               await collection.dropIndex(ttlIndex.name);
               await collection.createIndex({ expireAt: 1 }, { expireAfterSeconds: 86400 });
-              console.log('🔧 Updated TTL index to 24 hours');
+              logger.log('🔧 Updated TTL index to 24 hours');
             }
           } catch (idxErr) {
-            console.log('TTL index check skipped:', idxErr.message);
+            logger.log('TTL index check skipped:', idxErr.message);
           }
         } catch (migrationErr) {
-          console.log('Migration check skipped:', migrationErr.message);
+          logger.log('Migration check skipped:', migrationErr.message);
         }
       })
       .catch(err => {
-        console.error('❌ MongoDB Connection Error:', err);
+        logger.error('❌ MongoDB Connection Error:', err);
       });
   } else {
-    console.log('⚠️ PostgreSQL URL detected but this app requires MongoDB. Please provide MONGODB_URI in secrets.');
+    logger.log('⚠️ PostgreSQL URL detected but this app requires MongoDB. Please provide MONGODB_URI in secrets.');
   }
 } else {
-  console.log('⚠️ No MongoDB URI found. Falling back to local/mock mode.');
+  logger.log('⚠️ No MongoDB URI found. Falling back to local/mock mode.');
 }
 
 // Routes
@@ -360,7 +361,7 @@ const logRoutes = () => {
   if (app._router && app._router.stack) {
     app._router.stack.forEach(function(r){
       if (r.route && r.route.path){
-        console.log(`[ROUTE] Registered: ${Object.keys(r.route.methods)} ${r.route.path}`);
+        logger.log(`[ROUTE] Registered: ${Object.keys(r.route.methods)} ${r.route.path}`);
       }
     });
   }
@@ -483,7 +484,7 @@ const updateUserOnlineStatus = async (userId, status) => {
     }
     await User.findByIdAndUpdate(userId, updateData);
   } catch (error) {
-    console.error('Failed to update user online status:', error);
+    logger.error('Failed to update user online status:', error);
   }
 };
 
@@ -578,7 +579,7 @@ io.on('connection', (socket) => {
         $set: { seen: true, seenAt: new Date(), status: 'seen' }
       });
     } catch (err) {
-      console.error('Error marking messages as read:', err);
+      logger.error('Error marking messages as read:', err);
     }
 
     io.to(data.chatId).emit('chat:message-read', {
@@ -620,7 +621,7 @@ io.on('connection', (socket) => {
         const Match = require('./models/Match');
         await Match.findByIdAndUpdate(data.chatId, { screenshotProtection: data.enabled });
       } catch (e) {
-        console.error('Screenshot protection update error:', e);
+        logger.error('Screenshot protection update error:', e);
       }
       io.to(data.chatId).emit('chat:screenshot-protection-updated', {
         chatId: data.chatId,
@@ -639,7 +640,7 @@ io.on('connection', (socket) => {
       
       // Validate IDs before conversion
       if (!callerId || !receiverId) {
-        console.log('Missing callerId or receiverId for call message');
+        logger.log('Missing callerId or receiverId for call message');
         return null;
       }
       
@@ -651,7 +652,7 @@ io.on('connection', (socket) => {
       };
       
       if (!isValidObjectId(callerId) || !isValidObjectId(receiverId)) {
-        console.log('Invalid ObjectId format for call message:', callerId, receiverId);
+        logger.log('Invalid ObjectId format for call message:', callerId, receiverId);
         return null;
       }
       
@@ -666,7 +667,7 @@ io.on('connection', (socket) => {
       });
       
       if (!match) {
-        console.log('No match found for call message between', callerId, 'and', receiverId);
+        logger.log('No match found for call message between', callerId, 'and', receiverId);
         return null;
       }
       
@@ -686,7 +687,7 @@ io.on('connection', (socket) => {
             : `${callType === 'video' ? 'Video' : 'Voice'} call declined`
       });
       
-      console.log('Call message saved:', callStatus, callType, 'between', callerId, 'and', receiverId);
+      logger.log('Call message saved:', callStatus, callType, 'between', callerId, 'and', receiverId);
       
       // Emit to both users
       const messageData = {
@@ -707,7 +708,7 @@ io.on('connection', (socket) => {
       
       return message;
     } catch (err) {
-      console.error('Error saving call message:', err);
+      logger.error('Error saving call message:', err);
       return null;
     }
   }
@@ -722,7 +723,7 @@ io.on('connection', (socket) => {
       const targetBusy = await isUserBusy(targetUserId);
       if (targetBusy) {
         io.to(callerId).emit('call:busy', { targetUserId });
-        console.log(`User ${targetUserId} is busy, notifying ${callerId}`);
+        logger.log(`User ${targetUserId} is busy, notifying ${callerId}`);
         return;
       }
 
@@ -750,7 +751,7 @@ io.on('connection', (socket) => {
         },
         callerId: callerId
       });
-      console.log(`Call initiated from ${callerId} to ${targetUserId}`);
+      logger.log(`Call initiated from ${callerId} to ${targetUserId}`);
       
       const isTargetOnline = onlineUsers.has(targetUserId);
       if (!isTargetOnline) {
@@ -773,7 +774,7 @@ io.on('connection', (socket) => {
                 callData,
               });
             } catch (voipErr) {
-              console.error('[VoIP Push] Error:', voipErr?.message || voipErr);
+              logger.error('[VoIP Push] Error:', voipErr?.message || voipErr);
             }
           }
 
@@ -789,7 +790,7 @@ io.on('connection', (socket) => {
                 callData,
               });
             } catch (fcmErr) {
-              console.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
+              logger.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
             }
           }
 
@@ -813,7 +814,7 @@ io.on('connection', (socket) => {
             callerId,
           );
         } catch (err) {
-          console.error('Failed to send call push notification:', err);
+          logger.error('Failed to send call push notification:', err);
         }
       }
     }
@@ -851,7 +852,7 @@ io.on('connection', (socket) => {
         acceptedBy: socket.userId,
         callData
       });
-      console.log(`Call accepted by ${socket.userId}`);
+      logger.log(`Call accepted by ${socket.userId}`);
     }
   });
 
@@ -875,7 +876,7 @@ io.on('connection', (socket) => {
       io.to(callerId).emit('call:declined', {
         declinedBy: socket.userId
       });
-      console.log(`Call declined by ${socket.userId}`);
+      logger.log(`Call declined by ${socket.userId}`);
     }
   });
 
@@ -891,7 +892,7 @@ io.on('connection', (socket) => {
         if (callerSocket) callerSocket.pendingCall = null;
       }
       io.to(callerId).emit('call:busy', { targetUserId: socket.userId });
-      console.log(`User ${socket.userId} is busy — notified caller ${callerId}`);
+      logger.log(`User ${socket.userId} is busy — notified caller ${callerId}`);
     }
   });
 
@@ -946,7 +947,7 @@ io.on('connection', (socket) => {
         }
       }
       await saveCallMessage(socket.userId, targetUserId, callType || 'audio', 'missed');
-      console.log(`Missed call from ${socket.userId} to ${targetUserId}`);
+      logger.log(`Missed call from ${socket.userId} to ${targetUserId}`);
     }
   });
 
@@ -999,13 +1000,13 @@ io.on('connection', (socket) => {
         }
       }
     }
-    console.log('User disconnected:', socket.id);
+    logger.log('User disconnected:', socket.id);
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).json({
     success: false,
     message: 'Something went wrong!',
@@ -1016,20 +1017,20 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3001;
 const startServer = () => {
   const serverInstance = server.listen(PORT, '0.0.0.0', async () => {
-    console.log(`🚀 AfroConnect Backend running on port ${PORT}`);
-    console.log(`📡 Backend API ready`);
+    logger.log(`🚀 AfroConnect Backend running on port ${PORT}`);
+    logger.log(`📡 Backend API ready`);
     const { startScheduledJobs } = require('./utils/scheduledJobs');
     startScheduledJobs();
     const { startBroadcastScheduler } = require('./jobs/broadcastScheduler');
     startBroadcastScheduler();
     // Pre-warm face AI models so the first request isn't slow
     const { loadModels: loadVerifier } = require('./utils/faceVerifier');
-    loadVerifier().then(() => console.log('🤖 Face AI models ready')).catch(() => {});
+    loadVerifier().then(() => logger.log('🤖 Face AI models ready')).catch(() => {});
   });
 
   serverInstance.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.log('Address in use, retrying...');
+      logger.log('Address in use, retrying...');
       setTimeout(() => {
         serverInstance.close();
         startServer();

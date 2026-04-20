@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -122,7 +123,7 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
         setRemainingTime(0);
       }
     } catch (err) {
-      console.error('Failed to fetch boost status:', err);
+      logger.error('Failed to fetch boost status:', err);
     }
   };
 
@@ -133,7 +134,7 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
         setPackages(response.packages);
       }
     } catch (err) {
-      console.error('Failed to fetch boost packages:', err);
+      logger.error('Failed to fetch boost packages:', err);
     }
   };
 
@@ -154,7 +155,7 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
         onBoostActivated?.();
       }
     } catch (err) {
-      console.error('Failed to activate boost:', err);
+      logger.error('Failed to activate boost:', err);
     } finally {
       setActivating(false);
     }
@@ -170,7 +171,7 @@ export const BoostProfile: React.FC<BoostProfileProps> = ({ onBoostActivated }) 
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
     } catch (err) {
-      console.error('Failed to cancel boost:', err);
+      logger.error('Failed to cancel boost:', err);
     } finally {
       setLoading(false);
     }

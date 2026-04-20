@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useCallback, useEffect } from "react";
 import { 
   View, 
@@ -121,7 +122,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         setter(!value);
       }
     } catch (error) {
-      console.error(`Failed to update ${key}:`, error);
+      logger.error(`Failed to update ${key}:`, error);
       setter(!value);
     }
   };

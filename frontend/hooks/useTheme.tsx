@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useColorScheme as useSystemColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -106,7 +107,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setHapticFeedbackState(map[HAPTIC_KEY] !== "false");
       }
     } catch (error) {
-      console.error("Error loading theme preference:", error);
+      logger.error("Error loading theme preference:", error);
     } finally {
       setIsLoaded(true);
     }
@@ -117,7 +118,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(THEME_STORAGE_KEY, mode);
       setThemeModeState(mode);
     } catch (error) {
-      console.error("Error saving theme preference:", error);
+      logger.error("Error saving theme preference:", error);
     }
   }, []);
 
@@ -126,7 +127,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(ACCENT_COLOR_KEY, color);
       setAccentColorState(color);
     } catch (error) {
-      console.error("Error saving accent color:", error);
+      logger.error("Error saving accent color:", error);
     }
   }, []);
 
@@ -135,7 +136,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(FONT_SIZE_KEY, size);
       setFontSizeState(size);
     } catch (error) {
-      console.error("Error saving font size:", error);
+      logger.error("Error saving font size:", error);
     }
   }, []);
 
@@ -144,7 +145,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(CHAT_BUBBLE_KEY, style);
       setChatBubbleStyleState(style);
     } catch (error) {
-      console.error("Error saving chat bubble style:", error);
+      logger.error("Error saving chat bubble style:", error);
     }
   }, []);
 
@@ -153,7 +154,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(COMPACT_MODE_KEY, String(enabled));
       setCompactModeState(enabled);
     } catch (error) {
-      console.error("Error saving compact mode:", error);
+      logger.error("Error saving compact mode:", error);
     }
   }, []);
 
@@ -162,7 +163,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(ANIMATIONS_KEY, String(enabled));
       setAnimationsEnabledState(enabled);
     } catch (error) {
-      console.error("Error saving animations:", error);
+      logger.error("Error saving animations:", error);
     }
   }, []);
 
@@ -171,7 +172,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(HAPTIC_KEY, String(enabled));
       setHapticFeedbackState(enabled);
     } catch (error) {
-      console.error("Error saving haptic:", error);
+      logger.error("Error saving haptic:", error);
     }
   }, []);
 

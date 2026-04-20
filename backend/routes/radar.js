@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -160,7 +161,7 @@ router.get('/nearby-users', protect, async (req, res) => {
       .sort((a, b) => (a.distance || 999) - (b.distance || 999))
       .slice(0, 50);
 
-    console.log(`[RADAR] Returning ${nearbyUsers.length} users for radius ${searchRadius}km`);
+    logger.log(`[RADAR] Returning ${nearbyUsers.length} users for radius ${searchRadius}km`);
     const radarPayload = {
       users: nearbyUsers,
       count: nearbyUsers.length,
@@ -171,7 +172,7 @@ router.get('/nearby-users', protect, async (req, res) => {
     res.json({ success: true, ...radarPayload });
 
   } catch (error) {
-    console.error('Radar nearby users error:', error);
+    logger.error('Radar nearby users error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 
@@ -226,7 +227,7 @@ router.patch('/location', protect, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update location error:', error);
+    logger.error('Update location error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 
@@ -263,7 +264,7 @@ router.patch('/location-sharing', protect, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Toggle location sharing error:', error);
+    logger.error('Toggle location sharing error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 
@@ -298,7 +299,7 @@ router.get('/settings', protect, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get radar settings error:', error);
+    logger.error('Get radar settings error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Server error' 

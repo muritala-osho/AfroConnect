@@ -1732,7 +1732,7 @@ export default function ChatDetailScreen({
 
         <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
           <View style={styles.avatarContainer}>
-            <Image source={photoSource || { uri: "https://via.placeholder.com/50" }} style={styles.headerAvatar} contentFit="cover" />
+            <Image source={photoSource || require('../assets/icon.png')} style={styles.headerAvatar} contentFit="cover" />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.headerInfo}>

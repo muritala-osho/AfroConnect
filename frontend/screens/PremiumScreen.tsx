@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -151,7 +152,7 @@ export default function PremiumScreen({ navigation }: any) {
               Alert.alert('Welcome to Premium!', 'Your subscription is now active. Enjoy all the premium features!');
             }
           } catch (error) {
-            console.log('Receipt validation failed:', error);
+            logger.log('Receipt validation failed:', error);
           }
         }
         setProcessing(false);

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -192,7 +193,7 @@ export default function ProfileDetailScreen() {
         setUser(response.data.user);
       }
     } catch (error) {
-      console.error("Error loading user:", error);
+      logger.error("Error loading user:", error);
     } finally {
       setLoading(false);
     }
@@ -219,7 +220,7 @@ export default function ProfileDetailScreen() {
         }
       }
     } catch (error) {
-      console.error('Like error:', error);
+      logger.error('Like error:', error);
     } finally {
       setActionLoading(false);
     }
@@ -232,7 +233,7 @@ export default function ProfileDetailScreen() {
       await post('/match/swipe', { targetUserId: userId, action: 'pass' }, token);
       navigation.goBack();
     } catch (error) {
-      console.error('Pass error:', error);
+      logger.error('Pass error:', error);
     } finally {
       setActionLoading(false);
     }
@@ -259,7 +260,7 @@ export default function ProfileDetailScreen() {
         }
       }
     } catch (error) {
-      console.error('Super like error:', error);
+      logger.error('Super like error:', error);
     } finally {
       setActionLoading(false);
     }
@@ -310,7 +311,7 @@ export default function ProfileDetailScreen() {
               }
               Alert.alert('Reported', 'Thank you for your report. We will review it shortly.');
             } catch (error) {
-              console.error('Report error:', error);
+              logger.error('Report error:', error);
             }
           },
         },

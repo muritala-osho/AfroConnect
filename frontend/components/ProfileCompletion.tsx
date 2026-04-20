@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -94,7 +95,7 @@ export const ProfileCompletionCard: React.FC<ProfileCompletionProps> = ({
         setPrompts((promptsRes.data as any).prompts);
       }
     } catch (error) {
-      console.error('Failed to fetch profile completion:', error);
+      logger.error('Failed to fetch profile completion:', error);
     } finally {
       setLoading(false);
     }

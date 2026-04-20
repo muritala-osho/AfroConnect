@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const { Expo } = require('expo-server-sdk');
 const expo = new Expo({
   accessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
@@ -12,9 +13,9 @@ async function clearInvalidToken(pushToken) {
   try {
     const User = require('../models/User');
     await User.updateOne({ pushToken }, { $unset: { pushToken: '' }, pushNotificationsEnabled: false });
-    console.warn(`[Push] Cleared invalid/unregistered token: ${pushToken}`);
+    logger.warn(`[Push] Cleared invalid/unregistered token: ${pushToken}`);
   } catch (err) {
-    console.error('[Push] Failed to clear invalid token from DB:', err.message);
+    logger.error('[Push] Failed to clear invalid token from DB:', err.message);
   }
 }
 
@@ -36,13 +37,13 @@ async function checkPushReceipts(ticketIdMap) {
       try {
         receipts = await expo.getPushNotificationReceiptsAsync(chunk);
       } catch (err) {
-        console.error('[Push] Receipt fetch error:', err.message);
+        logger.error('[Push] Receipt fetch error:', err.message);
         continue;
       }
 
       for (const [receiptId, receipt] of Object.entries(receipts)) {
         if (receipt.status === 'error') {
-          console.error(`[Push] Receipt error for ${receiptId}: ${receipt.message}`, receipt.details);
+          logger.error(`[Push] Receipt error for ${receiptId}: ${receipt.message}`, receipt.details);
           if (receipt.details?.error === 'DeviceNotRegistered') {
             const token = ticketIdMap.get(receiptId);
             if (token) await clearInvalidToken(token);
@@ -51,13 +52,13 @@ async function checkPushReceipts(ticketIdMap) {
       }
     }
   } catch (err) {
-    console.error('[Push] Receipt check failed:', err.message);
+    logger.error('[Push] Receipt check failed:', err.message);
   }
 }
 
 async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge }) {
   if (!Expo.isExpoPushToken(pushToken)) {
-    console.warn(`[Push] Invalid Expo push token — skipping: ${pushToken}`);
+    logger.warn(`[Push] Invalid Expo push token — skipping: ${pushToken}`);
     return null;
   }
 
@@ -84,7 +85,7 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
     const ticketIdMap = new Map();
     for (const ticket of tickets) {
       if (ticket.status === 'error') {
-        console.error(`[Push] Ticket error: ${ticket.message}`, ticket.details);
+        logger.error(`[Push] Ticket error: ${ticket.message}`, ticket.details);
         if (ticket.details?.error === 'DeviceNotRegistered') {
           await clearInvalidToken(pushToken);
         }
@@ -97,10 +98,10 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
       setTimeout(() => checkPushReceipts(ticketIdMap), 20 * 60 * 1000);
     }
 
-    console.log(`[Push] Sent: "${title}" → ${pushToken.slice(0, 30)}…`);
+    logger.log(`[Push] Sent: "${title}" → ${pushToken.slice(0, 30)}…`);
     return tickets;
   } catch (error) {
-    console.error('[Push] Error sending notification:', error);
+    logger.error('[Push] Error sending notification:', error);
     return null;
   }
 }
@@ -119,12 +120,12 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
   const userId = user?._id?.toString() || 'unknown';
 
   if (!user?.pushToken || !Expo.isExpoPushToken(user.pushToken)) {
-    console.log(`[Push] Suppressed (no valid token) — user ${userId}, type: ${type}`);
+    logger.log(`[Push] Suppressed (no valid token) — user ${userId}, type: ${type}`);
     return false;
   }
 
   if (user.pushNotificationsEnabled === false) {
-    console.log(`[Push] Suppressed (notifications disabled) — user ${userId}, type: ${type}`);
+    logger.log(`[Push] Suppressed (notifications disabled) — user ${userId}, type: ${type}`);
     return false;
   }
 
@@ -134,23 +135,23 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
   const isCall = type === 'voice_call' || type === 'video_call';
 
   if (type === 'message'    && prefs.messagesEnabled   === false) {
-    console.log(`[Push] Suppressed (messages disabled) — user ${userId}`);
+    logger.log(`[Push] Suppressed (messages disabled) — user ${userId}`);
     return false;
   }
   if (type === 'match'      && prefs.matchesEnabled    === false) {
-    console.log(`[Push] Suppressed (matches disabled) — user ${userId}`);
+    logger.log(`[Push] Suppressed (matches disabled) — user ${userId}`);
     return false;
   }
   if (type === 'like'       && prefs.likesEnabled      === false) {
-    console.log(`[Push] Suppressed (likes disabled) — user ${userId}`);
+    logger.log(`[Push] Suppressed (likes disabled) — user ${userId}`);
     return false;
   }
   if (type === 'voice_call' && prefs.voiceCallsEnabled === false) {
-    console.log(`[Push] Suppressed (voice calls disabled) — user ${userId}`);
+    logger.log(`[Push] Suppressed (voice calls disabled) — user ${userId}`);
     return false;
   }
   if (type === 'video_call' && prefs.videoCallsEnabled === false) {
-    console.log(`[Push] Suppressed (video calls disabled) — user ${userId}`);
+    logger.log(`[Push] Suppressed (video calls disabled) — user ${userId}`);
     return false;
   }
 
@@ -160,19 +161,19 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     );
     if (muteEntry) {
       if (muteEntry.muteAll) {
-        console.log(`[Push] Suppressed (user muted sender) — user ${userId}`);
+        logger.log(`[Push] Suppressed (user muted sender) — user ${userId}`);
         return false;
       }
       if (type === 'message'    && muteEntry.muteMessages) {
-        console.log(`[Push] Suppressed (messages muted for sender) — user ${userId}`);
+        logger.log(`[Push] Suppressed (messages muted for sender) — user ${userId}`);
         return false;
       }
       if (type === 'voice_call' && muteEntry.muteVoiceCalls) {
-        console.log(`[Push] Suppressed (voice calls muted for sender) — user ${userId}`);
+        logger.log(`[Push] Suppressed (voice calls muted for sender) — user ${userId}`);
         return false;
       }
       if (type === 'video_call' && muteEntry.muteVideoCalls) {
-        console.log(`[Push] Suppressed (video calls muted for sender) — user ${userId}`);
+        logger.log(`[Push] Suppressed (video calls muted for sender) — user ${userId}`);
         return false;
       }
     }
@@ -193,7 +194,7 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
           : nowStr >= start || nowStr < end; // spans midnight
 
       if (inQuietHours) {
-        console.log(`[Push] Suppressed (quiet hours ${start}–${end} UTC, now ${nowStr}) — user ${userId}`);
+        logger.log(`[Push] Suppressed (quiet hours ${start}–${end} UTC, now ${nowStr}) — user ${userId}`);
         return false;
       }
     }

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useEffect, useCallback, useRef } from "react";
 import { StyleSheet, View, Text, TouchableOpacity, AppState, Platform } from "react-native";
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
@@ -72,11 +73,11 @@ function navigateFromNotification(data: Record<string, any>) {
 }
 
 // Print API configuration on startup
-console.log("\n\n========== AFROCONNECT APP STARTED ==========");
-console.log("API Base URL:", getApiBaseUrl());
-console.log("Signup URL:", `${getApiBaseUrl()}/api/auth/signup`);
-console.log("Login URL:", `${getApiBaseUrl()}/api/auth/login`);
-console.log("==========================================\n\n");
+logger.log("\n\n========== AFROCONNECT APP STARTED ==========");
+logger.log("API Base URL:", getApiBaseUrl());
+logger.log("Signup URL:", `${getApiBaseUrl()}/api/auth/signup`);
+logger.log("Login URL:", `${getApiBaseUrl()}/api/auth/login`);
+logger.log("==========================================\n\n");
 
 function LanguageSync() {
   const { user, isLoading } = useAuth();
@@ -140,9 +141,9 @@ function AppContent() {
                 },
                 body: JSON.stringify({ voipToken }),
               });
-              console.log('[App] VoIP push token registered with backend.');
+              logger.log('[App] VoIP push token registered with backend.');
             } catch (err) {
-              console.warn('[App] Failed to register VoIP token:', err);
+              logger.warn('[App] Failed to register VoIP token:', err);
             }
           });
         }
@@ -163,11 +164,11 @@ function AppContent() {
                 },
                 body: JSON.stringify({ fcmToken }),
               });
-              console.log('[App] FCM token registered with backend.');
+              logger.log('[App] FCM token registered with backend.');
             }
           }
         } catch (fcmErr) {
-          console.warn('[App] FCM token registration failed (non-fatal):', fcmErr);
+          logger.warn('[App] FCM token registration failed (non-fatal):', fcmErr);
         }
 
         // Handle a notification that launched the app from a killed state
@@ -180,7 +181,7 @@ function AppContent() {
         // Setup listeners for incoming notifications
         unsubscribe = setupNotificationListeners(
           (notification) => {
-            console.log("Notification received:", notification);
+            logger.log("Notification received:", notification);
           },
           async (response) => {
             const data = response?.notification?.request?.content?.data as Record<string, any>;
@@ -203,7 +204,7 @@ function AppContent() {
           },
         );
       } catch (error) {
-        console.error("Failed to setup notifications:", error);
+        logger.error("Failed to setup notifications:", error);
       }
     };
 

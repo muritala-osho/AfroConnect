@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -607,7 +608,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           if (d.interests) setInterests(d.interests);
         }
       } catch (e) {
-        console.error("Failed to load edit profile draft:", e);
+        logger.error("Failed to load edit profile draft:", e);
       }
     };
     loadDraft();
@@ -718,7 +719,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       });
       if (fetchUser) await fetchUser();
     } catch (err) {
-      console.error("Failed to save Spotify song:", err);
+      logger.error("Failed to save Spotify song:", err);
     }
   };
 

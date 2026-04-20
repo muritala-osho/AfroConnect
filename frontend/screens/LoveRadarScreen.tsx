@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -300,7 +301,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
         body: JSON.stringify({ lat, lng }),
       });
     } catch (error) {
-      console.error("Failed to update location:", error);
+      logger.error("Failed to update location:", error);
     }
   };
 
@@ -324,7 +325,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
         const data = await response.json();
         if (data.success) setNearbyUsers(data.users || []);
       } catch (error) {
-        console.error("Failed to fetch nearby users:", error);
+        logger.error("Failed to fetch nearby users:", error);
       } finally {
         setLoading(false);
       }

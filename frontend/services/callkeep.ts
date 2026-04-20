@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import { Platform } from 'react-native';
 
 let RNCallKeep: any = null;
@@ -9,7 +10,7 @@ function loadCallKeep() {
     RNCallKeep = require('react-native-callkeep').default;
     return RNCallKeep;
   } catch (err) {
-    console.warn('[CallKeep] Module not available:', err);
+    logger.warn('[CallKeep] Module not available:', err);
     return null;
   }
 }
@@ -56,9 +57,9 @@ export function initCallKeep(appName: string = 'AfroConnect') {
       },
     });
     _initialized = true;
-    console.log('[CallKeep] Initialized.');
+    logger.log('[CallKeep] Initialized.');
   } catch (err) {
-    console.error('[CallKeep] setup() failed:', err);
+    logger.error('[CallKeep] setup() failed:', err);
   }
 }
 
@@ -71,14 +72,14 @@ export function setupCallKeepListeners(handlers: {
   if (!CK || Platform.OS === 'web') return;
 
   CK.addEventListener('answerCall', ({ callUUID }: { callUUID: string }) => {
-    console.log('[CallKeep] answerCall uuid:', callUUID);
+    logger.log('[CallKeep] answerCall uuid:', callUUID);
     const callerId = getCallerIdByUUID(callUUID);
     CK.setCurrentCallActive(callUUID);
     handlers.onAnswer(callerId ?? callUUID, callUUID);
   });
 
   CK.addEventListener('endCall', ({ callUUID }: { callUUID: string }) => {
-    console.log('[CallKeep] endCall uuid:', callUUID);
+    logger.log('[CallKeep] endCall uuid:', callUUID);
     const callerId = getCallerIdByUUID(callUUID);
     handlers.onEnd(callerId ?? callUUID, callUUID);
     uuidMap.forEach((uuid, id) => {
@@ -87,7 +88,7 @@ export function setupCallKeepListeners(handlers: {
   });
 
   CK.addEventListener('didActivateAudioSession', () => {
-    console.log('[CallKeep] Audio session activated.');
+    logger.log('[CallKeep] Audio session activated.');
   });
 
   if (handlers.onToggleMute) {
@@ -128,9 +129,9 @@ export function displayIncomingCall(
 
   try {
     CK.displayIncomingCall(uuid, callerId, callerName, 'generic', hasVideo);
-    console.log('[CallKeep] displayIncomingCall — caller:', callerName, 'uuid:', uuid);
+    logger.log('[CallKeep] displayIncomingCall — caller:', callerName, 'uuid:', uuid);
   } catch (err) {
-    console.error('[CallKeep] displayIncomingCall error:', err);
+    logger.error('[CallKeep] displayIncomingCall error:', err);
   }
   return uuid;
 }

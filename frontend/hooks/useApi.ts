@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 
 import { useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
@@ -67,7 +68,7 @@ export function useApi() {
       const contentType = response.headers.get('content-type');
       if (contentType && !contentType.includes('application/json')) {
         const text = await response.text();
-        console.error('Non-JSON response received:', text.substring(0, 200));
+        logger.error('Non-JSON response received:', text.substring(0, 200));
         throw new Error('Server returned an invalid response. The backend might be down or restarting.');
       }
 

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -62,7 +63,7 @@ export default function DistanceWeatherScreen() {
             locationResult = { lat: loc.coords.latitude, lng: loc.coords.longitude };
           }
         } catch (locError) {
-          console.log("Location unavailable");
+          logger.log("Location unavailable");
         }
         
         const otherLoc = userResponse.data.user.location?.coordinates;
@@ -87,7 +88,7 @@ export default function DistanceWeatherScreen() {
         }
       }
     } catch (error) {
-      console.error("Error loading data:", error);
+      logger.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
@@ -118,7 +119,7 @@ export default function DistanceWeatherScreen() {
       const data = await response.json();
       setWeather(data);
     } catch (error) {
-      console.error("Weather fetch error:", error);
+      logger.error("Weather fetch error:", error);
     } finally {
       setWeatherLoading(false);
     }

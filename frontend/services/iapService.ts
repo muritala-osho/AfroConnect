@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import { Platform } from 'react-native';
 
 const PRODUCT_IDS = {
@@ -35,7 +36,7 @@ const loadIAP = async () => {
     isIAPAvailable = true;
     return true;
   } catch (error) {
-    console.log('IAP not available:', error);
+    logger.log('IAP not available:', error);
     isIAPAvailable = false;
     return false;
   }
@@ -47,7 +48,7 @@ const getSubscriptions = async () => {
     const subs = await iapModule.getSubscriptions({ skus: SUBSCRIPTION_SKUS! });
     return subs;
   } catch (error) {
-    console.log('Failed to get subscriptions:', error);
+    logger.log('Failed to get subscriptions:', error);
     return [];
   }
 };
@@ -77,7 +78,7 @@ const getPurchaseHistory = async () => {
   try {
     return await iapModule.getPurchaseHistory();
   } catch (error) {
-    console.log('Failed to get purchase history:', error);
+    logger.log('Failed to get purchase history:', error);
     return [];
   }
 };
@@ -87,7 +88,7 @@ const finishTransaction = async (purchase: any, isConsumable = false) => {
   try {
     await iapModule.finishTransaction({ purchase, isConsumable });
   } catch (error) {
-    console.log('Failed to finish transaction:', error);
+    logger.log('Failed to finish transaction:', error);
   }
 };
 
@@ -96,7 +97,7 @@ const endConnection = () => {
   try {
     iapModule.endConnection();
   } catch (error) {
-    console.log('Failed to end IAP connection:', error);
+    logger.log('Failed to end IAP connection:', error);
   }
 };
 

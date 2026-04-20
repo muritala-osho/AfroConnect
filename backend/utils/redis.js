@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const Redis = require('ioredis');
 
 let client = null;
@@ -12,7 +13,7 @@ function getClient() {
   const redisUrl = process.env.REDIS_URL;
 
   if (!redisUrl) {
-    console.log('[Redis] REDIS_URL not set — caching disabled');
+    logger.log('[Redis] REDIS_URL not set — caching disabled');
     return null;
   }
 
@@ -32,7 +33,7 @@ function getClient() {
       isConnected = true;
       circuitOpen = false;
       circuitOpenedAt = null;
-      console.log('[Redis] Connected');
+      logger.log('[Redis] Connected');
     });
 
     client.on('error', (err) => {
@@ -40,7 +41,7 @@ function getClient() {
       if (!circuitOpen) {
         circuitOpen = true;
         circuitOpenedAt = Date.now();
-        console.warn('[Redis] Circuit opened after error:', err.message);
+        logger.warn('[Redis] Circuit opened after error:', err.message);
       }
     });
 
@@ -50,7 +51,7 @@ function getClient() {
 
     client.connect().catch(() => {});
   } catch (err) {
-    console.warn('[Redis] Failed to initialize:', err.message);
+    logger.warn('[Redis] Failed to initialize:', err.message);
     client = null;
   }
 
@@ -63,7 +64,7 @@ function isHealthy() {
     if (Date.now() - circuitOpenedAt > CIRCUIT_RESET_MS) {
       circuitOpen = false;
       circuitOpenedAt = null;
-      console.log('[Redis] Circuit reset — retrying');
+      logger.log('[Redis] Circuit reset — retrying');
     } else {
       return false;
     }

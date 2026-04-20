@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
 import { Image } from "expo-image";
@@ -31,7 +32,7 @@ export default function BlockedUsersScreen() {
         setBlockedUsers(response.data.blockedUsers);
       }
     } catch (error) {
-      console.error('Failed to fetch blocked users:', error);
+      logger.error('Failed to fetch blocked users:', error);
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export default function BlockedUsersScreen() {
   };
 
   const renderItem = ({ item }: { item: any }) => {
-    const photoSource = getPhotoSource(item.photos?.[0]) || { uri: 'https://via.placeholder.com/50' };
+    const photoSource = getPhotoSource(item.photos?.[0]) || require('../assets/icon.png');
     return (
       <View style={[styles.userCard, { backgroundColor: theme.settingsItemBg, borderColor: theme.border }]}>
         <Image 

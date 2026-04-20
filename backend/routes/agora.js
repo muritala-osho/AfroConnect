@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -6,7 +7,7 @@ const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const AGORA_APP_ID = process.env.AGORA_APP_ID;
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 
-console.log('Agora Routes Loaded. ID:', !!AGORA_APP_ID, 'Cert:', !!AGORA_APP_CERTIFICATE);
+logger.log('Agora Routes Loaded. ID:', !!AGORA_APP_ID, 'Cert:', !!AGORA_APP_CERTIFICATE);
 
 router.get('/token', protect, async (req, res) => {
   try {
@@ -46,7 +47,7 @@ router.get('/token', protect, async (req, res) => {
       maxDuration: isPremium ? 0 : 300 // 5 minutes for free users
     });
   } catch (error) {
-    console.error('Agora token error:', error);
+    logger.error('Agora token error:', error);
     res.status(500).json({ success: false, message: 'Failed to generate token' });
   }
 });
@@ -94,7 +95,7 @@ router.post('/call/initiate', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Call initiation error:', error);
+    logger.error('Call initiation error:', error);
     res.status(500).json({ success: false, message: 'Failed to initiate call' });
   }
 });

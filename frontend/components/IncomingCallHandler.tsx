@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
@@ -115,7 +116,7 @@ export default function IncomingCallHandler() {
       ringtoneRef.current = sound;
       Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
-      console.log('Ringtone error:', err);
+      logger.log('Ringtone error:', err);
       Vibration.vibrate([500, 1000, 500], true);
     }
   }, []);
@@ -177,7 +178,7 @@ export default function IncomingCallHandler() {
 
     setupCallKeepListeners({
       onAnswer: (callerId) => {
-        console.log('[CallKeep] Native answer pressed — callerId:', callerId);
+        logger.log('[CallKeep] Native answer pressed — callerId:', callerId);
         const call = incomingCallRef.current;
         if (!call) return;
 
@@ -211,7 +212,7 @@ export default function IncomingCallHandler() {
         });
       },
       onEnd: (callerId) => {
-        console.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
+        logger.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
         const call = incomingCallRef.current;
         if (!call) return;
         stopRingtone();
@@ -231,7 +232,7 @@ export default function IncomingCallHandler() {
     if (!myUserId || !token) return;
 
     const handleIncomingCall = async (data: IncomingCallData) => {
-      console.log('Incoming call:', data);
+      logger.log('Incoming call:', data);
 
       const currentActiveCall = activeCallRef.current;
       const currentlyVisible = isVisibleRef.current;

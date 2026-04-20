@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView, Keyboard } from "react-native";
 import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
@@ -116,7 +117,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           }
         }
       } catch (error: any) {
-        console.error("Error fetching stories:", error);
+        logger.error("Error fetching stories:", error);
         if (userId === user?.id) {
           setStories([]);
         } else if (error?.response?.status === 403 || error?.message?.includes("403")) {
@@ -152,7 +153,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     try {
       await post(`/stories/${storyId}/view`, {}, token);
     } catch (error) {
-      console.error("Mark story viewed error:", error);
+      logger.error("Mark story viewed error:", error);
     }
   };
 
@@ -187,7 +188,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 Alert.alert("Error", "Failed to delete story");
               }
             } catch (error) {
-              console.error("Delete story error:", error);
+              logger.error("Delete story error:", error);
               Alert.alert("Error", "Failed to delete story");
             }
           }
@@ -222,7 +223,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         Alert.alert("Error", "Failed to update story");
       }
     } catch (error) {
-      console.error("Update story error:", error);
+      logger.error("Update story error:", error);
       Alert.alert("Error", "Failed to update story");
     } finally {
       setIsSaving(false);
@@ -297,7 +298,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       setShowReplyInput(false);
       Alert.alert("Reply sent!");
     } catch (error) {
-      console.error("Reply error:", error);
+      logger.error("Reply error:", error);
       Alert.alert("Error", "Failed to send reply. Please try again.");
     }
   };
@@ -316,7 +317,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       }
       setShowReactionPicker(false);
     } catch (error) {
-      console.error("Reaction error:", error);
+      logger.error("Reaction error:", error);
     }
   };
 
@@ -572,7 +573,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           >
             <View style={styles.avatarContainer}>
               <Image
-                source={userPhoto ? getPhotoSource(userPhoto) : { uri: "https://via.placeholder.com/40" }}
+                source={userPhoto ? getPhotoSource(userPhoto) : require('../assets/icon.png')}
                 style={styles.userAvatar}
                 onLoad={() => {
                 }}
@@ -794,7 +795,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                     }}
                   >
                     <Image
-                      source={viewer.photo ? getPhotoSource(viewer.photo) : { uri: "https://via.placeholder.com/40" }}
+                      source={viewer.photo ? getPhotoSource(viewer.photo) : require('../assets/icon.png')}
                       style={styles.viewerAvatar}
                     />
                     <View style={styles.viewerInfo}>

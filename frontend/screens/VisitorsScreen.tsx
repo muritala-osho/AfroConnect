@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -54,7 +55,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         setWeeklyInsights(response.data.weeklyInsights);
       }
     } catch (error) {
-      console.error('Failed to fetch visitors:', error);
+      logger.error('Failed to fetch visitors:', error);
     } finally {
       setLoading(false);
     }

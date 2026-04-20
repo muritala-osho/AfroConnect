@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -102,7 +103,7 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
         }
       }
     } catch (err) {
-      console.error('Failed to fetch quiz questions:', err);
+      logger.error('Failed to fetch quiz questions:', err);
       setError('Failed to load quiz. Please try again.');
     } finally {
       setLoading(false);
@@ -175,7 +176,7 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
         setError(response.message || 'Failed to submit quiz');
       }
     } catch (err) {
-      console.error('Failed to submit quiz:', err);
+      logger.error('Failed to submit quiz:', err);
       setError('Failed to submit. Please try again.');
     } finally {
       setSubmitting(false);
@@ -436,7 +437,7 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
         setNeedsQuiz(true);
       }
     } catch (err) {
-      console.error('Failed to fetch compatibility:', err);
+      logger.error('Failed to fetch compatibility:', err);
     } finally {
       setLoading(false);
     }

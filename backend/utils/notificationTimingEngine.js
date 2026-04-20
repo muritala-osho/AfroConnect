@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * AfroConnect Notification Timing Engine
  *
@@ -135,7 +136,7 @@ const scheduleNotification = async (user, payload, sendNow = false, type = 'syst
       await targetUser.save();
       await sendSmartNotification(targetUser, payload, type);
     } catch (err) {
-      console.error('[TimingEngine] Push send error:', err.message);
+      logger.error('[TimingEngine] Push send error:', err.message);
     }
   };
 
@@ -156,12 +157,12 @@ const scheduleNotification = async (user, payload, sendNow = false, type = 'syst
           await sendSmartNotification(freshUser, payload, type);
         }
       } catch (err) {
-        console.error('[TimingEngine] Delayed push error:', err.message);
+        logger.error('[TimingEngine] Delayed push error:', err.message);
       }
     }, delayMs);
 
     const delayHours = Math.round(delayMs / (1000 * 60 * 60) * 10) / 10;
-    console.log(`[TimingEngine] Notification scheduled for user ${user._id} in ${delayHours}h (optimal hour: ${optimalHour}:00 UTC)`);
+    logger.log(`[TimingEngine] Notification scheduled for user ${user._id} in ${delayHours}h (optimal hour: ${optimalHour}:00 UTC)`);
     return { scheduled: true, delayMs, sentNow: false, optimalHour };
   }
 };

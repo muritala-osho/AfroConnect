@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 /**
  * VoIP Push Notification Service (iOS only)
  *
@@ -28,18 +29,18 @@ export function registerVoipPushNotifications(
   try {
     VoipPushNotification = require('react-native-voip-push-notification').default;
   } catch (err) {
-    console.warn('[VoIP] react-native-voip-push-notification not available:', err);
+    logger.warn('[VoIP] react-native-voip-push-notification not available:', err);
     return;
   }
 
   VoipPushNotification.addEventListener('register', (token: string) => {
-    console.log('[VoIP] Registered token:', token);
+    logger.log('[VoIP] Registered token:', token);
     _voipToken = token;
     onTokenReceived(token);
   });
 
   VoipPushNotification.addEventListener('notification', (notification: any) => {
-    console.log('[VoIP] Received push (killed/background app):', notification);
+    logger.log('[VoIP] Received push (killed/background app):', notification);
     _handleVoipPush(notification);
     VoipPushNotification.onVoipNotificationCompleted(notification.uuid);
   });

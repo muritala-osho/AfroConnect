@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -120,7 +121,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
       profileIncomplete: !user.photos || user.photos.length === 0
     });
   } catch (error) {
-    console.error('Profile update error:', error);
+    logger.error('Profile update error:', error);
     let message = 'Server error';
     if (error.name === 'ValidationError') {
       message = Object.values(error.errors).map(e => e.message).join(', ');
@@ -161,7 +162,7 @@ router.get('/search', protect, async (req, res) => {
       users
     });
   } catch (error) {
-    console.error('Search error:', error);
+    logger.error('Search error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -184,7 +185,7 @@ router.get('/countries', protect, async (req, res) => {
       countries: filtered
     });
   } catch (error) {
-    console.error('Countries list error:', error);
+    logger.error('Countries list error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -236,7 +237,7 @@ router.get('/nearby', protect, async (req, res) => {
       if (activeLoc?.lat && activeLoc?.lng) {
         searchLat = activeLoc.lat;
         searchLng = activeLoc.lng;
-        console.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
+        logger.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
       }
     }
 
@@ -408,7 +409,7 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
-    console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
+    logger.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
 
     await redis.set(cacheKey, users, 120);
 
@@ -417,7 +418,7 @@ router.get('/nearby', protect, async (req, res) => {
       users
     });
   } catch (error) {
-    console.error('Nearby users error:', error);
+    logger.error('Nearby users error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -527,7 +528,7 @@ router.get('/who-viewed-me', protect, async (req, res) => {
     await redis.set(cacheKey, wvmPayload, 60);
     res.json({ success: true, ...wvmPayload });
   } catch (error) {
-    console.error('Who viewed me error:', error);
+    logger.error('Who viewed me error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -650,7 +651,7 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
     
     res.json({ success: true, message: 'Photo deleted successfully', photos: user.photos });
   } catch (error) {
-    console.error('Delete photo error:', error);
+    logger.error('Delete photo error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -693,7 +694,7 @@ router.post('/me/locations', protect, async (req, res) => {
         country = display[display.length - 1]?.trim() || '';
       }
     } catch (geoErr) {
-      console.warn('Geocoding failed for location:', name, geoErr.message);
+      logger.warn('Geocoding failed for location:', name, geoErr.message);
     }
 
     user.additionalLocations.push({ name: name.trim(), lat, lng, city, country });
@@ -756,7 +757,7 @@ router.post('/passport-location', protect, async (req, res) => {
     await user.save();
     res.json({ success: true, message: `Passport set to ${city || 'selected location'}`, passportLocation: user.passportLocation });
   } catch (error) {
-    console.error('Passport location error:', error);
+    logger.error('Passport location error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
