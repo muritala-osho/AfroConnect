@@ -1,6 +1,13 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Live location and admin stability fixes**:
+  - `backend/routes/users.js`: Normalizes profile location updates so `{ lat, lng }`, GeoJSON coordinates, and user-entered `livingIn` text are stored consistently as GeoJSON with city/country where available.
+  - `backend/routes/radar.js`: Clears the cached `/users/me` profile after live GPS updates so admin/mobile views see fresh location data.
+  - `frontend/screens/DiscoveryScreen.tsx` and `frontend/screens/LoveRadarScreen.tsx`: Live GPS refresh now reverse-geocodes city/country when possible and updates the backend location endpoint.
+  - `frontend/screens/ProfileSetupScreen.tsx`: Stores city/country from the user's entered location and removed Lagos-specific placeholder examples.
+  - `admin-dashboard/views/UserManagement.tsx`: Admin user list/detail now displays `livingIn`, city/country, or valid GPS coordinates with last-updated time instead of showing unknown/not set for valid live locations.
+  - `admin-dashboard/views/DashboardHome.tsx` and `admin-dashboard/services/adminApi.ts`: Reduced false backend-configuration errors and removed forced page reloads on auth/API errors that could make the dashboard appear to glitch.
 - **Code quality / production cleanup pass**:
   - Replaced all `console.log/warn/info/error` calls with the `logger` utility across **60+ files**: all 11 backend route files, `server.js`, `broadcastScheduler.js`, and 6 backend utils; all frontend services, hooks, components, and 32 screens. Logger is gated on `NODE_ENV !== production` for `.log/.warn/.info` and always-on for `.error`.
   - Fixed 2 empty `catch {}` blocks in `admin.js` kill-switch routes — now log a non-critical warning via `logger.warn`.

@@ -171,6 +171,31 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
       };
+
+      let locationName: { city?: string; country?: string } = {};
+      try {
+        const [place] = await Location.reverseGeocodeAsync({
+          latitude: coords.lat,
+          longitude: coords.lng,
+        });
+        locationName = {
+          city: place?.city || place?.district || place?.subregion || undefined,
+          country: place?.country || undefined,
+        };
+      } catch {}
+
+      try {
+        await fetch(`${getApiBaseUrl()}/api/radar/location`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...coords, ...locationName }),
+        });
+      } catch (locationUpdateError) {
+        logger.log('[DISCOVERY RADAR] Could not update live user location', locationUpdateError);
+      }
       
       const params = new URLSearchParams({
         lat: coords.lat.toString(),

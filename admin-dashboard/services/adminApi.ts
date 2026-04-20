@@ -16,10 +16,7 @@ const authHeaders = (): Record<string, string> => {
 const handleResponse = async (res: Response) => {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    if (res.status === 401) {
-      clearToken();
-      window.location.reload();
-    }
+    if (res.status === 401) clearToken();
     const text = await res.text();
     if (!res.ok || !contentType.includes('json')) {
       throw new Error(
@@ -32,10 +29,7 @@ const handleResponse = async (res: Response) => {
   }
   const data = await res.json();
   if (!res.ok) {
-    if (res.status === 401) {
-      clearToken();
-      window.location.reload();
-    }
+    if (res.status === 401) clearToken();
     throw new Error(data.message || `Request failed with status ${res.status}`);
   }
   return data;

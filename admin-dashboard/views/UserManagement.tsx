@@ -79,7 +79,20 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const formatLocationName = (location: any) => {
     if (!location) return '';
     if (typeof location === 'string') return location;
-    return location.name || [location.city, location.country].filter(Boolean).join(', ') || location.address || '';
+    const coords = Array.isArray(location.coordinates) && location.coordinates.length >= 2
+      && !(Number(location.coordinates[0]) === 0 && Number(location.coordinates[1]) === 0)
+      ? `${Number(location.coordinates[1]).toFixed(4)}, ${Number(location.coordinates[0]).toFixed(4)}`
+      : '';
+    return location.name || [location.city, location.country].filter(Boolean).join(', ') || location.address || coords || '';
+  };
+
+  const getUserLocationLabel = (user: any) => {
+    return user?.livingIn || formatLocationName(user?.location) || 'Not set';
+  };
+
+  const getLocationUpdatedLabel = (user: any) => {
+    if (!user?.locationUpdatedAt) return '';
+    return `Updated ${new Date(user.locationUpdatedAt).toLocaleString()}`;
   };
 
   const getLoveLocations = (user: any) => {
@@ -170,7 +183,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
       u.email || '',
       mapUserStatus(u),
       u.verified ? 'Yes' : 'No',
-      u.location?.city || u.location?.country || u.livingIn || '',
+      getUserLocationLabel(u),
       u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -308,7 +321,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">
-                          {user.location?.city || user.location?.country || user.livingIn || '—'}
+                          <div className="flex flex-col">
+                            <span>{getUserLocationLabel(user)}</span>
+                            {getLocationUpdatedLabel(user) && (
+                              <span className="text-[10px] text-gray-400 dark:text-slate-500">{getLocationUpdatedLabel(user)}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${statusBadge(status)}`}>
@@ -482,7 +500,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-4 text-gray-500 dark:text-slate-400 text-sm">
-                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {selectedUser.location?.city || selectedUser.location?.country || selectedUser.livingIn || 'Not set'}</span>
+                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {getUserLocationLabel(selectedUser)}{getLocationUpdatedLabel(selectedUser) ? ` · ${getLocationUpdatedLabel(selectedUser)}` : ''}</span>
                     <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-500" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
                     {selectedUser.age && <span className="flex items-center gap-1.5"><span className="text-teal-500 text-xs font-bold">Age</span> {selectedUser.age}</span>}
                     {selectedUser.email && <span className="text-xs text-gray-400">{selectedUser.email}</span>}

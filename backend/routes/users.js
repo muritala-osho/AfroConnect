@@ -9,6 +9,46 @@ const redis = require('../utils/redis');
 const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
 
+function parseLivingIn(livingIn) {
+  if (!livingIn || typeof livingIn !== 'string') return {};
+  const parts = livingIn.split(',').map(part => part.trim()).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { city: parts[0] };
+  return { city: parts.slice(0, -1).join(', '), country: parts[parts.length - 1] };
+}
+
+function normaliseLocationUpdate(location, livingIn) {
+  if (!location || typeof location !== 'object') return location;
+
+  const parsedLivingIn = parseLivingIn(livingIn);
+  const coords = Array.isArray(location.coordinates) && location.coordinates.length >= 2
+    ? [Number(location.coordinates[0]), Number(location.coordinates[1])]
+    : null;
+  const lng = location.lng ?? location.longitude ?? (coords ? coords[0] : undefined);
+  const lat = location.lat ?? location.latitude ?? (coords ? coords[1] : undefined);
+  const numericLat = Number(lat);
+  const numericLng = Number(lng);
+
+  const nextLocation = {
+    type: 'Point',
+    city: location.city || parsedLivingIn.city,
+    country: location.country || parsedLivingIn.country
+  };
+
+  if (
+    Number.isFinite(numericLat) &&
+    Number.isFinite(numericLng) &&
+    numericLat >= -90 &&
+    numericLat <= 90 &&
+    numericLng >= -180 &&
+    numericLng <= 180
+  ) {
+    nextLocation.coordinates = [numericLng, numericLat];
+  }
+
+  return nextLocation;
+}
+
 
 router.get('/me', protect, async (req, res) => {
   try {
@@ -105,6 +145,9 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ? user.lifestyle.toObject()
             : (user.lifestyle || {});
           user.lifestyle = { ...currentLifestyle, [field]: updates[field] };
+        } else if (field === 'location') {
+          user.location = normaliseLocationUpdate(updates.location, updates.livingIn ?? user.livingIn);
+          user.locationUpdatedAt = new Date();
         } else {
           user[field] = updates[field];
         }

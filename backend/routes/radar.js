@@ -219,6 +219,8 @@ router.patch('/location', protect, async (req, res) => {
       { new: true }
     ).select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire');
 
+    await redis.del(`profile:me:${req.user.id}`);
+
     res.json({
       success: true,
       message: 'Location updated successfully',

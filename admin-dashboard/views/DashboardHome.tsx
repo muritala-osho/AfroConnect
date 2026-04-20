@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area
 } from 'recharts';
@@ -43,6 +43,7 @@ const DashboardHome: React.FC = () => {
   const [reportsUsers, setReportsUsers] = useState<any[]>([]);
   const [chartRange, setChartRange] = useState<'7d' | '30d'>('7d');
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRequiredData = useRef(false);
 
   const formatNumber = (num: number) => {
     if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
@@ -65,9 +66,11 @@ const DashboardHome: React.FC = () => {
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
         setStats(statsRes.value.stats);
+        hasLoadedRequiredData.current = true;
       }
       if (activityRes.status === 'fulfilled' && activityRes.value?.success) {
         setActivity(activityRes.value.activity);
+        hasLoadedRequiredData.current = true;
       }
       if (reportsRes.status === 'fulfilled' && reportsRes.value?.success) {
         setReportsUsers(reportsRes.value.reports?.slice(0, 5) || []);
@@ -76,11 +79,14 @@ const DashboardHome: React.FC = () => {
         setDailyData(analyticsRes.value.analytics?.dailyData || []);
       }
 
-      if (statsRes.status === 'rejected' && activityRes.status === 'rejected') {
-        setError('Unable to reach backend. Check API URL configuration.');
+      const hasRequiredData =
+        (statsRes.status === 'fulfilled' && statsRes.value?.success) ||
+        (activityRes.status === 'fulfilled' && activityRes.value?.success);
+
+      if (!hasRequiredData && !hasLoadedRequiredData.current) {
+        setError('Unable to load live dashboard data. Please retry.');
       }
     } catch (err) {
-      console.error('Dashboard fetch error:', err);
       setError('Failed to load dashboard data.');
     } finally {
       setLoading(false);
@@ -114,7 +120,7 @@ const DashboardHome: React.FC = () => {
           </button>
           <div className="flex items-center px-4 py-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 shadow-sm">
             <Globe size={16} className="text-cyan-500 mr-2" />
-            <span className="text-sm font-bold text-gray-700 dark:text-slate-300">Hub: Lagos Central</span>
+            <span className="text-sm font-bold text-gray-700 dark:text-slate-300">Live Operations</span>
           </div>
           <span className="inline-flex items-center px-4 py-2 rounded-2xl text-[10px] font-black bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 uppercase tracking-widest">
             <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
