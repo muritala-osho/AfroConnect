@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 interface VerificationBadgeProps {
   verified?: boolean;
@@ -20,29 +19,13 @@ export function VerificationBadge({
   if (!verified) return null;
 
   const badgeSize = typeof size === 'number' ? size : (SIZE_MAP[size] ?? 14);
-  const iconSize = Math.round(badgeSize * 0.65);
 
   return (
-    <View
-      style={[
-        styles.badge,
-        {
-          width: badgeSize,
-          height: badgeSize,
-          borderRadius: badgeSize / 2,
-          marginLeft: 4,
-        },
-      ]}
-    >
-      <Ionicons name="checkmark" size={iconSize} color="#FFFFFF" />
-    </View>
+    <MaterialCommunityIcons
+      name="check-decagram"
+      size={badgeSize}
+      color="#10B981"
+      style={{ marginLeft: 4 }}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  badge: {
-    backgroundColor: '#FF6600',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
