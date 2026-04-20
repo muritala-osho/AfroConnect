@@ -268,7 +268,7 @@ router.post(
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: "Invalid credentials",
+          message: "No account found with this email address.",
         });
       }
 

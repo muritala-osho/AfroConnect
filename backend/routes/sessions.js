@@ -123,6 +123,7 @@ router.get('/', protect, async (req, res) => {
 router.delete('/others', protect, async (req, res) => {
   try {
     const currentSessionId = req.sessionId;
+    const userId = req.user._id.toString();
 
     const otherSessions = await Session.find({
       userId: req.user._id,
@@ -144,6 +145,14 @@ router.delete('/others', protect, async (req, res) => {
       sessionId: { $ne: currentSessionId },
     });
 
+    // Force-logout all other devices via socket immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.to(userId).emit('session:revoked', {
+        reason: 'You were logged out from another device.',
+      });
+    }
+
     res.json({
       success: true,
       message: `${otherSessions.length} other device(s) logged out`,
@@ -157,6 +166,7 @@ router.delete('/others', protect, async (req, res) => {
 router.delete('/:sessionId', protect, async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const userId = req.user._id.toString();
 
     if (sessionId === req.sessionId) {
       return res.status(400).json({
@@ -172,6 +182,14 @@ router.delete('/:sessionId', protect, async (req, res) => {
 
     await redis.set(`revoked:${sessionId}`, '1', 7 * 24 * 60 * 60);
     await Session.deleteOne({ sessionId });
+
+    // Force-logout the removed device via socket immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.to(userId).emit('session:revoked', {
+        reason: 'This device was removed from your account.',
+      });
+    }
 
     res.json({ success: true, message: 'Device logged out successfully' });
   } catch (error) {

@@ -175,12 +175,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             { cancelable: false }
           );
         };
+        const handleSessionRevoked = (data: { reason?: string }) => {
+          Alert.alert(
+            'Device Removed',
+            data?.reason || 'This device has been logged out remotely.',
+            [{ text: 'OK', onPress: () => clearAuthData() }],
+            { cancelable: false }
+          );
+        };
+
         socketService.on('user:banned', handleBanned);
         socketService.on('user:suspended', handleSuspended);
+        socketService.on('session:revoked', handleSessionRevoked);
 
         return () => {
           socketService.off('user:banned', handleBanned);
           socketService.off('user:suspended', handleSuspended);
+          socketService.off('session:revoked', handleSessionRevoked);
         };
       } catch (err) {
         logger.error('Socket connection failed:', err);
