@@ -122,81 +122,101 @@ async function pushToStaff(ticket, title, body) {
 
 
 /**
- * Rule-based instant reply when Gemini key is not available.
+ * Built-in rule engine — keyword + category matching.
+ * Returns the most specific reply it can find, or a warm generic fallback.
  */
-function getRuleBasedBotReply(category, message) {
-  const msg = (message || '').toLowerCase();
+function getRuleBasedBotReply(category, subject, message) {
+  // Combine subject + message for broader keyword coverage
+  const text = `${subject || ''} ${message || ''}`.toLowerCase();
 
+  const has = (...words) => words.some(w => text.includes(w));
+
+  /* ── BILLING ─────────────────────────────────────────────────── */
   if (category === 'billing') {
-    if (msg.includes('refund') || msg.includes('charge') || msg.includes('payment'))
-      return "Thank you for reaching out about your billing concern. We've received your request and our team will review your account and payment history. A support agent will get back to you within 24 hours with a resolution.";
-    if (msg.includes('subscription') || msg.includes('premium') || msg.includes('cancel'))
-      return "We've received your subscription inquiry. To manage your subscription you can go to Settings → Subscription in the app. If you need further help, our team will follow up with you shortly.";
-    return "Thank you for contacting us about a billing matter. Our finance team has been notified and will review your case within 24 hours.";
+    if (has('refund', 'charge', 'overcharge', 'double charge', 'charged twice'))
+      return "Hi there! We're sorry to hear about this billing issue. We've flagged your account for review and our billing team will look into the charge within 24 hours. Please don't worry — if an error occurred it will be corrected. A support agent will follow up with you directly.";
+
+    if (has('cancel', 'cancellation', 'unsubscribe'))
+      return "We've received your cancellation request. To cancel your subscription right now, go to Settings → Subscription → Cancel Plan inside the app. If you're having trouble with that, reply here and an agent will process it manually for you.";
+
+    if (has('subscription', 'premium', 'upgrade', 'plan', 'gold', 'vip'))
+      return "Thanks for reaching out about your subscription! You can view and manage your plan under Settings → Subscription in the app. If something isn't working as expected, our team will be happy to sort it out — a support agent will follow up within 24 hours.";
+
+    if (has('payment', 'card', 'paypal', 'declined', 'failed payment'))
+      return "Sorry to hear your payment didn't go through! Please check that your card details are up to date in Settings → Payment Methods. If the issue continues after updating, our team will investigate and get back to you within 24 hours.";
+
+    return "Thank you for reaching out about a billing matter. We've logged your request and our finance team will review your account within 24 hours. A support agent will follow up with a resolution.";
   }
 
+  /* ── ACCOUNT ─────────────────────────────────────────────────── */
   if (category === 'account') {
-    if (msg.includes('login') || msg.includes('password') || msg.includes('access') || msg.includes('sign in'))
-      return "Sorry you're having trouble accessing your account! Please try the 'Forgot Password' option on the login screen. If the issue persists our team will assist you further within 24 hours.";
-    if (msg.includes('delete') || msg.includes('deactivate'))
-      return "We've received your account request. You can delete your account under Settings → Privacy → Delete Account. If you need help, a support agent will reach out to you shortly.";
-    if (msg.includes('verif'))
-      return "Thank you for your verification inquiry. Our team reviews verification submissions within 48 hours. If you've already submitted, please allow up to 2 business days for a response.";
-    return "Thank you for reaching out about your account. Our support team has been notified and will look into this for you within 24 hours.";
+    if (has('login', 'log in', 'sign in', 'password', 'forgot', 'reset', "can't access", 'locked out'))
+      return "Sorry to hear you're having trouble logging in! Please tap 'Forgot Password' on the login screen and follow the steps to reset it. Check your spam folder if you don't see the email. If that doesn't work, reply here and an agent will help you regain access.";
+
+    if (has('delete', 'deactivate', 'close account', 'remove account'))
+      return "We're sorry to see you go! To delete your account, go to Settings → Privacy → Delete Account in the app. Please note that deletion is permanent and cannot be undone. If you need help or want to discuss alternatives, a support agent is happy to assist.";
+
+    if (has('ban', 'banned', 'suspend', 'suspended', 'disabled', 'restricted'))
+      return "We're sorry your account is restricted. This usually happens when our system detects activity that may violate our community guidelines. Your case has been flagged for review and a support agent will reach out within 24 hours with more information.";
+
+    if (has('verif', 'id check', 'selfie', 'photo check', 'face verif'))
+      return "Thanks for submitting your verification request! Our team typically reviews submissions within 24–48 hours. If you've already submitted your documents, please sit tight — we'll notify you as soon as it's processed.";
+
+    if (has('profile', 'photo', 'picture', 'bio', 'edit'))
+      return "For profile changes, go to your profile page and tap Edit. If photos are being rejected or the edit isn't saving, please try clearing the app cache or reinstalling. If the problem continues, reply here and an agent will look into it.";
+
+    if (has('match', 'like', 'swipe', 'connection'))
+      return "Thanks for reaching out about your matches! Matches are based on your preferences and mutual interest. Make sure your profile is complete and visible in Settings → Privacy. If you think something is wrong with your matching, let us know and a technical agent will investigate.";
+
+    return "Thank you for reaching out about your account. We've noted your request and our support team will look into this within 24 hours. An agent will follow up with you directly.";
   }
 
+  /* ── TECHNICAL ───────────────────────────────────────────────── */
   if (category === 'technical') {
-    if (msg.includes('crash') || msg.includes('not working') || msg.includes('error') || msg.includes('bug'))
-      return "Sorry to hear you're experiencing technical difficulties! Please try restarting the app and checking for updates in the App Store or Google Play. If the issue continues our technical team will investigate and follow up with you.";
-    if (msg.includes('notification') || msg.includes('push'))
-      return "For notification issues, go to your device Settings → AfroConnect → Notifications and make sure they're enabled. Also check your in-app notification settings. If problems persist we'll look into this further for you.";
-    return "Thank you for reporting this technical issue. Our engineering team has been notified and will investigate. We'll update you within 24 hours.";
+    if (has('crash', 'crashing', 'keeps closing', 'force close', 'freezing', 'frozen'))
+      return "We're sorry the app is crashing for you! First, please try force-closing the app, then reopening it. Also check for any available updates in the App Store or Google Play. If it continues, try reinstalling the app (your account data is safely stored). If none of that helps, please let us know your device model and OS version and we'll dig deeper.";
+
+    if (has('notification', 'push', 'alert', "not receiving", "no notification"))
+      return "For missing notifications, please check: 1) Device Settings → AfroConnect → Notifications are ON, 2) In-app Settings → Notifications are enabled, 3) Your phone isn't in Do Not Disturb mode. If all that looks correct, try logging out and back in. Still having issues? Reply here and we'll investigate.";
+
+    if (has('video', 'call', 'audio', 'sound', 'mic', 'camera', 'voice call'))
+      return "For call issues, please ensure AfroConnect has permission to access your camera and microphone (device Settings → AfroConnect → Permissions). Also check your internet connection — calls work best on Wi-Fi or a strong mobile signal. If it still isn't working, an agent will follow up within 24 hours.";
+
+    if (has('message', 'chat', "can't send", 'not sending', 'message failed'))
+      return "Sorry your messages aren't going through! Please check your internet connection and try again. If the issue is with a specific person, they may have restricted their messages. For anything else, reply here and our technical team will investigate.";
+
+    if (has('slow', 'loading', 'lag', 'lagging', 'takes long'))
+      return "We're sorry the app feels slow! Try closing other background apps to free up memory, and make sure you're on a stable internet connection. Clearing the app cache in your device settings can also help. If it's still slow, please share your device type and we'll look into it further.";
+
+    if (has('update', 'version', 'upgrade app'))
+      return "Please make sure you have the latest version of AfroConnect installed — updates often contain important fixes. Visit the App Store or Google Play and tap Update if one is available. If you're already on the latest version and still experiencing issues, a technical agent will follow up.";
+
+    return "Thank you for reporting this technical issue. Our engineering team has been notified. In the meantime, try restarting the app and checking for updates. We'll follow up within 24 hours if the problem persists.";
   }
 
-  if (category === 'safety')
-    return "Thank you for bringing this safety concern to our attention — we take all safety reports very seriously. Your report has been escalated to our Trust & Safety team who will review it as a priority. We'll follow up within 12 hours.";
+  /* ── SAFETY ──────────────────────────────────────────────────── */
+  if (category === 'safety') {
+    if (has('harassment', 'harass', 'threaten', 'threat', 'abuse', 'abusive'))
+      return "We take harassment and threats extremely seriously and we're sorry this happened to you. Your report has been escalated to our Trust & Safety team as a priority. We recommend blocking this user immediately (tap their profile → Block). We'll review and take action within 12 hours.";
 
-  return "Thank you for contacting AfroConnect Support! We've received your message and a member of our support team will review it and get back to you within 24 hours. We appreciate your patience! 💚";
+    if (has('fake', 'scam', 'catfish', 'fraud', 'impersonat'))
+      return "Thank you for reporting this — fake profiles and scams go against everything AfroConnect stands for. We've escalated this to our Trust & Safety team who will investigate the reported account within 24 hours. We'll update you on the outcome.";
+
+    if (has('inappropriate', 'nude', 'explicit', 'content'))
+      return "Thank you for flagging this content — it's exactly the kind of report that keeps our community safe. Our safety team will review the reported content as a priority. If you haven't already, please use the in-app Report button on the content itself so it gets reviewed immediately.";
+
+    return "Thank you for bringing this safety concern to our attention — we take every report seriously. Your case has been escalated to our Trust & Safety team who will review it as a priority. We'll follow up within 12 hours. Your safety matters to us. 💚";
+  }
+
+  /* ── GENERIC FALLBACK ────────────────────────────────────────── */
+  return "Hi there! Thanks for reaching out to AfroConnect Support 💚 We've received your message and a member of our team will review it and get back to you within 24 hours. If your issue is urgent, feel free to add more details here and we'll prioritise it.";
 }
 
 /**
- * Generate an automatic first reply for a new ticket.
- * Uses Gemini if GEMINI_API_KEY is set, otherwise falls back to rule-based.
+ * Generate an automatic first reply for a new ticket using the built-in rule engine.
  */
 async function generateBotReply(category, subject, message) {
-  if (process.env.GEMINI_API_KEY) {
-    try {
-      const prompt = `You are a friendly, empathetic customer support assistant for AfroConnect, an African dating app.
-A user has submitted a support ticket:
-Category: ${category}
-Subject: ${subject}
-Message: ${message}
-
-Write a helpful, warm, and concise response (2-4 sentences).
-- If you can resolve the issue with clear guidance, do so.
-- If the issue needs account investigation or manual action, acknowledge it, confirm you've logged their request, and say a support agent will follow up within 24 hours.
-- Do NOT invent account-specific details.
-- Keep the tone professional but friendly.`;
-
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 250, temperature: 0.65 },
-          }),
-        }
-      );
-      const data = await resp.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-      if (text && text.length > 20) return text;
-    } catch (e) {
-      console.error('[SupportBot] Gemini call failed (falling back):', e.message);
-    }
-  }
-  return getRuleBasedBotReply(category, message);
+  return getRuleBasedBotReply(category, subject, message);
 }
 
 /**
