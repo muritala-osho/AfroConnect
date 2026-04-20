@@ -69,16 +69,33 @@ router.get('/', protect, async (req, res) => {
       sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
     }
 
-    // Self-heal stale device info for the current session
+    // Self-heal stale device info and missing location for the current session
     const currentSession = sessions.find(s => s.sessionId === currentSessionId);
-    if (currentSession && (currentSession.deviceName === 'Unknown Device' || currentSession.platform === 'unknown')) {
+    if (currentSession) {
       const freshName = req.headers['x-device-name'] || null;
       const freshPlatform = req.headers['x-platform'] || null;
-      if (freshName || freshPlatform) {
-        await Session.updateOne(
-          { sessionId: currentSessionId },
-          { $set: { ...(freshName && { deviceName: freshName }), ...(freshPlatform && { platform: freshPlatform }), lastActive: new Date() } }
-        );
+      const needsDeviceHeal = (currentSession.deviceName === 'Unknown Device' || currentSession.platform === 'unknown') && (freshName || freshPlatform);
+      const needsLocationHeal = !currentSession.city && !currentSession.country;
+
+      const updateFields = { lastActive: new Date() };
+      if (needsDeviceHeal) {
+        if (freshName) updateFields.deviceName = freshName;
+        if (freshPlatform) updateFields.platform = freshPlatform;
+      }
+
+      if (needsLocationHeal) {
+        const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+        const cleanIp = rawIp && rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
+        const { city, country } = await lookupGeo(cleanIp);
+        if (city || country) {
+          updateFields.city = city;
+          updateFields.country = country;
+          if (cleanIp) updateFields.ipAddress = cleanIp;
+        }
+      }
+
+      if (needsDeviceHeal || needsLocationHeal) {
+        await Session.updateOne({ sessionId: currentSessionId }, { $set: updateFields });
         sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
       }
     }

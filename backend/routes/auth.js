@@ -32,7 +32,7 @@ async function createSession(userId, req) {
     const rawDeviceName = req.body.deviceName || req.headers['x-device-name'] || null;
     const deviceName = rawDeviceName || 'Unknown Device';
     const platform = req.body.platform || req.headers['x-platform'] || 'unknown';
-    const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || null;
+    const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
     const cleanIp = ipAddress && ipAddress.startsWith('::ffff:') ? ipAddress.slice(7) : ipAddress;
 
     let city = null;
