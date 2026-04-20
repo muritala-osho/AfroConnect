@@ -69,6 +69,20 @@ router.get('/', protect, async (req, res) => {
       sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
     }
 
+    // Self-heal stale device info for the current session
+    const currentSession = sessions.find(s => s.sessionId === currentSessionId);
+    if (currentSession && (currentSession.deviceName === 'Unknown Device' || currentSession.platform === 'unknown')) {
+      const freshName = req.headers['x-device-name'] || null;
+      const freshPlatform = req.headers['x-platform'] || null;
+      if (freshName || freshPlatform) {
+        await Session.updateOne(
+          { sessionId: currentSessionId },
+          { $set: { ...(freshName && { deviceName: freshName }), ...(freshPlatform && { platform: freshPlatform }), lastActive: new Date() } }
+        );
+        sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
+      }
+    }
+
     const sessionData = sessions.map((s) => ({
       _id: s._id,
       sessionId: s.sessionId,
