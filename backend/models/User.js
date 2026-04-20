@@ -156,6 +156,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
   emailVerified: {
     type: Boolean,
     default: false
@@ -169,9 +173,24 @@ const userSchema = new mongoose.Schema({
   },
   verificationStatus: {
     type: String,
-    enum: ['not_requested', 'pending', 'approved', 'rejected'],
+    enum: ['none', 'not_requested', 'pending', 'approved', 'rejected'],
     default: 'not_requested'
   },
+  verificationHistory: [{
+    action: {
+      type: String,
+      enum: ['approved', 'rejected', 'revoked']
+    },
+    reason: String,
+    adminId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   verificationPhoto: {
     type: String,
     default: null

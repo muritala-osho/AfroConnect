@@ -10,6 +10,7 @@ const Message = require('../models/Message');
 const Story = require('../models/Story');
 const AuditLog = require('../models/AuditLog');
 const redis = require('../utils/redis');
+const verificationController = require('../controllers/verificationController');
 
 const logAudit = async (req, action, category, severity, targetUser, details, metadata) => {
   try {
@@ -45,8 +46,9 @@ const isAdmin = async (req, res, next) => {
 router.get('/reports', protect, isAdmin, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
+    const query = status === 'all' ? {} : { status };
     
-    const reports = await Report.find({ status })
+    const reports = await Report.find(query)
       .populate('reporter', 'name email')
       .populate('reportedUser', 'name email photos')
       .sort({ createdAt: -1 })
@@ -442,6 +444,8 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
+router.post('/revoke-verification/:userId', protect, isAdmin, verificationController.revokeVerification);
 
 router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) => {
   try {

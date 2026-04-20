@@ -1,6 +1,11 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Reports queue and verification revoke backend**:
+  - `backend/routes/admin.js`: Reports Queue `all` status now returns all report statuses instead of filtering for a non-existent `all` status.
+  - `backend/controllers/verificationController.js` and `backend/services/verificationService.js`: Added admin-only `POST /api/admin/revoke-verification/:userId` to remove a verified badge with required reason, history logging, profile cache invalidation, and user notification.
+  - `backend/services/notificationService.js`: Added reusable `sendNotification(userId, message)` helper for persisted verification notifications plus push delivery when available.
+  - `backend/models/User.js`: Added verification revoke history storage and compatibility field for verified badge state.
 - **Live location and admin stability fixes**:
   - `backend/routes/users.js`: Normalizes profile location updates so `{ lat, lng }`, GeoJSON coordinates, and user-entered `livingIn` text are stored consistently as GeoJSON with city/country where available.
   - `backend/routes/radar.js`: Clears the cached `/users/me` profile after live GPS updates so admin/mobile views see fresh location data.
