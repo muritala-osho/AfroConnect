@@ -170,7 +170,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
       u.email || '',
       mapUserStatus(u),
       u.verified ? 'Yes' : 'No',
-      u.location?.city || u.location?.country || '',
+      u.location?.city || u.location?.country || u.livingIn || '',
       u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -308,7 +308,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">
-                          {user.location?.city || user.location?.country || '—'}
+                          {user.location?.city || user.location?.country || user.livingIn || '—'}
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${statusBadge(status)}`}>
@@ -482,7 +482,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-4 text-gray-500 dark:text-slate-400 text-sm">
-                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
+                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {selectedUser.location?.city || selectedUser.location?.country || selectedUser.livingIn || 'Not set'}</span>
                     <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-500" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
                     {selectedUser.age && <span className="flex items-center gap-1.5"><span className="text-teal-500 text-xs font-bold">Age</span> {selectedUser.age}</span>}
                     {selectedUser.email && <span className="text-xs text-gray-400">{selectedUser.email}</span>}
