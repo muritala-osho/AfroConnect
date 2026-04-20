@@ -20,7 +20,7 @@ const SECTION_GROUPS = [
   },
   {
     label: 'Management',
-    ids: ['users', 'verification', 'reports', 'content', 'appeals', 'churn'],
+    ids: ['users', 'verification', 'revoke-verification', 'reports', 'content', 'appeals', 'churn'],
   },
   {
     label: 'Revenue',
