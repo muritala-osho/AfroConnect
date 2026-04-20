@@ -1039,9 +1039,16 @@ router.get('/user-demographics', protect, isAdmin, async (req, res) => {
     const users = await User.find({}, 'gender age');
     const genderMap = {};
     const ageBuckets = { '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0 };
+    const normalizeGender = (gender) => {
+      const value = String(gender || 'other').trim().toLowerCase();
+      if (['male', 'man', 'men', 'm'].includes(value)) return 'male';
+      if (['female', 'woman', 'women', 'f'].includes(value)) return 'female';
+      if (['non-binary', 'nonbinary', 'non binary', 'nb'].includes(value)) return 'non-binary';
+      return 'other';
+    };
 
     users.forEach(u => {
-      const g = (u.gender || 'other').toLowerCase();
+      const g = normalizeGender(u.gender);
       genderMap[g] = (genderMap[g] || 0) + 1;
       const a = u.age || 0;
       if (a >= 18 && a <= 24) ageBuckets['18-24']++;
@@ -1050,7 +1057,8 @@ router.get('/user-demographics', protect, isAdmin, async (req, res) => {
       else if (a >= 45) ageBuckets['45+']++;
     });
 
-    const genderData = Object.entries(genderMap).map(([name, value]) => ({ name, value }));
+    const genderLabels = { male: 'Male', female: 'Female', 'non-binary': 'Non-binary', other: 'Other' };
+    const genderData = Object.entries(genderMap).map(([name, value]) => ({ name: genderLabels[name] || name, value }));
     const ageData = Object.entries(ageBuckets).map(([name, value]) => ({ name, value }));
 
     res.json({ success: true, demographics: { genderData, ageData, total: users.length } });

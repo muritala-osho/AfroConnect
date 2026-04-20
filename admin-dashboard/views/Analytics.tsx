@@ -15,6 +15,24 @@ const GENDER_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLORS = ['#06b6d4', '#f43f5e', '#8b5cf6', '#6b7280', '#f59e0b'];
 
+const normalizeGenderName = (name: string) => {
+  const value = String(name || 'other').trim().toLowerCase();
+  if (['male', 'man', 'men', 'm'].includes(value)) return 'Male';
+  if (['female', 'woman', 'women', 'f'].includes(value)) return 'Female';
+  if (['non-binary', 'nonbinary', 'non binary', 'nb'].includes(value)) return 'Non-binary';
+  return 'Other';
+};
+
+const normalizeGenderData = (items: GenderPoint[] = []) => {
+  const grouped = items.reduce<Record<string, number>>((acc, item) => {
+    const label = normalizeGenderName(item.name);
+    acc[label] = (acc[label] || 0) + Number(item.value || 0);
+    return acc;
+  }, {});
+
+  return Object.entries(grouped).map(([name, value]) => ({ name, value }));
+};
+
 interface DailyPoint {
   name: string;
   active: number;
@@ -62,7 +80,7 @@ const Analytics: React.FC = () => {
       }
 
       if (demoRes.status === 'fulfilled' && demoRes.value?.success) {
-        setGenderData(demoRes.value.demographics?.genderData || []);
+        setGenderData(normalizeGenderData(demoRes.value.demographics?.genderData || []));
         setAgeData(demoRes.value.demographics?.ageData || []);
       }
     } catch (e) {

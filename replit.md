@@ -60,6 +60,9 @@
   - `admin-dashboard/views/IDVerification.tsx`: The review panel now shows the submitted verification video beside the profile photo instead of the old submitted selfie image.
   - `frontend/screens/VerificationScreen.tsx`: Added premium Lottie-powered prompt animation, SVG step icons, and MediaPipe-style landmark gating for centered face, usable landmarks, distance guidance, blink readiness, and opposite-direction head turns.
   - `frontend/package.json`: Added `lottie-react-native` for animated guided verification prompts.
+- **Admin Analytics gender split fix**:
+  - `backend/routes/admin.js`: Normalizes stored gender variants (`man`/`male`, `woman`/`female`) before returning demographics.
+  - `admin-dashboard/views/Analytics.tsx`: Defensively groups legacy/cached gender labels into `Male`, `Female`, `Non-binary`, and `Other`.
 - **Admin Dashboard — full interactivity upgrade**:
   - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
   - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.
