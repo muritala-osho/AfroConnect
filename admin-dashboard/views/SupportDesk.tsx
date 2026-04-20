@@ -181,8 +181,8 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
       setSelectedTicket(updated);
       setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updated : t));
       showToast?.(`Ticket marked as ${newStatus}`, 'success');
-    } catch {
-      showToast?.('Status update failed', 'error');
+    } catch (err: any) {
+      showToast?.(err?.message || 'Status update failed', 'error');
     } finally {
       setStatusUpdating(false);
     }
@@ -200,8 +200,8 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
         const agentName = agentId ? agents.find(a => a._id === agentId)?.name || 'agent' : 'unassigned';
         showToast?.(agentId ? `Ticket assigned to ${agentName}` : 'Ticket unassigned', 'success');
       }
-    } catch {
-      showToast?.('Failed to assign ticket', 'error');
+    } catch (err: any) {
+      showToast?.(err?.message || 'Failed to assign ticket', 'error');
     } finally {
       setAssigningTicket(false);
     }
@@ -499,6 +499,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                 )}
                 {selectedTicket.messages?.map((msg, i) => {
                   const isStaff = msg.role === 'admin' || msg.role === 'agent';
+                  const isBot = isStaff && (msg.senderName === 'AfroConnect Support Bot' || msg.adminName === 'AfroConnect Support Bot');
                   return (
                     <div key={i} className={`flex ${isStaff ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
                       <div className={`max-w-[75%] flex flex-col ${isStaff ? 'items-end' : 'items-start'}`}>
@@ -515,19 +516,21 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                         )}
                         {isStaff && (
                           <div className="flex items-center gap-2 mb-1 mr-1">
-                            <span className="text-[9px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest">
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${isBot ? 'text-violet-500 dark:text-violet-400' : 'text-teal-600 dark:text-teal-400'}`}>
                               {msg.senderName || msg.adminName || (msg.role === 'agent' ? 'Agent' : 'Admin')}
                             </span>
-                            <div className="h-5 w-5 rounded-lg bg-teal-100 dark:bg-teal-500/20 flex items-center justify-center text-[9px] font-black text-teal-700 dark:text-teal-400">
-                              {msg.role === 'agent' ? 'AG' : 'AD'}
+                            <div className={`h-5 w-5 rounded-lg flex items-center justify-center text-[9px] font-black ${isBot ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400' : 'bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400'}`}>
+                              {isBot ? '🤖' : msg.role === 'agent' ? 'AG' : 'AD'}
                             </div>
                           </div>
                         )}
                         {/* Bubble */}
                         <div className={`px-5 py-4 rounded-[1.5rem] text-sm font-medium leading-relaxed shadow-sm ${
-                          isStaff
-                            ? 'bg-teal-600 text-white rounded-tr-md'
-                            : 'bg-gray-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-gray-100 dark:border-slate-700 rounded-tl-md'
+                          isBot
+                            ? 'bg-violet-600 text-white rounded-tr-md'
+                            : isStaff
+                              ? 'bg-teal-600 text-white rounded-tr-md'
+                              : 'bg-gray-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-gray-100 dark:border-slate-700 rounded-tl-md'
                         }`}>
                           {msg.content}
                         </div>

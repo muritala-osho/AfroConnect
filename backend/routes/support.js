@@ -122,6 +122,84 @@ async function pushToStaff(ticket, title, body) {
 
 
 /**
+ * Rule-based instant reply when Gemini key is not available.
+ */
+function getRuleBasedBotReply(category, message) {
+  const msg = (message || '').toLowerCase();
+
+  if (category === 'billing') {
+    if (msg.includes('refund') || msg.includes('charge') || msg.includes('payment'))
+      return "Thank you for reaching out about your billing concern. We've received your request and our team will review your account and payment history. A support agent will get back to you within 24 hours with a resolution.";
+    if (msg.includes('subscription') || msg.includes('premium') || msg.includes('cancel'))
+      return "We've received your subscription inquiry. To manage your subscription you can go to Settings → Subscription in the app. If you need further help, our team will follow up with you shortly.";
+    return "Thank you for contacting us about a billing matter. Our finance team has been notified and will review your case within 24 hours.";
+  }
+
+  if (category === 'account') {
+    if (msg.includes('login') || msg.includes('password') || msg.includes('access') || msg.includes('sign in'))
+      return "Sorry you're having trouble accessing your account! Please try the 'Forgot Password' option on the login screen. If the issue persists our team will assist you further within 24 hours.";
+    if (msg.includes('delete') || msg.includes('deactivate'))
+      return "We've received your account request. You can delete your account under Settings → Privacy → Delete Account. If you need help, a support agent will reach out to you shortly.";
+    if (msg.includes('verif'))
+      return "Thank you for your verification inquiry. Our team reviews verification submissions within 48 hours. If you've already submitted, please allow up to 2 business days for a response.";
+    return "Thank you for reaching out about your account. Our support team has been notified and will look into this for you within 24 hours.";
+  }
+
+  if (category === 'technical') {
+    if (msg.includes('crash') || msg.includes('not working') || msg.includes('error') || msg.includes('bug'))
+      return "Sorry to hear you're experiencing technical difficulties! Please try restarting the app and checking for updates in the App Store or Google Play. If the issue continues our technical team will investigate and follow up with you.";
+    if (msg.includes('notification') || msg.includes('push'))
+      return "For notification issues, go to your device Settings → AfroConnect → Notifications and make sure they're enabled. Also check your in-app notification settings. If problems persist we'll look into this further for you.";
+    return "Thank you for reporting this technical issue. Our engineering team has been notified and will investigate. We'll update you within 24 hours.";
+  }
+
+  if (category === 'safety')
+    return "Thank you for bringing this safety concern to our attention — we take all safety reports very seriously. Your report has been escalated to our Trust & Safety team who will review it as a priority. We'll follow up within 12 hours.";
+
+  return "Thank you for contacting AfroConnect Support! We've received your message and a member of our support team will review it and get back to you within 24 hours. We appreciate your patience! 💚";
+}
+
+/**
+ * Generate an automatic first reply for a new ticket.
+ * Uses Gemini if GEMINI_API_KEY is set, otherwise falls back to rule-based.
+ */
+async function generateBotReply(category, subject, message) {
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const prompt = `You are a friendly, empathetic customer support assistant for AfroConnect, an African dating app.
+A user has submitted a support ticket:
+Category: ${category}
+Subject: ${subject}
+Message: ${message}
+
+Write a helpful, warm, and concise response (2-4 sentences).
+- If you can resolve the issue with clear guidance, do so.
+- If the issue needs account investigation or manual action, acknowledge it, confirm you've logged their request, and say a support agent will follow up within 24 hours.
+- Do NOT invent account-specific details.
+- Keep the tone professional but friendly.`;
+
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { maxOutputTokens: 250, temperature: 0.65 },
+          }),
+        }
+      );
+      const data = await resp.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+      if (text && text.length > 20) return text;
+    } catch (e) {
+      console.error('[SupportBot] Gemini call failed (falling back):', e.message);
+    }
+  }
+  return getRuleBasedBotReply(category, message);
+}
+
+/**
  * GET /api/support/challenge
  * Returns a simple math CAPTCHA question + a short-lived token containing the answer.
  * The client must solve the question and submit both the token and answer with their ticket.
@@ -222,6 +300,30 @@ router.post('/ticket', supportTicketLimiter, async (req, res) => {
       `Ticket ID: ${ticket._id}\nUser: ${name} (${email})\nCategory: ${cat}\n\nMessage:\n${message}`
     );
 
+    // Fire-and-forget bot auto-reply (non-blocking, never crashes ticket creation)
+    setImmediate(async () => {
+      try {
+        const botReply = await generateBotReply(cat, subject || 'Support Request', message);
+        ticket.messages.push({
+          role: 'agent',
+          content: botReply,
+          senderName: 'AfroConnect Support Bot',
+          timestamp: new Date(),
+        });
+        ticket.status = 'pending';
+        ticket.unreadByUser = 1;
+        await ticket.save();
+        await pushToUser(
+          resolvedUserId,
+          '💬 Support Reply',
+          botReply.length > 80 ? botReply.slice(0, 80) + '…' : botReply,
+          { screen: 'Support', ticketId: ticket._id.toString() }
+        );
+      } catch (botErr) {
+        console.error('[SupportBot] Auto-reply failed (non-critical):', botErr.message);
+      }
+    });
+
     res.json({ success: true, ticketId: ticket._id, message: "Ticket created. We'll reply within 24 hours." });
   } catch (error) {
     console.error('[Support] Create ticket error:', error);
@@ -269,12 +371,6 @@ router.get('/ticket/:id', protect, async (req, res) => {
 
     if (!isStaff && String(ticket.userId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
-    if (req.user.isSupportAgent && !req.user.isAdmin) {
-      if (ticket.assignedTo && String(ticket.assignedTo._id) !== String(req.user._id)) {
-        return res.status(403).json({ success: false, message: 'This ticket is not assigned to you' });
-      }
     }
 
     const unreadUpdate = isStaff ? { unreadByAgent: 0 } : { unreadByUser: 0 };
@@ -329,11 +425,6 @@ router.post('/reply', protect, async (req, res) => {
     if (senderRole === 'user' && String(ticket.userId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
-    if (senderRole === 'agent' && !req.user.isAdmin) {
-      if (ticket.assignedTo && String(ticket.assignedTo) !== String(req.user._id)) {
-        return res.status(403).json({ success: false, message: 'This ticket is not assigned to you' });
-      }
-    }
 
     const isStaff = senderRole !== 'user';
     const displayName = req.user.name || (isStaff ? 'AfroConnect Support' : ticket.userName);
@@ -384,8 +475,7 @@ router.post('/reply', protect, async (req, res) => {
 
 /**
  * GET /api/support/all
- * Admin: all tickets with optional filters.
- * Agent: only tickets assigned to them.
+ * Admin and agents: all tickets with optional filters.
  */
 router.get('/all', protect, isAdminOrAgent, async (req, res) => {
   try {
@@ -395,10 +485,6 @@ router.get('/all', protect, isAdminOrAgent, async (req, res) => {
     if (status) query.status = status;
     if (category) query.category = category;
     if (priority) query.priority = priority;
-
-    if (req.user.isSupportAgent && !req.user.isAdmin) {
-      query.assignedTo = req.user._id;
-    }
 
     const tickets = await SupportTicket.find(query)
       .populate('assignedTo', 'name email')
