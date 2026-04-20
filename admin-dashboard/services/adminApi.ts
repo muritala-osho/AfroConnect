@@ -177,8 +177,8 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  getAnalytics: async () => {
-    const res = await fetch(`${API_BASE}/admin/analytics`, { headers: authHeaders() });
+  getAnalytics: async (period: '7d' | '30d' = '7d') => {
+    const res = await fetch(`${API_BASE}/admin/analytics?period=${encodeURIComponent(period)}`, { headers: authHeaders() });
     return handleResponse(res);
   },
 

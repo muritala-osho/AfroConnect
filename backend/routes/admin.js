@@ -948,9 +948,11 @@ router.put('/settings', protect, isAdmin, (req, res) => {
 router.get('/analytics', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
+    const period = req.query.period === '30d' ? '30d' : '7d';
+    const dayCount = period === '30d' ? 30 : 7;
 
     const days = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = dayCount - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const start = new Date(d); start.setHours(0, 0, 0, 0);
@@ -962,7 +964,9 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
       ]);
 
       days.push({
-        name: start.toLocaleDateString('en-US', { weekday: 'short' }),
+        name: period === '30d'
+          ? start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : start.toLocaleDateString('en-US', { weekday: 'short' }),
         newUsers,
         active:   activeUsers,
         matches:  Math.floor(activeUsers * 0.25),

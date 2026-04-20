@@ -61,7 +61,7 @@ const DashboardHome: React.FC = () => {
         adminApi.getStats(),
         adminApi.getActivityMonitoring(),
         adminApi.getReports('pending'),
-        adminApi.getAnalytics(),
+        adminApi.getAnalytics(chartRange),
       ]);
 
       if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
@@ -92,7 +92,7 @@ const DashboardHome: React.FC = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [chartRange]);
 
   useEffect(() => {
     fetchData();
@@ -191,7 +191,7 @@ const DashboardHome: React.FC = () => {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 dark:text-white">Citizen Engagement Flow</h2>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
-                    {chartData.length > 0 ? 'Real data — last 7 days' : 'No data yet'}
+                    {chartData.length > 0 ? `Real data — last ${chartRange === '30d' ? '30 days' : '7 days'}` : 'No data yet'}
                   </p>
                 </div>
                 <div className="flex bg-gray-50 dark:bg-slate-800 p-1 rounded-xl border border-gray-100 dark:border-slate-700">
