@@ -132,6 +132,15 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  revokeVerification: async (userId: string, reason: string) => {
+    const res = await fetch(`${API_BASE}/admin/revoke-verification/${userId}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
   approveVerification: async (userId: string) => {
     const res = await fetch(`${API_BASE}/admin/verifications/${userId}/approve`, {
       method: 'PUT',
