@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView, Keyboard } from "react-native";
-import { KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
+import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, Platform, Alert, Modal, ScrollView, Keyboard } from "react-native";
+import { KeyboardAvoidingView as KAVController, KeyboardStickyView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -439,10 +439,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {currentStory.type === "image" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
@@ -657,7 +654,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         />
       </View>
 
-      <View style={styles.bottomGradientWrapper}>
+      <KeyboardStickyView style={styles.bottomGradientWrapper}>
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.6)"]}
         style={[
@@ -752,7 +749,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </Pressable>
         )}
       </LinearGradient>
-      </View>
+      </KeyboardStickyView>
 
       <Modal
         visible={showViewers}
@@ -894,7 +891,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </KAVController>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
