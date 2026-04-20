@@ -370,7 +370,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
         </div>
 
         {/* Message thread */}
-        <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 flex flex-col overflow-hidden shadow-sm">
+        <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 flex flex-col shadow-sm" style={{ overflow: 'visible' }}>
           {!selectedTicket ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-40">
               <div className="p-8 bg-gray-50 dark:bg-slate-800 rounded-full mb-6">
