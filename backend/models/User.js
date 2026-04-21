@@ -152,6 +152,24 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  liveLocation: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: undefined
+    },
+    city: String,
+    country: String,
+    accuracy: Number
+  },
+  liveLocationUpdatedAt: {
+    type: Date,
+    default: null
+  },
   verified: {
     type: Boolean,
     default: false

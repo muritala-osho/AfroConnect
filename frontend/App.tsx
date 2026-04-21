@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { initCallKeep } from "@/services/callkeep";
 import { registerVoipPushNotifications } from "@/services/voipPush";
 import { requestFCMPermissionAndGetToken } from "@/services/firebaseMessaging";
+import { pushLiveLocation } from "@/utils/liveLocation";
 
 import RootNavigator from "@/navigation/RootNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -211,6 +212,8 @@ function AppContent() {
     setupNotifications();
     lastTokenRegistration.current = Date.now();
 
+    pushLiveLocation(token ?? undefined, { force: true }).catch(() => {});
+
     // Re-register push token when the app comes back to the foreground, but
     // no more than once per hour to avoid TOO_MANY_REGISTRATIONS from Firebase.
     const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -221,6 +224,7 @@ function AppContent() {
           lastTokenRegistration.current = Date.now();
           registerForPushNotificationsAsync(token ?? undefined).catch(() => {});
         }
+        pushLiveLocation(token ?? undefined).catch(() => {});
       }
       appState.current = nextState;
     });

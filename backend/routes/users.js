@@ -708,6 +708,51 @@ router.delete('/me', protect, async (req, res) => {
   }
 });
 
+router.put('/me/live-location', protect, async (req, res) => {
+  try {
+    const { lat, latitude, lng, longitude, accuracy, city, country } = req.body || {};
+    const numericLat = Number(lat ?? latitude);
+    const numericLng = Number(lng ?? longitude);
+
+    if (
+      !Number.isFinite(numericLat) || !Number.isFinite(numericLng) ||
+      numericLat < -90 || numericLat > 90 ||
+      numericLng < -180 || numericLng > 180
+    ) {
+      return res.status(400).json({ success: false, message: 'Invalid coordinates' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.locationSharingEnabled === false) {
+      return res.status(403).json({ success: false, message: 'Location sharing is disabled' });
+    }
+
+    user.liveLocation = {
+      type: 'Point',
+      coordinates: [numericLng, numericLat],
+      city: city || user.liveLocation?.city,
+      country: country || user.liveLocation?.country,
+      accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : undefined
+    };
+    user.liveLocationUpdatedAt = new Date();
+
+    await user.save();
+
+    try { await redis.del(`profile:me:${user._id}`); } catch (_) {}
+
+    res.json({
+      success: true,
+      liveLocation: user.liveLocation,
+      liveLocationUpdatedAt: user.liveLocationUpdatedAt
+    });
+  } catch (error) {
+    logger.error('Update live location error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.post('/me/locations', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);

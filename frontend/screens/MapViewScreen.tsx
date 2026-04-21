@@ -15,6 +15,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { getPhotoSource } from "@/utils/photos";
 import * as Location from 'expo-location';
+import { pushLiveLocation } from '@/utils/liveLocation';
 
 type MapViewScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "MapView">;
 
@@ -103,6 +104,7 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
       const lng = location.coords.longitude;
       setCurrentLocation({ lat, lng });
 
+      pushLiveLocation(token ?? undefined, { force: true }).catch(() => {});
       fetchWeather(lat, lng);
       await loadNearbyUsers(lat, lng);
     } catch (error) {
