@@ -1,13 +1,25 @@
 import logger from '@/utils/logger';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
+import Constants from 'expo-constants';
 
 let RNCallKeep: any = null;
+let _loadAttempted = false;
+
+const isExpoGo = Constants.appOwnership === 'expo';
 
 function loadCallKeep() {
   if (RNCallKeep) return RNCallKeep;
-  if (Platform.OS === 'web') return null;
+  if (_loadAttempted) return null;
+  _loadAttempted = true;
+  if (Platform.OS === 'web' || isExpoGo) return null;
   try {
-    RNCallKeep = require('react-native-callkeep').default;
+    const mod = require('react-native-callkeep').default;
+    const nativeBridge = (NativeModules as any).RNCallKeep;
+    if (!mod || !nativeBridge) {
+      logger.warn('[CallKeep] Native bridge unavailable — needs a dev build.');
+      return null;
+    }
+    RNCallKeep = mod;
     return RNCallKeep;
   } catch (err) {
     logger.warn('[CallKeep] Module not available:', err);
