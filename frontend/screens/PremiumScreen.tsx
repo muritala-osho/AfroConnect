@@ -73,7 +73,7 @@ export default function PremiumScreen({ navigation }: any) {
   const [processing, setProcessing] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [iapReady, setIapReady] = useState(false);
-  const [storePrices, setStorePrices] = useState<Record<string, string>>({});
+  const [storePrices, setStorePrices] = useState<Record<string, { localizedPrice: string; currency: string }>>({});
   const [pricesLoading, setPricesLoading] = useState(false);
 
   const cardScale = useSharedValue(1);
@@ -111,22 +111,19 @@ export default function PremiumScreen({ navigation }: any) {
         setPricesLoading(true);
         const subs = await iapService.getSubscriptions();
         if (subs && subs.length > 0) {
-          const priceMap: Record<string, string> = {};
-          subs.forEach((sub: any) => {
-            const productId = sub.productId;
-            const localizedPrice =
-              sub.localizedPrice ||
-              sub.price ||
-              null;
-            if (productId && localizedPrice) {
-              priceMap[productId] = localizedPrice;
-            }
+          const priceMap: Record<string, { localizedPrice: string; currency: string }> = {};
+          subs.forEach((sub) => {
+            priceMap[sub.productId] = {
+              localizedPrice: sub.localizedPrice,
+              currency: sub.currency,
+            };
           });
           if (Object.keys(priceMap).length > 0) {
             setStorePrices(priceMap);
           }
         }
       } catch (e) {
+        logger.log('Failed to load store prices:', e);
       } finally {
         setPricesLoading(false);
       }
@@ -192,7 +189,8 @@ export default function PremiumScreen({ navigation }: any) {
   };
 
   const getDisplayPrice = (tier: PriceTier): string => {
-    if (storePrices[tier.id]) return storePrices[tier.id];
+    const stored = storePrices[tier.id];
+    if (stored?.localizedPrice) return stored.localizedPrice;
     return formatPrice(tier.amount, tier.currency);
   };
 
