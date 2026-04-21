@@ -1219,7 +1219,7 @@ router.post('/kill-switch', protect, isAdmin, async (req, res) => {
       });
     } catch (auditErr) { logger.warn('[kill-switch] Audit log failed (non-critical):', auditErr.message); }
 
-    logger.warn(`[KILL-SWITCH] Activated by admin ${req.user.email} at ${new Date().toISOString()}`);
+    logger.warn(`[KILL-SWITCH] Activated by admin ${req.user._id} at ${new Date().toISOString()}`);
 
     return res.json({
       success: true,
@@ -1245,7 +1245,7 @@ router.post('/kill-switch/deactivate', protect, isAdmin, async (req, res) => {
       });
     } catch (auditErr) { logger.warn('[kill-switch] Audit log failed (non-critical):', auditErr.message); }
 
-    logger.log(`[KILL-SWITCH] Deactivated by admin ${req.user.email}`);
+    logger.log(`[KILL-SWITCH] Deactivated by admin ${req.user._id}`);
 
     return res.json({
       success: true,

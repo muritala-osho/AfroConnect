@@ -755,7 +755,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                   );
                 }
               } catch (e) {
-                logger.log("Pre-fetch error for", conv.user.name, e);
+                logger.log("Pre-fetch error for conversation", e);
               }
             });
           }

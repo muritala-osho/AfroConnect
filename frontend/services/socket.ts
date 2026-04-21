@@ -29,7 +29,6 @@ class SocketService {
       reconnectionAttempts: Infinity,
       timeout: 10000,
       autoConnect: true,
-      rejectUnauthorized: false,
       forceNew: true,
       query: {
         token

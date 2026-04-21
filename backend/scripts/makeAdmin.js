@@ -11,14 +11,14 @@ async function makeUserAdmin(email) {
     const user = await User.findOne({ email });
     
     if (!user) {
-      console.log(`User with email ${email} not found`);
+      console.log(`User not found`);
       process.exit(1);
     }
 
     user.isAdmin = true;
     await user.save();
 
-    console.log(`✅ User ${user.name} (${user.email}) is now an admin!`);
+    console.log(`✅ User ${user._id} is now an admin!`);
     process.exit(0);
   } catch (error) {
     console.error('Error:', error);

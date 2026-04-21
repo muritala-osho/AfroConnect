@@ -332,7 +332,7 @@ router.post(
                 },
                 'security',
               );
-              logger.info(`[Auth] Suspicious login alert sent → user ${user._id} | device: ${deviceStr} | IP: ${newSession.ipAddress}`);
+              logger.info(`[Auth] Suspicious login alert sent → user ${user._id} | device: ${deviceStr}`);
             }
           }
         } catch (alertErr) {
