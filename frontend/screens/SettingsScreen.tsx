@@ -46,6 +46,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState((user as any)?.settings?.pushNotifications ?? true);
   const [incognitoMode, setIncognitoMode] = useState((user as any)?.privacySettings?.incognitoMode ?? false);
   const [hideAge, setHideAge] = useState((user as any)?.privacySettings?.hideAge ?? false);
+  const [autoUpdateLocation, setAutoUpdateLocation] = useState((user as any)?.autoUpdateProfileLocation ?? false);
   
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -103,6 +104,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         const response = await put('/account/settings', { pushNotifications: value }, token);
         if (response.success) {
           if (fetchUser) await fetchUser();
+        } else {
+          setter(!value);
+        }
+        return;
+      }
+
+      if (key === 'autoUpdateProfileLocation') {
+        const response = await put('/users/me', { autoUpdateProfileLocation: value }, token);
+        if (response.success) {
+          if (fetchUser) await fetchUser();
+          if (value) {
+            try {
+              const { pushLiveLocation } = await import('@/utils/liveLocation');
+              pushLiveLocation(token, { force: true }).catch(() => {});
+            } catch {}
+          }
         } else {
           setter(!value);
         }
@@ -345,6 +362,33 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <Switch 
                 value={hideAge} 
                 onValueChange={(v) => handleToggle('hideAge', v, setHideAge)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            }
+          />
+          <SettingItem 
+            icon="map-pin" 
+            label="Auto-update Profile Location" 
+            value={autoUpdateLocation ? 'On — follows your travels' : 'Off — you set it manually'}
+            showChevron={false}
+            rightElement={
+              <Switch 
+                value={autoUpdateLocation} 
+                onValueChange={(v) => {
+                  if (v) {
+                    showAlert(
+                      'Auto-update Location',
+                      'Your profile location (e.g. "Lagos, Nigeria") will automatically follow your travels. Turn this off anytime to set it yourself.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Turn On', onPress: () => handleToggle('autoUpdateProfileLocation', true, setAutoUpdateLocation) }
+                      ],
+                      'map-pin'
+                    );
+                  } else {
+                    handleToggle('autoUpdateProfileLocation', false, setAutoUpdateLocation);
+                  }
+                }}
                 trackColor={{ false: theme.border, true: theme.primary }}
               />
             }

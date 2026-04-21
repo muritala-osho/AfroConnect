@@ -86,6 +86,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
       'pets', 'relationshipStatus',
       'height', 'countryOfOrigin', 'tribe', 'languages', 'diasporaGeneration', 'language',
+      'autoUpdateProfileLocation', 'locationSharingEnabled',
     ];
 
     const user = await User.findById(req.user._id);
@@ -729,14 +730,32 @@ router.put('/me/live-location', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Location sharing is disabled' });
     }
 
+    const resolvedCity = city || user.liveLocation?.city;
+    const resolvedCountry = country || user.liveLocation?.country;
+
     user.liveLocation = {
       type: 'Point',
       coordinates: [numericLng, numericLat],
-      city: city || user.liveLocation?.city,
-      country: country || user.liveLocation?.country,
+      city: resolvedCity,
+      country: resolvedCountry,
       accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : undefined
     };
     user.liveLocationUpdatedAt = new Date();
+
+    let profileLocationUpdated = false;
+    if (user.autoUpdateProfileLocation) {
+      user.location = {
+        type: 'Point',
+        coordinates: [numericLng, numericLat],
+        city: resolvedCity || user.location?.city,
+        country: resolvedCountry || user.location?.country
+      };
+      user.locationUpdatedAt = new Date();
+      if (resolvedCity || resolvedCountry) {
+        user.livingIn = [resolvedCity, resolvedCountry].filter(Boolean).join(', ');
+      }
+      profileLocationUpdated = true;
+    }
 
     await user.save();
 
@@ -745,7 +764,10 @@ router.put('/me/live-location', protect, async (req, res) => {
     res.json({
       success: true,
       liveLocation: user.liveLocation,
-      liveLocationUpdatedAt: user.liveLocationUpdatedAt
+      liveLocationUpdatedAt: user.liveLocationUpdatedAt,
+      profileLocationUpdated,
+      livingIn: user.livingIn,
+      location: user.location
     });
   } catch (error) {
     logger.error('Update live location error:', error);

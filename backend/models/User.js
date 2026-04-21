@@ -170,6 +170,10 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  autoUpdateProfileLocation: {
+    type: Boolean,
+    default: false
+  },
   verified: {
     type: Boolean,
     default: false
