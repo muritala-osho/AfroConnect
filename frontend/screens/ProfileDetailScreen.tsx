@@ -28,7 +28,7 @@ import ProfilePrompts from "@/components/ProfilePrompts";
 import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
-import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
+import CompatibilityQuiz from "@/components/CompatibilityQuiz";
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
@@ -267,24 +267,28 @@ export default function ProfileDetailScreen() {
   };
 
   const handleTap = (evt: any) => {
-    if (!user || !user.photos || user.photos.length <= 1) return;
+    if (!user || !user.photos || user.photos.length === 0) return;
 
-    const tapX = evt.nativeEvent.locationX;
     const { width } = Dimensions.get('window');
+    const tapX = evt.nativeEvent.locationX;
+    const edgeZone = width * 0.25;
 
-    if (tapX > width / 2) {
-      if (currentPhotoIndex < user.photos.length - 1) {
-        setCurrentPhotoIndex(currentPhotoIndex + 1);
-      } else {
-        setCurrentPhotoIndex(0);
-      }
-    } else {
-      if (currentPhotoIndex > 0) {
-        setCurrentPhotoIndex(currentPhotoIndex - 1);
-      } else {
-        setCurrentPhotoIndex(user.photos.length - 1);
-      }
+    if (user.photos.length > 1 && tapX < edgeZone) {
+      setCurrentPhotoIndex(
+        currentPhotoIndex > 0 ? currentPhotoIndex - 1 : user.photos.length - 1
+      );
+      return;
     }
+
+    if (user.photos.length > 1 && tapX > width - edgeZone) {
+      setCurrentPhotoIndex(
+        currentPhotoIndex < user.photos.length - 1 ? currentPhotoIndex + 1 : 0
+      );
+      return;
+    }
+
+    setZoomPhotoIndex(currentPhotoIndex);
+    setZoomVisible(true);
   };
 
   const handleReport = () => {
@@ -741,8 +745,6 @@ export default function ProfileDetailScreen() {
             )}
 
             <ProfilePrompts userId={user._id} isOwnProfile={false} />
-
-            <CompatibilityScore userId={user._id} />
 
             <Pressable
               style={[styles.quizCard, { backgroundColor: theme.surface, borderColor: theme.border }]}

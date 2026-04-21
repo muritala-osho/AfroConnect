@@ -733,32 +733,60 @@ export default function ChatDetailScreen({
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
 
+  const uploadChatImageAsset = async (uri: string) => {
+    const filename = uri.split("/").pop() || "chat_image.jpg";
+    const extMatch = /\.([a-zA-Z0-9]+)$/.exec(filename);
+    const ext = (extMatch?.[1] || "jpg").toLowerCase();
+    const mime =
+      ext === "png" ? "image/png" :
+      ext === "webp" ? "image/webp" :
+      ext === "heic" || ext === "heif" ? "image/heic" :
+      "image/jpeg";
+
+    const formData = new FormData();
+    formData.append("image", { uri, type: mime, name: filename } as any);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    try {
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: formData,
+        signal: controller.signal,
+      });
+      const contentType = uploadResponse.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await uploadResponse.text().catch(() => "");
+        throw new Error(`Upload failed (${uploadResponse.status}). ${text.slice(0, 120)}`);
+      }
+      return await uploadResponse.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"] as ImagePicker.MediaType[],
-      quality: 0.8,
+      quality: 0.7,
       allowsEditing: true,
-      base64: true,
     });
     if (!result.canceled && result.assets[0]) {
       try {
-        const formData = new FormData();
-        formData.append("image", { uri: result.assets[0].uri, type: "image/jpeg", name: "chat_image.jpg" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
+        const uploadData = await uploadChatImageAsset(result.assets[0].uri);
+        if (uploadData?.success && uploadData.url) {
           const isVOImg = viewOnceModeRef.current;
           await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
           if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
-      } catch (error) {
+        } else Alert.alert("Upload Failed", uploadData?.message || "Could not upload image. Please try again.");
+      } catch (error: any) {
         logger.error("Image upload error:", error);
-        Alert.alert("Error", "Failed to upload image. Check your connection.");
+        const msg = error?.name === "AbortError"
+          ? "Upload timed out. Try a smaller image or a stronger connection."
+          : "Failed to upload image. Check your connection and try again.";
+        Alert.alert("Upload Failed", msg);
       }
     }
   };
