@@ -1,12 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo } from "react";
 import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as SecureStore from "expo-secure-store";
 import * as Device from "expo-device";
 import { useApi } from "./useApi";
 import socketService from "@/services/socket";
 import { getApiBaseUrl } from "@/constants/config";
 import logger from "@/utils/logger";
+import { tokenManager, setOnSessionExpired, ACCESS_TOKEN_KEY } from "@/utils/tokenManager";
 
 function getDeviceInfo(): { deviceName: string; platform: string } {
   const model = Device.modelName || "Unknown Device";
@@ -118,23 +118,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const TOKEN_KEY = 'auth_token';
+const TOKEN_KEY = ACCESS_TOKEN_KEY;
 const USER_KEY = 'auth_user';
 const PENDING_PROFILE_KEY = 'pending_profile_setup';
 const LANGUAGE_SYNCED_KEY = 'app_language_synced';
 const LANGUAGE_STORAGE_KEY = 'app_language_preference';
-
-async function saveToken(token: string) {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
-}
-
-async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
-}
-
-async function deleteToken() {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -142,9 +130,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [pendingProfileSetup, setPendingProfileSetup] = useState(false);
   const { post, put, get } = useApi();
+  const clearAuthDataRef = useRef<() => Promise<void>>(async () => {});
 
   useEffect(() => {
     loadAuthData();
+  }, []);
+
+  useEffect(() => {
+    clearAuthDataRef.current = clearAuthData;
+  });
+
+  useEffect(() => {
+    setOnSessionExpired(() => { clearAuthDataRef.current(); });
+    return () => { setOnSessionExpired(null); };
   }, []);
 
   const userProfileComplete = useMemo(() => {
@@ -203,7 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadAuthData = async () => {
     try {
       const [storedToken, storedUser, pendingSetup] = await Promise.all([
-        getToken(),
+        tokenManager.getAccessToken(),
         AsyncStorage.getItem(USER_KEY),
         AsyncStorage.getItem(PENDING_PROFILE_KEY),
       ]);
@@ -220,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const saveAuthData = async (authToken: string, userData: User) => {
+  const saveAuthData = async (authToken: string, userData: User, refreshToken?: string | null) => {
     try {
       const baseUrl = getApiBaseUrl();
       const userResponse = await fetch(`${baseUrl}/api/users/me`, {
@@ -230,7 +228,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const finalUserData = userDataFull.success ? userDataFull.user : userData;
 
       await Promise.all([
-        saveToken(authToken),
+        tokenManager.setAccessToken(authToken),
+        refreshToken ? tokenManager.setRefreshToken(refreshToken) : Promise.resolve(),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(finalUserData)),
       ]);
       setToken(authToken);
@@ -238,7 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       logger.error("Error saving auth data:", error);
       await Promise.all([
-        saveToken(authToken),
+        tokenManager.setAccessToken(authToken),
+        refreshToken ? tokenManager.setRefreshToken(refreshToken) : Promise.resolve(),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)),
       ]);
       setToken(authToken);
@@ -255,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await Promise.all([
         ...asyncKeys.map(key => AsyncStorage.removeItem(key)),
-        deleteToken(),
+        tokenManager.clearTokens(),
       ]);
       setToken(null);
       setUser(null);
@@ -301,7 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      await saveAuthData(data.token, data.user);
+      await saveAuthData(data.token, data.user, data.refreshToken);
       await fetchUser();
     } catch (error: any) {
       logger.error('Login error:', error.message);
@@ -354,7 +354,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (response.success && response.data) {
       await Promise.all([
-        saveToken(response.data.token),
+        tokenManager.setAccessToken(response.data.token),
+        response.data.refreshToken ? tokenManager.setRefreshToken(response.data.refreshToken) : Promise.resolve(),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.user)),
         AsyncStorage.setItem(PENDING_PROFILE_KEY, 'true'),
       ]);
@@ -397,7 +398,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
-      const currentToken = token || await getToken();
+      const currentToken = token || await tokenManager.getAccessToken();
       if (currentToken) {
         await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
           method: 'POST',

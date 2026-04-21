@@ -13,6 +13,11 @@ const sessionSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    refreshTokenHash: {
+      type: String,
+      default: null,
+      index: true,
+    },
     deviceName: {
       type: String,
       default: 'Unknown Device',
@@ -42,6 +47,6 @@ const sessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-sessionSchema.index({ lastActive: 1 }, { expireAfterSeconds: 7 * 24 * 60 * 60 });
+sessionSchema.index({ lastActive: 1 }, { expireAfterSeconds: 30 * 24 * 60 * 60 });
 
 module.exports = mongoose.model('Session', sessionSchema);

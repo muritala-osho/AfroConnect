@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { getApiBaseUrl } from '@/constants/config';
 import { useMaintenance } from '@/context/MaintenanceContext';
+import { tokenManager } from '@/utils/tokenManager';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;
 
@@ -73,6 +74,38 @@ export function useApi() {
       }
 
       const jsonData = await response.json();
+
+      if (response.status === 401 && !endpoint.includes('/auth/')) {
+        const newToken = await tokenManager.refresh();
+        if (newToken) {
+          const retryHeaders: Record<string, string> = {
+            'Content-Type': 'application/json',
+            ...getDeviceHeaders(),
+            ...(options.headers as Record<string, string> || {}),
+            Authorization: `Bearer ${newToken}`,
+          };
+          const retryResponse = await fetch(`${getApiUrl()}${endpoint}`, { ...options, headers: retryHeaders });
+
+          if (retryResponse.status === 503) {
+            const rb = await retryResponse.json().catch(() => ({}));
+            if (rb.maintenance) {
+              setMaintenance(true);
+              const err = 'Platform is under maintenance.';
+              errorRef.current = err; setError(err); loadingRef.current = false; setLoading(false);
+              return { success: false, error: err, message: err };
+            }
+          }
+          setMaintenance(false);
+          const retryData = await retryResponse.json();
+          if (!retryResponse.ok) throw new Error(retryData.message || 'API request failed');
+          loadingRef.current = false; setLoading(false);
+          const rd = retryData.data !== undefined ? retryData.data : retryData;
+          return { success: retryData.success ?? true, data: rd as T, message: retryData.message };
+        }
+        const expiredMsg = 'Session expired. Please log in again.';
+        errorRef.current = expiredMsg; setError(expiredMsg); loadingRef.current = false; setLoading(false);
+        return { success: false, error: 'TOKEN_EXPIRED', message: expiredMsg };
+      }
 
       if (!response.ok) {
         throw new Error(jsonData.message || 'API request failed');

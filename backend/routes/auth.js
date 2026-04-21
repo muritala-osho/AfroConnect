@@ -15,7 +15,9 @@ const {
   otpLimiter,
   forgotPasswordLimiter,
   resetPasswordLimiter,
+  refreshLimiter,
 } = require("../middleware/rateLimiter");
+const redis = require('../utils/redis');
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
@@ -23,9 +25,15 @@ const generateToken = (userId, tokenVersion = 0, sessionId = null) => {
   const payload = { id: userId, tokenVersion };
   if (sessionId) payload.sessionId = sessionId;
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || "7d",
+    expiresIn: "24h",
   });
 };
+
+function generateRefreshToken() {
+  const raw = crypto.randomBytes(64).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  return { raw, hash };
+}
 
 async function createSession(userId, req) {
   try {
@@ -63,11 +71,12 @@ async function createSession(userId, req) {
       await Session.deleteMany({ sessionId: { $in: idsToDelete } });
     }
 
-    await Session.create({ userId, sessionId, deviceName, platform, ipAddress: cleanIp, city, country });
-    return { sessionId, deviceName, ipAddress: cleanIp, city, country };
+    const { raw: rawRefreshToken, hash: refreshTokenHash } = generateRefreshToken();
+    await Session.create({ userId, sessionId, deviceName, platform, ipAddress: cleanIp, city, country, refreshTokenHash });
+    return { sessionId, deviceName, ipAddress: cleanIp, city, country, refreshToken: rawRefreshToken };
   } catch (err) {
     logger.error('Failed to create session:', err.message);
-    return { sessionId: crypto.randomUUID(), deviceName: 'Unknown Device', ipAddress: null, city: null, country: null };
+    return { sessionId: crypto.randomUUID(), deviceName: 'Unknown Device', ipAddress: null, city: null, country: null, refreshToken: null };
   }
 }
 
@@ -183,12 +192,13 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
     );
 
     const freshUser = await User.findById(user._id).select('+tokenVersion');
-    const sessionId = await createSession(user._id, req);
-    const token = generateToken(user._id, freshUser.tokenVersion || 0, sessionId);
+    const newSession = await createSession(user._id, req);
+    const token = generateToken(user._id, freshUser.tokenVersion || 0, newSession.sessionId);
 
     res.json({
       success: true,
       token,
+      refreshToken: newSession.refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -307,7 +317,7 @@ router.post(
 
       const userWithVersion = await User.findById(user._id).select('+tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings');
       const newSession = await createSession(user._id, req);
-      const { sessionId } = newSession;
+      const { sessionId, refreshToken } = newSession;
       const token = generateToken(user._id, userWithVersion.tokenVersion || 0, sessionId);
 
       // ── Suspicious login detection (fire-and-forget) ───────────────────────
@@ -344,6 +354,7 @@ router.post(
       res.json({
         success: true,
         token,
+        refreshToken,
         user: {
           id: user._id,
           name: user.name,
@@ -504,6 +515,50 @@ router.post("/logout", async (req, res) => {
     res.json({ success: true, message: "Logged out successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+router.post("/refresh", refreshLimiter, async (req, res) => {
+  try {
+    const { refreshToken: rawToken } = req.body;
+    if (!rawToken) {
+      return res.status(400).json({ success: false, message: "Refresh token required" });
+    }
+
+    const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const session = await Session.findOne({ refreshTokenHash: hash });
+
+    if (!session) {
+      return res.status(401).json({ success: false, message: "Invalid refresh token", tokenRevoked: true });
+    }
+
+    const revoked = await redis.get(`revoked:${session.sessionId}`);
+    if (revoked) {
+      await Session.deleteOne({ _id: session._id });
+      return res.status(401).json({ success: false, message: "Session revoked", tokenRevoked: true });
+    }
+
+    const user = await User.findById(session.userId).select('+tokenVersion');
+    if (!user || user.banned) {
+      await Session.deleteOne({ _id: session._id });
+      return res.status(401).json({ success: false, message: "Account unavailable", tokenRevoked: true });
+    }
+
+    const { raw: newRawToken, hash: newHash } = generateRefreshToken();
+    session.refreshTokenHash = newHash;
+    session.lastActive = new Date();
+    await session.save();
+
+    const newAccessToken = generateToken(user._id, user.tokenVersion || 0, session.sessionId);
+
+    return res.json({
+      success: true,
+      token: newAccessToken,
+      refreshToken: newRawToken,
+    });
+  } catch (error) {
+    logger.error("Token refresh error:", error);
+    res.status(500).json({ success: false, message: "Server error during token refresh" });
   }
 });
 

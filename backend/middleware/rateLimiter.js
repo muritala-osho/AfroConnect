@@ -46,6 +46,17 @@ const resetPasswordLimiter = rateLimit({
   }
 });
 
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many refresh attempts, please try again after 15 minutes.'
+  }
+});
+
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -123,6 +134,7 @@ module.exports = {
   otpLimiter,
   forgotPasswordLimiter,
   resetPasswordLimiter,
+  refreshLimiter,
   adminLimiter,
   uploadLimiter,
   messageLimiter,
