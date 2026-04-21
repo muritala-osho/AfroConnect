@@ -29,6 +29,8 @@ export interface DiscoverUser {
   online: boolean | null;
   distance: number | null;
   similarityScore?: number;
+  sharedInterests?: string[];
+  isBoosted?: boolean;
   gender?: string;
   verified?: boolean;
   location?: {

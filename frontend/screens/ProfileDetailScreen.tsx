@@ -775,23 +775,36 @@ export default function ProfileDetailScreen() {
               </LinearGradient>
             </Pressable>
 
-            <Pressable
-              style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => navigation.navigate('UserDistanceMap' as any, { otherUser: user })}
-            >
-              <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
-                <Ionicons name="map" size={20} color="#00B2FF" />
-              </View>
-              <View style={styles.distanceTextContent}>
-                <ThemedText style={[styles.distanceTitle, { color: theme.text }]}>
-                  View on Map
-                </ThemedText>
-                <ThemedText style={[styles.distanceSubtitle, { color: theme.textSecondary }]}>
-                  See their location on the map
-                </ThemedText>
-              </View>
-              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-            </Pressable>
+            {(() => {
+              const realCity = user.location?.city || user.location?.address || user.livingIn || '';
+              const realCountry = user.location?.country || '';
+              const realPlace = realCity
+                ? (realCountry ? `${realCity}, ${realCountry}` : realCity)
+                : (realCountry || 'Location not shared');
+              const distanceKm = typeof (user as any).distance === 'number' ? (user as any).distance : null;
+              const distanceText = distanceKm != null
+                ? (distanceKm < 1 ? 'Less than 1 km away' : `${Math.round(distanceKm)} km away`)
+                : null;
+              return (
+                <Pressable
+                  style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => navigation.navigate('UserDistanceMap' as any, { otherUser: user })}
+                >
+                  <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
+                    <Ionicons name="map" size={20} color="#00B2FF" />
+                  </View>
+                  <View style={styles.distanceTextContent}>
+                    <ThemedText style={[styles.distanceTitle, { color: theme.text }]}>
+                      {realPlace}
+                    </ThemedText>
+                    <ThemedText style={[styles.distanceSubtitle, { color: theme.textSecondary }]}>
+                      {distanceText ? `${distanceText} • Tap to view on map` : 'Tap to view on map'}
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                </Pressable>
+              );
+            })()}
 
             <Pressable onPress={handleReport} style={styles.reportContainer}>
               <Ionicons name="flag-outline" size={14} color={theme.textSecondary} />

@@ -87,6 +87,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [showSecondChance, setShowSecondChance] = useState(false);
   const [secondChanceProfiles, setSecondChanceProfiles] = useState<any[]>([]);
   const [secondChanceLoading, setSecondChanceLoading] = useState(false);
+  const [blendMatch, setBlendMatch] = useState<{ user: DiscoverUser; shared: string[] } | null>(null);
+  const blendShownIds = useRef<Set<string>>(new Set());
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
   
@@ -370,6 +372,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             online: u.online,
             distance: u.distance,
             similarityScore,
+            sharedInterests,
             gender: u.gender || 'male',
             verified: u.verified || false,
             location: u.location,
@@ -931,6 +934,24 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
     navigation.navigate("ProfileDetail", { userId: targetUser.id });
   }, [currentIndex, users, navigation]);
+
+  useEffect(() => {
+    if (loading || isAnimating) return;
+    const cur = users[currentIndex];
+    if (!cur) return;
+    const shared = cur.sharedInterests || [];
+    const score = cur.similarityScore || 0;
+    if (shared.length >= 3 && score >= 65 && !blendShownIds.current.has(cur.id)) {
+      blendShownIds.current.add(cur.id);
+      setBlendMatch({ user: cur, shared });
+    }
+  }, [currentIndex, users, loading, isAnimating]);
+
+  const handleBlendLike = useCallback(() => {
+    if (!blendMatch) return;
+    setBlendMatch(null);
+    setTimeout(() => handleLike(), 50);
+  }, [blendMatch]);
 
   const handleRewind = useCallback(async () => {
     if (userHistory.current.length === 0) {
@@ -1657,6 +1678,72 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         )}
         <AlertComponent />
+
+        <Modal
+          visible={!!blendMatch}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setBlendMatch(null)}
+        >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24, width: '100%', maxWidth: 360, alignItems: 'center' }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '20', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Feather name="zap" size={28} color={theme.primary} />
+              </View>
+              <ThemedText style={{ fontSize: 20, fontWeight: '700', color: theme.text, textAlign: 'center' }}>
+                Blend Match
+              </ThemedText>
+              <ThemedText style={{ fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
+                You and {blendMatch?.user.name} share {blendMatch?.shared.length} interests
+                {blendMatch?.user.similarityScore != null
+                  ? ` — about ${Math.round(blendMatch.user.similarityScore)}% in common.`
+                  : '.'}
+              </ThemedText>
+              {blendMatch?.shared && blendMatch.shared.length > 0 && (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 14 }}>
+                  {blendMatch.shared.slice(0, 5).map((tag) => (
+                    <View key={tag} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.primary + '15' }}>
+                      <ThemedText style={{ fontSize: 12, color: theme.primary, fontWeight: '600' }}>{tag}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 22, width: '100%' }}>
+                <Pressable
+                  onPress={() => setBlendMatch(null)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 14,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    alignItems: 'center',
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <ThemedText style={{ color: theme.text, fontWeight: '600' }}>Cancel</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={handleBlendLike}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    paddingVertical: 14,
+                    borderRadius: 999,
+                    backgroundColor: theme.primary,
+                    alignItems: 'center',
+                    opacity: pressed ? 0.9 : 1,
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    gap: 6,
+                  })}
+                >
+                  <Feather name="heart" size={16} color="#FFF" />
+                  <ThemedText style={{ color: '#FFF', fontWeight: '700' }}>Like</ThemedText>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <Modal
           visible={showSecondChance}
