@@ -46,6 +46,14 @@ const isAdmin = async (req, res, next) => {
 const handleVerificationVideoUpload = async (req, res) => {
   const tempPath = req.file?.path || null;
   try {
+    if (tempPath) {
+      const resolvedPath = path.resolve(tempPath);
+      const resolvedDir  = path.resolve(VIDEO_UPLOAD_DIR);
+      if (!resolvedPath.startsWith(resolvedDir + path.sep)) {
+        return res.status(400).json({ success: false, message: 'Invalid file path' });
+      }
+    }
+
     const requestedUserId     = req.body.userId;
     const authenticatedUserId = req.user._id.toString();
     const userId              = requestedUserId || authenticatedUserId;

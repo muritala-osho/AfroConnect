@@ -104,7 +104,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
         else if (field === 'preferences') {
           const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language', 'smoking', 'drinking', 'wantsKids', 'onlineNow', 'interests'];
           allowedPrefKeys.forEach(prefKey => {
-            if (updates.preferences[prefKey] === undefined) return;
+            if (!Object.prototype.hasOwnProperty.call(updates.preferences, prefKey) || updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
               user.preferences.ageRange = {
                 ...(user.preferences.ageRange || {}),
@@ -148,7 +148,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
         } else if (field === 'location') {
           user.location = normaliseLocationUpdate(updates.location, updates.livingIn ?? user.livingIn);
           user.locationUpdatedAt = new Date();
-        } else {
+        } else if (Object.prototype.hasOwnProperty.call(updates, field)) {
           user[field] = updates[field];
         }
       }

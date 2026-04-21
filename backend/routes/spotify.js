@@ -104,7 +104,7 @@ router.get('/auth-url', protect, async (req, res) => {
 router.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
   if (error) {
-    return res.send(`<html><body><script>window.location.href='afroconnect://spotify?error=${encodeURIComponent(error)}';</script><p>Spotify connection failed. You can close this window.</p></body></html>`);
+    return res.send('<html><body><script>window.location.href=\'afroconnect://spotify?error=oauth_error\';</script><p>Spotify connection failed. You can close this window.</p></body></html>');
   }
   if (!code || !state) {
     return res.status(400).send('<html><body><p>Invalid request. Please try again.</p></body></html>');
