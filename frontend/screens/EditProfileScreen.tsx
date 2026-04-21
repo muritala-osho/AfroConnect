@@ -217,7 +217,7 @@ const DIASPORA_GENERATION_OPTIONS = [
   { value: 'not_applicable', label: 'Not Applicable' },
 ];
 
-const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => {
+const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent, editable = true }: any) => {
   const { theme, isDark } = useTheme();
   return (
     <View style={styles.fieldContainer}>
@@ -240,12 +240,13 @@ const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, 
           </View>
         )}
         <TextInput
-          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
+          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput, !editable && { opacity: 0.6 }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={theme.textSecondary}
           multiline={multiline}
+          editable={editable}
         />
       </View>
     </View>
@@ -509,7 +510,36 @@ const InterestModal = ({ visible, onClose, interests, toggleInterest, insetsBott
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
   const { theme, isDark } = useTheme();
   const { user, updateProfile, fetchUser, token } = useAuth();
-  const { del } = useApi();
+  const { del, put } = useApi();
+  const [autoUpdateLocation, setAutoUpdateLocation] = useState((user as any)?.autoUpdateProfileLocation ?? false);
+  const [autoUpdateSaving, setAutoUpdateSaving] = useState(false);
+
+  const handleAutoUpdateLocationToggle = async (value: boolean) => {
+    setAutoUpdateLocation(value);
+    if (!token) return;
+    setAutoUpdateSaving(true);
+    try {
+      const response = await put('/users/me', { autoUpdateProfileLocation: value }, token);
+      if (response.success) {
+        if (fetchUser) await fetchUser();
+        if (value) {
+          try {
+            const { pushLiveLocation } = await import('@/utils/liveLocation');
+            pushLiveLocation(token, { force: true })
+              .then(() => { if (fetchUser) fetchUser(); })
+              .catch(() => {});
+          } catch {}
+        }
+      } else {
+        setAutoUpdateLocation(!value);
+      }
+    } catch (e) {
+      logger.error('Failed to toggle auto-update location:', e);
+      setAutoUpdateLocation(!value);
+    } finally {
+      setAutoUpdateSaving(false);
+    }
+  };
   const { showAlert, AlertComponent } = useThemedAlert();
   const insets = useSafeAreaInsets();
 
@@ -1184,7 +1214,68 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
               </View>
               <View style={styles.cardBody}>
                 <InputField label="Job Title" value={jobTitle} onChangeText={setJobTitle} placeholder="What you do" icon="briefcase" accent="#EF4444" />
-                <InputField label="City / Location" value={livingIn} onChangeText={setLivingIn} placeholder="City, Country" icon="map-pin" accent="#EF4444" />
+                <InputField
+                  label="City / Location"
+                  value={livingIn}
+                  onChangeText={setLivingIn}
+                  placeholder="City, Country"
+                  icon="map-pin"
+                  accent="#EF4444"
+                  editable={!autoUpdateLocation}
+                />
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: theme.background,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 12,
+                  marginTop: 10,
+                  gap: 12,
+                }}>
+                  <View style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#EF444418',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    <Feather name="navigation" size={16} color="#EF4444" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={{ color: theme.text, fontSize: 14, fontWeight: '600' }}>
+                      Auto-update as I travel
+                    </ThemedText>
+                    <ThemedText style={{ color: theme.textSecondary, fontSize: 12, marginTop: 2 }}>
+                      {autoUpdateLocation
+                        ? 'Your city updates automatically (e.g., Lagos → Cape Town)'
+                        : 'Keep this off to set your city yourself'}
+                    </ThemedText>
+                  </View>
+                  <Switch
+                    value={autoUpdateLocation}
+                    disabled={autoUpdateSaving}
+                    onValueChange={(v) => {
+                      if (v) {
+                        showAlert(
+                          'Auto-update Location',
+                          'Your profile city will follow your travels using your phone\u2019s location. You can turn it off anytime to control it yourself.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Turn On', onPress: () => handleAutoUpdateLocationToggle(true) },
+                          ],
+                          'map-pin'
+                        );
+                      } else {
+                        handleAutoUpdateLocationToggle(false);
+                      }
+                    }}
+                    trackColor={{ false: theme.border, true: '#EF4444' }}
+                  />
+                </View>
               </View>
             </View>
 
