@@ -14,6 +14,7 @@ const {
   authLimiter,
   otpLimiter,
   forgotPasswordLimiter,
+  resetPasswordLimiter,
 } = require("../middleware/rateLimiter");
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
@@ -93,10 +94,10 @@ router.post(
         });
       }
 
-      if (password.length < 6) {
+      if (password.length < 8) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 6 characters",
+          message: "Password must be at least 8 characters",
         });
       }
 
@@ -268,7 +269,7 @@ router.post(
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: "No account found with this email address.",
+          message: "Invalid email or password.",
         });
       }
 
@@ -420,6 +421,7 @@ router.post(
 
 router.post(
   "/reset-password",
+  resetPasswordLimiter,
   validate(schemas.auth.resetPassword),
   async (req, res) => {
     try {

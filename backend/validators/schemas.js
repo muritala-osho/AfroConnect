@@ -4,7 +4,7 @@ const Joi = require('joi');
 
 const signup = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
-  password: Joi.string().min(6).max(128).required(),
+  password: Joi.string().min(8).max(128).required(),
   confirmPassword: Joi.string().optional().allow(''),
   name: Joi.string().trim().min(2).max(60).optional(),
   username: Joi.string().trim().min(2).max(40).optional().allow(''),
