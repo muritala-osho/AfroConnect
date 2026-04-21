@@ -31,6 +31,7 @@ import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz from "@/components/CompatibilityQuiz";
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.25;
@@ -685,7 +686,10 @@ export default function ProfileDetailScreen() {
                       key={index}
                       onPress={() => {
                         const realIndex = user.photos.indexOf(photo);
-                        if (realIndex >= 0) setCurrentPhotoIndex(realIndex);
+                        const targetIndex = realIndex >= 0 ? realIndex : 0;
+                        setCurrentPhotoIndex(targetIndex);
+                        setZoomPhotoIndex(targetIndex);
+                        setZoomVisible(true);
                       }}
                       style={[styles.galleryImageWrap, { borderColor: theme.border }]}
                     >
@@ -827,10 +831,11 @@ export default function ProfileDetailScreen() {
                 const source = getPhotoSource(photo) || require('@/assets/images/placeholder-1.jpg');
                 return (
                   <View key={index} style={styles.zoomPhotoPage}>
-                    <Image
+                    <ZoomablePhoto
                       source={source}
-                      style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
-                      resizeMode="contain"
+                      width={SCREEN_WIDTH}
+                      height={SCREEN_HEIGHT}
+                      onSingleTap={() => setZoomVisible(false)}
                     />
                   </View>
                 );

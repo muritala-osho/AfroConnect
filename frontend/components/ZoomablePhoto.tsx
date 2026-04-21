@@ -1,95 +1,137 @@
 import React from "react";
-import { Dimensions } from "react-native";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from "react-native-reanimated";
+import { Image, ImageSourcePropType, StyleSheet } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  runOnJS,
+} from "react-native-reanimated";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-interface ZoomablePhotoProps {
-  source: any;
-  width?: number;
-  height?: number;
+interface Props {
+  source: ImageSourcePropType;
+  width: number;
+  height: number;
+  onSingleTap?: () => void;
 }
 
-export default function ZoomablePhoto({
-  source,
-  width = SCREEN_WIDTH,
-  height = SCREEN_HEIGHT * 0.82,
-}: ZoomablePhotoProps) {
-  const scale      = useSharedValue(1);
+const MIN_SCALE = 1;
+const MAX_SCALE = 4;
+
+export default function ZoomablePhoto({ source, width, height, onSingleTap }: Props) {
+  const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
-  const tx         = useSharedValue(0);
-  const ty         = useSharedValue(0);
-  const savedTx    = useSharedValue(0);
-  const savedTy    = useSharedValue(0);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const reset = () => {
+    scale.value = withTiming(1);
+    savedScale.value = 1;
+    translateX.value = withTiming(0);
+    translateY.value = withTiming(0);
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+  };
 
   const pinch = Gesture.Pinch()
     .onUpdate((e) => {
-      scale.value = Math.min(Math.max(savedScale.value * e.scale, 0.8), 6);
+      const next = savedScale.value * e.scale;
+      scale.value = Math.min(Math.max(next, MIN_SCALE * 0.8), MAX_SCALE);
     })
     .onEnd(() => {
-      if (scale.value < 1) {
-        scale.value      = withSpring(1);
-        savedScale.value = 1;
-        tx.value         = withSpring(0);
-        ty.value         = withSpring(0);
-        savedTx.value    = 0;
-        savedTy.value    = 0;
+      if (scale.value < MIN_SCALE) {
+        scale.value = withTiming(MIN_SCALE);
+        savedScale.value = MIN_SCALE;
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
       } else {
         savedScale.value = scale.value;
       }
     });
 
   const pan = Gesture.Pan()
-    .averageTouches(true)
+    .minPointers(1)
+    .maxPointers(2)
     .onUpdate((e) => {
-      if (scale.value <= 1) return;
-      tx.value = savedTx.value + e.translationX;
-      ty.value = savedTy.value + e.translationY;
+      if (scale.value > 1) {
+        translateX.value = savedTranslateX.value + e.translationX;
+        translateY.value = savedTranslateY.value + e.translationY;
+      }
     })
     .onEnd(() => {
-      savedTx.value = tx.value;
-      savedTy.value = ty.value;
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
     });
 
   const doubleTap = Gesture.Tap()
     .numberOfTaps(2)
-    .maxDelay(250)
     .onEnd(() => {
-      if (savedScale.value > 1) {
-        scale.value      = withSpring(1);
+      if (scale.value > 1) {
+        scale.value = withTiming(1);
         savedScale.value = 1;
-        tx.value         = withSpring(0);
-        ty.value         = withSpring(0);
-        savedTx.value    = 0;
-        savedTy.value    = 0;
+        translateX.value = withTiming(0);
+        translateY.value = withTiming(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
       } else {
-        scale.value      = withSpring(2.5);
+        scale.value = withTiming(2.5);
         savedScale.value = 2.5;
       }
     });
 
-  const gesture = Gesture.Race(doubleTap, Gesture.Simultaneous(pinch, pan));
+  const singleTap = Gesture.Tap()
+    .numberOfTaps(1)
+    .onEnd(() => {
+      if (onSingleTap) runOnJS(onSingleTap)();
+    })
+    .requireExternalGestureToFail(doubleTap);
 
-  const animStyle = useAnimatedStyle(() => ({
+  const composed = Gesture.Simultaneous(
+    pinch,
+    pan,
+    Gesture.Exclusive(doubleTap, singleTap),
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
     transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
       { scale: scale.value },
-      { translateX: tx.value },
-      { translateY: ty.value },
     ],
   }));
 
+  React.useEffect(() => {
+    return () => {
+      reset();
+    };
+  }, []);
+
   return (
-    <GestureDetector gesture={gesture}>
-      <Animated.Image
-        source={source}
-        style={[{ width, height }, animStyle]}
-        resizeMode="contain"
-      />
+    <GestureDetector gesture={composed}>
+      <Animated.View style={[styles.container, { width, height }]}>
+        <Animated.View style={[styles.imageWrap, animatedStyle]}>
+          <Image
+            source={source}
+            style={{ width, height }}
+            resizeMode="contain"
+          />
+        </Animated.View>
+      </Animated.View>
     </GestureDetector>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  imageWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
