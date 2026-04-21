@@ -41,6 +41,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-g
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { FALLBACK_COUNTRIES, PASSPORT_CITIES, DiscoverUser } from "@/constants/discoveryConstants";
+import BlendPopupPage from "@/components/BlendPopupPage";
 import logger from "@/utils/logger";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -87,7 +88,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [showSecondChance, setShowSecondChance] = useState(false);
   const [secondChanceProfiles, setSecondChanceProfiles] = useState<any[]>([]);
   const [secondChanceLoading, setSecondChanceLoading] = useState(false);
-  const [blendMatch, setBlendMatch] = useState<{ user: DiscoverUser; shared: string[] } | null>(null);
+  const [blendMatch, setBlendMatch] = useState<{
+    user: DiscoverUser;
+    shared: string[];
+    songMatch?: { type: 'song' | 'artist'; title?: string; artist?: string; albumArt?: string };
+  } | null>(null);
   const blendShownIds = useRef<Set<string>>(new Set());
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
@@ -232,6 +237,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             distance: u.distance,
             gender: u.gender || 'unknown',
             verified: u.verified || false,
+            favoriteSong: u.favoriteSong || undefined,
           };
         });
         
@@ -378,7 +384,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             location: u.location,
             isBoosted: u.isBoosted || false,
             needsVerification: u.needsVerification || false,
-            premium: u.premium || undefined
+            premium: u.premium || undefined,
+            favoriteSong: u.favoriteSong || undefined,
           };
         });
 
@@ -939,13 +946,36 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (loading || isAnimating) return;
     const cur = users[currentIndex];
     if (!cur) return;
+    if (blendShownIds.current.has(cur.id)) return;
+
     const shared = cur.sharedInterests || [];
     const score = cur.similarityScore || 0;
-    if (shared.length >= 3 && score >= 65 && !blendShownIds.current.has(cur.id)) {
-      blendShownIds.current.add(cur.id);
-      setBlendMatch({ user: cur, shared });
+
+    const mySong = (user as any)?.favoriteSong;
+    const theirSong = cur.favoriteSong;
+    const norm = (s?: string) => (s || '').trim().toLowerCase();
+    let songMatch: { type: 'song' | 'artist'; title?: string; artist?: string; albumArt?: string } | undefined;
+    if (mySong && theirSong) {
+      const sameTitle = !!norm(mySong.title) && norm(mySong.title) === norm(theirSong.title);
+      const sameArtist = !!norm(mySong.artist) && norm(mySong.artist) === norm(theirSong.artist);
+      if (sameTitle && sameArtist) {
+        songMatch = { type: 'song', title: theirSong.title, artist: theirSong.artist, albumArt: theirSong.albumArt };
+      } else if (sameArtist) {
+        songMatch = { type: 'artist', artist: theirSong.artist, albumArt: theirSong.albumArt };
+      }
     }
-  }, [currentIndex, users, loading, isAnimating]);
+
+    const hasInterestBlend = shared.length >= 3 && score >= 65;
+    const hasSongBlend = !!songMatch;
+
+    if (hasInterestBlend || hasSongBlend) {
+      blendShownIds.current.add(cur.id);
+      setBlendMatch({ user: cur, shared, songMatch });
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    }
+  }, [currentIndex, users, loading, isAnimating, user]);
 
   const handleBlendLike = useCallback(() => {
     if (!blendMatch) return;
@@ -1682,119 +1712,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         <Modal
           visible={!!blendMatch}
           transparent
-          animationType="fade"
+          animationType="slide"
           onRequestClose={() => setBlendMatch(null)}
+          statusBarTranslucent
         >
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-            <View style={{ backgroundColor: theme.surface, borderRadius: 28, paddingTop: 28, paddingBottom: 24, paddingHorizontal: 24, width: '100%', maxWidth: 360, alignItems: 'center', overflow: 'hidden' }}>
-              <LinearGradient
-                colors={[theme.primary + '25', 'transparent']}
-                style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 180 }}
-              />
-
-              <View style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: theme.primary + '20', flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 18 }}>
-                <Feather name="zap" size={12} color={theme.primary} />
-                <ThemedText style={{ fontSize: 11, fontWeight: '700', color: theme.primary, letterSpacing: 0.5 }}>BLEND DETECTED</ThemedText>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-                <View style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: theme.primary, padding: 3, backgroundColor: theme.surface }}>
-                  {user?.photos?.[0] ? (
-                    <Image source={getPhotoSource(user.photos[0])} style={{ width: '100%', height: '100%', borderRadius: 38 }} contentFit="cover" />
-                  ) : (
-                    <View style={{ width: '100%', height: '100%', borderRadius: 38, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
-                      <Feather name="user" size={28} color={theme.textSecondary} />
-                    </View>
-                  )}
-                </View>
-
-                <View style={{ marginHorizontal: -14, zIndex: 2, width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface }}>
-                  <Feather name="zap" size={20} color="#FFF" />
-                </View>
-
-                <View style={{ width: 84, height: 84, borderRadius: 42, borderWidth: 3, borderColor: theme.primary, padding: 3, backgroundColor: theme.surface }}>
-                  {blendMatch?.user.photos?.[0] ? (
-                    <Image source={getPhotoSource(blendMatch.user.photos[0])} style={{ width: '100%', height: '100%', borderRadius: 38 }} contentFit="cover" />
-                  ) : (
-                    <View style={{ width: '100%', height: '100%', borderRadius: 38, backgroundColor: theme.background, alignItems: 'center', justifyContent: 'center' }}>
-                      <Feather name="user" size={28} color={theme.textSecondary} />
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <ThemedText style={{ fontSize: 22, fontWeight: '800', color: theme.text, textAlign: 'center' }}>
-                You might be a Blend
-              </ThemedText>
-              <ThemedText style={{ fontSize: 15, color: theme.textSecondary, textAlign: 'center', marginTop: 4 }}>
-                with <ThemedText style={{ color: theme.primary, fontWeight: '700' }}>{blendMatch?.user.name}</ThemedText>
-              </ThemedText>
-
-              {blendMatch?.user.similarityScore != null && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, backgroundColor: theme.background }}>
-                  <Feather name="trending-up" size={12} color={theme.primary} />
-                  <ThemedText style={{ fontSize: 12, fontWeight: '700', color: theme.text }}>
-                    {Math.round(blendMatch.user.similarityScore)}% in common
-                  </ThemedText>
-                </View>
-              )}
-
-              {blendMatch?.shared && blendMatch.shared.length > 0 && (
-                <View style={{ width: '100%', marginTop: 18, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border }}>
-                  <ThemedText style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, marginBottom: 10, textAlign: 'center' }}>
-                    YOU BOTH LOVE
-                  </ThemedText>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
-                    {blendMatch.shared.slice(0, 6).map((tag) => (
-                      <View key={tag} style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: theme.primary + '15', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Feather name="check" size={11} color={theme.primary} />
-                        <ThemedText style={{ fontSize: 13, color: theme.primary, fontWeight: '600' }}>{tag}</ThemedText>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 22, width: '100%' }}>
-                <Pressable
-                  onPress={() => setBlendMatch(null)}
-                  style={({ pressed }) => ({
-                    flex: 1,
-                    paddingVertical: 14,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    alignItems: 'center',
-                    opacity: pressed ? 0.85 : 1,
-                  })}
-                >
-                  <ThemedText style={{ color: theme.text, fontWeight: '600' }}>Skip</ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={handleBlendLike}
-                  style={({ pressed }) => ({
-                    flex: 1.4,
-                    paddingVertical: 14,
-                    borderRadius: 999,
-                    backgroundColor: theme.primary,
-                    alignItems: 'center',
-                    opacity: pressed ? 0.9 : 1,
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    gap: 6,
-                    shadowColor: theme.primary,
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 10,
-                    elevation: 6,
-                  })}
-                >
-                  <Feather name="heart" size={16} color="#FFF" />
-                  <ThemedText style={{ color: '#FFF', fontWeight: '700' }}>Send Like</ThemedText>
-                </Pressable>
-              </View>
-            </View>
-          </View>
+          <BlendPopupPage
+            blendMatch={blendMatch}
+            currentUser={user}
+            theme={theme}
+            onClose={() => setBlendMatch(null)}
+            onLike={handleBlendLike}
+          />
         </Modal>
 
         <Modal

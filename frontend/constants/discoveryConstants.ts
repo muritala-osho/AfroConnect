@@ -30,6 +30,13 @@ export interface DiscoverUser {
   distance: number | null;
   similarityScore?: number;
   sharedInterests?: string[];
+  favoriteSong?: {
+    title?: string;
+    artist?: string;
+    albumArt?: string;
+    spotifyUri?: string;
+    previewUrl?: string;
+  };
   isBoosted?: boolean;
   gender?: string;
   verified?: boolean;
