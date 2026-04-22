@@ -899,6 +899,18 @@ export default function ChatDetailScreen({
     }
   };
 
+  const retryFailedMedia = (item: any) => {
+    if (!item || item.status !== "failed") return;
+    const localUri = item.imageUrl || item.videoUrl;
+    if (!localUri) return;
+    const kind: "image" | "video" = item.type === "video" ? "video" : "image";
+    setMessages((prev) => prev.filter((m) => m._id !== item._id));
+    const uploadFn = kind === "video"
+      ? () => uploadChatVideoAsset(localUri)
+      : () => uploadChatImageAsset(localUri);
+    sendMediaOptimistic(kind, localUri, uploadFn);
+  };
+
   const uploadChatVideoAsset = async (uri: string) => {
     const formData = new FormData();
     formData.append("video", { uri, type: "video/mp4", name: "chat_video.mp4" } as any);
@@ -1644,12 +1656,35 @@ export default function ChatDetailScreen({
                           </Pressable>
                         );
                       }
+                      const isFailed = (item as any).status === "failed";
+                      const isSending = (item as any).status === "sending";
                       return (
-                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={() => saveImage(item.imageUrl!)}>
+                        <Pressable
+                          onPress={() => {
+                            if (isFailed) { retryFailedMedia(item); return; }
+                            if (isSending) return;
+                            setViewOnceViewerActive(false);
+                            setViewingImage(item.imageUrl!);
+                          }}
+                          onLongPress={() => !isFailed && !isSending && saveImage(item.imageUrl!)}
+                        >
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                            <Ionicons name="download-outline" size={16} color="#FFF" />
-                          </Pressable>
+                          {isSending && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <ActivityIndicator color="#FFF" />
+                            </View>
+                          )}
+                          {isFailed && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="refresh-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          )}
+                          {!isSending && !isFailed && (
+                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -1692,8 +1727,18 @@ export default function ChatDetailScreen({
                           </Pressable>
                         );
                       }
+                      const isFailedVid = (item as any).status === "failed";
+                      const isSendingVid = (item as any).status === "sending";
                       return (
-                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
+                        <Pressable
+                          onPress={() => {
+                            if (isFailedVid) { retryFailedMedia(item); return; }
+                            if (isSendingVid) return;
+                            const url = item.videoUrl || item.imageUrl;
+                            if (url) { setViewOnceViewerActive(false); setViewingVideo(url); }
+                          }}
+                          style={styles.videoContainer}
+                        >
                           {failedThumbnails.has(item._id) ? (
                             <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
                               <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
@@ -1706,12 +1751,23 @@ export default function ChatDetailScreen({
                               onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
                             />
                           )}
-                          <View style={styles.videoOverlay}>
-                            <View style={styles.videoPlayButton}>
-                              <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                          {isSendingVid ? (
+                            <View style={styles.mediaStatusOverlay}>
+                              <ActivityIndicator color="#FFF" />
                             </View>
-                          </View>
-                          {!item.viewOnce && (
+                          ) : isFailedVid ? (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="refresh-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          ) : (
+                            <View style={styles.videoOverlay}>
+                              <View style={styles.videoPlayButton}>
+                                <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                              </View>
+                            </View>
+                          )}
+                          {!item.viewOnce && !isSendingVid && !isFailedVid && (
                             <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
                               <Ionicons name="download-outline" size={16} color="#FFF" />
                             </Pressable>
@@ -2645,6 +2701,8 @@ const styles = StyleSheet.create<any>({
   submitReportButton: { marginTop: 20, paddingVertical: 16, borderRadius: 12, alignItems: "center" },
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  mediaStatusOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", borderRadius: 12 },
+  mediaStatusText: { color: "#FFF", fontSize: 12, fontWeight: "600", marginTop: 6 },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
   audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: -8, marginBottom: 4, zIndex: 2, paddingHorizontal: 4 },
