@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const querystring = require('querystring');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const { encrypt, decrypt } = require('../utils/cryptoTokens');
 
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
@@ -86,10 +87,11 @@ function httpsGet(hostname, path, headers) {
 }
 
 async function refreshSpotifyToken(user) {
-  if (!user.spotify?.refreshToken) return null;
+  const refreshToken = decrypt(user.spotify?.refreshToken);
+  if (!refreshToken) return null;
   const body = querystring.stringify({
     grant_type: 'refresh_token',
-    refresh_token: user.spotify.refreshToken,
+    refresh_token: refreshToken,
   });
   const credentials = Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString('base64');
   const result = await httpsPost('accounts.spotify.com', '/api/token', {
@@ -100,9 +102,9 @@ async function refreshSpotifyToken(user) {
   if (result.status === 200 && result.data.access_token) {
     const expiry = new Date(Date.now() + result.data.expires_in * 1000);
     await User.findByIdAndUpdate(user._id, {
-      'spotify.accessToken': result.data.access_token,
+      'spotify.accessToken': encrypt(result.data.access_token),
       'spotify.tokenExpiry': expiry,
-      ...(result.data.refresh_token ? { 'spotify.refreshToken': result.data.refresh_token } : {}),
+      ...(result.data.refresh_token ? { 'spotify.refreshToken': encrypt(result.data.refresh_token) } : {}),
     });
     return result.data.access_token;
   }
@@ -114,7 +116,7 @@ async function getValidAccessToken(user) {
   const now = new Date();
   const expiry = user.spotify.tokenExpiry ? new Date(user.spotify.tokenExpiry) : null;
   if (expiry && expiry > now && user.spotify.accessToken) {
-    return user.spotify.accessToken;
+    return decrypt(user.spotify.accessToken);
   }
   return await refreshSpotifyToken(user);
 }
@@ -179,8 +181,8 @@ router.get('/callback', async (req, res) => {
       'spotify.connected': true,
       'spotify.userId': spotifyProfile.id || '',
       'spotify.displayName': spotifyProfile.display_name || '',
-      'spotify.accessToken': access_token,
-      'spotify.refreshToken': refresh_token || '',
+      'spotify.accessToken': encrypt(access_token),
+      'spotify.refreshToken': encrypt(refresh_token || ''),
       'spotify.tokenExpiry': tokenExpiry,
     });
 
