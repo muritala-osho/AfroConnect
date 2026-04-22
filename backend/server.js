@@ -55,19 +55,25 @@ const server = http.createServer(app);
 server.headersTimeout = 5 * 60 * 1000;  // 5 minutes
 server.requestTimeout = 5 * 60 * 1000;  // 5 minutes
 server.timeout = 5 * 60 * 1000;         // 5 minutes
+const IS_PROD = process.env.NODE_ENV === 'production';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
   : [];
 
+if (IS_PROD && ALLOWED_ORIGINS.length === 0) {
+  // Loud warning so this is never missed in prod logs.
+  console.warn('[CORS] WARNING: ALLOWED_ORIGINS is empty in production. ' +
+    'Set ALLOWED_ORIGINS to a comma-separated list of trusted origins.');
+}
+
 const isOriginAllowed = (origin) => {
-  if (!origin) return true; // allow non-browser requests (mobile apps, Postman)
-  if (ALLOWED_ORIGINS.length === 0) return true; // dev mode: no restriction
-  return ALLOWED_ORIGINS.some(allowed =>
-    origin === allowed ||
-    origin.endsWith('.replit.app') ||
-    origin.endsWith('.replit.dev') ||
-    origin.endsWith('.vercel.app')
-  );
+  // Origin-less requests (mobile apps, server-to-server, curl) carry no
+  // browser credential-context, so they cannot be CSRF'd via Origin checks.
+  if (!origin) return true;
+  // Dev mode without an allow-list: permissive.
+  if (!IS_PROD && ALLOWED_ORIGINS.length === 0) return true;
+  // Exact-match against the configured allow-list only.
+  return ALLOWED_ORIGINS.includes(origin);
 };
 
 const io = socketIO(server, {

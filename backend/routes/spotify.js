@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const https = require('https');
+const crypto = require('crypto');
 const querystring = require('querystring');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
@@ -8,6 +9,40 @@ const User = require('../models/User');
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const SPOTIFY_REDIRECT_URI = process.env.SPOTIFY_REDIRECT_URI;
+
+// Sign OAuth state with HMAC so it cannot be forged. Format:
+//   base64url( JSON({uid, n, e}) ) + "." + base64url( hmac )
+// Falls back to JWT_SECRET so we don't need a new env var.
+const STATE_SECRET = process.env.SPOTIFY_STATE_SECRET || process.env.JWT_SECRET || 'dev-state-secret';
+const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+const b64url = (buf) =>
+  Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+const signState = (userId) => {
+  const payload = { uid: String(userId), n: crypto.randomBytes(16).toString('hex'), e: Date.now() + STATE_TTL_MS };
+  const body = b64url(JSON.stringify(payload));
+  const sig = b64url(crypto.createHmac('sha256', STATE_SECRET).update(body).digest());
+  return `${body}.${sig}`;
+};
+
+const verifyState = (state) => {
+  if (typeof state !== 'string' || !state.includes('.')) return null;
+  const [body, sig] = state.split('.');
+  if (!body || !sig) return null;
+  const expected = b64url(crypto.createHmac('sha256', STATE_SECRET).update(body).digest());
+  // constant-time compare
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const json = JSON.parse(Buffer.from(body.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+    if (!json?.uid || !json?.e || Date.now() > json.e) return null;
+    return json.uid;
+  } catch {
+    return null;
+  }
+};
 
 const SPOTIFY_SCOPES = [
   'user-read-currently-playing',
@@ -88,7 +123,7 @@ router.get('/auth-url', protect, async (req, res) => {
   if (!SPOTIFY_CLIENT_ID || !SPOTIFY_REDIRECT_URI) {
     return res.status(503).json({ success: false, message: 'Spotify integration not configured' });
   }
-  const state = Buffer.from(req.user._id.toString()).toString('base64');
+  const state = signState(req.user._id);
   const params = querystring.stringify({
     response_type: 'code',
     client_id: SPOTIFY_CLIENT_ID,
@@ -110,11 +145,9 @@ router.get('/callback', async (req, res) => {
     return res.status(400).send('<html><body><p>Invalid request. Please try again.</p></body></html>');
   }
   try {
-    let userId;
-    try {
-      userId = Buffer.from(state, 'base64').toString('utf8');
-    } catch (e) {
-      return res.status(400).send('<html><body><p>Invalid state parameter.</p></body></html>');
+    const userId = verifyState(state);
+    if (!userId) {
+      return res.status(400).send('<html><body><p>Invalid or expired state parameter. Please retry from the app.</p></body></html>');
     }
     const body = querystring.stringify({
       grant_type: 'authorization_code',

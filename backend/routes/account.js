@@ -11,6 +11,7 @@ const CallHistory = require('../models/CallHistory');
 const FriendRequest = require('../models/FriendRequest');
 const crypto = require('crypto');
 const { sendOTP } = require('../utils/emailService');
+const { logAudit } = require('../utils/auditHelper');
 
 router.delete('/delete', protect, async (req, res) => {
   try {
@@ -34,7 +35,21 @@ router.delete('/delete', protect, async (req, res) => {
     }
     
     logger.log('Account deletion - User ID:', user._id, 'Reason:', reason);
-    
+
+    await logAudit({
+      action: 'SELF_DELETE_ACCOUNT',
+      category: 'ACCOUNT',
+      severity: 'critical',
+      adminId: user._id,
+      adminName: user.name,
+      adminEmail: user.email,
+      targetUserId: user._id,
+      targetUserName: user.name,
+      targetUserEmail: user.email,
+      details: `User self-deleted account. Reason: ${reason || 'not provided'}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
+
     await Promise.all([
       User.deleteOne({ _id: user._id }),
       
@@ -67,6 +82,20 @@ router.delete('/delete', protect, async (req, res) => {
 router.post('/export-data', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+
+    await logAudit({
+      action: 'EXPORT_USER_DATA',
+      category: 'ACCOUNT',
+      severity: 'high',
+      adminId: req.user._id,
+      adminName: req.user.name,
+      adminEmail: req.user.email,
+      targetUserId: req.user._id,
+      targetUserName: req.user.name,
+      targetUserEmail: req.user.email,
+      details: 'User exported all personal data (GDPR/data portability).',
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
     const matches = await Match.find({ users: req.user._id }).populate('users', 'name email');
     const messages = await Message.find({ 
       $or: [{ sender: req.user._id }, { receiver: req.user._id }] 
@@ -341,7 +370,21 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
     }
     
     logger.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
-    
+
+    await logAudit({
+      action: 'SELF_DELETE_ACCOUNT_OTP',
+      category: 'ACCOUNT',
+      severity: 'critical',
+      adminId: user._id,
+      adminName: user.name,
+      adminEmail: user.email,
+      targetUserId: user._id,
+      targetUserName: user.name,
+      targetUserEmail: user.email,
+      details: `User self-deleted account via OTP. Reason: ${reason || 'not provided'}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
+
     await Promise.all([
       User.deleteOne({ _id: user._id }),
       Match.deleteMany({ users: user._id }),
