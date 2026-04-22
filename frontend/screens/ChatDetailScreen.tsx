@@ -40,6 +40,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { reverseGeocode } from "@/utils/geocode";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
@@ -112,6 +113,7 @@ export default function ChatDetailScreen({
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isSendingLocation, setIsSendingLocation] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -847,20 +849,92 @@ export default function ChatDetailScreen({
   };
 
   const handleShareLocation = async () => {
+    if (isSendingLocation) return;
     setShowAttachmentMenu(false);
+    setIsSendingLocation(true);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { Alert.alert("Permission Denied", "Location permission is required to share your location"); return; }
-      const location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      let address = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-      try {
-        const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geocode) address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(", ");
-      } catch (e) {}
-      await sendMessage(`📍 ${address}`, "location", { latitude, longitude, address });
-    } catch (error) {
-      Alert.alert("Error", "Could not get your location");
+      // 1. Make sure GPS itself is on (separate from app permission)
+      const servicesOn = await Location.hasServicesEnabledAsync();
+      if (!servicesOn) {
+        Alert.alert(
+          "Location is off",
+          "Turn on location services in your device settings to share your location.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      // 2. App-level permission (with a path back to settings if denied)
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Location permission needed",
+          canAskAgain
+            ? "Please allow location access to share where you are."
+            : "Location access was previously denied. You can enable it in Settings.",
+          canAskAgain
+            ? [{ text: "OK" }]
+            : [
+                { text: "Cancel", style: "cancel" },
+                { text: "Open Settings", onPress: () => Linking.openSettings() },
+              ]
+        );
+        return;
+      }
+
+      // 3. Get coordinates fast: use last-known instantly if recent (<2 min),
+      //    otherwise race a fresh fix against an 8s timeout so we never hang.
+      let coords: { latitude: number; longitude: number } | null = null;
+      const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 120_000 }).catch(() => null);
+      if (lastKnown?.coords) {
+        coords = { latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude };
+      } else {
+        try {
+          const fresh = await Promise.race<Location.LocationObject>([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<Location.LocationObject>((_, reject) =>
+              setTimeout(() => reject(new Error("location_timeout")), 8000)
+            ),
+          ]);
+          coords = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+        } catch {
+          Alert.alert(
+            "Couldn't get your location",
+            "We couldn't find your location in time. Please check your signal and try again."
+          );
+          return;
+        }
+      }
+
+      const { latitude, longitude } = coords;
+
+      // 4. Send the message immediately with coords (no text — the bubble already
+      //    renders the address). Reverse-geocoding happens in the background and
+      //    the bubble updates the moment we know the address.
+      await sendMessage("", "location", { latitude, longitude });
+
+      reverseGeocode(latitude, longitude).then((g) => {
+        if (g.address) {
+          setMessages((prev) =>
+            prev.map((m: any) =>
+              m.type === "location" &&
+              m.latitude === latitude &&
+              m.longitude === longitude &&
+              !m.address
+                ? { ...m, address: g.address }
+                : m
+            )
+          );
+        }
+      });
+    } catch {
+      Alert.alert("Error", "Could not share your location. Please try again.");
+    } finally {
+      setIsSendingLocation(false);
     }
   };
 
@@ -1936,9 +2010,21 @@ export default function ChatDetailScreen({
                 <View style={[styles.attachmentIcon, { backgroundColor: "#9B59B620" }]}><Feather name="video" size={24} color="#9B59B6" /></View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
               </Pressable>
-              <Pressable style={styles.attachmentOption} onPress={handleShareLocation}>
-                <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}><Feather name="map-pin" size={24} color="#45B7D1" /></View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Location</ThemedText>
+              <Pressable
+                style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
+                onPress={handleShareLocation}
+                disabled={isSendingLocation}
+              >
+                <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}>
+                  {isSendingLocation ? (
+                    <ActivityIndicator size="small" color="#45B7D1" />
+                  ) : (
+                    <Feather name="map-pin" size={24} color="#45B7D1" />
+                  )}
+                </View>
+                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>
+                  {isSendingLocation ? "Getting…" : "Location"}
+                </ThemedText>
               </Pressable>
             </View>
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
