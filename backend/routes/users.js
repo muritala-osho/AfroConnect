@@ -435,7 +435,7 @@ router.get('/nearby', protect, async (req, res) => {
     users = users.map(user => {
       const privacy = user.privacySettings || {};
       const isOnline = user.onlineStatus === 'online' || user.online;
-      const distanceVisible = isPremium || privacy.showDistance !== false;
+      const distanceVisible = true;
 
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
