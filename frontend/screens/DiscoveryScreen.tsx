@@ -59,6 +59,40 @@ interface DiscoveryScreenProps {
 
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
 
+function haversineKm(lat1?: number, lng1?: number, lat2?: number, lng2?: number): number | null {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+function formatDistanceAway(target: any, currentUser: any): string | null {
+  let km: number | null = typeof target?.distance === 'number' ? target.distance : null;
+  if (km == null) {
+    km = haversineKm(
+      currentUser?.location?.lat,
+      currentUser?.location?.lng,
+      target?.location?.lat,
+      target?.location?.lng,
+    );
+  }
+  if (km == null || !isFinite(km) || km < 0) return null;
+  if (km < 1) {
+    const meters = Math.max(50, Math.round((km * 1000) / 50) * 50);
+    return `${meters}m away`;
+  }
+  if (km < 10) {
+    const rounded = Math.round(km * 10) / 10;
+    return `${rounded}km away`;
+  }
+  return `${Math.round(km)}km away`;
+}
+
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -1585,6 +1619,19 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     </ThemedText>
                   </View>
                 )}
+
+                {(() => {
+                  const distanceLabel = formatDistanceAway(currentUser, user);
+                  if (!distanceLabel) return null;
+                  return (
+                    <View style={styles.locationRow}>
+                      <Feather name="navigation" size={13} color="rgba(255,255,255,0.7)" />
+                      <ThemedText style={styles.locationText} numberOfLines={1}>
+                        {distanceLabel}
+                      </ThemedText>
+                    </View>
+                  );
+                })()}
 
                 <View style={styles.lifestyleRow}>
                   {currentUser.religion && (
