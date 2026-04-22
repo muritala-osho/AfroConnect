@@ -832,6 +832,96 @@ export default function ChatDetailScreen({
     }
   };
 
+  // Optimistically insert a media message using the local URI, upload in the
+  // background, then post the chat message and replace the temp with the
+  // server response. Makes image/video sends feel instant.
+  const sendMediaOptimistic = async (
+    kind: "image" | "video",
+    localUri: string,
+    uploadFn: () => Promise<{ success?: boolean; url?: string; message?: string }>,
+  ) => {
+    if (!matchId || !token) return;
+    const isVO = viewOnceModeRef.current;
+    if (isVO) {
+      setViewOnceModeSync(false);
+      setViewOnceSent(true);
+      setTimeout(() => setViewOnceSent(false), 2500);
+    }
+
+    const tempId = `temp_${Date.now()}_${kind}`;
+    const labelContent = kind === "image" ? "📷 Photo" : "🎬 Video";
+    const urlField = kind === "image" ? "imageUrl" : "videoUrl";
+
+    const tempMsg: any = {
+      _id: tempId,
+      sender: myId,
+      content: labelContent,
+      type: kind,
+      [urlField]: localUri,
+      createdAt: new Date().toISOString(),
+      status: "sending",
+      ...(isVO ? { viewOnce: true } : {}),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+
+    try {
+      const uploadData = await uploadFn();
+      if (!uploadData?.success || !uploadData.url) {
+        throw new Error(uploadData?.message || "Upload failed");
+      }
+      // Swap to the cloud URL so we don't re-fetch a local thumbnail later.
+      setMessages((prev) =>
+        prev.map((m) => (m._id === tempId ? { ...m, [urlField]: uploadData.url } : m)),
+      );
+
+      const response = await post<{ message: Message }>(
+        `/chat/${matchId}/message`,
+        { content: labelContent, type: kind, [urlField]: uploadData.url, ...(isVO ? { viewOnce: true } : {}) },
+        token,
+      );
+      if (response.success && response.data?.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === tempId
+              ? { ...response.data!.message, status: "sent", ...(isVO ? { viewOnce: true } : {}) }
+              : m,
+          ),
+        );
+      }
+    } catch (error: any) {
+      logger.error(`${kind} send error:`, error);
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? ({ ...m, status: "failed" } as any) : m)));
+      const msg = error?.name === "AbortError"
+        ? "Upload timed out. Try a smaller file or a stronger connection."
+        : `Failed to send ${kind}. Check your connection and try again.`;
+      Alert.alert("Send Failed", msg);
+    }
+  };
+
+  const uploadChatVideoAsset = async (uri: string) => {
+    const formData = new FormData();
+    formData.append("video", { uri, type: "video/mp4", name: "chat_video.mp4" } as any);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    try {
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-video`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: formData,
+        signal: controller.signal,
+      });
+      const contentType = uploadResponse.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await uploadResponse.text().catch(() => "");
+        throw new Error(`Upload failed (${uploadResponse.status}). ${text.slice(0, 120)}`);
+      }
+      return await uploadResponse.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -840,20 +930,8 @@ export default function ChatDetailScreen({
       allowsEditing: true,
     });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const uploadData = await uploadChatImageAsset(result.assets[0].uri);
-        if (uploadData?.success && uploadData.url) {
-          const isVOImg = viewOnceModeRef.current;
-          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        } else Alert.alert("Upload Failed", uploadData?.message || "Could not upload image. Please try again.");
-      } catch (error: any) {
-        logger.error("Image upload error:", error);
-        const msg = error?.name === "AbortError"
-          ? "Upload timed out. Try a smaller image or a stronger connection."
-          : "Failed to upload image. Check your connection and try again.";
-        Alert.alert("Upload Failed", msg);
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("image", uri, () => uploadChatImageAsset(uri));
     }
   };
 
@@ -865,24 +943,8 @@ export default function ChatDetailScreen({
       allowsEditing: true,
     });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const formData = new FormData();
-        formData.append("video", { uri: result.assets[0].uri, type: "video/mp4", name: "chat_video.mp4" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-video`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
-          const isVOVid = viewOnceModeRef.current;
-          await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
-          if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
-      } catch (error) {
-        logger.error("Video upload error:", error);
-        Alert.alert("Error", "Failed to upload video. Check your connection.");
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("video", uri, () => uploadChatVideoAsset(uri));
     }
   };
 
@@ -890,25 +952,10 @@ export default function ChatDetailScreen({
     setShowAttachmentMenu(false);
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) { Alert.alert("Permission Needed", "Camera permission is required to take photos"); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, base64: true });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, base64: false });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const formData = new FormData();
-        formData.append("image", { uri: result.assets[0].uri, type: "image/jpeg", name: "chat_photo.jpg" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
-          const isVOImg = viewOnceModeRef.current;
-          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        }
-      } catch (error) {
-        Alert.alert("Error", "Failed to upload photo");
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("image", uri, () => uploadChatImageAsset(uri));
     }
   };
 
@@ -2113,7 +2160,7 @@ export default function ChatDetailScreen({
               </Pressable>
               <Pressable
                 style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
-                onPress={() => handleShareLocation()}
+                onPress={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
                 disabled={isSendingLocation}
               >
                 <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}>
@@ -2126,16 +2173,6 @@ export default function ChatDetailScreen({
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>
                   {isSendingLocation ? "Getting…" : "Location"}
                 </ThemedText>
-              </Pressable>
-              <Pressable
-                style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
-                onPress={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
-                disabled={isSendingLocation}
-              >
-                <View style={[styles.attachmentIcon, { backgroundColor: "#dc262620" }]}>
-                  <Feather name="radio" size={24} color="#dc2626" />
-                </View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Live</ThemedText>
               </Pressable>
             </View>
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
@@ -2150,25 +2187,34 @@ export default function ChatDetailScreen({
         <Pressable style={styles.modalOverlay} onPress={() => setShowLivePicker(false)}>
           <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
             <View style={{ alignItems: "center", marginBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
-                <ThemedText style={[styles.optionsTitle, { color: theme.text, marginBottom: 0 }]}>Share Live Location</ThemedText>
-              </View>
+              <ThemedText style={[styles.optionsTitle, { color: theme.text, marginBottom: 0 }]}>Share Location</ThemedText>
               <ThemedText style={{ color: theme.textSecondary, fontSize: 12, textAlign: "center", marginTop: 6, paddingHorizontal: 8 }}>
-                Your moving position updates in real time and stops automatically when the timer ends.
+                Send your current spot, or share live for a set time.
               </ThemedText>
             </View>
+            <Pressable
+              style={styles.optionItem}
+              onPress={() => { setShowLivePicker(false); handleShareLocation(); }}
+            >
+              <Feather name="map-pin" size={22} color="#45B7D1" />
+              <ThemedText style={[styles.optionText, { color: theme.text }]}>Send current location</ThemedText>
+            </Pressable>
+            <View style={{ height: 1, backgroundColor: theme.textSecondary + "20", marginVertical: 6 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, marginBottom: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, fontWeight: "600" }}>LIVE — updates in real time</ThemedText>
+            </View>
             {[
-              { mins: 15, label: "15 minutes" },
-              { mins: 60, label: "1 hour" },
-              { mins: 480, label: "8 hours" },
+              { mins: 15, label: "Live · 15 minutes" },
+              { mins: 60, label: "Live · 1 hour" },
+              { mins: 480, label: "Live · 8 hours" },
             ].map((opt) => (
               <Pressable
                 key={opt.mins}
                 style={styles.optionItem}
                 onPress={() => handleShareLocation(opt.mins)}
               >
-                <Feather name="clock" size={22} color={theme.primary} />
+                <Feather name="radio" size={22} color="#dc2626" />
                 <ThemedText style={[styles.optionText, { color: theme.text }]}>{opt.label}</ThemedText>
               </Pressable>
             ))}
