@@ -27,41 +27,20 @@ import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
 
-import Constants from "expo-constants";
-
-/* react-native-agora is a native module — not available in Expo Go.
-   We lazy-require it so the screen loads normally in Expo Go (no crash),
-   and native rendering is used automatically in real dev/production builds. */
-let createAgoraRtcEngine: any = null;
-let RtcSurfaceView: any       = null;
-let VideoSourceType: any      = {};
-let ChannelProfileType: any   = {};
-let ClientRoleType: any       = {};
-let VideoMirrorModeType: any  = {};
-let RenderModeType: any       = {};
-let OrientationMode: any      = {};
-let DegradationPreference: any = {};
-
-const isExpoGo =
-  Constants.executionEnvironment === "storeClient" ||
-  Constants.appOwnership === "expo";
-
-if (!isExpoGo && Platform.OS !== "web") {
-  try {
-    const agora = require("react-native-agora");
-    createAgoraRtcEngine = agora.createAgoraRtcEngine;
-    RtcSurfaceView       = agora.RtcSurfaceView;
-    VideoSourceType      = agora.VideoSourceType;
-    ChannelProfileType   = agora.ChannelProfileType;
-    ClientRoleType       = agora.ClientRoleType;
-    VideoMirrorModeType  = agora.VideoMirrorModeType;
-    RenderModeType       = agora.RenderModeType;
-    OrientationMode      = agora.OrientationMode;
-    DegradationPreference = agora.DegradationPreference;
-  } catch (e) {
-    logger.log("[VideoCall] Native Agora not available — using fallback");
-  }
-}
+/* react-native-agora is a native module — not available on web or in Expo Go.
+   The platform-specific resolver in `@/utils/agoraNative` keeps the native
+   import out of the web bundle entirely (via a `.native.ts` extension). */
+import {
+  createAgoraRtcEngine,
+  RtcSurfaceView,
+  VideoSourceType,
+  ChannelProfileType,
+  ClientRoleType,
+  VideoMirrorModeType,
+  RenderModeType,
+  OrientationMode,
+  DegradationPreference,
+} from "@/utils/agoraNative";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
