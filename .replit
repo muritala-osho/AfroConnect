@@ -26,10 +26,6 @@ args = "Expo QR (Mobile)"
 task = "workflow.run"
 args = "Admin Dashboard"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "InsightFace Service"
-
 [[workflows.workflow]]
 name = "Start Backend"
 author = "agent"
@@ -64,18 +60,6 @@ outputType = "webview"
 task = "shell.exec"
 args = "cd admin-dashboard && npm install --legacy-peer-deps && npm run dev"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "InsightFace Service"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "INSIGHTFACE_PORT=6800 bash insightface_service/startup.sh"
-waitForPort = 6800
 
 [[ports]]
 localPort = 3001
