@@ -713,6 +713,44 @@ io.on('connection', (socket) => {
     }
   }
 
+  // Send a "Missed call from X" push to the receiver. Used when the caller
+  // hangs up before the receiver answers, or when the call rings out.
+  async function sendMissedCallPush(callerId, receiverId, callType) {
+    try {
+      if (!callerId || !receiverId) return;
+      const User = require('./models/User');
+      const [caller, receiver] = await Promise.all([
+        User.findById(callerId).select('name photos profilePicture'),
+        User.findById(receiverId).select(
+          'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+        ),
+      ]);
+      if (!receiver) return;
+      const callerName = caller?.name || 'Someone';
+      const callerPhoto = caller?.photos?.[0] || caller?.profilePicture || '';
+      const isVideo = callType === 'video';
+      const { sendSmartNotification } = require('./utils/pushNotifications');
+      await sendSmartNotification(
+        receiver,
+        {
+          title: `Missed ${isVideo ? 'video' : 'voice'} call`,
+          body: `${callerName} tried to reach you`,
+          data: {
+            type: 'message',
+            screen: 'ChatDetail',
+            senderId: callerId.toString(),
+            senderName: callerName,
+            senderPhoto: callerPhoto,
+          },
+        },
+        'message',
+        callerId.toString(),
+      );
+    } catch (err) {
+      logger.error('[MissedCallPush] failed:', err?.message || err);
+    }
+  }
+
   // Call signaling - incoming call to target user
   socket.on('call:initiate', async (data) => {
     const { targetUserId, callData, callerInfo } = data;
@@ -926,6 +964,14 @@ io.on('connection', (socket) => {
       io.to(targetUserId).emit('call:ended', {
         endedBy: socket.userId
       });
+
+      // If the caller hung up before the receiver answered, notify the receiver
+      // with a "Missed call" push so the stale "calling" notification is replaced.
+      if (!wasAnswered) {
+        sendMissedCallPush(socket.userId, targetUserId, callType || 'audio').catch((e) =>
+          logger.error('[MissedCallPush] error:', e?.message || e)
+        );
+      }
     }
   });
   
@@ -948,6 +994,10 @@ io.on('connection', (socket) => {
       }
       await saveCallMessage(socket.userId, targetUserId, callType || 'audio', 'missed');
       logger.log(`Missed call from ${socket.userId} to ${targetUserId}`);
+
+      sendMissedCallPush(socket.userId, targetUserId, callType || 'audio').catch((e) =>
+        logger.error('[MissedCallPush] error:', e?.message || e)
+      );
     }
   });
 
