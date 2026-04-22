@@ -61,8 +61,9 @@ import WavyWaveform from "@/components/chat/WavyWaveform";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
 import logger from "@/utils/logger";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ChatDetailScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -2007,7 +2008,7 @@ export default function ChatDetailScreen({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: Math.max(insets.bottom, 4), minHeight: 60 }]}>
           {isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
@@ -2280,7 +2281,13 @@ export default function ChatDetailScreen({
               <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
             </View>
           )}
-          {viewingImage && <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />}
+          {viewingImage && (
+            <ZoomablePhoto
+              source={{ uri: viewingImage }}
+              width={SCREEN_WIDTH}
+              height={SCREEN_HEIGHT * 0.8}
+            />
+          )}
         </View>
       </Modal>
 

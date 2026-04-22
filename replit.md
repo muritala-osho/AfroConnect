@@ -1,6 +1,11 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Chat zoomable images, smoother keyboard, accurate local time**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Full-screen image viewer now uses the existing `ZoomablePhoto` component so chat photos pinch-to-zoom, double-tap-zoom, and pan. Removed the conflicting `paddingBottom` toggle on the input bar that animated against the keyboard-controller `KeyboardAvoidingView`, eliminating the visible glitch when the keyboard opens/closes.
+  - `frontend/screens/ProfileDetailScreen.tsx`: `getUserLocalTime` now resolves a timezone via `user.timezone` → country map → GeoJSON longitude offset (Etc/GMT±N), with a 30-second ticker so the displayed local time stays accurate while the screen is open. Time row also shows when only coordinates are known.
+  - `frontend/screens/MyProfileScreen.tsx`: Own profile local time updates every 30 seconds via state instead of being captured at render time.
+
 - **Reports queue and verification revoke backend**:
   - `backend/routes/admin.js`: Reports Queue `all` status now returns all report statuses instead of filtering for a non-existent `all` status.
   - `backend/controllers/verificationController.js` and `backend/services/verificationService.js`: Added admin-only `POST /api/admin/revoke-verification/:userId` to remove a verified badge with required reason, history logging, profile cache invalidation, and user notification.

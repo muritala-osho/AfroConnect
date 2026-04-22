@@ -140,11 +140,38 @@ function getTimezoneFromCountry(country: string): string {
   return map[country] || 'UTC';
 }
 
-function getUserLocalTime(user: any): string {
+function getTimezoneFromLongitude(lng: number): string {
+  // Etc/GMT signs are inverted vs UTC offsets: GMT-5 == UTC+5
+  const offset = Math.round(lng / 15);
+  const clamped = Math.max(-12, Math.min(14, offset));
+  if (clamped === 0) return 'Etc/GMT';
+  return clamped > 0 ? `Etc/GMT-${clamped}` : `Etc/GMT+${Math.abs(clamped)}`;
+}
+
+function getUserTimezone(user: any): string | null {
+  if (user?.timezone) return user.timezone;
+  const country = user?.location?.country;
+  if (country) {
+    const fromCountry = getTimezoneFromCountry(country);
+    if (fromCountry && fromCountry !== 'UTC') return fromCountry;
+  }
+  // GeoJSON coordinates are [lng, lat]
+  const coords = user?.location?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
+    return getTimezoneFromLongitude(coords[0]);
+  }
+  if (typeof user?.location?.lng === 'number') {
+    return getTimezoneFromLongitude(user.location.lng);
+  }
+  return null;
+}
+
+function getUserLocalTime(user: any, _tick?: number): string {
   try {
-    const tz =
-      user?.timezone ||
-      getTimezoneFromCountry(user?.location?.country || '');
+    const tz = getUserTimezone(user);
+    if (!tz) {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
@@ -172,6 +199,12 @@ export default function ProfileDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
+  const [timeTick, setTimeTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTimeTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
   const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -461,11 +494,11 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               </View>
             )}
-            {(user.location?.country || user.timezone) && (
+            {(user.location?.country || user.timezone || user.location?.coordinates) && (
               <View style={styles.locationRow}>
                 <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
                 <ThemedText style={styles.locationText}>
-                  {getUserLocalTime(user)} local time
+                  {getUserLocalTime(user, timeTick)} local time
                 </ThemedText>
               </View>
             )}
