@@ -226,14 +226,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       <View style={[styles.iconContainer, { backgroundColor: destructive ? 'rgba(255, 59, 48, 0.1)' : theme.primary + '15' }]}>
         <Feather name={icon as any} size={20} color={destructive ? '#FF3B30' : theme.primary} />
       </View>
-      <ThemedText style={[styles.settingLabel, { color: destructive ? '#FF3B30' : theme.text }]}>
-        {label}
-      </ThemedText>
-      {value && (
-        <ThemedText style={[styles.settingValue, { color: theme.textSecondary }]}>
-          {value}
+      <View style={styles.settingTextBlock}>
+        <ThemedText
+          style={[styles.settingLabel, { color: destructive ? '#FF3B30' : theme.text }]}
+          numberOfLines={2}
+        >
+          {label}
         </ThemedText>
-      )}
+        {value && (
+          <ThemedText
+            style={[styles.settingValue, { color: theme.textSecondary }]}
+            numberOfLines={2}
+          >
+            {value}
+          </ThemedText>
+        )}
+      </View>
       {rightElement}
       {showChevron && onPress && !rightElement && (
         <Feather name="chevron-right" size={20} color={theme.textSecondary} />
@@ -775,8 +783,9 @@ const styles = StyleSheet.create({
   sectionCard: { borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
   settingItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   iconContainer: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  settingLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
-  settingValue: { fontSize: 14, marginRight: 8 },
+  settingTextBlock: { flex: 1, marginRight: 8, minWidth: 0 },
+  settingLabel: { fontSize: 16, fontWeight: '500' },
+  settingValue: { fontSize: 13, marginTop: 2 },
   footer: { marginTop: 32, alignItems: 'center' },
   version: { fontSize: 12, opacity: 0.5 },
   header: {
