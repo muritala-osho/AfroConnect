@@ -1,6 +1,9 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Chat: tap-to-retry failed media sends**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Failed image/video bubbles now show a refresh icon and "Tap to retry" overlay; tapping re-runs the upload and message POST using the original local file URI without re-picking. Sending bubbles show a spinner overlay so users see the in-flight state.
+
 - **Chat: instant media send + single Location button**:
   - `frontend/screens/ChatDetailScreen.tsx`: Image and video sends are now optimistic — the message bubble appears immediately using the local file URI with a "sending" status, then swaps to the cloud URL and the server message id once the upload + POST completes. Failures mark the bubble `failed` and show an alert.
   - `frontend/screens/ChatDetailScreen.tsx`: Removed the duplicate "Live" attachment button. The single "Location" button now opens a unified picker with "Send current location" plus the three live-share durations (15 min / 1 hour / 8 hours).
