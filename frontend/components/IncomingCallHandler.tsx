@@ -254,17 +254,39 @@ export default function IncomingCallHandler() {
       await showCallUI(data);
     };
 
-    const handleCallEnded = async () => {
+    const dismissCallNotifications = async (callerId?: string) => {
+      try {
+        const presented = await Notifications.getPresentedNotificationsAsync();
+        await Promise.all(
+          presented
+            .filter((n) => {
+              const d: any = n.request?.content?.data || {};
+              if (d.type !== 'call') return false;
+              if (callerId && d.callerId && d.callerId !== callerId) return false;
+              return true;
+            })
+            .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+        );
+      } catch (err) {
+        logger.warn('[Notifications] dismiss call notifications failed:', err);
+      }
+    };
+
+    const handleCallEnded = async (data?: any) => {
       await stopRingtone();
       const call = incomingCallRef.current;
+      const cId = call?.callerId || data?.endedBy || data?.callerId;
       if (call) reportCallEnded(call.callerId);
+      await dismissCallNotifications(cId);
       dismissModal();
     };
 
-    const handleCallDeclined = async () => {
+    const handleCallDeclined = async (data?: any) => {
       await stopRingtone();
       const call = incomingCallRef.current;
+      const cId = call?.callerId || data?.callerId;
       if (call) reportCallEnded(call.callerId);
+      await dismissCallNotifications(cId);
       dismissModal();
     };
 
@@ -311,10 +333,14 @@ export default function IncomingCallHandler() {
         callAccepted: true,
       });
     } else if (data?.type === 'message') {
+      const senderId = data.senderId || data.userId;
+      if (!senderId) return;
       navigation.navigate('ChatDetail', {
-        userId:   data.senderId,
-        userName: data.senderName,
-      });
+        userId:    senderId,
+        userName:  data.senderName || 'Chat',
+        userPhoto: data.senderPhoto || data.userPhoto || '',
+        matchId:   data.matchId,
+      } as any);
     } else if (data?.type === 'match') {
       navigation.navigate('Discovery');
     }
