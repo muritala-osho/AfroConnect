@@ -3,13 +3,14 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
+const { callTokenLimiter } = require('../middleware/rateLimiter');
 
 const AGORA_APP_ID = process.env.AGORA_APP_ID;
 const AGORA_APP_CERTIFICATE = process.env.AGORA_APP_CERTIFICATE;
 
 logger.log('Agora Routes Loaded. ID:', !!AGORA_APP_ID, 'Cert:', !!AGORA_APP_CERTIFICATE);
 
-router.get('/token', protect, async (req, res) => {
+router.get('/token', protect, callTokenLimiter, async (req, res) => {
   try {
     const { channelName, uid = 0, role = 'publisher' } = req.query;
     
@@ -22,7 +23,15 @@ router.get('/token', protect, async (req, res) => {
     }
 
     const rtcRole = role === 'publisher' ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
-    const expirationTimeInSeconds = 3600;
+    const isPremium = req.user.premium?.isActive;
+    // Server-side enforcement: free users get a token that expires in 5 minutes
+    // (plus a small grace buffer for connection setup), so the call cannot
+    // continue past the limit even with a tampered client.
+    const FREE_CALL_SECONDS = 300;
+    const FREE_GRACE_SECONDS = 15;
+    const expirationTimeInSeconds = isPremium
+      ? 3600
+      : FREE_CALL_SECONDS + FREE_GRACE_SECONDS;
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTimestamp + expirationTimeInSeconds;
     
@@ -35,16 +44,15 @@ router.get('/token', protect, async (req, res) => {
       privilegeExpireTime
     );
 
-    const isPremium = req.user.premium?.isActive;
-    
     res.json({
       success: true,
       token,
       appId: AGORA_APP_ID,
       channel: channelName,
       uid: parseInt(uid) || 0,
-      isLimited: !isPremium, // Flag for frontend to enforce duration
-      maxDuration: isPremium ? 0 : 300 // 5 minutes for free users
+      isLimited: !isPremium, // Flag for frontend UX (countdown, warning)
+      maxDuration: isPremium ? 0 : FREE_CALL_SECONDS,
+      tokenExpiresAt: privilegeExpireTime
     });
   } catch (error) {
     logger.error('Agora token error:', error);
@@ -52,7 +60,7 @@ router.get('/token', protect, async (req, res) => {
   }
 });
 
-router.post('/call/initiate', protect, async (req, res) => {
+router.post('/call/initiate', protect, callTokenLimiter, async (req, res) => {
   try {
     const { targetUserId, callType } = req.body;
     
@@ -66,8 +74,13 @@ router.post('/call/initiate', protect, async (req, res) => {
     
     const channelName = `c${String(req.user._id).slice(-8)}${String(targetUserId).slice(-8)}${Date.now().toString(36)}`;
     const uid = Math.floor(Math.random() * 100000);
-    
-    const expirationTimeInSeconds = 3600;
+
+    const isPremium = req.user.premium?.isActive;
+    const FREE_CALL_SECONDS = 300;
+    const FREE_GRACE_SECONDS = 15;
+    const expirationTimeInSeconds = isPremium
+      ? 3600
+      : FREE_CALL_SECONDS + FREE_GRACE_SECONDS;
     const currentTimestamp = Math.floor(Date.now() / 1000);
     const privilegeExpireTime = currentTimestamp + expirationTimeInSeconds;
     
@@ -90,8 +103,9 @@ router.post('/call/initiate', protect, async (req, res) => {
         callType,
         callerId: req.user._id,
         targetUserId,
-        isLimited: !req.user.premium?.isActive,
-        maxDuration: req.user.premium?.isActive ? 0 : 300
+        isLimited: !isPremium,
+        maxDuration: isPremium ? 0 : FREE_CALL_SECONDS,
+        tokenExpiresAt: privilegeExpireTime
       }
     });
   } catch (error) {

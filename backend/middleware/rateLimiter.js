@@ -117,6 +117,32 @@ const swipeLimiter = rateLimit({
   }
 });
 
+const discoveryLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user ? req.user._id.toString() : null) || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown',
+  validate: { trustProxy: false, xForwardedForHeader: false },
+  message: {
+    success: false,
+    message: 'You are loading discovery too frequently. Please wait a moment.'
+  }
+});
+
+const callTokenLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user ? req.user._id.toString() : null) || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown',
+  validate: { trustProxy: false, xForwardedForHeader: false },
+  message: {
+    success: false,
+    message: 'Too many call requests. Please wait a moment.'
+  }
+});
+
 const supportTicketLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 5,
@@ -139,5 +165,7 @@ module.exports = {
   uploadLimiter,
   messageLimiter,
   swipeLimiter,
-  supportTicketLimiter
+  supportTicketLimiter,
+  discoveryLimiter,
+  callTokenLimiter
 };

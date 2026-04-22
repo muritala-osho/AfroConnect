@@ -5,6 +5,7 @@ const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const redis = require('../utils/redis');
 const { haversineDistance, extractLatLng } = require('../utils/distance');
+const { discoveryLimiter } = require('../middleware/rateLimiter');
 
 function formatDistance(distanceKm) {
   if (distanceKm < 1) {
@@ -29,7 +30,7 @@ function generateRandomAngle() {
   return Math.random() * 360;
 }
 
-router.get('/nearby-users', protect, async (req, res) => {
+router.get('/nearby-users', protect, discoveryLimiter, async (req, res) => {
   try {
     const { lat, lng, radius = 10, gender, ageMin, ageMax } = req.query;
 

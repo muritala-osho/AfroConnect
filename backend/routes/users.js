@@ -8,6 +8,7 @@ const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
 const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
+const { discoveryLimiter } = require('../middleware/rateLimiter');
 
 function parseLivingIn(livingIn) {
   if (!livingIn || typeof livingIn !== 'string') return {};
@@ -235,7 +236,10 @@ router.get('/countries', protect, async (req, res) => {
 });
 
 
-router.get('/nearby', protect, async (req, res) => {
+router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
+  let inflightCacheKey = null;
+  let resolveInflight = null;
+  let rejectInflight = null;
   try {
     const {
       lat, lng, maxDistance, minAge, maxAge, genders,
@@ -249,21 +253,46 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 60);
+
     const normLat  = Math.round((parseFloat(lat)  || 0) * 10);
     const normLng  = Math.round((parseFloat(lng)  || 0) * 10);
     const normDist = parseInt(maxDistance) || '';
     const normMin  = parseInt(minAge)      || '';
     const normMax  = parseInt(maxAge)      || '';
     const normGen  = (genders || '').split(',').sort().join(',');
-    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}`;
+    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}:${cursor || ''}:${limit}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
-      return res.json({ success: true, users: cached, fromCache: true });
+      return res.json({ success: true, users: cached.users || cached, nextCursor: cached.nextCursor || null, fromCache: true });
     }
+
+    // In-process stampede lock: if another request for the same key is already
+    // computing, wait briefly for it to populate the cache instead of running
+    // the same expensive query in parallel.
+    const inflight = req.app.get('discoveryInflight') || new Map();
+    if (!req.app.get('discoveryInflight')) req.app.set('discoveryInflight', inflight);
+    if (inflight.has(cacheKey)) {
+      try {
+        const result = await inflight.get(cacheKey);
+        return res.json({ success: true, users: result.users, nextCursor: result.nextCursor, fromCache: true });
+      } catch (_) {
+        // fall through and recompute
+      }
+    }
+    const inflightPromise = new Promise((resolve, reject) => {
+      resolveInflight = resolve;
+      rejectInflight = reject;
+    });
+    inflight.set(cacheKey, inflightPromise);
+    inflightCacheKey = cacheKey;
 
     const currentUser = await User.findById(req.user.id);
 
     if (isGlobal && !currentUser.premium?.isActive) {
+      if (rejectInflight) rejectInflight(new Error('forbidden'));
+      if (inflightCacheKey) inflight.delete(inflightCacheKey);
       return res.status(403).json({ success: false, message: 'Global discovery is a Premium feature' });
     }
 
@@ -384,30 +413,40 @@ router.get('/nearby', protect, async (req, res) => {
     );
     const maxDist = isPremium ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
+    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
+    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+    const hasOrigin = effectiveLat != null && effectiveLng != null;
+
     if (isGlobal) {
       if (countryFilter) {
         query['location.country'] = { $regex: new RegExp(countryFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       }
-    } else {
-      const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
-      const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
-
-      if (effectiveLat || effectiveLng) {
-        query.$or = [
-          { 'location.coordinates': { $exists: true } },
-          { 'location.lat': { $exists: true } }
-        ];
-      }
+    } else if (hasOrigin) {
+      // Use the 2dsphere index when origin coordinates are available.
+      // $geoWithin / $centerSphere uses the index and only returns docs
+      // with valid GeoJSON Point coordinates within the search radius.
+      // Legacy users with only flat lat/lng are matched via the second
+      // branch of $or so they aren't dropped.
+      const radiusKm = Math.max(1, Math.min(maxDist * 2, 20000));
+      const radiusInRadians = radiusKm / 6371;
+      query.$or = [
+        {
+          'location.coordinates': {
+            $geoWithin: { $centerSphere: [[effectiveLng, effectiveLat], radiusInRadians] }
+          }
+        },
+        {
+          'location.lat': { $exists: true },
+          'location.coordinates': { $exists: false }
+        }
+      ];
     }
 
-    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
-    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
-
+    const queryStart = Date.now();
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
-
-    const hasOrigin = effectiveLat != null && effectiveLng != null;
+    const queryMs = Date.now() - queryStart;
 
     users = users.map(user => {
       const userObj = user.toObject();
@@ -430,7 +469,10 @@ router.get('/nearby', protect, async (req, res) => {
 
     users.sort((a, b) => b.score - a.score);
 
-    users = users.slice(0, 40);
+    const offset = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+    const totalAvailable = users.length;
+    users = users.slice(offset, offset + limit);
+    const nextCursor = offset + limit < totalAvailable ? String(offset + limit) : null;
 
     users = users.map(user => {
       const privacy = user.privacySettings || {};
@@ -453,16 +495,30 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
-    logger.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
+    const totalMs = Date.now() - queryStart;
+    logger.log(`[DISCOVERY] Returning ${users.length}/${totalAvailable} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium}, queryMs=${queryMs}, totalMs=${totalMs}, offset=${offset})`);
 
-    await redis.set(cacheKey, users, 120);
+    const payload = { users, nextCursor };
+    await redis.set(cacheKey, payload, 120);
+
+    if (resolveInflight) resolveInflight(payload);
+    if (inflightCacheKey) {
+      const inflight = req.app.get('discoveryInflight');
+      if (inflight) inflight.delete(inflightCacheKey);
+    }
 
     res.json({
       success: true,
-      users
+      users,
+      nextCursor
     });
   } catch (error) {
     logger.error('Nearby users error:', error);
+    if (rejectInflight) rejectInflight(error);
+    if (inflightCacheKey) {
+      const inflight = req.app.get('discoveryInflight');
+      if (inflight) inflight.delete(inflightCacheKey);
+    }
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

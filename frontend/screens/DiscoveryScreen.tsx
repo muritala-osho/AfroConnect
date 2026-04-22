@@ -71,6 +71,23 @@ function haversineKm(lat1?: number, lng1?: number, lat2?: number, lng2?: number)
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
+const reverseGeocodeCache = new Map<string, { city?: string; country?: string }>();
+async function cachedReverseGeocode(lat: number, lng: number): Promise<{ city?: string; country?: string }> {
+  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  if (reverseGeocodeCache.has(key)) return reverseGeocodeCache.get(key)!;
+  try {
+    const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+    const result = {
+      city: place?.city || place?.district || place?.subregion || undefined,
+      country: place?.country || undefined,
+    };
+    reverseGeocodeCache.set(key, result);
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 function formatDistanceAway(target: any, currentUser: any): string | null {
   let km: number | null = typeof target?.distance === 'number' ? target.distance : null;
   if (km == null) {
@@ -213,17 +230,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         lng: location.coords.longitude,
       };
 
-      let locationName: { city?: string; country?: string } = {};
-      try {
-        const [place] = await Location.reverseGeocodeAsync({
-          latitude: coords.lat,
-          longitude: coords.lng,
-        });
-        locationName = {
-          city: place?.city || place?.district || place?.subregion || undefined,
-          country: place?.country || undefined,
-        };
-      } catch {}
+      const locationName = await cachedReverseGeocode(coords.lat, coords.lng);
 
       try {
         await fetch(`${getApiBaseUrl()}/api/radar/location`, {
@@ -486,29 +493,36 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       
       const loadData = async () => {
         setLoading(true);
-        await Promise.all([
-          loadPotentialMatches(),
-          fetchRadarNearbyUsers()
-        ]);
+        // Run nearby query first; only fall back to radar if we got few results.
+        // Avoids two concurrent location lookups + duplicate API calls on every load.
+        await loadPotentialMatches();
+        if (users.length < 3) {
+          fetchRadarNearbyUsers();
+        }
       };
       loadData();
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
 
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const isAnimatingRef = useRef(false);
+  useEffect(() => {
+    isAnimatingRef.current = isAnimating;
+  }, [isAnimating]);
+
   useFocusEffect(
     useCallback(() => {
       checkLocationPermission();
       
       const initialScanTimeout = setTimeout(() => {
-        if (hasLocationPermission !== false && token) {
+        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
           fetchRadarNearbyUsers();
         }
       }, 1000);
       
       radarIntervalRef.current = setInterval(() => {
-        if (hasLocationPermission !== false && token) {
+        // Skip while a swipe animation is mid-flight to avoid jank
+        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
           fetchRadarNearbyUsers();
         }
       }, 30000);
@@ -620,6 +634,30 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         </Pressable>
       </View>
+
+      {discoveryType === 'local' && !(user?.location?.lat && user?.location?.lng) && (
+        <Pressable
+          onPress={handleShareLocation}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: theme.primary + '22',
+            borderColor: theme.primary,
+            borderWidth: 1,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: BorderRadius.md,
+            marginTop: 12,
+          }}
+        >
+          <Feather name="map-pin" size={14} color={theme.primary} />
+          <ThemedText style={{ fontSize: 12, flex: 1, color: theme.primary }}>
+            Share your location to see distance & better local matches
+          </ThemedText>
+          <Feather name="chevron-right" size={14} color={theme.primary} />
+        </Pressable>
+      )}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
         <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
