@@ -127,6 +127,25 @@ function AppContent() {
         // don't rely on AsyncStorage timing after a fresh login
         await registerForPushNotificationsAsync(token ?? undefined);
 
+        // Register the user's IANA device timezone so other users see
+        // accurate "local time" on their profile even when GPS is missing.
+        try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          const authToken = token || (await AsyncStorage.getItem('auth_token'));
+          if (tz && authToken) {
+            await fetch(`${getApiBaseUrl()}/api/notifications/register-timezone`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify({ timezone: tz }),
+            });
+          }
+        } catch (tzErr) {
+          logger.warn('[App] Timezone registration failed (non-fatal):', tzErr);
+        }
+
         // Register VoIP push token (iOS only) for native CallKit incoming call
         // screen even when the app is completely killed.
         if (Platform.OS === 'ios') {

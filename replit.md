@@ -1,6 +1,11 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Device timezone sync for accurate local time**:
+  - `backend/models/User.js`: Added `timezone` (IANA name) field on the User schema.
+  - `backend/routes/notifications.js`: New `POST /api/notifications/register-timezone` protected endpoint that stores the caller's IANA timezone string.
+  - `frontend/App.tsx`: After login (alongside FCM/VoIP token registration), the app now sends `Intl.DateTimeFormat().resolvedOptions().timeZone` to the backend so other users see truly accurate "local time" on profiles even when the user has no shared GPS coordinates.
+
 - **Chat zoomable images, smoother keyboard, accurate local time**:
   - `frontend/screens/ChatDetailScreen.tsx`: Full-screen image viewer now uses the existing `ZoomablePhoto` component so chat photos pinch-to-zoom, double-tap-zoom, and pan. Removed the conflicting `paddingBottom` toggle on the input bar that animated against the keyboard-controller `KeyboardAvoidingView`, eliminating the visible glitch when the keyboard opens/closes.
   - `frontend/screens/ProfileDetailScreen.tsx`: `getUserLocalTime` now resolves a timezone via `user.timezone` → country map → GeoJSON longitude offset (Etc/GMT±N), with a 30-second ticker so the displayed local time stays accurate while the screen is open. Time row also shows when only coordinates are known.

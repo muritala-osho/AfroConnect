@@ -69,6 +69,21 @@ router.post('/register-fcm-token', protect, async (req, res) => {
   }
 });
 
+router.post('/register-timezone', protect, async (req, res) => {
+  const userId = req.user?._id;
+  try {
+    const { timezone } = req.body;
+    if (!timezone || typeof timezone !== 'string' || timezone.length > 64) {
+      return res.status(400).json({ success: false, message: 'Valid timezone is required' });
+    }
+    await User.findByIdAndUpdate(userId, { timezone });
+    res.json({ success: true, message: 'Timezone registered' });
+  } catch (error) {
+    logger.error(`[Notifications] register-timezone error for user ${userId}:`, error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.post('/register-voip-token', protect, async (req, res) => {
   const userId = req.user?._id;
   logger.log(`[Notifications] register-voip-token — userId: ${userId}`);
