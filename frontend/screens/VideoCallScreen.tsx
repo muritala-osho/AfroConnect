@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
   BackHandler,
+  ActivityIndicator,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -44,6 +45,40 @@ import {
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
+
+/* ─────────────────────────────────────────────────────────────────
+   Signal bars — reflects Agora onNetworkQuality (1=excellent…6=down)
+───────────────────────────────────────────────────────────────── */
+function qualityToBars(q: number): { bars: number; color: string; label: string } {
+  // Agora: 0=unknown, 1=excellent, 2=good, 3=poor, 4=bad, 5=very bad, 6=down
+  if (q === 0 || q === 8) return { bars: 0, color: "rgba(255,255,255,0.4)", label: "" };
+  if (q === 1) return { bars: 4, color: "#34d399", label: "Excellent" };
+  if (q === 2) return { bars: 3, color: "#34d399", label: "Good" };
+  if (q === 3) return { bars: 2, color: "#fbbf24", label: "Fair" };
+  if (q === 4) return { bars: 2, color: "#fbbf24", label: "Weak" };
+  if (q === 5) return { bars: 1, color: "#f87171", label: "Poor" };
+  return { bars: 0, color: "#f87171", label: "No signal" };
+}
+
+function SignalBars({ quality }: { quality: number }) {
+  const { bars, color } = qualityToBars(quality);
+  const heights = [4, 7, 10, 13];
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, height: 13 }}>
+      {heights.map((h, i) => (
+        <View
+          key={i}
+          style={{
+            width: 3,
+            height: h,
+            borderRadius: 1,
+            backgroundColor: i < bars ? color : "rgba(255,255,255,0.2)",
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────────
    Pulse ring
@@ -162,6 +197,7 @@ export default function VideoCallScreen() {
   const [remoteUid, setRemoteUid]         = useState<number | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [networkQuality, setNetworkQuality] = useState(0);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [engineReady,   setEngineReady]    = useState(false);
 
   /* ── Animated values ── */
@@ -308,6 +344,11 @@ export default function VideoCallScreen() {
 
       engine.addListener("onNetworkQuality", (_conn: any, uid: any, txQ: any, rxQ: any) => {
         if (uid === 0) setNetworkQuality(Math.max(txQ, rxQ));
+      });
+
+      engine.addListener("onConnectionStateChanged", (_conn: any, state: any, _reason: any) => {
+        // Agora states: 1=disconnected, 2=connecting, 3=connected, 4=reconnecting, 5=failed
+        setIsReconnecting(state === 4);
       });
 
       engine.addListener("onRemoteVideoStateChanged", (_conn: any, _uid: any, state: any) => {
@@ -827,16 +868,27 @@ export default function VideoCallScreen() {
 
               <View style={s.topInfo}>
                 <Text style={s.topName} numberOfLines={1}>{userName || "Unknown"}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, justifyContent: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
                   <Text style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
-                    {isConnected && duration > 0 ? formatDuration(duration) : statusText()}
+                    {isReconnecting
+                      ? "Reconnecting…"
+                      : isConnected && duration > 0
+                        ? formatDuration(duration)
+                        : statusText()}
                   </Text>
-                  {isConnected && networkQuality >= 4 && (
+                  {isConnected && !isReconnecting && networkQuality > 0 && (
                     <View style={s.qualityBadge}>
-                      <Ionicons name="wifi" size={10} color="#fbbf24" />
-                      <Text style={s.qualityText}>
-                        {networkQuality === 6 ? "No signal" : "Weak signal"}
-                      </Text>
+                      <SignalBars quality={networkQuality} />
+                      {networkQuality >= 3 && (
+                        <Text style={[s.qualityText, { color: qualityToBars(networkQuality).color }]}>
+                          {qualityToBars(networkQuality).label}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  {isReconnecting && (
+                    <View style={[s.qualityBadge, { backgroundColor: "rgba(248,113,113,0.18)", borderColor: "rgba(248,113,113,0.4)" }]}>
+                      <ActivityIndicator size="small" color="#f87171" />
                     </View>
                   )}
                 </View>
