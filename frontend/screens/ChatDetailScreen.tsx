@@ -99,6 +99,8 @@ export default function ChatDetailScreen({
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
@@ -134,6 +136,14 @@ export default function ChatDetailScreen({
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const playingAudioIdRef = useRef<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const playbackRateRef = useRef<number>(1);
+  const [playedAudioIds, setPlayedAudioIds] = useState<Set<string>>(new Set());
+  const [recordingPaused, setRecordingPaused] = useState(false);
+  const [recordingPreview, setRecordingPreview] = useState<{ uri: string; duration: number } | null>(null);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
@@ -180,18 +190,72 @@ export default function ChatDetailScreen({
     const loadDraft = async () => {
       if (!userId) return;
       try {
-        const [savedDraft, savedLang] = await Promise.all([
+        const [savedDraft, savedLang, savedPlayed, savedRate] = await Promise.all([
           AsyncStorage.getItem(`chat_draft_${userId}`),
           AsyncStorage.getItem("@afroconnect_translate_lang"),
+          AsyncStorage.getItem(`played_audio_${userId}`),
+          AsyncStorage.getItem("@afroconnect_audio_rate"),
         ]);
         if (savedDraft) setMessage(savedDraft);
         if (savedLang) setSavedTranslateLang(savedLang);
+        if (savedPlayed) {
+          try { setPlayedAudioIds(new Set(JSON.parse(savedPlayed))); } catch (_) {}
+        }
+        if (savedRate) {
+          const r = parseFloat(savedRate);
+          if (!isNaN(r) && [1, 1.5, 2].includes(r)) {
+            setPlaybackRate(r);
+            playbackRateRef.current = r;
+          }
+        }
       } catch (error) {
         logger.error("Failed to load draft:", error);
       }
     };
     loadDraft();
   }, [userId]);
+
+  const markAudioPlayed = (messageId: string) => {
+    setPlayedAudioIds((prev) => {
+      if (prev.has(messageId)) return prev;
+      const next = new Set(prev);
+      next.add(messageId);
+      if (userId) AsyncStorage.setItem(`played_audio_${userId}`, JSON.stringify(Array.from(next))).catch(() => {});
+      return next;
+    });
+  };
+
+  const togglePlaybackSpeed = async () => {
+    const order = [1, 1.5, 2];
+    const idx = order.indexOf(playbackRateRef.current);
+    const next = order[(idx + 1) % order.length];
+    playbackRateRef.current = next;
+    setPlaybackRate(next);
+    AsyncStorage.setItem("@afroconnect_audio_rate", String(next)).catch(() => {});
+    try {
+      if (soundRef.current) {
+        await soundRef.current.setRateAsync(next, true);
+      }
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.playbackRate = next;
+      }
+    } catch (e) { logger.log("setRate error", e); }
+  };
+
+  const seekAudio = async (fraction: number) => {
+    try {
+      if (soundRef.current) {
+        const status: any = await soundRef.current.getStatusAsync();
+        if (status.isLoaded && status.durationMillis) {
+          await soundRef.current.setPositionAsync(Math.floor(status.durationMillis * fraction));
+          setAudioProgress(fraction);
+        }
+      } else if (htmlAudioRef.current && htmlAudioRef.current.duration) {
+        htmlAudioRef.current.currentTime = htmlAudioRef.current.duration * fraction;
+        setAudioProgress(fraction);
+      }
+    } catch (e) { logger.log("seek error", e); }
+  };
 
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -901,6 +965,14 @@ export default function ChatDetailScreen({
 
   const retryFailedMedia = (item: any) => {
     if (!item || item.status !== "failed") return;
+    if (item.type === "audio") {
+      const localUri = item.audioUrl;
+      if (!localUri) return;
+      const duration = item.audioDuration || 1;
+      setMessages((prev) => prev.filter((m) => m._id !== item._id));
+      sendVoiceOptimistic(localUri, duration);
+      return;
+    }
     const localUri = item.imageUrl || item.videoUrl;
     if (!localUri) return;
     const kind: "image" | "video" = item.type === "video" ? "video" : "image";
@@ -1105,38 +1177,47 @@ export default function ChatDetailScreen({
     }
   };
 
+  const pauseRecording = async () => {
+    if (!recordingRef.current || recordingPaused) return;
+    try {
+      await recordingRef.current.pauseAsync();
+      if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
+      setRecordingPaused(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) { logger.log("Pause recording error:", e); }
+  };
+
+  const resumeRecording = async () => {
+    if (!recordingRef.current || !recordingPaused) return;
+    try {
+      await recordingRef.current.startAsync();
+      setRecordingPaused(false);
+      recordingIntervalRef.current = setInterval(() => {
+        recordingDurationRef.current += 1;
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) { logger.log("Resume recording error:", e); }
+  };
+
   const stopRecording = async () => {
-    if (!recordingRef.current) { setIsRecording(false); return; }
+    if (!recordingRef.current) { setIsRecording(false); setRecordingPaused(false); return; }
     try {
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       const recording = recordingRef.current;
       const duration = recordingDurationRef.current;
       recordingRef.current = null;
       setIsRecording(false);
+      setRecordingPaused(false);
       if (matchId) socketService.emit("chat:recording-voice", { chatId: matchId, userId: myId, isRecording: false });
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
       const uri = recording.getURI();
       if (uri && duration >= 1) {
-        try {
-          const ext = uri.split(".").pop()?.toLowerCase() || "m4a";
-          const mimeMap: Record<string, string> = { m4a: "audio/m4a", mp4: "audio/mp4", caf: "audio/x-caf", wav: "audio/wav", "3gp": "audio/3gpp", aac: "audio/aac", webm: "audio/webm" };
-          const mimeType = mimeMap[ext] || (Platform.OS === "android" ? "application/octet-stream" : "audio/m4a");
-          const formData = new FormData();
-          formData.append("audio", { uri, type: mimeType, name: `voice_message.${ext}` } as any);
-          formData.append("duration", duration.toString());
-          const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
-          else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
-        } catch (error) {
-          logger.error("Voice upload error:", error);
-          Alert.alert("Error", "Failed to upload voice message");
-        }
+        // Show preview UI instead of auto-sending so user can review/discard.
+        setRecordingPreview({ uri, duration });
+        setPreviewProgress(0);
+        setPreviewPlaying(false);
       } else if (uri && duration < 1) {
         Alert.alert("Too Short", "Voice message must be at least 1 second long");
       }
@@ -1146,10 +1227,106 @@ export default function ChatDetailScreen({
     } catch (error) {
       logger.error("Stop recording error:", error);
       setIsRecording(false);
+      setRecordingPaused(false);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
     }
+  };
+
+  const togglePreviewPlay = async () => {
+    if (!recordingPreview) return;
+    try {
+      if (previewSoundRef.current) {
+        const status: any = await previewSoundRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          if (status.isPlaying) { await previewSoundRef.current.pauseAsync(); setPreviewPlaying(false); return; }
+          await previewSoundRef.current.playAsync(); setPreviewPlaying(true); return;
+        }
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: recordingPreview.uri },
+        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
+        (status: any) => {
+          if (status.isLoaded) {
+            if (status.durationMillis > 0) setPreviewProgress(status.positionMillis / status.durationMillis);
+            if (status.didJustFinish) {
+              setPreviewPlaying(false); setPreviewProgress(0);
+              if (previewSoundRef.current) { previewSoundRef.current.unloadAsync().catch(() => {}); previewSoundRef.current = null; }
+            }
+          }
+        },
+      );
+      previewSoundRef.current = sound;
+      setPreviewPlaying(true);
+    } catch (e) { logger.error("Preview play error:", e); }
+  };
+
+  const discardRecordingPreview = async () => {
+    if (previewSoundRef.current) {
+      try { await previewSoundRef.current.unloadAsync(); } catch (_) {}
+      previewSoundRef.current = null;
+    }
+    setRecordingPreview(null);
+    setPreviewProgress(0);
+    setPreviewPlaying(false);
+  };
+
+  const sendVoiceOptimistic = async (uri: string, duration: number) => {
+    if (!matchId || !token) return;
+    const tempId = `temp_${Date.now()}_audio`;
+    const labelContent = `🎤 Voice message (${duration}s)`;
+    const tempMsg: any = {
+      _id: tempId,
+      sender: myId,
+      content: labelContent,
+      type: "audio",
+      audioUrl: uri,
+      audioDuration: duration,
+      createdAt: new Date().toISOString(),
+      status: "sending",
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+    try {
+      const ext = uri.split(".").pop()?.toLowerCase() || "m4a";
+      const mimeMap: Record<string, string> = { m4a: "audio/m4a", mp4: "audio/mp4", caf: "audio/x-caf", wav: "audio/wav", "3gp": "audio/3gpp", aac: "audio/aac", webm: "audio/webm" };
+      const mimeType = mimeMap[ext] || (Platform.OS === "android" ? "application/octet-stream" : "audio/m4a");
+      const formData = new FormData();
+      formData.append("audio", { uri, type: mimeType, name: `voice_message.${ext}` } as any);
+      formData.append("duration", duration.toString());
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadData = await uploadResponse.json();
+      if (!uploadData.success || !uploadData.url) throw new Error(uploadData.message || "Upload failed");
+      // Swap to cloud URL so future plays don't depend on local file.
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? { ...m, audioUrl: uploadData.url } : m)));
+      const response = await post<{ message: Message }>(
+        `/chat/${matchId}/message`,
+        { content: labelContent, type: "audio", audioUrl: uploadData.url, audioDuration: duration },
+        token,
+      );
+      if (response.success && response.data?.message) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? { ...response.data!.message, status: "sent" } : m)),
+        );
+      }
+    } catch (error: any) {
+      logger.error("Voice send error:", error);
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? ({ ...m, status: "failed" } as any) : m)));
+      Alert.alert("Send Failed", "Failed to send voice message. Tap the bubble to retry.");
+    }
+  };
+
+  const sendRecordingPreview = async () => {
+    if (!recordingPreview) return;
+    const { uri, duration } = recordingPreview;
+    await discardRecordingPreview();
+    sendVoiceOptimistic(uri, duration);
   };
 
   const cancelRecording = async () => {
@@ -1202,12 +1379,33 @@ export default function ChatDetailScreen({
       updatePlayingId(null);
       setAudioProgress(0);
 
+      const playNextUnplayed = (afterId: string) => {
+        try {
+          const list = messagesRef.current || [];
+          const idx = list.findIndex((m: any) => m._id === afterId);
+          if (idx < 0) return;
+          for (let i = idx + 1; i < list.length; i++) {
+            const m: any = list[i];
+            if (m.type !== "audio" || !m.audioUrl) continue;
+            const senderId = String(typeof m.sender === "string" ? m.sender : m.sender?._id);
+            const isMine = senderId === String(myId);
+            if (isMine) continue;
+            if (playedAudioIds.has(m._id)) continue;
+            // Defer slightly so the previous sound finishes unloading.
+            setTimeout(() => playAudio(m.audioUrl, m._id), 250);
+            return;
+          }
+        } catch (e) { logger.log("auto-next error", e); }
+      };
+
       const onStatus = (status: any) => {
         if (status.isLoaded) {
           if (status.durationMillis > 0) setAudioProgress(status.positionMillis / status.durationMillis);
           if (status.didJustFinish) {
+            markAudioPlayed(messageId);
             updatePlayingId(null); setAudioProgress(0);
             if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
+            playNextUnplayed(messageId);
           }
         }
       };
@@ -1215,14 +1413,15 @@ export default function ChatDetailScreen({
       if (Platform.OS === "web") {
         try {
           await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-          const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
+          const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100, rate: playbackRateRef.current, shouldCorrectPitch: true }, onStatus);
           soundRef.current = sound; updatePlayingId(messageId);
         } catch (expoError) {
           logger.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
           try {
             const htmlAudio = new window.Audio(audioUrl);
             htmlAudioRef.current = htmlAudio;
-            htmlAudio.onended = () => { updatePlayingId(null); setAudioProgress(0); };
+            htmlAudio.playbackRate = playbackRateRef.current;
+            htmlAudio.onended = () => { markAudioPlayed(messageId); updatePlayingId(null); setAudioProgress(0); playNextUnplayed(messageId); };
             htmlAudio.ontimeupdate = () => { if (htmlAudio.duration > 0) setAudioProgress(htmlAudio.currentTime / htmlAudio.duration); };
             htmlAudio.onerror = () => { updatePlayingId(null); setAudioProgress(0); Alert.alert("Playback Error", "Could not play this voice message. The audio format may not be supported."); };
             await htmlAudio.play(); updatePlayingId(messageId);
@@ -1234,8 +1433,8 @@ export default function ChatDetailScreen({
         return;
       }
 
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
+      const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100, rate: playbackRateRef.current, shouldCorrectPitch: true }, onStatus);
       soundRef.current = sound; updatePlayingId(messageId);
     } catch (error: any) {
       logger.error("Audio playback error for URL:", audioUrl, error);
@@ -1253,6 +1452,7 @@ export default function ChatDetailScreen({
       }
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       recordingDurationRef.current = 0;
+      if (previewSoundRef.current) { previewSoundRef.current.unloadAsync().catch(() => {}); previewSoundRef.current = null; }
     };
   }, []);
 
@@ -1776,35 +1976,66 @@ export default function ChatDetailScreen({
                       );
                     })()}
 
-                    {item.type === "audio" && item.audioUrl && (
-                      <Pressable
-                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
-                        onPress={() => playAudio(item.audioUrl!, item._id)}
-                      >
-                        <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
-                          <Ionicons
-                            name={
-                              playingAudioId === item._id
-                                ? "pause"
-                                : playingAudioId === "paused:" + item._id
-                                ? "play"
-                                : "play"
-                            }
-                            size={18}
-                            color={isMe ? "#FFF" : theme.primary}
-                          />
+                    {item.type === "audio" && item.audioUrl && (() => {
+                      const isFailedAud = (item as any).status === "failed";
+                      const isSendingAud = (item as any).status === "sending";
+                      const isActiveBubble = playingAudioId === item._id || playingAudioId === "paused:" + item._id;
+                      const isUnplayed = !isMe && !isSendingAud && !isFailedAud && !playedAudioIds.has(item._id);
+                      return (
+                        <View>
+                          <Pressable
+                            style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", opacity: isSendingAud ? 0.7 : 1 }]}
+                            onPress={() => {
+                              if (isFailedAud) { retryFailedMedia(item); return; }
+                              if (isSendingAud) return;
+                              playAudio(item.audioUrl!, item._id);
+                            }}
+                          >
+                            <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
+                              {isSendingAud ? (
+                                <ActivityIndicator size="small" color={isMe ? "#FFF" : theme.primary} />
+                              ) : isFailedAud ? (
+                                <Ionicons name="refresh" size={18} color={isMe ? "#FFF" : theme.primary} />
+                              ) : (
+                                <Ionicons
+                                  name={playingAudioId === item._id ? "pause" : "play"}
+                                  size={18}
+                                  color={isMe ? "#FFF" : theme.primary}
+                                />
+                              )}
+                            </View>
+                            <View style={styles.audioWaveform}>
+                              <WavyWaveform
+                                isPlaying={playingAudioId === item._id}
+                                progress={isActiveBubble ? audioProgress : 0}
+                                isMe={isMe}
+                                theme={theme}
+                                duration={(item as any).audioDuration}
+                                onSeek={isActiveBubble ? seekAudio : undefined}
+                              />
+                            </View>
+                            {isActiveBubble && (
+                              <Pressable
+                                onPress={(e: any) => { e.stopPropagation?.(); togglePlaybackSpeed(); }}
+                                style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }}
+                              >
+                                <ThemedText style={{ fontSize: 11, fontWeight: "700", color: isMe ? "#FFF" : theme.primary }}>
+                                  {playbackRate}x
+                                </ThemedText>
+                              </Pressable>
+                            )}
+                            {isUnplayed && (
+                              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary, marginLeft: 2 }} />
+                            )}
+                          </Pressable>
+                          {isFailedAud && (
+                            <ThemedText style={{ fontSize: 10, color: "#dc2626", marginTop: 4, marginLeft: 4 }}>
+                              Tap to retry
+                            </ThemedText>
+                          )}
                         </View>
-                        <View style={styles.audioWaveform}>
-                          <WavyWaveform
-                            isPlaying={playingAudioId === item._id}
-                            progress={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? audioProgress : 0}
-                            isMe={isMe}
-                            theme={theme}
-                            duration={(item as any).audioDuration}
-                          />
-                        </View>
-                      </Pressable>
-                    )}
+                      );
+                    })()}
 
                     {item.type === "location" && item.latitude != null && item.longitude != null && (() => {
                       const lat = item.latitude!;
@@ -2112,15 +2343,39 @@ export default function ChatDetailScreen({
         )}
 
         <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: Math.max(insets.bottom, 4), minHeight: 60 }]}>
-          {isRecording ? (
+          {recordingPreview ? (
+            <View style={styles.recordingContainer}>
+              <Pressable onPress={discardRecordingPreview} style={styles.cancelRecordButton}><Feather name="trash-2" size={22} color="#F44336" /></Pressable>
+              <Pressable onPress={togglePreviewPlay} style={[styles.audioPlayBtn, { backgroundColor: theme.primary + "22", marginLeft: 8 }]}>
+                <Ionicons name={previewPlaying ? "pause" : "play"} size={18} color={theme.primary} />
+              </Pressable>
+              <View style={[styles.recordingInfo, { flex: 1 }]}>
+                <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.border + "55", overflow: "hidden" }}>
+                  <View style={{ width: `${Math.min(100, previewProgress * 100)}%`, height: "100%", backgroundColor: theme.primary }} />
+                </View>
+                <ThemedText style={[styles.recordingTime, { color: theme.text, marginLeft: 10 }]}>
+                  {formatRecordingTime(recordingPreview.duration)}
+                </ThemedText>
+              </View>
+              <Pressable onPress={sendRecordingPreview} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}>
+                <Feather name="send" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+          ) : isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
               <View style={styles.recordingInfo}>
-                <Animated.View style={[styles.recordingDot, { transform: [{ scale: recordingPulse }] }]} />
+                <Animated.View style={[styles.recordingDot, { transform: [{ scale: recordingPulse }], opacity: recordingPaused ? 0.3 : 1 }]} />
                 <ThemedText style={[styles.recordingTime, { color: theme.text }]}>{formatRecordingTime(recordingDuration)}</ThemedText>
-                <ThemedText style={[styles.recordingLabel, { color: theme.textSecondary }]}>Recording</ThemedText>
+                <ThemedText style={[styles.recordingLabel, { color: theme.textSecondary }]}>{recordingPaused ? "Paused" : "Recording"}</ThemedText>
               </View>
-              <Pressable onPress={stopRecording} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}><Feather name="send" size={20} color="#FFF" /></Pressable>
+              <Pressable
+                onPress={recordingPaused ? resumeRecording : pauseRecording}
+                style={[styles.audioPlayBtn, { backgroundColor: theme.primary + "22", marginRight: 8 }]}
+              >
+                <Ionicons name={recordingPaused ? "play" : "pause"} size={18} color={theme.primary} />
+              </Pressable>
+              <Pressable onPress={stopRecording} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}><Feather name="check" size={20} color="#FFF" /></Pressable>
             </View>
           ) : (
             <>

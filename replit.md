@@ -1,6 +1,13 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Voice notes: major UX overhaul**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Recording is now a two-step flow — stop produces a *preview* bubble (play / scrub / discard / send) instead of auto-uploading, so users can review before sending. Added pause/resume buttons during recording (uses `Recording.pauseAsync()` / `startAsync()`). Sending is now optimistic with the same tap-to-retry pattern as photos/videos: failed voice notes show a refresh icon and "Tap to retry" caption.
+  - `frontend/screens/ChatDetailScreen.tsx`: Playback gains variable speed (1x / 1.5x / 2x pill that appears next to the active bubble, persisted in AsyncStorage), continuous auto-play (when a received voice note finishes, the next unplayed received voice note in the chat starts after 250ms), and waveform scrubbing (tap anywhere on the bars during playback to seek). Background playback is enabled via `staysActiveInBackground: true` and `shouldDuckAndroid: true` so it keeps playing when the user leaves the chat.
+  - `frontend/screens/ChatDetailScreen.tsx`: Played/unplayed indicator — received voice notes show a small primary-colored dot next to the waveform until the user listens through to the end. The set of played message ids is persisted per user in AsyncStorage (`played_audio_<userId>`).
+  - `frontend/components/chat/WavyWaveform.tsx`: Added optional `onSeek(fraction)` prop. The bars are now wrapped in a `Pressable` that measures its width via `onLayout` and computes the seek fraction from `e.nativeEvent.locationX`, so taps along the waveform jump playback to that position.
+  - Not built (would need a paid third-party API or new native module): tap-to-read transcription (no free key-less Whisper option), proximity-sensor earpiece switching, Opus re-encoding.
+
 - **Chat: tap-to-retry failed media sends**:
   - `frontend/screens/ChatDetailScreen.tsx`: Failed image/video bubbles now show a refresh icon and "Tap to retry" overlay; tapping re-runs the upload and message POST using the original local file URI without re-picking. Sending bubbles show a spinner overlay so users see the in-flight state.
 
