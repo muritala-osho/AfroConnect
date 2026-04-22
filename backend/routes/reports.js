@@ -6,6 +6,7 @@ const Report = require('../models/Report');
 const User = require('../models/User');
 const Story = require('../models/Story');
 const Message = require('../models/Message');
+const SuccessStory = require('../models/SuccessStory');
 
 router.post('/', protect, async (req, res) => {
   try {
@@ -31,7 +32,7 @@ router.post('/', protect, async (req, res) => {
       normalizedReason = 'other';
     }
 
-    const reportedUser = await User.findById(reportedUserId).select('photos name');
+    const reportedUser = await User.findById(reportedUserId).select('photos name bio voiceBio');
     if (!reportedUser) {
       return res.status(404).json({
         success: false,
@@ -39,9 +40,11 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    let normalizedContentType = ['profile_photo', 'story', 'message_image', 'user', 'comment', 'voice_bio', 'success_story'].includes(contentType)
-      ? contentType
-      : 'user';
+    const ALLOWED_CONTENT_TYPES = [
+      'profile_photo', 'story', 'message_image', 'message_text', 'message_audio',
+      'message_video', 'user', 'comment', 'voice_bio', 'success_story', 'bio'
+    ];
+    let normalizedContentType = ALLOWED_CONTENT_TYPES.includes(contentType) ? contentType : 'user';
     let normalizedContentId = contentId ? String(contentId) : undefined;
     let normalizedContentUrl = contentUrl;
     let normalizedContentPreview = contentPreview;
@@ -82,6 +85,68 @@ router.post('/', protect, async (req, res) => {
       normalizedContentUrl = message.imageUrl;
       normalizedContentPreview = message.content || 'Reported image message';
       contentMeta = { matchId: message.matchId };
+    }
+
+    if (normalizedContentType === 'message_text') {
+      const message = await Message.findById(normalizedContentId);
+      if (!message || message.sender.toString() !== reportedUserId) {
+        return res.status(400).json({ success: false, message: 'Text message does not belong to the reported user' });
+      }
+      normalizedContentPreview = message.content || normalizedContentPreview || '(no text)';
+      contentMeta = { matchId: message.matchId };
+    }
+
+    if (normalizedContentType === 'message_audio') {
+      const message = await Message.findById(normalizedContentId);
+      if (!message || message.sender.toString() !== reportedUserId || !message.audioUrl) {
+        return res.status(400).json({ success: false, message: 'Voice message does not belong to the reported user' });
+      }
+      normalizedContentUrl = message.audioUrl;
+      normalizedContentPreview = message.content || 'Reported voice message';
+      contentMeta = { matchId: message.matchId, duration: message.audioDuration };
+    }
+
+    if (normalizedContentType === 'message_video') {
+      const message = await Message.findById(normalizedContentId);
+      if (!message || message.sender.toString() !== reportedUserId || !message.videoUrl) {
+        return res.status(400).json({ success: false, message: 'Video message does not belong to the reported user' });
+      }
+      normalizedContentUrl = message.videoUrl;
+      normalizedContentPreview = message.content || 'Reported video message';
+      contentMeta = { matchId: message.matchId };
+    }
+
+    if (normalizedContentType === 'voice_bio') {
+      const voiceUrl = reportedUser.voiceBio?.url;
+      if (!voiceUrl) {
+        return res.status(400).json({ success: false, message: 'This user has no voice bio to report' });
+      }
+      normalizedContentUrl = voiceUrl;
+      normalizedContentPreview = normalizedContentPreview || 'Voice bio';
+      contentMeta = { publicId: reportedUser.voiceBio?.publicId };
+    }
+
+    if (normalizedContentType === 'bio') {
+      if (!reportedUser.bio) {
+        return res.status(400).json({ success: false, message: 'This user has no bio to report' });
+      }
+      normalizedContentPreview = reportedUser.bio.slice(0, 500);
+      normalizedContentUrl = undefined;
+    }
+
+    if (normalizedContentType === 'success_story') {
+      const story = await SuccessStory.findById(normalizedContentId);
+      if (!story) {
+        return res.status(400).json({ success: false, message: 'Success story not found' });
+      }
+      const isOwner = story.submittedBy?.toString() === reportedUserId
+        || story.couple?.some(id => id.toString() === reportedUserId);
+      if (!isOwner) {
+        return res.status(400).json({ success: false, message: 'Success story does not belong to the reported user' });
+      }
+      normalizedContentUrl = story.photos?.[0]?.url || normalizedContentUrl;
+      normalizedContentPreview = story.title ? `${story.title}\n\n${story.story?.slice(0, 300) || ''}` : story.story?.slice(0, 500);
+      contentMeta = { storyType: 'success_story' };
     }
 
     const report = await Report.create({

@@ -478,6 +478,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             label="Terms of Service" 
             onPress={() => navigation.navigate('Legal', { type: 'terms' })} 
           />
+          <SettingItem 
+            icon="users" 
+            label="Community Guidelines" 
+            onPress={() => navigation.navigate('Legal', { type: 'community' })} 
+          />
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: theme.surface, marginTop: 20 }]}>

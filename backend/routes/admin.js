@@ -707,26 +707,30 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
-    const reports = await Report.find({ status: 'pending', contentType: { $in: ['profile_photo', 'story', 'message_image'] } })
+    const FLAGGABLE_TYPES = [
+      'profile_photo', 'story', 'message_image', 'message_text', 'message_audio',
+      'message_video', 'voice_bio', 'success_story', 'bio', 'comment'
+    ];
+    const reports = await Report.find({ status: 'pending', contentType: { $in: FLAGGABLE_TYPES } })
       .populate('reportedBy', 'name email photos')
       .populate('reporter', 'name email photos')
       .populate('reportedUser', 'name email photos')
       .sort({ createdAt: -1 })
       .limit(100);
 
+    const VISUAL_TYPES = ['profile_photo', 'story', 'message_image', 'success_story'];
     const content = reports
       .map(report => {
         const reportedUser = report.reportedUser;
         const reporter = report.reportedBy || report.reporter;
         if (!reportedUser) return null;
-        const userAvatar = reportedUser.photos?.[0]?.url || reportedUser.photos?.[0] || report.contentUrl;
-        let imageUrl = report.contentUrl || userAvatar;
+        const userAvatar = reportedUser.photos?.[0]?.url || reportedUser.photos?.[0];
+        let imageUrl = report.contentUrl || (VISUAL_TYPES.includes(report.contentType) ? userAvatar : null);
         if (report.contentType === 'profile_photo' && !imageUrl) {
           const photoIndex = Number.parseInt(report.contentId || '0', 10);
           const photo = reportedUser.photos?.[photoIndex] || reportedUser.photos?.[0];
           imageUrl = photo?.url || photo;
         }
-        if (!imageUrl) return null;
 
         return {
           id: `report-${report._id}`,
@@ -736,6 +740,9 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
           userAvatar,
           type: report.contentType,
           imageUrl,
+          contentUrl: report.contentUrl,
+          contentPreview: report.contentPreview,
+          contentMeta: report.contentMeta,
           reason: `${report.reason || 'Reported content'}${report.description ? `: ${report.description}` : ''}${reporter?.name ? ` • reported by ${reporter.name}` : ''}`,
           flaggedAt: report.createdAt || new Date(),
           status: 'pending',
@@ -809,6 +816,27 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
                 matchId: message.matchId,
               });
             }
+          }
+        } else if (report.contentType === 'voice_bio' && user) {
+          if (user.voiceBio?.url) {
+            user.voiceBio = { url: null, publicId: null };
+            await user.save();
+            await redis.del(`profile:me:${user._id}`);
+          }
+        } else if (report.contentType === 'bio' && user) {
+          if (user.bio) {
+            user.bio = '';
+            await user.save();
+            await redis.del(`profile:me:${user._id}`);
+          }
+        } else if (report.contentType === 'success_story' && report.contentId) {
+          const SuccessStory = require('../models/SuccessStory');
+          const story = await SuccessStory.findById(report.contentId);
+          if (story) {
+            story.status = 'rejected';
+            story.rejectionReason = 'Removed by moderation following community report';
+            story.featured = false;
+            await story.save();
           }
         }
       }
