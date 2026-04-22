@@ -638,6 +638,7 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       address,
       replyTo,
       viewOnce,
+      liveDurationMin,
     } = req.body;
 
     const match = await Match.findById(matchId);
@@ -677,6 +678,11 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       messageData.longitude = longitude;
       messageData.address = address;
       messageData.content = content;
+      // Live location: cap duration at 8 hours, only allowed values 15/60/480 min
+      if (liveDurationMin && [15, 60, 480].includes(Number(liveDurationMin))) {
+        messageData.liveExpiresAt = new Date(Date.now() + Number(liveDurationMin) * 60 * 1000);
+        messageData.lastLocationUpdate = new Date();
+      }
     } else {
       messageData.content = content;
     }
@@ -908,6 +914,91 @@ router.post('/messages/:messageId/view-once', protect, async (req, res) => {
     res.json({ success: true, alreadyViewed, openedAt: new Date() });
   } catch (error) {
     console.error('View once error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────────
+   Live location: update coordinates of an active live-share message
+───────────────────────────────────────────────────────────────── */
+router.patch('/messages/:messageId/live-location', protect, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { latitude, longitude } = req.body;
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+      return res.status(400).json({ success: false, message: 'latitude and longitude required' });
+    }
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+    if (!message.sender.equals(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (message.type !== 'location' || !message.liveExpiresAt) {
+      return res.status(400).json({ success: false, message: 'Not a live-location message' });
+    }
+    if (new Date(message.liveExpiresAt) < new Date()) {
+      return res.status(410).json({ success: false, message: 'Live share has expired' });
+    }
+
+    message.latitude = latitude;
+    message.longitude = longitude;
+    message.lastLocationUpdate = new Date();
+    await message.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      const payload = {
+        messageId: message._id,
+        matchId: message.matchId,
+        latitude,
+        longitude,
+        lastLocationUpdate: message.lastLocationUpdate,
+        liveExpiresAt: message.liveExpiresAt,
+      };
+      io.to(message.matchId.toString()).emit('chat:live-location-update', payload);
+      io.to(message.receiver.toString()).emit('chat:live-location-update', payload);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Live location update error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/* ─────────────────────────────────────────────────────────────────
+   Live location: stop an active share immediately
+───────────────────────────────────────────────────────────────── */
+router.post('/messages/:messageId/stop-live-location', protect, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const message = await Message.findById(messageId);
+    if (!message) return res.status(404).json({ success: false, message: 'Message not found' });
+    if (!message.sender.equals(req.user._id)) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+    if (!message.liveExpiresAt) {
+      return res.json({ success: true });
+    }
+
+    message.liveExpiresAt = new Date();
+    await message.save();
+
+    const io = req.app.get('io');
+    if (io) {
+      const payload = {
+        messageId: message._id,
+        matchId: message.matchId,
+        liveExpiresAt: message.liveExpiresAt,
+        stopped: true,
+      };
+      io.to(message.matchId.toString()).emit('chat:live-location-update', payload);
+      io.to(message.receiver.toString()).emit('chat:live-location-update', payload);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Stop live location error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

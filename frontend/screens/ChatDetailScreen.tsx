@@ -41,6 +41,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { reverseGeocode } from "@/utils/geocode";
+import { startLiveLocationShare, stopLiveLocationShare, isSharingLive } from "@/utils/liveLocationShare";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
@@ -114,6 +115,8 @@ export default function ChatDetailScreen({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [isSendingLocation, setIsSendingLocation] = useState(false);
+  const [showLivePicker, setShowLivePicker] = useState(false);
+  const [, setLiveTick] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
@@ -585,6 +588,22 @@ export default function ChatDetailScreen({
     socketService.on("chat:read", handleMessagesRead);
     socketService.on("chat:message-updated", handleMessageUpdated);
     socketService.on("chat:message-deleted", handleMessageDeleted);
+    socketService.on("chat:live-location-update", (data: any) => {
+      if (!data?.messageId) return;
+      setMessages((prev) =>
+        prev.map((m: any) =>
+          String(m._id) === String(data.messageId)
+            ? {
+                ...m,
+                ...(typeof data.latitude === "number" ? { latitude: data.latitude } : {}),
+                ...(typeof data.longitude === "number" ? { longitude: data.longitude } : {}),
+                ...(data.lastLocationUpdate ? { lastLocationUpdate: data.lastLocationUpdate } : {}),
+                ...(data.liveExpiresAt ? { liveExpiresAt: data.liveExpiresAt } : {}),
+              }
+            : m
+        )
+      );
+    });
     socketService.on("chat:message-edited", (data: any) => {
       if (data.messageId) {
         setMessages((prev) =>
@@ -615,6 +634,7 @@ export default function ChatDetailScreen({
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
+      socketService.off("chat:live-location-update");
     };
   }, [matchId, userId, myId, token, put]);
 
@@ -672,6 +692,7 @@ export default function ChatDetailScreen({
               : m,
           ),
         );
+        return response.data.message;
       }
     } catch (error) {
       logger.error("Send error:", error);
@@ -680,9 +701,51 @@ export default function ChatDetailScreen({
     } finally {
       setSending(false);
     }
+    return undefined;
   };
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
+
+  // Tick once a second so any active live-location countdown stays accurate
+  useEffect(() => {
+    const hasLive = messages.some(
+      (m: any) => m.type === "location" && m.liveExpiresAt && new Date(m.liveExpiresAt) > new Date()
+    );
+    if (!hasLive) return;
+    const id = setInterval(() => setLiveTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [messages]);
+
+  const handleStopLiveShare = useCallback((messageId: string) => {
+    Alert.alert("Stop sharing live location?", "Your live location will no longer update.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Stop",
+        style: "destructive",
+        onPress: () => {
+          stopLiveLocationShare(messageId);
+          setMessages((prev) =>
+            prev.map((m: any) =>
+              String(m._id) === String(messageId) ? { ...m, liveExpiresAt: new Date().toISOString() } : m
+            )
+          );
+          setLiveTick((t) => t + 1);
+        },
+      },
+    ]);
+  }, []);
+
+  const formatLiveRemaining = useCallback((expiresAt: string | Date) => {
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    if (ms <= 0) return "Ended";
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m left`;
+    if (m > 0) return `${m}m ${s}s left`;
+    return `${s}s left`;
+  }, []);
 
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
@@ -848,9 +911,10 @@ export default function ChatDetailScreen({
     }
   };
 
-  const handleShareLocation = async () => {
+  const handleShareLocation = async (liveDurationMin?: number) => {
     if (isSendingLocation) return;
     setShowAttachmentMenu(false);
+    setShowLivePicker(false);
     setIsSendingLocation(true);
 
     try {
@@ -915,7 +979,11 @@ export default function ChatDetailScreen({
       // 4. Send the message immediately with coords (no text — the bubble already
       //    renders the address). Reverse-geocoding happens in the background and
       //    the bubble updates the moment we know the address.
-      await sendMessage("", "location", { latitude, longitude });
+      const sentMsg: any = await sendMessage("", "location", {
+        latitude,
+        longitude,
+        ...(liveDurationMin ? { liveDurationMin } : {}),
+      });
 
       reverseGeocode(latitude, longitude).then((g) => {
         if (g.address) {
@@ -931,6 +999,12 @@ export default function ChatDetailScreen({
           );
         }
       });
+
+      // 5. If this is a live share, kick off the periodic GPS pusher
+      if (liveDurationMin && sentMsg?._id) {
+        startLiveLocationShare(String(sentMsg._id), String(matchId || ""), liveDurationMin);
+        setLiveTick((t) => t + 1);
+      }
     } catch {
       Alert.alert("Error", "Could not share your location. Please try again.");
     } finally {
@@ -1679,12 +1753,38 @@ export default function ChatDetailScreen({
                             </View>
                             <View style={{ flex: 1 }}>
                               <ThemedText style={[styles.locationAddress, { color: isMe ? "#FFF" : theme.text }]} numberOfLines={2}>{item.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</ThemedText>
-                              <View style={styles.locationTapHint}>
-                                <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }]}>Tap to open in maps</ThemedText>
-                                <Feather name="external-link" size={10} color={isMe ? "rgba(255,255,255,0.5)" : theme.textSecondary} />
-                              </View>
+                              {(() => {
+                                const isLive = item.liveExpiresAt && new Date(item.liveExpiresAt) > new Date();
+                                if (isLive) {
+                                  return (
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#dc2626", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#fff" }} />
+                                        <ThemedText style={{ fontSize: 9, color: "#fff", fontWeight: "700", letterSpacing: 0.5 }}>LIVE</ThemedText>
+                                      </View>
+                                      <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>
+                                        {formatLiveRemaining(item.liveExpiresAt)}
+                                      </ThemedText>
+                                    </View>
+                                  );
+                                }
+                                return (
+                                  <View style={styles.locationTapHint}>
+                                    <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }]}>Tap to open in maps</ThemedText>
+                                    <Feather name="external-link" size={10} color={isMe ? "rgba(255,255,255,0.5)" : theme.textSecondary} />
+                                  </View>
+                                );
+                              })()}
                             </View>
                           </View>
+                          {isMe && item.liveExpiresAt && new Date(item.liveExpiresAt) > new Date() && (
+                            <Pressable
+                              onPress={(e) => { e.stopPropagation(); handleStopLiveShare(String(item._id)); }}
+                              style={{ paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.2)", alignItems: "center" }}
+                            >
+                              <ThemedText style={{ color: "#fecaca", fontSize: 12, fontWeight: "600" }}>Stop sharing</ThemedText>
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -2012,7 +2112,7 @@ export default function ChatDetailScreen({
               </Pressable>
               <Pressable
                 style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
-                onPress={handleShareLocation}
+                onPress={() => handleShareLocation()}
                 disabled={isSendingLocation}
               >
                 <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}>
@@ -2026,8 +2126,52 @@ export default function ChatDetailScreen({
                   {isSendingLocation ? "Getting…" : "Location"}
                 </ThemedText>
               </Pressable>
+              <Pressable
+                style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
+                onPress={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
+                disabled={isSendingLocation}
+              >
+                <View style={[styles.attachmentIcon, { backgroundColor: "#dc262620" }]}>
+                  <Feather name="radio" size={24} color="#dc2626" />
+                </View>
+                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Live</ThemedText>
+              </Pressable>
             </View>
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
+              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Live location duration picker */}
+      <Modal visible={showLivePicker} transparent animationType="fade" onRequestClose={() => setShowLivePicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowLivePicker(false)}>
+          <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
+            <View style={{ alignItems: "center", marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
+                <ThemedText style={[styles.optionsTitle, { color: theme.text, marginBottom: 0 }]}>Share Live Location</ThemedText>
+              </View>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, textAlign: "center", marginTop: 6, paddingHorizontal: 8 }}>
+                Your moving position updates in real time and stops automatically when the timer ends.
+              </ThemedText>
+            </View>
+            {[
+              { mins: 15, label: "15 minutes" },
+              { mins: 60, label: "1 hour" },
+              { mins: 480, label: "8 hours" },
+            ].map((opt) => (
+              <Pressable
+                key={opt.mins}
+                style={styles.optionItem}
+                onPress={() => handleShareLocation(opt.mins)}
+              >
+                <Feather name="clock" size={22} color={theme.primary} />
+                <ThemedText style={[styles.optionText, { color: theme.text }]}>{opt.label}</ThemedText>
+              </Pressable>
+            ))}
+            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 8 }]} onPress={() => setShowLivePicker(false)}>
               <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
             </Pressable>
           </View>
