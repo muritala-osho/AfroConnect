@@ -18,6 +18,7 @@ import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
 import AuditLog from './views/AuditLog';
 import RevokeVerification from './views/RevokeVerification';
+import IceBreakers from './views/IceBreakers';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search } from 'lucide-react';
@@ -25,7 +26,7 @@ import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn', 'audit'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'audit'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -440,6 +441,7 @@ const App: React.FC = () => {
                 {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
                 {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
                 {activeTab === 'audit'        && canAccessTab('audit')        && <AuditLog />}
+                {activeTab === 'icebreakers'  && canAccessTab('icebreakers')  && <IceBreakers showToast={showToast} />}
                 {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
                 {ALL_TABS.includes(activeTab) && !canAccessTab(activeTab) && (

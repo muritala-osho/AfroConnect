@@ -1502,11 +1502,23 @@ export default function ChatDetailScreen({
     } catch (error) { logger.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
-  const fetchAISuggestions = useCallback(() => {
+  const fetchAISuggestions = useCallback(async () => {
     setShowAISuggestions(true);
-    const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
-    setAiSuggestions(shuffled);
-  }, []);
+    const fallback = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
+    setAiSuggestions(fallback);
+    if (!userId || !token) return;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/icebreakers/suggest/${userId}?limit=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setAiSuggestions(data.suggestions.map((s: any) => s.question));
+      }
+    } catch (e) {
+      logger.log("icebreaker fetch failed, using fallback", e);
+    }
+  }, [userId, token]);
 
   const handleBlockUser = async () => {
     setShowOptionsMenu(false);

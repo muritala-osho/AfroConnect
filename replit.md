@@ -1,6 +1,12 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Icebreakers: full feature integration (no logic disturbed)**:
+  - `backend/routes/icebreakers.js` (new): adds three endpoints — `GET /api/icebreakers/suggest/:userId` (returns 5 personalized prompts for the chat partner), `GET/POST/PUT/DELETE /api/icebreakers/admin` (admin CRUD). Auto-seeds ~70 default questions across 9 categories on first call so the feature works on day one with no migration step. Scoring boosts shared interests (+3), partner-only interests (+2), my-only interests (+1); falls back to `general` then random to always return a full set; filters out questions whose text already appears in the conversation.
+  - `backend/server.js`: registered the route alongside `/api/prompts`. Reuses the existing `IceBreaker` model that previously had no consumers.
+  - `frontend/screens/ChatDetailScreen.tsx`: `fetchAISuggestions` now calls the new endpoint with the chat partner's userId. The hard-coded `AI_SUGGESTIONS` array is set immediately as a fallback so the chip row never appears empty (offline / network failure / unauth = local list, online = personalized list). All other behavior — opening the chip row, tap-to-send, the robot button placement — is unchanged.
+  - `admin-dashboard/views/IceBreakers.tsx` (new) + `admin-dashboard/App.tsx` + `admin-dashboard/constants.tsx` + `admin-dashboard/services/adminApi.ts`: added a full management page (table with category filter chips, search, status toggle, edit/delete) and a create/edit modal that lets admins enter a question, pick a category, and tag related interests as a comma-separated list. Visible to SUPER_ADMIN and MODERATOR roles.
+
 - **Chat: voice-note reactions + swipeable image gallery**:
   - `frontend/screens/ChatDetailScreen.tsx`: Added `onLongPress={handleMessageLongPress}` to the voice-note bubble so the existing reaction picker now opens for audio messages just like text/image. No new server changes — reuses the same reactions array on the Message model.
   - `frontend/screens/ChatDetailScreen.tsx`: The image viewer is now a swipeable gallery. Tapping any photo collects every image URL in the chat (`messagesRef.current.filter(m=>m.type==='image')`), opens the modal at that index, and renders a horizontal `FlatList` with `pagingEnabled`. A "n / total" counter appears in the header. The download button always saves the currently visible photo.

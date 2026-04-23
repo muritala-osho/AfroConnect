@@ -375,6 +375,29 @@ export const adminApi = {
     const res = await fetch(`${API_BASE}/admin/recent-activity`, { headers: authHeaders() });
     return handleResponse(res);
   },
+
+  listIcebreakers: async () => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+  createIcebreaker: async (payload: { category: string; question: string; relatedInterests: string[]; isActive?: boolean }) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin`, {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+  updateIcebreaker: async (id: string, payload: Partial<{ category: string; question: string; relatedInterests: string[]; isActive: boolean }>) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin/${id}`, {
+      method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+  deleteIcebreaker: async (id: string) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin/${id}`, {
+      method: 'DELETE', headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;
