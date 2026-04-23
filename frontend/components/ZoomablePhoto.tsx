@@ -13,18 +13,25 @@ interface Props {
   width: number;
   height: number;
   onSingleTap?: () => void;
+  onZoomChange?: (zoomed: boolean) => void;
 }
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 4;
 
-export default function ZoomablePhoto({ source, width, height, onSingleTap }: Props) {
+export default function ZoomablePhoto({ source, width, height, onSingleTap, onZoomChange }: Props) {
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const wasZoomedRef = React.useRef(false);
+  const notifyZoom = (zoomed: boolean) => {
+    if (wasZoomedRef.current === zoomed) return;
+    wasZoomedRef.current = zoomed;
+    onZoomChange?.(zoomed);
+  };
 
   const reset = () => {
     scale.value = withTiming(1);
@@ -33,6 +40,7 @@ export default function ZoomablePhoto({ source, width, height, onSingleTap }: Pr
     translateY.value = withTiming(0);
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
+    notifyZoom(false);
   };
 
   const pinch = Gesture.Pinch()
@@ -48,8 +56,10 @@ export default function ZoomablePhoto({ source, width, height, onSingleTap }: Pr
         translateY.value = withTiming(0);
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(notifyZoom)(false);
       } else {
         savedScale.value = scale.value;
+        runOnJS(notifyZoom)(scale.value > 1.05);
       }
     });
 
@@ -77,9 +87,11 @@ export default function ZoomablePhoto({ source, width, height, onSingleTap }: Pr
         translateY.value = withTiming(0);
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        runOnJS(notifyZoom)(false);
       } else {
         scale.value = withTiming(2.5);
         savedScale.value = 2.5;
+        runOnJS(notifyZoom)(true);
       }
     });
 

@@ -1,6 +1,11 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Chat: voice-note reactions + swipeable image gallery**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Added `onLongPress={handleMessageLongPress}` to the voice-note bubble so the existing reaction picker now opens for audio messages just like text/image. No new server changes — reuses the same reactions array on the Message model.
+  - `frontend/screens/ChatDetailScreen.tsx`: The image viewer is now a swipeable gallery. Tapping any photo collects every image URL in the chat (`messagesRef.current.filter(m=>m.type==='image')`), opens the modal at that index, and renders a horizontal `FlatList` with `pagingEnabled`. A "n / total" counter appears in the header. The download button always saves the currently visible photo.
+  - `frontend/components/ZoomablePhoto.tsx`: Added optional `onZoomChange(zoomed)` callback that fires when the user pinches in / out or double-taps. The gallery uses this to set `scrollEnabled={!imageViewerZoomed}` on the horizontal `FlatList`, so swiping between images is disabled while zoomed (preventing the pinch/pan gesture from fighting the pager swipe). When the user swipes to a new photo, the zoom flag is reset.
+
 - **Voice notes: major UX overhaul**:
   - `frontend/screens/ChatDetailScreen.tsx`: Recording is now a two-step flow — stop produces a *preview* bubble (play / scrub / discard / send) instead of auto-uploading, so users can review before sending. Added pause/resume buttons during recording (uses `Recording.pauseAsync()` / `startAsync()`). Sending is now optimistic with the same tap-to-retry pattern as photos/videos: failed voice notes show a refresh icon and "Tap to retry" caption.
   - `frontend/screens/ChatDetailScreen.tsx`: Playback gains variable speed (1x / 1.5x / 2x pill that appears next to the active bubble, persisted in AsyncStorage), continuous auto-play (when a received voice note finishes, the next unplayed received voice note in the chat starts after 250ms), and waveform scrubbing (tap anywhere on the bars during playback to seek). Background playback is enabled via `staysActiveInBackground: true` and `shouldDuckAndroid: true` so it keeps playing when the user leaves the chat.

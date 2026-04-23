@@ -145,6 +145,10 @@ export default function ChatDetailScreen({
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const previewSoundRef = useRef<Audio.Sound | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageGallery, setImageGallery] = useState<string[]>([]);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
+  const [imageViewerZoomed, setImageViewerZoomed] = useState(false);
+  const imageViewerListRef = useRef<FlatList>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
 
@@ -240,6 +244,24 @@ export default function ChatDetailScreen({
         htmlAudioRef.current.playbackRate = next;
       }
     } catch (e) { logger.log("setRate error", e); }
+  };
+
+  const openImageViewer = (url: string) => {
+    const list = (messagesRef.current || [])
+      .filter((m: any) => m.type === "image" && m.imageUrl)
+      .map((m: any) => m.imageUrl as string);
+    const idx = Math.max(0, list.findIndex((u) => u === url));
+    setImageGallery(list.length ? list : [url]);
+    setImageViewerIndex(idx);
+    setImageViewerZoomed(false);
+    setViewingImage(url);
+  };
+
+  const closeImageViewer = () => {
+    setViewingImage(null);
+    setImageGallery([]);
+    setImageViewerIndex(0);
+    setImageViewerZoomed(false);
   };
 
   const seekAudio = async (fraction: number) => {
@@ -1864,7 +1886,7 @@ export default function ChatDetailScreen({
                             if (isFailed) { retryFailedMedia(item); return; }
                             if (isSending) return;
                             setViewOnceViewerActive(false);
-                            setViewingImage(item.imageUrl!);
+                            openImageViewer(item.imageUrl!);
                           }}
                           onLongPress={() => !isFailed && !isSending && saveImage(item.imageUrl!)}
                         >
@@ -1990,6 +2012,8 @@ export default function ChatDetailScreen({
                               if (isSendingAud) return;
                               playAudio(item.audioUrl!, item._id);
                             }}
+                            onLongPress={() => !isSendingAud && handleMessageLongPress(item)}
+                            delayLongPress={400}
                           >
                             <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
                               {isSendingAud ? (
@@ -2622,10 +2646,10 @@ export default function ChatDetailScreen({
         </View>
       </Modal>
 
-      {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); stopViewOnceCountdown(); }}>
+      {/* Image viewer (swipeable gallery) */}
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { closeImageViewer(); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { closeImageViewer(); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
@@ -2635,16 +2659,55 @@ export default function ChatDetailScreen({
             </View>
           ) : (
             <View style={styles.imageViewerActions}>
-              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+              {imageGallery.length > 1 && (
+                <View style={[styles.imageViewerActionBtn, { paddingHorizontal: 12 }]}>
+                  <ThemedText style={{ color: "#FFF", fontSize: 13, fontWeight: "700" }}>
+                    {imageViewerIndex + 1} / {imageGallery.length}
+                  </ThemedText>
+                </View>
+              )}
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => {
+                const url = imageGallery[imageViewerIndex] || viewingImage;
+                if (url) saveImage(url);
+              }}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
             </View>
           )}
-          {viewingImage && (
+          {viewingImage && (viewOnceViewerActive || imageGallery.length <= 1 ? (
             <ZoomablePhoto
               source={{ uri: viewingImage }}
               width={SCREEN_WIDTH}
               height={SCREEN_HEIGHT * 0.8}
             />
-          )}
+          ) : (
+            <FlatList
+              ref={imageViewerListRef}
+              data={imageGallery}
+              keyExtractor={(u, i) => `${i}_${u}`}
+              horizontal
+              pagingEnabled
+              scrollEnabled={!imageViewerZoomed}
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={imageViewerIndex}
+              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+              onMomentumScrollEnd={(e) => {
+                const newIdx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                if (newIdx !== imageViewerIndex) {
+                  setImageViewerIndex(newIdx);
+                  setImageViewerZoomed(false);
+                }
+              }}
+              renderItem={({ item: url }) => (
+                <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8, justifyContent: "center" }}>
+                  <ZoomablePhoto
+                    source={{ uri: url }}
+                    width={SCREEN_WIDTH}
+                    height={SCREEN_HEIGHT * 0.8}
+                    onZoomChange={setImageViewerZoomed}
+                  />
+                </View>
+              )}
+            />
+          ))}
         </View>
       </Modal>
 
