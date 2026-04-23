@@ -11,31 +11,31 @@
 
 const express = require('express');
 const router = express.Router();
-const nodemailer = require('nodemailer');
+const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
 const { isAdmin, isAdminOrAgent } = require('../middleware/supportAccess');
+const { supportTicketLimiter } = require('../middleware/rateLimiter');
 const User = require('../models/User');
 const SupportTicket = require('../models/SupportTicket');
-const { sendExpoPushNotification } = require('../utils/pushNotifications');
+const { sendExpoPushNotification, sendSmartNotification } = require('../utils/pushNotifications');
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 /** Send optional email alert to admin inbox (non-critical, never crashes a route) */
 async function emailAdmin(subject, body) {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
+  if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) return;
   try {
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-    });
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject,
-      text: body,
+    await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: 'AfroConnect', email: process.env.BREVO_SENDER_EMAIL },
+        to: [{ email: process.env.BREVO_SENDER_EMAIL }],
+        subject,
+        textContent: body,
+      }),
     });
   } catch (err) {
     console.error('[Support] Admin email failed (non-critical):', err.message);
@@ -46,9 +46,11 @@ async function emailAdmin(subject, body) {
 async function pushToUser(userId, title, body, data = {}) {
   if (!userId) return;
   try {
-    const user = await User.findById(userId).select('pushToken pushNotificationsEnabled');
-    if (user?.pushToken && user.pushNotificationsEnabled !== false) {
-      await sendExpoPushNotification(user.pushToken, { title, body, data, channelId: 'support' });
+    const user = await User.findById(userId).select(
+      'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+    );
+    if (user?.pushToken) {
+      await sendSmartNotification(user, { title, body, data, channelId: 'support' }, 'support');
     }
   } catch (err) {
     console.error('[Support] Push to user failed (non-critical):', err.message);
@@ -77,27 +79,79 @@ async function pushToStaff(ticket, title, body) {
   }
 }
 
-// ─── User endpoints ───────────────────────────────────────────────────────────
+
+/**
+ * GET /api/support/challenge
+ * Returns a simple math CAPTCHA question + a signed token containing the answer.
+ * The client must solve the question and submit both the token and answer with their ticket.
+ */
+router.get('/challenge', (req, res) => {
+  const a = Math.floor(Math.random() * 10) + 1;
+  const b = Math.floor(Math.random() * 10) + 1;
+  const ops = [
+    { symbol: '+', answer: a + b },
+    { symbol: '-', answer: a - b },
+    { symbol: 'x', answer: a * b },
+  ];
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  const question = `What is ${a} ${op.symbol} ${b}?`;
+
+  const challengeToken = jwt.sign(
+    { answer: op.answer },
+    process.env.JWT_SECRET,
+    { expiresIn: '10m' }
+  );
+
+  res.json({ success: true, question, challengeToken });
+});
 
 /**
  * POST /api/support/ticket
  * Create a new support ticket.
  * Works without auth (public contact form) or with auth (links to user account).
+ * Requires a valid CAPTCHA challenge (challengeToken + challengeAnswer) for unauthenticated requests.
  */
-router.post('/ticket', async (req, res) => {
+router.post('/ticket', supportTicketLimiter, async (req, res) => {
   try {
-    const { name, email, message, subject, category } = req.body;
+    const { name, email, message, subject, category, challengeToken, challengeAnswer } = req.body;
+
+    const authHeader = req.headers.authorization;
+    const isAuthenticated = !!(authHeader && authHeader.startsWith('Bearer '));
+
+    if (!isAuthenticated) {
+      if (!challengeToken || challengeAnswer === undefined || challengeAnswer === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please complete the security challenge to submit a ticket.',
+          requiresChallenge: true
+        });
+      }
+      let decoded;
+      try {
+        decoded = jwt.verify(challengeToken, process.env.JWT_SECRET);
+      } catch (_) {
+        return res.status(400).json({
+          success: false,
+          message: 'Challenge expired. Please request a new one.',
+          requiresChallenge: true
+        });
+      }
+      if (parseInt(challengeAnswer, 10) !== decoded.answer) {
+        return res.status(400).json({
+          success: false,
+          message: 'Incorrect answer to the security challenge.',
+          requiresChallenge: true
+        });
+      }
+    }
 
     if (!name || !email || !message) {
       return res.status(400).json({ success: false, message: 'Name, email and message are required' });
     }
 
-    // Resolve userId exclusively from auth token — never trust userId from request body
     let resolvedUserId = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
+    if (isAuthenticated) {
       try {
-        const jwt = require('jsonwebtoken');
         const decoded = jwt.verify(authHeader.split(' ')[1], process.env.JWT_SECRET);
         resolvedUserId = decoded.id;
       } catch (_) {}
@@ -125,7 +179,6 @@ router.post('/ticket', async (req, res) => {
     });
     await ticket.save();
 
-    // Notify staff of the new ticket
     await pushToStaff(ticket, '🎫 New Support Ticket', `${name}: ${subject || message.slice(0, 60)}`);
     await emailAdmin(
       `[AfroConnect Support] New Ticket from ${name}`,
@@ -187,7 +240,6 @@ router.get('/ticket/:id', protect, async (req, res) => {
       }
     }
 
-    // Clear unread for the appropriate side
     const unreadUpdate = isStaff ? { unreadByAgent: 0 } : { unreadByUser: 0 };
     await SupportTicket.findByIdAndUpdate(req.params.id, unreadUpdate);
 
@@ -216,7 +268,6 @@ router.get('/unread', protect, async (req, res) => {
   }
 });
 
-// ─── Shared reply endpoint (user / admin / agent) ─────────────────────────────
 
 /**
  * POST /api/support/reply
@@ -233,13 +284,11 @@ router.post('/reply', protect, async (req, res) => {
     const ticket = await SupportTicket.findById(ticketId);
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
 
-    // Determine sender role
     let senderRole;
     if (req.user.isAdmin) senderRole = 'admin';
     else if (req.user.isSupportAgent) senderRole = 'agent';
     else senderRole = 'user';
 
-    // Access control
     if (senderRole === 'user' && String(ticket.userId) !== String(req.user._id)) {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
@@ -262,7 +311,6 @@ router.post('/reply', protect, async (req, res) => {
     });
 
     if (isStaff) {
-      // Staff replied — move to in-progress, increment user's unread badge
       if (ticket.status === 'open') ticket.status = 'in-progress';
       ticket.unreadByUser = (ticket.unreadByUser || 0) + 1;
 
@@ -271,7 +319,6 @@ router.post('/reply', protect, async (req, res) => {
         ticketId: ticket._id.toString(),
       });
 
-      // Email user
       if (ticket.userId) {
         try {
           const ticketUser = await User.findById(ticket.userId).select('email name');
@@ -284,7 +331,6 @@ router.post('/reply', protect, async (req, res) => {
         }
       }
     } else {
-      // User replied — re-open if closed, increment staff unread
       if (ticket.status === 'closed') ticket.status = 'open';
       ticket.unreadByAgent = (ticket.unreadByAgent || 0) + 1;
       await pushToStaff(ticket, '💬 User Reply', `${ticket.userName}: ${content.slice(0, 60)}`);
@@ -298,7 +344,6 @@ router.post('/reply', protect, async (req, res) => {
   }
 });
 
-// ─── Admin / Agent endpoints ──────────────────────────────────────────────────
 
 /**
  * GET /api/support/all
@@ -314,7 +359,6 @@ router.get('/all', protect, isAdminOrAgent, async (req, res) => {
     if (category) query.category = category;
     if (priority) query.priority = priority;
 
-    // Agents only see their own assigned tickets
     if (req.user.isSupportAgent && !req.user.isAdmin) {
       query.assignedTo = req.user._id;
     }
@@ -430,7 +474,6 @@ router.get('/agents', protect, isAdmin, async (req, res) => {
   }
 });
 
-// ─── Legacy compatibility routes (keep old paths alive) ───────────────────────
 
 router.get('/my-tickets', protect, async (req, res) => {
   try {

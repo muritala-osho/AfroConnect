@@ -5,14 +5,12 @@ const Boost = require('../models/Boost');
 const User = require('../models/User');
 const redis = require('../utils/redis');
 
-// Boost duration configurations (in minutes)
 const BOOST_CONFIGS = {
   standard: { duration: 30, multiplier: 2, name: 'Standard Boost' },
   super: { duration: 60, multiplier: 3, name: 'Super Boost' },
   premium: { duration: 180, multiplier: 5, name: 'Premium Boost' }
 };
 
-// Get current boost status
 router.get('/status', protect, async (req, res) => {
   try {
     const cacheKey = `boost:status:${req.user._id}`;
@@ -53,12 +51,10 @@ router.get('/status', protect, async (req, res) => {
   }
 });
 
-// Activate a boost
 router.post('/activate', protect, async (req, res) => {
   try {
     const { type = 'standard', source = 'purchase' } = req.body;
 
-    // Validate boost type
     if (!BOOST_CONFIGS[type]) {
       return res.status(400).json({
         success: false,
@@ -66,7 +62,6 @@ router.post('/activate', protect, async (req, res) => {
       });
     }
 
-    // Check for existing active boost
     const existingBoost = await Boost.getActiveBoost(req.user._id);
     if (existingBoost) {
       return res.status(400).json({
@@ -112,7 +107,6 @@ router.post('/activate', protect, async (req, res) => {
   }
 });
 
-// Extend current boost
 router.post('/extend', protect, async (req, res) => {
   try {
     const { additionalMinutes = 30 } = req.body;
@@ -125,7 +119,6 @@ router.post('/extend', protect, async (req, res) => {
       });
     }
 
-    // Max extension of 3 hours
     const maxExtension = 180;
     const extension = Math.min(additionalMinutes, maxExtension);
     
@@ -144,7 +137,6 @@ router.post('/extend', protect, async (req, res) => {
   }
 });
 
-// Cancel/deactivate current boost
 router.delete('/cancel', protect, async (req, res) => {
   try {
     const activeBoost = await Boost.getActiveBoost(req.user._id);
@@ -175,7 +167,6 @@ router.delete('/cancel', protect, async (req, res) => {
   }
 });
 
-// Get boost history
 router.get('/history', protect, async (req, res) => {
   try {
     const { limit = 10 } = req.query;
@@ -227,7 +218,6 @@ router.get('/history', protect, async (req, res) => {
   }
 });
 
-// Get available boost packages (for UI)
 router.get('/packages', protect, async (req, res) => {
   try {
     const cached = await redis.get('boost:packages');
@@ -252,8 +242,6 @@ router.get('/packages', protect, async (req, res) => {
   }
 });
 
-// Internal: Record boost stat (server-side only, validates caller)
-// This should only be called by internal routes when a view/like/match occurs
 const recordBoostStat = async (userId, stat) => {
   try {
     const activeBoost = await Boost.getActiveBoost(userId);
@@ -268,7 +256,6 @@ const recordBoostStat = async (userId, stat) => {
   }
 };
 
-// Export for use in other routes
 router.recordBoostStat = recordBoostStat;
 
 module.exports = router;

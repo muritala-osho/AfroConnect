@@ -82,16 +82,16 @@ export const ProfileCompletionCard: React.FC<ProfileCompletionProps> = ({
       ]);
 
       if (statusRes.success) {
-        setStatus(statusRes.data);
+        setStatus(statusRes.data as any);
         Animated.timing(progressAnim, {
-          toValue: statusRes.data.completionPercentage / 100,
+          toValue: (statusRes.data as any).completionPercentage / 100,
           duration: 1000,
           useNativeDriver: false,
         }).start();
       }
 
       if (promptsRes.success) {
-        setPrompts(promptsRes.data.prompts);
+        setPrompts((promptsRes.data as any).prompts);
       }
     } catch (error) {
       console.error('Failed to fetch profile completion:', error);
@@ -244,8 +244,8 @@ export const ProfileCompletionBanner: React.FC<ProfileCompletionProps> = ({
       try {
         const res = await api.get('/profile-completion/status');
         if (res.success) {
-          setStatus(res.data);
-          if (res.data.completionPercentage >= 90) {
+          setStatus(res.data as any);
+          if ((res.data as any).completionPercentage >= 90) {
             setVisible(false);
           }
         }

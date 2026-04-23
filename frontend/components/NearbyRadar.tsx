@@ -25,6 +25,7 @@ interface NearbyUser {
   distance: number;
   photos: any[];
   online?: boolean;
+  premium?: { isActive: boolean; plan?: string };
 }
 
 interface NearbyRadarProps {
@@ -71,7 +72,6 @@ function UserPin({
   }, []);
 
   const radarRadius = 70;
-  // Ensure maxDistance is a valid non-zero number to avoid NaN
   const safeMaxDistance = maxDistance > 0 ? maxDistance : 1;
   const normalizedDistance = Math.min(distance / safeMaxDistance, 1);
   const pinRadius = radarRadius * (isNaN(normalizedDistance) ? 0 : normalizedDistance) * 0.85;

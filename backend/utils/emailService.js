@@ -1,7 +1,29 @@
-const nodemailer = require('nodemailer');
-const path = require('path');
+const logger = require('./logger');
+async function brevoSend({ to, subject, html, text }) {
+  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': process.env.BREVO_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      sender: {
+        name: 'AfroConnect',
+        email: process.env.BREVO_SENDER_EMAIL,
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+      textContent: text,
+    }),
+  });
+  if (!response.ok) {
+    const err = await response.json();
+    throw new Error(JSON.stringify(err));
+  }
+  return response.json();
+}
 
-// Escape user-supplied strings before embedding them in HTML email bodies
 function escapeHtml(str) {
   if (typeof str !== 'string') return '';
   return str
@@ -12,15 +34,6 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-const transporter = nodemailer.createTransport({
-  service: process.env.EMAIL_SERVICE || 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-// Brand palette — Emerald Blue
 const BRAND = {
   gradientStart: '#059669',   // emerald
   gradientEnd:   '#0EA5E9',   // sky blue
@@ -30,15 +43,15 @@ const BRAND = {
   accentLight:   '#E0F2FE',
 };
 
-// Reusable logo block (CID inline)
-const LOGO_BLOCK = `
-  <img src="cid:afroconnect-logo"
-       alt="AfroConnect"
-       width="80" height="80"
-       style="border-radius: 16px; display: block; margin: 0 auto 14px auto;" />
-`;
+const LOGO_URL = process.env.RENDER_EXTERNAL_URL
+  ? `${process.env.RENDER_EXTERNAL_URL}/public/logo.png`
+  : '';
 
-// Reusable header section
+const LOGO_BLOCK = LOGO_URL
+  ? `<img src="${LOGO_URL}" alt="AfroConnect" width="120" height="120"
+       style="border-radius: 20px; display: block; margin: 0 auto 14px auto;" />`
+  : '';
+
 const emailHeader = (title, subtitle = '') => `
   <tr>
     <td style="background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
@@ -52,7 +65,6 @@ const emailHeader = (title, subtitle = '') => `
   </tr>
 `;
 
-// Reusable footer
 const emailFooter = () => `
   <tr>
     <td style="background-color: #F8F9FA; padding: 28px 40px; border-top: 1px solid #E9ECEF; text-align: center;">
@@ -75,7 +87,6 @@ const emailFooter = () => `
   </tr>
 `;
 
-// Email shell wrapper
 const emailShell = (bodyRows) => `
   <!DOCTYPE html>
   <html lang="en">
@@ -99,7 +110,6 @@ const emailShell = (bodyRows) => `
   </html>
 `;
 
-// ─── OTP Email ────────────────────────────────────────────────────────────────
 const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
   ${emailHeader('AfroConnect', 'Connect with Your Perfect Match')}
   <tr>
@@ -149,7 +159,6 @@ const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Welcome Email ────────────────────────────────────────────────────────────
 const getWelcomeEmailTemplate = (userName) => emailShell(`
   ${emailHeader('Welcome to AfroConnect! 🎉')}
   <tr>
@@ -189,7 +198,6 @@ const getWelcomeEmailTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Password Reset Email ─────────────────────────────────────────────────────
 const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
   ${emailHeader('Password Reset Request')}
   <tr>
@@ -227,7 +235,6 @@ const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Ban Notification ─────────────────────────────────────────────────────────
 const getBanNotificationTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
@@ -263,7 +270,6 @@ const getBanNotificationTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Unban Notification ───────────────────────────────────────────────────────
 const getUnbanNotificationTemplate = (userName) => emailShell(`
   ${emailHeader("You're Back! 🎉")}
   <tr>
@@ -289,7 +295,6 @@ const getUnbanNotificationTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Appeal Decision ──────────────────────────────────────────────────────────
 const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
   const headerBg  = approved ? `linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%)` : 'linear-gradient(135deg, #DC2626 0%, #EF4444 100%)';
   const noteBg    = approved ? BRAND.primaryLight : '#FEE2E2';
@@ -329,44 +334,31 @@ const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
   `);
 };
 
-// ─── Logo attachment helper ───────────────────────────────────────────────────
-const logoAttachment = () => ({
-  filename: 'afroconnect-logo.png',
-  path: path.join(__dirname, '../../frontend/assets/afroconnect-logo.png'),
-  cid: 'afroconnect-logo',
-});
-
-// ─── Send functions ───────────────────────────────────────────────────────────
-const sendOTPEmail = async (email, userName, otpCode) => {
+const sendOTP = async (email, otp) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '🔐 Your AfroConnect Verification Code',
-      html: getOTPEmailTemplate(userName, otpCode),
-      attachments: [logoAttachment()],
+      html: getOTPEmailTemplate('there', otp),
     });
-    console.log('OTP email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('OTP sent successfully');
   } catch (error) {
-    console.error('Error sending OTP email:', error);
-    throw new Error('Failed to send OTP email');
+    logger.error('Failed to send OTP:', error);
+    throw error;
   }
 };
 
 const sendWelcomeEmail = async (email, userName) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '🎉 Welcome to AfroConnect — Let\'s Find Your Match!',
       html: getWelcomeEmailTemplate(userName),
-      attachments: [logoAttachment()],
     });
-    console.log('Welcome email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('Welcome email sent');
+    return { success: true };
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    logger.error('Error sending welcome email:', error);
     throw new Error('Failed to send welcome email');
   }
 };
@@ -374,73 +366,64 @@ const sendWelcomeEmail = async (email, userName) => {
 const sendPasswordResetEmail = async (email, userName, resetToken) => {
   try {
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '🔒 Reset Your AfroConnect Password',
       html: getPasswordResetEmailTemplate(userName, resetLink),
-      attachments: [logoAttachment()],
     });
-    console.log('Password reset email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('Password reset email sent');
+    return { success: true };
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    logger.error('Error sending password reset email:', error);
     throw new Error('Failed to send password reset email');
   }
 };
 
 const sendBanNotificationEmail = async (email, userName, reason) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '⚠️ Your AfroConnect Account Has Been Suspended',
       html: getBanNotificationTemplate(userName, reason),
-      attachments: [logoAttachment()],
     });
-    console.log('Ban notification email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('Ban notification email sent');
+    return { success: true };
   } catch (error) {
-    console.error('Error sending ban notification email:', error);
+    logger.error('Error sending ban notification email:', error);
     throw new Error('Failed to send ban notification email');
   }
 };
 
 const sendUnbanNotificationEmail = async (email, userName) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '✓ Your Appeal Was Approved — Welcome Back!',
       html: getUnbanNotificationTemplate(userName),
-      attachments: [logoAttachment()],
     });
-    console.log('Unban notification email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('Unban notification email sent');
+    return { success: true };
   } catch (error) {
-    console.error('Error sending unban notification email:', error);
+    logger.error('Error sending unban notification email:', error);
     throw new Error('Failed to send unban notification email');
   }
 };
 
 const sendAppealDecisionEmail = async (email, userName, approved, adminResponse) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: approved ? '✓ Your Appeal Was Approved!' : '⚠️ Appeal Decision',
       html: getAppealDecisionTemplate(userName, approved, adminResponse),
-      attachments: [logoAttachment()],
     });
-    console.log('Appeal decision email sent:', info.messageId);
-    return { success: true, messageId: info.messageId };
+    logger.log('Appeal decision email sent');
+    return { success: true };
   } catch (error) {
-    console.error('Error sending appeal decision email:', error);
+    logger.error('Error sending appeal decision email:', error);
     throw new Error('Failed to send appeal decision email');
   }
 };
 
-// ─── Verification Approved ────────────────────────────────────────────────────
 const getVerificationApprovedTemplate = (userName) => emailShell(`
   ${emailHeader('Identity Verified! ✓', 'You are now a verified AfroConnect member')}
   <tr>
@@ -468,7 +451,6 @@ const getVerificationApprovedTemplate = (userName) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Verification Rejected ────────────────────────────────────────────────────
 const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #F59E0B 0%, #EF4444 100%);
@@ -506,7 +488,6 @@ const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Warning Email ─────────────────────────────────────────────────────────────
 const getWarningEmailTemplate = (userName, reason) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
@@ -540,7 +521,6 @@ const getWarningEmailTemplate = (userName, reason) => emailShell(`
   ${emailFooter()}
 `);
 
-// ─── Suspension Email ──────────────────────────────────────────────────────────
 const getSuspensionEmailTemplate = (userName, reason, durationDays) => emailShell(`
   <tr>
     <td style="background: linear-gradient(135deg, #DC2626 0%, #F59E0B 100%);
@@ -579,69 +559,60 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
 
 const sendVerificationApprovedEmail = async (email, userName) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '✓ Your AfroConnect Profile is Verified!',
       html: getVerificationApprovedTemplate(userName),
-      attachments: [logoAttachment()],
     });
-    console.log('Verification approved email sent:', info.messageId);
+    logger.log('Verification approved email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification approved email:', error);
+    logger.error('Error sending verification approved email:', error);
   }
 };
 
 const sendVerificationRejectedEmail = async (email, userName, reason) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '⚠️ AfroConnect Verification Update',
       html: getVerificationRejectedTemplate(userName, reason),
-      attachments: [logoAttachment()],
     });
-    console.log('Verification rejected email sent:', info.messageId);
+    logger.log('Verification rejected email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification rejected email:', error);
+    logger.error('Error sending verification rejected email:', error);
   }
 };
 
 const sendWarningEmail = async (email, userName, reason) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '⚠️ Community Guideline Warning — AfroConnect',
       html: getWarningEmailTemplate(userName, reason),
-      attachments: [logoAttachment()],
     });
-    console.log('Warning email sent:', info.messageId);
+    logger.log('Warning email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending warning email:', error);
+    logger.error('Error sending warning email:', error);
   }
 };
 
 const sendSuspensionEmail = async (email, userName, reason, durationDays) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '⛔ Your AfroConnect Account Has Been Temporarily Suspended',
       html: getSuspensionEmailTemplate(userName, reason, durationDays),
-      attachments: [logoAttachment()],
     });
-    console.log('Suspension email sent:', info.messageId);
+    logger.log('Suspension email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending suspension email:', error);
+    logger.error('Error sending suspension email:', error);
   }
 };
 
-// ─── Suspension Lifted Email ──────────────────────────────────────────────────
 const getSuspensionLiftedTemplate = (userName) => emailShell(`
   ${emailHeader("Suspension Lifted — Welcome Back! 🎉", "Your access has been automatically restored")}
   <tr>
@@ -676,21 +647,18 @@ const getSuspensionLiftedTemplate = (userName) => emailShell(`
 
 const sendSuspensionLiftedEmail = async (email, userName) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '✅ Your AfroConnect Suspension Has Been Lifted',
       html: getSuspensionLiftedTemplate(userName),
-      attachments: [logoAttachment()],
     });
-    console.log('Suspension lifted email sent:', info.messageId);
+    logger.log('Suspension lifted email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending suspension lifted email:', error);
+    logger.error('Error sending suspension lifted email:', error);
   }
 };
 
-// ─── New Match Notification ───────────────────────────────────────────────────
 const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
   ${emailHeader("It's a Match! 💚", `You and ${matchName} liked each other`)}
   <tr>
@@ -734,21 +702,18 @@ const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
 
 const sendNewMatchEmail = async (email, userName, matchName, matchPhoto) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: `💚 You matched with ${matchName} on AfroConnect!`,
       html: getNewMatchTemplate(userName, matchName, matchPhoto),
-      attachments: [logoAttachment()],
     });
-    console.log('New match email sent:', info.messageId);
+    logger.log('New match email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending new match email:', error);
+    logger.error('Error sending new match email:', error);
   }
 };
 
-// ─── Support Ticket Reply ─────────────────────────────────────────────────────
 const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => emailShell(`
   ${emailHeader('Support Reply from AfroConnect 💬', 'Our team has responded to your enquiry')}
   <tr>
@@ -787,21 +752,18 @@ const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => email
 
 const sendSupportReplyEmail = async (email, userName, replyContent, ticketSubject) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect Support" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: '💬 AfroConnect Support has replied to your ticket',
       html: getSupportReplyTemplate(userName, replyContent, ticketSubject),
-      attachments: [logoAttachment()],
     });
-    console.log('Support reply email sent:', info.messageId);
+    logger.log('Support reply email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending support reply email:', error);
+    logger.error('Error sending support reply email:', error);
   }
 };
 
-// ─── Renewal Reminder ─────────────────────────────────────────────────────────
 const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) => emailShell(`
   ${emailHeader('Subscription Renewal Reminder ⏰', `Your ${planName} plan renews soon`)}
   <tr>
@@ -840,21 +802,18 @@ const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) =
 
 const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, daysLeft) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: `⏰ Your AfroConnect ${planName} plan renews in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
       html: getRenewalReminderTemplate(userName, planName, renewalDate, daysLeft),
-      attachments: [logoAttachment()],
     });
-    console.log('Renewal reminder email sent:', info.messageId);
+    logger.log('Renewal reminder email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending renewal reminder email:', error);
+    logger.error('Error sending renewal reminder email:', error);
   }
 };
 
-// ─── Inactivity Re-engagement ─────────────────────────────────────────────────
 const getInactivityTemplate = (userName) => emailShell(`
   ${emailHeader('We miss you, ' + userName + '! 👋', 'New people are waiting to connect with you')}
   <tr>
@@ -912,22 +871,20 @@ const getInactivityTemplate = (userName) => emailShell(`
 
 const sendInactivityEmail = async (email, userName) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"AfroConnect" <${process.env.EMAIL_USER}>`,
+    await brevoSend({
       to: email,
       subject: `👋 ${userName}, we miss you! New matches are waiting`,
       html: getInactivityTemplate(userName),
-      attachments: [logoAttachment()],
     });
-    console.log('Inactivity email sent:', info.messageId);
+    logger.log('Inactivity email sent');
     return { success: true };
   } catch (error) {
-    console.error('Error sending inactivity email:', error);
+    logger.error('Error sending inactivity email:', error);
   }
 };
 
 module.exports = {
-  sendOTPEmail,
+  sendOTP,
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendBanNotificationEmail,

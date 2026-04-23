@@ -26,8 +26,9 @@ import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { Spacing, BorderRadius, Typography, Shadow } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
+import * as Location from "expo-location";
 
 const ActionSheetIOS = Platform.OS === "ios" ? require("react-native").ActionSheetIOS : null;
 const { width } = Dimensions.get("window");
@@ -47,59 +48,32 @@ type PhotoSlot = PhotoItem | null;
 
 const PROFILE_SETUP_STORAGE_KEY = "afroconnect_profile_setup_draft";
 
-const INTEREST_CATEGORIES = [
-  {
-    category: "🎵 Music & Arts",
-    color: "#FF6B6B",
-    items: [
-      { label: "🎵 Music", value: "Music" },
-      { label: "🎸 Guitar", value: "Guitar" },
-      { label: "💃 Dancing", value: "Dancing" },
-      { label: "🎨 Art", value: "Art" },
-      { label: "🎭 Theatre", value: "Theatre" },
-      { label: "🎬 Movies", value: "Movies" },
-    ],
-  },
-  {
-    category: "⚽ Sports & Fitness",
-    color: "#4ECDC4",
-    items: [
-      { label: "⚽ Sports", value: "Sports" },
-      { label: "💪 Fitness", value: "Fitness" },
-      { label: "🏄 Surfing", value: "Surfing" },
-      { label: "🏊 Swimming", value: "Swimming" },
-      { label: "🧘 Yoga", value: "Yoga" },
-      { label: "🏃 Running", value: "Running" },
-    ],
-  },
-  {
-    category: "✈️ Lifestyle & Social",
-    color: "#F59E0B",
-    items: [
-      { label: "✈️ Travel", value: "Travel" },
-      { label: "🍕 Food", value: "Food" },
-      { label: "👨‍🍳 Cooking", value: "Cooking" },
-      { label: "👗 Fashion", value: "Fashion" },
-      { label: "🌿 Nature", value: "Nature" },
-      { label: "🐾 Pets", value: "Pets" },
-    ],
-  },
-  {
-    category: "💻 Creative & Tech",
-    color: "#74B9FF",
-    items: [
-      { label: "💻 Technology", value: "Technology" },
-      { label: "📸 Photography", value: "Photography" },
-      { label: "📚 Reading", value: "Reading" },
-      { label: "🎮 Gaming", value: "Gaming" },
-      { label: "🎙️ Podcasts", value: "Podcasts" },
-      { label: "✍️ Writing", value: "Writing" },
-    ],
-  },
+const INTEREST_OPTIONS = [
+  { id: "music", label: "Music", icon: "musical-notes" },
+  { id: "travel", label: "Travel", icon: "airplane" },
+  { id: "cooking", label: "Cooking", icon: "restaurant" },
+  { id: "fitness", label: "Fitness", icon: "fitness" },
+  { id: "art", label: "Art", icon: "color-palette" },
+  { id: "gaming", label: "Gaming", icon: "game-controller" },
+  { id: "movies", label: "Movies", icon: "film" },
+  { id: "reading", label: "Reading", icon: "book" },
+  { id: "photography", label: "Photography", icon: "camera" },
+  { id: "dancing", label: "Dancing", icon: "footsteps" },
+  { id: "coding", label: "Coding", icon: "code-slash" },
+  { id: "sports", label: "Sports", icon: "basketball" },
+  { id: "fashion", label: "Fashion", icon: "shirt" },
+  { id: "nature", label: "Nature", icon: "leaf" },
+  { id: "technology", label: "Technology", icon: "hardware-chip" },
+  { id: "business", label: "Business", icon: "briefcase" },
+  { id: "outdoors", label: "Outdoors", icon: "trail-sign" },
+  { id: "socializing", label: "Socializing", icon: "people" },
+  { id: "wellness", label: "Wellness", icon: "heart-half" },
+  { id: "creativity", label: "Creativity", icon: "brush" },
+  { id: "values", label: "Values", icon: "diamond" },
+  { id: "food", label: "Food", icon: "fast-food" },
 ];
 
-const INTERESTS_OPTIONS = INTEREST_CATEGORIES.flatMap((cat) =>
-  cat.items.map((item) => ({ ...item, color: cat.color }))
+const INTERESTS_OPTIONS = INTEREST_OPTIONS.map((item) => ({ ...item, value: item.id, color: "#10B981" })
 );
 
 const ZODIAC_SIGNS = [
@@ -131,7 +105,6 @@ const LOOKING_FOR_OPTIONS = [
   { label: "🤷 Not sure", value: "Not sure", desc: "Open to anything", color: "#A8E6CF" },
 ];
 
-// Step order: Photos → Basic Info → Interests → Bio → Preferences
 const STEP_META = [
   { icon: "camera", title: "Your Photos", subtitle: "Add at least 4 great photos", color: "#10B981", step: 1 },
   { icon: "user", title: "About You", subtitle: "Let's get to know you", color: "#059669", step: 2 },
@@ -146,7 +119,17 @@ const RELIGION_OPTIONS = [
   { value: "traditional", label: "Traditional" },
   { value: "atheist", label: "Atheist" },
   { value: "agnostic", label: "Agnostic" },
+  { value: "deist", label: "Deist" },
   { value: "spiritual", label: "Spiritual" },
+  { value: "other", label: "Other" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+
+const ETHNICITY_OPTIONS = [
+  { value: "african", label: "African" },
+  { value: "african_american", label: "African American" },
+  { value: "caribbean", label: "Caribbean" },
+  { value: "mixed", label: "Mixed" },
   { value: "other", label: "Other" },
   { value: "prefer_not_to_say", label: "Prefer not to say" },
 ];
@@ -156,13 +139,12 @@ const SMALL_SLOT = (width - Spacing.xl * 2 - Spacing.sm * 2) / 3;
 const BIG_SLOT_WIDTH = width - Spacing.xl * 2;
 const BIG_SLOT_HEIGHT = BIG_SLOT_WIDTH * 1.1;
 
-// ─── Animated Interest Chip ────────────────────────────────────────────────
 function InterestChip({
   item,
   selected,
   onPress,
 }: {
-  item: { label: string; value: string; color: string };
+  item: { label: string; value: string; icon?: string; color: string };
   selected: boolean;
   onPress: () => void;
 }) {
@@ -205,9 +187,11 @@ function InterestChip({
             : { backgroundColor: `${item.color}14`, borderColor: `${item.color}50` },
         ]}
       >
-        {selected && (
+        {item.icon ? (
+          <Ionicons name={item.icon as any} size={13} color={selected ? "#fff" : item.color} />
+        ) : selected ? (
           <Feather name="check" size={11} color="#fff" />
-        )}
+        ) : null}
         <ThemedText
           style={{
             fontSize: 13,
@@ -262,6 +246,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
   const [reorderSource, setReorderSource] = useState<number | null>(null);
 
   const [religionModalVisible, setReligionModalVisible] = useState(false);
+  const [ethnicityModalVisible, setEthnicityModalVisible] = useState(false);
   const [photoPickerModalVisible, setPhotoPickerModalVisible] = useState(false);
   const [photoPickerSlotIndex, setPhotoPickerSlotIndex] = useState<number>(0);
 
@@ -345,7 +330,6 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
     }
   };
 
-  // Step 1 = Photos, Step 2 = Basic Info, Step 3 = Interests, Step 4 = Bio, Step 5 = Preferences
   const handleNext = () => {
     if (step === 1) {
       const photoCount = photos.filter((p) => p !== null).length;
@@ -562,7 +546,16 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
       const finalGender = gender.toLowerCase() === "other" ? "other" : gender.toLowerCase();
       const finalPreferredGenders = preferredGenders.length > 0
         ? preferredGenders.map((g) => g.toLowerCase())
-        : [finalGender === "male" ? "female" : "male"];
+        : [finalGender === "man" ? "female" : "male"];
+
+      let locationData: any = undefined;
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === "granted") {
+          const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          locationData = { type: "Point", coordinates: [coords.coords.longitude, coords.coords.latitude] };
+        }
+      } catch {}
 
       await completeProfileSetup({
         name: name.trim(),
@@ -574,23 +567,26 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         livingIn: livingIn.trim() || undefined,
         religion: religion || undefined,
         ethnicity: ethnicity.trim() || undefined,
-        communicationStyle: communicationStyle || undefined,
-        loveStyle: loveStyle || undefined,
-        personalityType: personalityType.trim() || undefined,
         lifestyle: {
           smoking: smoking || undefined,
           drinking: drinking || undefined,
           religion: religion || undefined,
+          ethnicity: ethnicity.trim() || undefined,
+          communicationStyle: communicationStyle || undefined,
+          loveStyle: loveStyle || undefined,
+          personalityType: personalityType.trim() || undefined,
+          hasKids: hasKids !== null ? hasKids : undefined,
+          hasPets: hasPets !== null ? hasPets : undefined,
         },
         bio: bio.trim(),
         interests,
         lookingFor: lookingFor.toLowerCase() || "friends",
         photos: formattedPhotos,
         favoriteSong: favoriteSongTitle.trim() ? { title: favoriteSongTitle.trim(), artist: favoriteSongArtist.trim() } : undefined,
-        location: { type: "Point", coordinates: [3.3792, 6.5244] },
+        ...(locationData ? { location: locationData } : {}),
         preferences: {
           ageRange: { min: minAgeNum, max: maxAgeNum },
-          maxDistance: maxDistanceNum * 1000,
+          maxDistance: maxDistanceNum,
           genders: finalPreferredGenders,
         },
       });
@@ -944,7 +940,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Gender *</ThemedText>
                   <View style={styles.pillRow}>
-                    {["Male", "Female", "Other"].map((g) => (
+                    {["Man", "Woman", "Non-binary"].map((g) => (
                       <Pressable
                         key={g}
                         style={[
@@ -974,13 +970,15 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
 
                 <View style={styles.inputGroup}>
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Ethnicity *</ThemedText>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. Yoruba, Igbo, Ashanti"
-                    placeholderTextColor={theme.textSecondary}
-                    value={ethnicity}
-                    onChangeText={setEthnicity}
-                  />
+                  <Pressable
+                    style={[styles.dropdownButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setEthnicityModalVisible(true)}
+                  >
+                    <ThemedText style={{ color: ethnicity ? theme.text : theme.textSecondary, fontSize: 15 }}>
+                      {ethnicity ? ETHNICITY_OPTIONS.find((e) => e.value === ethnicity)?.label : "Select ethnicity"}
+                    </ThemedText>
+                    <Feather name="chevron-down" size={18} color={theme.textSecondary} />
+                  </Pressable>
                 </View>
 
                 <View style={styles.inputGroup}>
@@ -1570,6 +1568,34 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         </View>
       </Modal>
 
+      <Modal visible={ethnicityModalVisible} transparent animationType="slide" onRequestClose={() => setEthnicityModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.listModal, { backgroundColor: theme.background }]}>
+            <View style={styles.modalHeader}>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Ethnicity</ThemedText>
+              <Pressable onPress={() => setEthnicityModalVisible(false)} hitSlop={8}>
+                <Feather name="x" size={22} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {ETHNICITY_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.value}
+                  style={[
+                    styles.listItem,
+                    { borderColor: ethnicity === option.value ? theme.primary : theme.border, backgroundColor: ethnicity === option.value ? `${theme.primary}10` : theme.surface },
+                  ]}
+                  onPress={() => { setEthnicity(option.value); setEthnicityModalVisible(false); }}
+                >
+                  <ThemedText style={[styles.listItemText, { color: theme.text }]}>{option.label}</ThemedText>
+                  {ethnicity === option.value && <Feather name="check" size={18} color={theme.primary} />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Photo Picker Modal (Android) ── */}
       <Modal visible={photoPickerModalVisible} transparent animationType="fade" onRequestClose={() => setPhotoPickerModalVisible(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setPhotoPickerModalVisible(false)}>
@@ -1703,7 +1729,6 @@ const styles = StyleSheet.create({
     gap: Spacing.lg,
   },
 
-  // ── Hero Photo ──
   heroPhotoContainer: {
     alignItems: "center",
   },
@@ -1791,7 +1816,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Small photos grid ──
   sectionLabel: {
     fontSize: 12,
     fontWeight: "700",
@@ -1845,7 +1869,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Photo progress ──
   photoProgressCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
@@ -1882,7 +1905,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Info Cards ──
   infoCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1.5,
@@ -1913,7 +1935,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Form inputs ──
   inputGroup: {
     gap: 7,
   },
@@ -1966,7 +1987,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  // ── Interests ──
   interestHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -2060,7 +2080,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  // ── Bio ──
   promptsScroll: {
     marginHorizontal: -Spacing.xl,
   },
@@ -2146,7 +2165,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  // ── Preferences ──
   ageRangeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2172,7 +2190,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Celebration ──
   celebrationCard: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
@@ -2219,7 +2236,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  // ── Navigation ──
   navRow: {
     flexDirection: "row",
     gap: Spacing.sm,
@@ -2255,7 +2271,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  // ── Modals ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",

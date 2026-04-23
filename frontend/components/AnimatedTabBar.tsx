@@ -43,7 +43,6 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
         const icon = TAB_ICONS[route.name] || 'circle';
-        // Show the unread badge only on the Chats tab
         const showBadge = route.name === 'Chats' && unreadCount > 0;
 
         const onPress = () => {
@@ -184,21 +183,23 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -5,
-    right: -8,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   badgeText: {
     color: '#FFFFFF',
-    fontSize: 9,
-    fontWeight: '700',
-    lineHeight: 11,
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 12,
   },
   activeIndicator: {
     position: 'absolute',

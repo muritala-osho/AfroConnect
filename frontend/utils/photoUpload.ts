@@ -16,7 +16,6 @@ export async function uploadToCloudinary(photoUri: string): Promise<string> {
   try {
     const formData = new FormData();
     
-    // Create file object for upload
     const filename = photoUri.split('/').pop() || 'photo.jpg';
     const match = /\.(\w+)$/.exec(filename);
     const type = match ? `image/${match[1]}` : 'image/jpeg';

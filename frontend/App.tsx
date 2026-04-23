@@ -1,12 +1,16 @@
-import React, { useEffect, useCallback } from "react";
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import React, { useEffect, useCallback, useRef } from "react";
+import { StyleSheet, View, Text, TouchableOpacity, AppState, Platform } from "react-native";
+import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
+import * as Notifications from "expo-notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { Ionicons } from "@expo/vector-icons";
+import { initCallKeep } from "@/services/callkeep";
+import { registerVoipPushNotifications } from "@/services/voipPush";
+import { requestFCMPermissionAndGetToken } from "@/services/firebaseMessaging";
 
 import RootNavigator from "@/navigation/RootNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -15,8 +19,11 @@ import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
 import { UnreadProvider } from "@/context/UnreadContext";
 import { CallProvider } from "@/contexts/CallContext";
+import { MaintenanceProvider } from "@/context/MaintenanceContext";
+import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import IncomingCallHandler from "@/components/IncomingCallHandler";
 import FloatingCallBar from "@/components/FloatingCallBar";
+import UpdateBanner from "@/components/UpdateBanner";
 import {
   registerForPushNotificationsAsync,
   setupNotificationListeners,
@@ -25,6 +32,44 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 SplashScreen.preventAutoHideAsync();
+
+// Initialize CallKit (iOS) / ConnectionService (Android) as early as possible
+// so the native call infrastructure is ready before the first call arrives.
+if (Platform.OS !== 'web') {
+  initCallKeep('AfroConnect');
+}
+
+export const navigationRef = createNavigationContainerRef<any>();
+
+function navigateFromNotification(data: Record<string, any>) {
+  if (!navigationRef.isReady()) return;
+  const nav = navigationRef as any;
+  const { type, screen, senderId, senderName } = data || {};
+  if (type === "message" || screen === "ChatDetail") {
+    if (senderId) {
+      nav.navigate("ChatDetail", {
+        userId: senderId,
+        userName: senderName || "User",
+        userPhoto: "",
+      });
+    } else {
+      nav.navigate("MainTabs", { screen: "Chats" });
+    }
+    return;
+  }
+  if (type === "match" || screen === "Matches") {
+    nav.navigate("MainTabs", { screen: "Matches" });
+    return;
+  }
+  if (screen === "Discovery") {
+    nav.navigate("MainTabs", { screen: "Discovery" });
+    return;
+  }
+  if (type === "security" || screen === "DeviceManagement") {
+    nav.navigate("DeviceManagement");
+    return;
+  }
+}
 
 // Print API configuration on startup
 console.log("\n\n========== AFROCONNECT APP STARTED ==========");
@@ -59,8 +104,10 @@ function LanguageSync() {
 
 function AppContent() {
   const { isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [isOverlayVisible, setIsOverlayVisible] = React.useState(false);
+  const appState = useRef(AppState.currentState);
+  const lastTokenRegistration = useRef<number>(0);
 
   const onLayoutRootView = useCallback(async () => {
     await SplashScreen.hideAsync();
@@ -74,30 +121,83 @@ function AppContent() {
 
     const setupNotifications = async () => {
       try {
-        // Register for push notifications
-        await registerForPushNotificationsAsync();
+        // Register for push notifications — pass token directly so we
+        // don't rely on AsyncStorage timing after a fresh login
+        await registerForPushNotificationsAsync(token ?? undefined);
+
+        // Register VoIP push token (iOS only) for native CallKit incoming call
+        // screen even when the app is completely killed.
+        if (Platform.OS === 'ios') {
+          registerVoipPushNotifications(async (voipToken) => {
+            try {
+              const authToken = token || (await AsyncStorage.getItem('auth_token'));
+              if (!authToken) return;
+              await fetch(`${getApiBaseUrl()}/api/notifications/register-voip-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ voipToken }),
+              });
+              console.log('[App] VoIP push token registered with backend.');
+            } catch (err) {
+              console.warn('[App] Failed to register VoIP token:', err);
+            }
+          });
+        }
+
+        // Register FCM token for direct Firebase data messages.
+        // On Android this enables the background message handler to wake the
+        // killed app and display the native ConnectionService call screen.
+        try {
+          const fcmToken = await requestFCMPermissionAndGetToken();
+          if (fcmToken) {
+            const authToken = token || (await AsyncStorage.getItem('auth_token'));
+            if (authToken) {
+              await fetch(`${getApiBaseUrl()}/api/notifications/register-fcm-token`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ fcmToken }),
+              });
+              console.log('[App] FCM token registered with backend.');
+            }
+          }
+        } catch (fcmErr) {
+          console.warn('[App] FCM token registration failed (non-fatal):', fcmErr);
+        }
+
+        // Handle a notification that launched the app from a killed state
+        const lastResponse = await Notifications.getLastNotificationResponseAsync();
+        if (lastResponse) {
+          const data = lastResponse.notification.request.content.data as Record<string, any>;
+          setTimeout(() => navigateFromNotification(data), 500);
+        }
 
         // Setup listeners for incoming notifications
         unsubscribe = setupNotificationListeners(
           (notification) => {
             console.log("Notification received:", notification);
-            // Handle notification when app is in foreground
           },
           async (response) => {
-            console.log("User tapped notification:", response);
-            // Track notification open for the timing engine
+            const data = response?.notification?.request?.content?.data as Record<string, any>;
+            // Navigate to the right screen immediately
+            navigateFromNotification(data);
+            // Fire-and-forget engagement tracking — never block navigation
             try {
-              const token = await AsyncStorage.getItem("token");
-              if (token) {
-                const screen = response?.notification?.request?.content?.data?.screen;
+              const authToken = await AsyncStorage.getItem("auth_token");
+              if (authToken) {
                 fetch(`${getApiBaseUrl()}/api/engagement/notification-opened`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
+                    Authorization: `Bearer ${authToken}`,
                   },
-                  body: JSON.stringify({ screen: screen || "unknown" }),
-                }).catch(() => {}); // fire and forget — never block UX
+                  body: JSON.stringify({ screen: data?.screen || "unknown" }),
+                }).catch(() => {});
               }
             } catch {}
           },
@@ -108,9 +208,25 @@ function AppContent() {
     };
 
     setupNotifications();
+    lastTokenRegistration.current = Date.now();
+
+    // Re-register push token when the app comes back to the foreground, but
+    // no more than once per hour to avoid TOO_MANY_REGISTRATIONS from Firebase.
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+    const appStateSubscription = AppState.addEventListener("change", (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === "active") {
+        const timeSinceLastReg = Date.now() - lastTokenRegistration.current;
+        if (timeSinceLastReg >= ONE_HOUR_MS) {
+          lastTokenRegistration.current = Date.now();
+          registerForPushNotificationsAsync(token ?? undefined).catch(() => {});
+        }
+      }
+      appState.current = nextState;
+    });
 
     return () => {
       if (unsubscribe) unsubscribe();
+      appStateSubscription.remove();
     };
   }, [user?.id]);
 
@@ -122,11 +238,13 @@ function AppContent() {
     <GestureHandlerRootView style={styles.root} onLayout={onLayoutRootView}>
       <KeyboardProvider>
         <CallProvider>
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <RootNavigator />
             <IncomingCallHandler />
             <FloatingCallBar />
           </NavigationContainer>
+          <MaintenanceOverlay />
+          <UpdateBanner />
           <StatusBar style={isDark ? "light" : "dark"} />
         </CallProvider>
       </KeyboardProvider>
@@ -140,12 +258,14 @@ export default function App() {
       <SafeAreaProvider>
         <ThemeProvider>
           <LanguageProvider>
-            <AuthProvider>
-              <UnreadProvider>
-                <LanguageSync />
-                <AppContent />
-              </UnreadProvider>
-            </AuthProvider>
+            <MaintenanceProvider>
+              <AuthProvider>
+                <UnreadProvider>
+                  <LanguageSync />
+                  <AppContent />
+                </UnreadProvider>
+              </AuthProvider>
+            </MaintenanceProvider>
           </LanguageProvider>
         </ThemeProvider>
       </SafeAreaProvider>

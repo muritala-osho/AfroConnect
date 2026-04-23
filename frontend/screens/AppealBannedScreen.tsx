@@ -36,7 +36,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     if (appeal) {
-      setAppealStatus(appeal.status as any);
+      setAppealStatus(appeal.status === 'approved' ? 'none' : appeal.status as any);
       
       if (appeal.status === 'rejected' && appeal.lastAppealRejectedAt) {
         const ms = Date.now() - new Date(appeal.lastAppealRejectedAt).getTime();
@@ -60,7 +60,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
 
     setLoading(true);
     try {
-      const response = await fetch(`${getApiBaseUrl()}/api/auth/submit-appeal`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/auth/appeal`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,7 +100,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
     });
   };
 
-  const canSubmitAppeal = appealStatus === 'none' || 
+  const canSubmitAppeal = appealStatus === 'none' || appealStatus === 'approved' ||
     (appealStatus === 'rejected' && daysUntilReapply === 0);
 
   return (

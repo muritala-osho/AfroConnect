@@ -33,6 +33,18 @@ router.put('/status', protect, async (req, res) => {
 router.get('/status/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
+
+    if (userId !== req.user._id.toString()) {
+      const Match = require('../models/Match');
+      const match = await Match.findOne({
+        users: { $all: [req.user._id, userId] },
+        status: 'active'
+      });
+      if (!match) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
     const cacheKey = `activity:status:${userId}`;
     const cachedStatus = await redis.get(cacheKey);
     if (cachedStatus) return res.json({ success: true, data: cachedStatus, fromCache: true });

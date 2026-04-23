@@ -105,7 +105,6 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
           { text: "Login", onPress: () => navigation.navigate("Login") }
         ], "check-circle");
       } else {
-        // If it's a code mismatch, help the user
         const errorMsg = data.message || "Failed to reset password";
         showAlert("Error", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
         console.log("Reset failed:", data);

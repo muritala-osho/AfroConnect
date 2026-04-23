@@ -71,10 +71,10 @@ interface Appeal {
 }
 
 export default function AdminScreen({ navigation }: any) {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { token, user } = useAuth();
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'reports' | 'verifications' | 'appeals' | 'analytics' | 'subscriptions' | 'activity' | 'stories' | 'boosts'>('stats');
-  const [isAdminDark, setIsAdminDark] = useState(theme.dark);
+  const [isAdminDark, setIsAdminDark] = useState(isDark);
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [reports, setReports] = useState<Report[]>([]);

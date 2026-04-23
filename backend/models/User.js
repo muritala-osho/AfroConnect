@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema({
   verificationOTPExpire: Date,
   resetPasswordOTP: String,
   resetPasswordOTPExpire: Date,
+  tokenVersion: {
+    type: Number,
+    default: 0,
+    select: false
+  },
   password: {
     type: String,
     required: function() {
@@ -82,7 +87,9 @@ const userSchema = new mongoose.Schema({
   favoriteSong: {
     title: { type: String, maxlength: 200, default: '' },
     artist: { type: String, maxlength: 200, default: '' },
-    spotifyUri: { type: String, default: '' }
+    spotifyUri: { type: String, default: '' },
+    albumArt: { type: String, default: '' },
+    previewUrl: { type: String, default: '' }
   },
   spotify: {
     connected: { type: Boolean, default: false },
@@ -177,7 +184,29 @@ const userSchema = new mongoose.Schema({
   selfiePhoto: {
     url: String,
     publicId: String,
-    submittedAt: Date
+    submittedAt: Date,
+    poseChallenge: {
+      id: String,
+      instruction: String,
+      emoji: String
+    }
+  },
+  verificationVideoUrl: {
+    type: String,
+    default: null
+  },
+  verificationVideo: {
+    url:               { type: String,  default: null },
+    publicId:          { type: String,  default: null },
+    storedAt:          { type: Date,    default: null },
+    storage:           { type: String,  enum: ['cloudinary', 'local'], default: null },
+    challengeOrder:    { type: [String], default: null },
+    antiSpoofScore:    { type: Number,  default: null },
+    antiSpoofReal:     { type: Boolean, default: null },
+    antiSpoofAt:       { type: Date,    default: null },
+    faceMatchScore:    { type: Number,  default: null },
+    faceMatchVerified: { type: Boolean, default: null },
+    faceMatchAt:       { type: Date,    default: null },
   },
   verificationRequestDate: {
     type: Date,
@@ -245,7 +274,12 @@ const userSchema = new mongoose.Schema({
       type: String,
       enum: ['en', 'es', 'fr', 'pt', 'ar', 'sw', 'yo', 'ig', 'ha', 'zu', 'xh', 'am'],
       default: 'en'
-    }
+    },
+    smoking: { type: String, default: null },
+    drinking: { type: String, default: null },
+    wantsKids: { type: Boolean, default: null },
+    onlineNow: { type: Boolean, default: false },
+    interests: [{ type: String }]
   },
   lifestyle: {
     smoking: {
@@ -265,7 +299,7 @@ const userSchema = new mongoose.Schema({
     },
     religion: {
       type: String,
-      enum: ['christian', 'muslim', 'traditional', 'atheist', 'agnostic', 'spiritual', 'other', 'prefer_not_to_say'],
+      enum: ['christian', 'muslim', 'traditional', 'atheist', 'agnostic', 'spiritual', 'deist', 'other', 'prefer_not_to_say'],
       default: null,
       trim: true
     },
@@ -371,11 +405,26 @@ const userSchema = new mongoose.Schema({
       default: 'system'
     }
   },
+  pushToken: {
+    type: String,
+    default: null,
+  },
+  voipPushToken: {
+    type: String,
+    default: null,
+  },
+  fcmToken: {
+    type: String,
+    default: null,
+  },
+  pushNotificationsEnabled: {
+    type: Boolean,
+    default: true,
+  },
   isAdmin: {
     type: Boolean,
     default: false
   },
-  // Support agent role — can view assigned tickets and reply, not full admin
   isSupportAgent: {
     type: Boolean,
     default: false
@@ -436,7 +485,6 @@ const userSchema = new mongoose.Schema({
   inactivityEmailSentAt: Date,
   renewalReminderSentAt: Date,
 
-  // ── Churn Prediction ────────────────────────────────────────────────────────
   churnScore: {
     type: Number,
     default: 0,
@@ -451,8 +499,6 @@ const userSchema = new mongoose.Schema({
   },
   freeBoostGrantedAt: Date,
 
-  // ── Notification Timing Engine ──────────────────────────────────────────────
-  // 24-slot array (one per UTC hour) tracking sent/opened counts
   notificationEngagement: [{
     hour:        { type: Number, min: 0, max: 23 },
     sent:        { type: Number, default: 0 },
@@ -490,7 +536,6 @@ const userSchema = new mongoose.Schema({
       unsendLimit: { type: Number, default: 15 } 
     }
   },
-  // ── Cultural Identity ────────────────────────────────────────────────────────
   countryOfOrigin: {
     type: String,
     maxlength: 100,
@@ -513,14 +558,12 @@ const userSchema = new mongoose.Schema({
     default: null
   },
 
-  // ── Voice Bio ────────────────────────────────────────────────────────────────
   voiceBio: {
     url: { type: String, default: null },
     publicId: { type: String, default: null },
     duration: { type: Number, default: 0 }
   },
 
-  // ── Daily Curated Match ──────────────────────────────────────────────────────
   dailyMatch: {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     date: { type: String, default: null }
@@ -555,6 +598,18 @@ const userSchema = new mongoose.Schema({
     targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     passedAt: { type: Date, default: Date.now }
   }],
+  additionalLocations: [{
+    name: { type: String, required: true },
+    city: { type: String, default: '' },
+    country: { type: String, default: '' },
+    lat: { type: Number, default: null },
+    lng: { type: Number, default: null },
+    createdAt: { type: Date, default: Date.now }
+  }],
+  activeLocationId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
+  },
   profileComments: [{
     _id: mongoose.Schema.Types.ObjectId,
     authorId: mongoose.Schema.Types.ObjectId,

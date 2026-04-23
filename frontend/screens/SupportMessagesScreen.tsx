@@ -28,7 +28,6 @@ import { useTheme } from '@/hooks/useTheme';
 import { getApiBaseUrl } from '@/constants/config';
 import { useAuth } from '@/hooks/useAuth';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TicketMessage {
   _id?: string;
@@ -53,7 +52,6 @@ interface Ticket {
 
 type Screen = 'list' | 'thread' | 'create';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
   open: '#10b981',
@@ -86,7 +84,6 @@ function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function SupportMessagesScreen({ navigation }: any) {
   const { theme } = useTheme();
@@ -98,20 +95,17 @@ export default function SupportMessagesScreen({ navigation }: any) {
   const [listLoading, setListLoading] = useState(true);
   const [threadLoading, setThreadLoading] = useState(false);
 
-  // Create ticket form state
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState('other');
   const [submitting, setSubmitting] = useState(false);
 
-  // Thread reply state
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── API helpers ────────────────────────────────────────────────────────────
 
   const authHeaders = useCallback(() => ({
     'Content-Type': 'application/json',
@@ -143,7 +137,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
       const data = await res.json();
       if (data.success) {
         setSelectedTicket(data.ticket);
-        // Clear unread badge in the list for this ticket
         setTickets(prev => prev.map(t => t._id === ticketId ? { ...t, unreadByUser: 0 } : t));
       }
     } catch (e) {
@@ -153,13 +146,11 @@ export default function SupportMessagesScreen({ navigation }: any) {
     }
   }, [authHeaders]);
 
-  // ─── Lifecycle ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetchTickets();
   }, []);
 
-  // Poll the open thread every 10 seconds for new staff replies
   useEffect(() => {
     if (screen === 'thread' && selectedTicket) {
       pollingRef.current = setInterval(() => fetchThread(selectedTicket._id, true), 10000);
@@ -169,14 +160,12 @@ export default function SupportMessagesScreen({ navigation }: any) {
     };
   }, [screen, selectedTicket?._id]);
 
-  // Auto-scroll to latest message in thread
   useEffect(() => {
     if (screen === 'thread') {
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
     }
   }, [selectedTicket?.messages?.length, screen]);
 
-  // ─── Actions ────────────────────────────────────────────────────────────────
 
   const openTicket = async (ticket: Ticket) => {
     setSelectedTicket(ticket);
@@ -226,7 +215,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
     const content = replyText.trim();
     setReplyText('');
 
-    // Optimistic update
     const optimisticMsg: TicketMessage = {
       role: 'user',
       content,
@@ -252,10 +240,8 @@ export default function SupportMessagesScreen({ navigation }: any) {
     }
   };
 
-  // Total unread count across all tickets (drives the header badge)
   const totalUnread = tickets.reduce((sum, t) => sum + (t.unreadByUser || 0), 0);
 
-  // ─── Screen: Ticket list ──────────────────────────────────────────────────────
 
   const renderList = () => (
     <View style={{ flex: 1 }}>
@@ -334,7 +320,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
     </View>
   );
 
-  // ─── Screen: Create ticket ────────────────────────────────────────────────────
 
   const renderCreate = () => (
     <KeyboardAvoidingView
@@ -402,7 +387,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
     </KeyboardAvoidingView>
   );
 
-  // ─── Screen: Message thread ───────────────────────────────────────────────────
 
   const renderThread = () => {
     if (threadLoading || !selectedTicket) {
@@ -498,7 +482,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
     );
   };
 
-  // ─── Header title / back logic ─────────────────────────────────────────────
 
   const getTitle = () => {
     if (screen === 'create') return 'New Ticket';
@@ -515,7 +498,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
     }
   };
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -536,7 +518,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
@@ -553,7 +534,6 @@ const styles = StyleSheet.create({
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Ticket list
   createButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -601,7 +581,6 @@ const styles = StyleSheet.create({
   },
   unreadBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
 
-  // Create ticket form
   createForm: { padding: 20 },
   formLabel: {
     fontSize: 12,
@@ -636,7 +615,6 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
-  // Thread
   threadInfoBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -649,7 +627,7 @@ const styles = StyleSheet.create({
 
   messagesList: { padding: 16, paddingBottom: 24 },
 
-  messageRow: { flexDirection: 'row', marginBottom: 12 },
+  messageRow: { flexDirection: 'row', marginBottom: 12, width: '100%' },
   messageRowUser: { justifyContent: 'flex-end' },
   messageRowStaff: { justifyContent: 'flex-start' },
 

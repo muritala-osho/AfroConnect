@@ -18,11 +18,16 @@ const signup = Joi.object({
 const login = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   password: Joi.string().min(1).max(128).required(),
+  deviceName: Joi.string().max(200).optional().allow(''),
+  platform: Joi.string().valid('ios', 'android', 'web', 'unknown').optional().allow(''),
 });
 
 const verifyOtp = Joi.object({
   email: Joi.string().email({ tlds: { allow: false } }).lowercase().required(),
   otp: Joi.string().length(6).pattern(/^\d+$/).required(),
+  userId: Joi.string().optional().allow(''),
+  deviceName: Joi.string().max(200).optional().allow(''),
+  platform: Joi.string().valid('ios', 'android', 'web', 'unknown').optional().allow(''),
 });
 
 const forgotPassword = Joi.object({
@@ -104,7 +109,7 @@ const updateProfile = Joi.object({
   name: Joi.string().trim().min(2).max(60).optional(),
   bio: Joi.string().max(500).optional().allow(''),
   age: Joi.number().integer().min(18).max(100).optional(),
-  gender: Joi.string().valid('male', 'female', 'non-binary', 'other').optional(),
+  gender: Joi.string().valid('male', 'female', 'non-binary', 'other', 'man', 'woman', 'prefer_not_to_say').optional(),
   interestedIn: Joi.array().items(Joi.string()).optional(),
   interests: Joi.array().items(Joi.string().max(50)).max(20).optional(),
   location: Joi.object().optional(),
@@ -112,6 +117,32 @@ const updateProfile = Joi.object({
   lookingFor: Joi.string().max(100).optional().allow(''),
   height: Joi.number().min(100).max(250).optional(),
   photos: Joi.array().optional(),
+  zodiacSign: Joi.string().optional().allow('', null),
+  relationshipGoal: Joi.string().optional().allow('', null),
+  jobTitle: Joi.string().max(100).optional().allow(''),
+  education: Joi.string().optional().allow('', null),
+  school: Joi.string().max(150).optional().allow(''),
+  livingIn: Joi.string().max(100).optional().allow(''),
+  ethnicity: Joi.string().max(100).optional().allow('', null),
+  communicationStyle: Joi.string().optional().allow('', null),
+  loveStyle: Joi.string().optional().allow('', null),
+  personalityType: Joi.string().max(50).optional().allow(''),
+  privacySettings: Joi.object().optional(),
+  pets: Joi.alternatives().try(Joi.array().items(Joi.string()), Joi.string()).optional().allow('', null),
+  relationshipStatus: Joi.string().optional().allow('', null),
+  countryOfOrigin: Joi.string().max(100).optional().allow(''),
+  tribe: Joi.string().max(100).optional().allow(''),
+  languages: Joi.array().items(Joi.string()).optional(),
+  diasporaGeneration: Joi.string().optional().allow('', null),
+  language: Joi.string().optional().allow(''),
+  preferences: Joi.object().optional(),
+  favoriteSong: Joi.object({
+    title: Joi.string().max(200).optional().allow(''),
+    artist: Joi.string().max(200).optional().allow(''),
+    albumArt: Joi.string().optional().allow(''),
+    spotifyUri: Joi.string().optional().allow(''),
+    previewUrl: Joi.string().optional().allow(''),
+  }).optional(),
 }).unknown(true);
 
 module.exports = {

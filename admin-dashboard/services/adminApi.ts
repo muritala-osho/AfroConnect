@@ -1,4 +1,5 @@
-const API_BASE = '/api';
+const _viteApiUrl = import.meta.env.VITE_API_URL?.replace(/\/+$/, '');
+const API_BASE = _viteApiUrl ? `${_viteApiUrl}/api` : '/api';
 
 const getToken = (): string | null => localStorage.getItem('afroconnect_token');
 
@@ -13,6 +14,22 @@ const authHeaders = (): Record<string, string> => {
 };
 
 const handleResponse = async (res: Response) => {
+  const contentType = res.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (res.status === 401) {
+      clearToken();
+      window.location.reload();
+    }
+    const text = await res.text();
+    if (!res.ok || !contentType.includes('json')) {
+      throw new Error(
+        res.ok
+          ? 'Server returned an unexpected response. Check that VITE_API_URL is set correctly.'
+          : `Server error (${res.status}): Backend may be unreachable. Please check your API URL configuration.`
+      );
+    }
+    return JSON.parse(text);
+  }
   const data = await res.json();
   if (!res.ok) {
     if (res.status === 401) {
@@ -102,6 +119,15 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  deleteReportedContent: async (reportId: string) => {
+    const res = await fetch(`${API_BASE}/admin/flagged-content/report-${reportId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ action: 'reject' }),
+    });
+    return handleResponse(res);
+  },
+
   getSubscriptionsRevenue: async () => {
     const res = await fetch(`${API_BASE}/admin/subscriptions-revenue`, { headers: authHeaders() });
     return handleResponse(res);
@@ -125,6 +151,26 @@ export const adminApi = {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
+  verifyFace: async (userId: string): Promise<{
+    success: boolean;
+    verified: boolean;
+    similarity: number;
+    distance?: number;
+    liveness: { passed: boolean; issues: string[] };
+    error?: string;
+    message?: string;
+  }> => {
+    const token = getToken();
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${API_BASE}/verification/verify-face/by-url`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
     });
     return handleResponse(res);
   },
@@ -191,7 +237,22 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // ─── Legacy admin support routes (kept for backward compat) ───────────────
+  activateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  deactivateKillSwitch: async () => {
+    const res = await fetch(`${API_BASE}/admin/kill-switch/deactivate`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   getSupportTickets: async (status?: string) => {
     const query = status ? `?status=${status}` : '';
     const res = await fetch(`${API_BASE}/admin/support-tickets${query}`, { headers: authHeaders() });
@@ -216,9 +277,7 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // ─── Unified support system endpoints ─────────────────────────────────────
 
-  // GET /api/support/all — admin sees all, agent sees assigned only
   getAllSupportTickets: async (params?: { status?: string; category?: string; priority?: string; page?: number }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
@@ -229,13 +288,11 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // GET /api/support/ticket/:id — fetch single ticket with messages
   getSupportTicket: async (ticketId: string) => {
     const res = await fetch(`${API_BASE}/support/ticket/${ticketId}`, { headers: authHeaders() });
     return handleResponse(res);
   },
 
-  // POST /api/support/reply — unified reply for admin/agent/user
   replySupportUnified: async (ticketId: string, content: string) => {
     const res = await fetch(`${API_BASE}/support/reply`, {
       method: 'POST',
@@ -245,7 +302,6 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // PATCH /api/support/status — update ticket status
   updateSupportStatus: async (ticketId: string, status: string) => {
     const res = await fetch(`${API_BASE}/support/status`, {
       method: 'PATCH',
@@ -255,7 +311,6 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // PATCH /api/support/assign — assign ticket to agent (admin only)
   assignSupportTicket: async (ticketId: string, agentId: string | null) => {
     const res = await fetch(`${API_BASE}/support/assign`, {
       method: 'PATCH',
@@ -265,13 +320,11 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  // GET /api/support/agents — list all staff users
   getSupportAgents: async () => {
     const res = await fetch(`${API_BASE}/support/agents`, { headers: authHeaders() });
     return handleResponse(res);
   },
 
-  // ─── Churn & appeals ──────────────────────────────────────────────────────
   getChurnOverview: async () => {
     const res = await fetch(`${API_BASE}/engagement/admin/churn-overview`, { headers: authHeaders() });
     return handleResponse(res);
@@ -288,6 +341,35 @@ export const adminApi = {
       headers: authHeaders(),
       body: JSON.stringify({ action, adminResponse }),
     });
+    return handleResponse(res);
+  },
+
+  getUserDemographics: async () => {
+    const res = await fetch(`${API_BASE}/admin/user-demographics`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  getRevenueHistory: async () => {
+    const res = await fetch(`${API_BASE}/admin/revenue-history`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  getBoostsRevenue: async () => {
+    const res = await fetch(`${API_BASE}/admin/boosts-revenue`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  updateAdminProfile: async (payload: { name?: string; email?: string; avatar?: string }) => {
+    const res = await fetch(`${API_BASE}/admin/profile`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  getRecentActivity: async () => {
+    const res = await fetch(`${API_BASE}/admin/recent-activity`, { headers: authHeaders() });
     return handleResponse(res);
   },
 };

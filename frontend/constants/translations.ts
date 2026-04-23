@@ -13,7 +13,6 @@ export type LanguageCode =
   | "am";
 
 export type TranslationKeys = {
-  // Common
   loading: string;
   error: string;
   success: string;
@@ -31,7 +30,6 @@ export type TranslationKeys = {
   ok: string;
   search: string;
   
-  // Auth
   login: string;
   signUp: string;
   logout: string;
@@ -41,13 +39,11 @@ export type TranslationKeys = {
   createAccount: string;
   welcomeBack: string;
   
-  // Navigation
   discovery: string;
   matches: string;
   chats: string;
   profile: string;
   
-  // Discovery Screen
   findingPeople: string;
   highCompatibility: string;
   nearYou: string;
@@ -72,7 +68,6 @@ export type TranslationKeys = {
   lookingForPeople: string;
   goBack: string;
   
-  // Love Radar
   loveRadar: string;
   scanningNearby: string;
   peopleWithinKm: string;
@@ -98,7 +93,6 @@ export type TranslationKeys = {
   women: string;
   men: string;
   
-  // Profile
   myProfile: string;
   editProfile: string;
   changeProfilePicture: string;
@@ -120,7 +114,6 @@ export type TranslationKeys = {
   manage: string;
   primary: string;
   
-  // Settings
   language: string;
   theme: string;
   notifications: string;
@@ -132,7 +125,6 @@ export type TranslationKeys = {
   selectLanguage: string;
   languageChanged: string;
   
-  // Matches & Chat
   newMatch: string;
   noMatches: string;
   noMessages: string;
@@ -152,20 +144,17 @@ export type TranslationKeys = {
   refresh: string;
   adjustPreferences: string;
   
-  // Swipe
   itsAMatch: string;
   startChatting: string;
   keepSwiping: string;
   noMoreProfiles: string;
   checkBackLater: string;
   
-  // Filters
   filters: string;
   ageRange: string;
   maxDistance: string;
   showMe: string;
   
-  // Location
   locationRequired: string;
   locationUpdated: string;
   locationError: string;
@@ -174,11 +163,9 @@ export type TranslationKeys = {
   refreshLocation: string;
   openLoveRadar: string;
   
-  // Logout
   logoutConfirm: string;
   loggingOut: string;
   
-  // Events & Meetups
   events: string;
   eventsAndMeetups: string;
   browseEvents: string;
@@ -214,11 +201,18 @@ export type TranslationKeys = {
   all: string;
   full: string;
   
-  // Success Stories
   stories: string;
   loveStories: string;
   allStories: string;
   myStory: string;
+  deleteStory: string;
+  deleteStoryConfirm: string;
+  storyDeleted: string;
+  failedToDeleteStory: string;
+  warning: string;
+  somePhotosFailed: string;
+  continue: string;
+  totalStories: string;
   shareStory: string;
   shareYourStory: string;
   noStoriesYet: string;
@@ -467,6 +461,14 @@ export const translations: Translations = {
     loveStories: "Love Stories",
     allStories: "All Stories",
     myStory: "My Story",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Share Story",
     shareYourStory: "Share Your Story",
     noStoriesYet: "No Stories Yet",
@@ -709,6 +711,14 @@ export const translations: Translations = {
     loveStories: "Histoires d'amour",
     allStories: "Toutes les histoires",
     myStory: "Mon histoire",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Partager une histoire",
     shareYourStory: "Partagez votre histoire",
     noStoriesYet: "Pas encore d'histoires",
@@ -951,6 +961,14 @@ export const translations: Translations = {
     loveStories: "Historias de amor",
     allStories: "Todas las historias",
     myStory: "Mi historia",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Compartir historia",
     shareYourStory: "Comparte tu historia",
     noStoriesYet: "Aún no hay historias",
@@ -1193,6 +1211,14 @@ export const translations: Translations = {
     loveStories: "Histórias de amor",
     allStories: "Todas as histórias",
     myStory: "Minha história",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Compartilhar história",
     shareYourStory: "Compartilhe sua história",
     noStoriesYet: "Ainda não há histórias",
@@ -1435,6 +1461,14 @@ export const translations: Translations = {
     loveStories: "قصص الحب",
     allStories: "جميع القصص",
     myStory: "قصتي",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "شارك قصة",
     shareYourStory: "شارك قصتك",
     noStoriesYet: "لا توجد قصص بعد",
@@ -1677,6 +1711,14 @@ export const translations: Translations = {
     loveStories: "Hadithi za mapenzi",
     allStories: "Hadithi zote",
     myStory: "Hadithi yangu",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Shiriki hadithi",
     shareYourStory: "Shiriki hadithi yako",
     noStoriesYet: "Hakuna hadithi bado",
@@ -1919,6 +1961,14 @@ export const translations: Translations = {
     loveStories: "Awọn itan ifẹ",
     allStories: "Gbogbo awọn itan",
     myStory: "Itan mi",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Pin itan",
     shareYourStory: "Pin itan rẹ",
     noStoriesYet: "Ko si itan sibẹsibẹ",
@@ -2161,6 +2211,14 @@ export const translations: Translations = {
     loveStories: "Akụkọ ịhụnanya",
     allStories: "Akụkọ niile",
     myStory: "Akụkọ m",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Kekọrịta akụkọ",
     shareYourStory: "Kekọrịta akụkọ gị",
     noStoriesYet: "Enweghị akụkọ ọ bụla",
@@ -2403,6 +2461,14 @@ export const translations: Translations = {
     loveStories: "Labaran soyayya",
     allStories: "Dukan labarai",
     myStory: "Labararina",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Raba labari",
     shareYourStory: "Raba labarinki",
     noStoriesYet: "Babu labarai tukuna",
@@ -2645,6 +2711,14 @@ export const translations: Translations = {
     loveStories: "Izindaba zothando",
     allStories: "Zonke izindaba",
     myStory: "Indaba yami",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Yabelana ngendaba",
     shareYourStory: "Yabelana ngendaba yakho",
     noStoriesYet: "Azikho izindaba okwamanje",
@@ -2887,6 +2961,14 @@ export const translations: Translations = {
     loveStories: "Amabali othando",
     allStories: "Onke amabali",
     myStory: "Ibali lam",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "Yabelana ngebali",
     shareYourStory: "Yabelana ngebali lakho",
     noStoriesYet: "Akukho mabali okwangoku",
@@ -3129,6 +3211,14 @@ export const translations: Translations = {
     loveStories: "የፍቅር ታሪኮች",
     allStories: "ሁሉም ታሪኮች",
     myStory: "የእኔ ታሪክ",
+    deleteStory: "Delete Story",
+    deleteStoryConfirm: "Are you sure you want to delete your story?",
+    storyDeleted: "Your story has been deleted",
+    failedToDeleteStory: "Failed to delete story",
+    warning: "Warning",
+    somePhotosFailed: "Some photos failed to upload",
+    continue: "Continue",
+    totalStories: "Total Stories",
     shareStory: "ታሪክ አጋራ",
     shareYourStory: "ታሪክህን አጋራ",
     noStoriesYet: "እስካሁን ታሪኮች የሉም",

@@ -2,14 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
-const { sendOTPEmail } = require('../utils/emailService');
+const { sendOTP } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
+const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
+const { calculateMatchScore } = require('../utils/matching');
 
 
-// @route   GET /api/users/me
-// @desc    Get current user profile
-// @access  Private
 router.get('/me', protect, async (req, res) => {
   try {
     if (!req.user.emailVerified) {
@@ -32,12 +31,8 @@ router.get('/me', protect, async (req, res) => {
   }
 });
 
-// @route   PUT /api/users/me
-// @desc    Update current user profile
-// @access  Private
 router.put('/me', protect, require('../middleware/validate')(require('../validators/schemas').updateProfile), async (req, res) => {
   try {
-    // Ensure the user has verified their email before allowing profile updates
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
@@ -56,7 +51,6 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
 
     allowedUpdates.forEach(field => {
       if (updates[field] !== undefined) {
-        // Special handling for photos - set first photo as primary
         if (field === 'photos' && Array.isArray(updates[field]) && updates[field].length > 0) {
           user.photos = updates[field].map((photo, index) => ({
             ...photo,
@@ -65,10 +59,8 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
           }));
         }
 
-        // Handle preference updates
         else if (field === 'preferences') {
-          // Merge preferences instead of replacing
-          const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language'];
+          const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language', 'smoking', 'drinking', 'wantsKids', 'onlineNow', 'interests'];
           allowedPrefKeys.forEach(prefKey => {
             if (updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
@@ -80,18 +72,29 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
           });
+          if (Array.isArray(updates.preferences.genders) && updates.preferences.genders.length > 0) {
+            const g = updates.preferences.genders;
+            user.preferences.genderPreference = g.length === 1 ? g[0] : 'both';
+          }
         } else if (field === 'lifestyle' && updates.lifestyle) {
-          // Merge lifestyle instead of replacing
+          const lifestyleUpdate = { ...updates.lifestyle };
+          if (Array.isArray(lifestyleUpdate.pets)) {
+            lifestyleUpdate.pets = lifestyleUpdate.pets.join(',');
+          }
           user.lifestyle = {
             ...(user.lifestyle && typeof user.lifestyle.toObject === 'function' ? user.lifestyle.toObject() : (user.lifestyle || {})),
-            ...updates.lifestyle
+            ...lifestyleUpdate
           };
         } else if (field === 'privacySettings' && updates.privacySettings) {
-          // Merge privacySettings
           user.privacySettings = {
             ...(user.privacySettings || {}),
             ...updates.privacySettings
           };
+        } else if (['communicationStyle', 'loveStyle', 'personalityType'].includes(field)) {
+          const currentLifestyle = user.lifestyle && typeof user.lifestyle.toObject === 'function'
+            ? user.lifestyle.toObject()
+            : (user.lifestyle || {});
+          user.lifestyle = { ...currentLifestyle, [field]: updates[field] };
         } else {
           user[field] = updates[field];
         }
@@ -99,7 +102,6 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     });
 
     await user.save();
-    // Invalidate own profile cache on update
     await redis.del(`profile:me:${req.user._id}`);
 
     res.json({ 
@@ -110,13 +112,16 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     });
   } catch (error) {
     console.error('Profile update error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
+    let message = 'Server error';
+    if (error.name === 'ValidationError') {
+      message = Object.values(error.errors).map(e => e.message).join(', ');
+    } else if (error.message) {
+      message = error.message;
+    }
+    res.status(500).json({ success: false, message });
   }
 });
 
-// @route   GET /api/users/search
-// @desc    Search users by username or name
-// @access  Private
 router.get('/search', protect, async (req, res) => {
   try {
     const { query } = req.query;
@@ -128,7 +133,6 @@ router.get('/search', protect, async (req, res) => {
       });
     }
 
-    // Ensure the user has verified their email before allowing search
     if (!req.user.emailVerified) {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
@@ -140,7 +144,7 @@ router.get('/search', protect, async (req, res) => {
         { name: { $regex: query, $options: 'i' } }
       ]
     })
-    .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
+    .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire -email -resetPasswordOTP -resetPasswordOTPExpire -banned -banReason -bannedAt -appeal -suspended -suspendedUntil -tokenVersion')
     .limit(20);
 
     res.json({
@@ -156,9 +160,6 @@ router.get('/search', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/countries
-// @desc    Get distinct countries from user locations
-// @access  Private
 router.get('/countries', protect, async (req, res) => {
   try {
     const countries = await User.distinct('location.country', {
@@ -182,7 +183,11 @@ router.get('/countries', protect, async (req, res) => {
 
 router.get('/nearby', protect, async (req, res) => {
   try {
-    const { lat, lng, maxDistance, minAge, maxAge, genders } = req.query;
+    const {
+      lat, lng, maxDistance, minAge, maxAge, genders,
+      lookingFor, religion, smoking, drinking, wantsKids,
+      verifiedOnly, onlineOnly,
+    } = req.query;
     const isGlobal = req.query.global === 'true';
     const countryFilter = req.query.country;
 
@@ -190,7 +195,6 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    // Cache discovery results per user (2 min TTL — fast enough to stay fresh)
     const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${Math.round((parseFloat(lat) || 0) * 10)}:${Math.round((parseFloat(lng) || 0) * 10)}:${maxDistance || ''}:${minAge || ''}:${maxAge || ''}:${genders || ''}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
@@ -205,9 +209,20 @@ router.get('/nearby', protect, async (req, res) => {
 
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
+
     if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
       searchLng = currentUser.passportLocation.coordinates[0];
       searchLat = currentUser.passportLocation.coordinates[1];
+    }
+    else if (currentUser.premium?.isActive && currentUser.activeLocationId) {
+      const activeLoc = (currentUser.additionalLocations || []).find(
+        l => l._id.toString() === currentUser.activeLocationId.toString()
+      );
+      if (activeLoc?.lat && activeLoc?.lng) {
+        searchLat = activeLoc.lat;
+        searchLng = activeLoc.lng;
+        console.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
+      }
     }
 
     const blockedUserIds = currentUser.blockedUsers || [];
@@ -252,20 +267,21 @@ router.get('/nearby', protect, async (req, res) => {
       suspended: { $ne: true },
     };
 
-    if (req.query.verifiedOnly === 'true') {
-      query.verified = true;
-    }
+    const wantVerifiedOnly =
+      verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true;
+    if (wantVerifiedOnly) query.verified = true;
 
-    if (req.query.onlineOnly === 'true') {
-      query.onlineStatus = 'online';
-    }
+    const wantOnlineOnly =
+      onlineOnly === 'true' || currentUser.preferences?.onlineNow === true;
+    if (wantOnlineOnly) query.onlineStatus = 'online';
 
-    const minAgeFilter = minAge ? parseInt(minAge) : currentUser.preferences?.ageRange?.min || 18;
-    const maxAgeFilter = maxAge ? parseInt(maxAge) : currentUser.preferences?.ageRange?.max || 100;
-    query.age = { $gte: minAgeFilter, $lte: maxAgeFilter };
+    const minAgeFilter = minAge ? parseInt(minAge, 10) : (currentUser.preferences?.ageRange?.min || 18);
+    const maxAgeFilter = maxAge ? parseInt(maxAge, 10) : (currentUser.preferences?.ageRange?.max || 100);
+    query.age = { $gte: Number(minAgeFilter), $lte: Number(maxAgeFilter) };
 
-    if (genders) {
-      const genderArray = genders.split(',');
+    const resolvedGenders = genders || currentUser.preferences?.genderPreference;
+    if (resolvedGenders && resolvedGenders !== 'both' && resolvedGenders !== 'any') {
+      const genderArray = resolvedGenders.split(',').map(g => g.trim().toLowerCase());
       const expandedGenders = [];
       genderArray.forEach(g => {
         expandedGenders.push(g);
@@ -275,17 +291,38 @@ router.get('/nearby', protect, async (req, res) => {
         else if (g === 'woman') expandedGenders.push('female');
       });
       query.gender = { $in: [...new Set(expandedGenders)] };
-    } else {
-      const genderPref = currentUser.preferences?.genderPreference || 'both';
-      if (genderPref === 'male') query.gender = { $in: ['male', 'man'] };
-      else if (genderPref === 'female') query.gender = { $in: ['female', 'woman'] };
     }
 
-    let maxDist = maxDistance ? parseInt(maxDistance) : 50;
-    if (!maxDistance && currentUser.preferences?.maxDistance) {
-      const storedDist = currentUser.preferences.maxDistance;
-      maxDist = storedDist > 1000 ? Math.round(storedDist / 1000) : storedDist;
+    const resolvedLookingFor = lookingFor || null;
+    if (resolvedLookingFor) query.lookingFor = resolvedLookingFor;
+
+    const resolvedReligion = religion || null;
+    if (resolvedReligion && resolvedReligion !== 'any') {
+      query['lifestyle.religion'] = resolvedReligion;
     }
+
+    const resolvedSmoking = smoking || null;
+    if (resolvedSmoking && resolvedSmoking !== 'any') {
+      query['lifestyle.smoking'] = resolvedSmoking;
+    }
+
+    const resolvedDrinking = drinking || null;
+    if (resolvedDrinking && resolvedDrinking !== 'any') {
+      query['lifestyle.drinking'] = resolvedDrinking;
+    }
+
+    if (wantsKids != null && wantsKids !== 'any') {
+      query['lifestyle.wantsKids'] = wantsKids === 'true';
+    }
+
+    const isPremium = currentUser.premium?.isActive;
+    const FREE_MAX_DISTANCE_KM = 50;
+
+    const rawMaxDist = normaliseMaxDistanceKm(
+      maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
+      FREE_MAX_DISTANCE_KM
+    );
+    const maxDist = isPremium ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
     if (isGlobal) {
       if (countryFilter) {
@@ -310,60 +347,28 @@ router.get('/nearby', protect, async (req, res) => {
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
 
-    const myInterests = currentUser.interests || [];
+    const hasOrigin = effectiveLat != null && effectiveLng != null;
 
     users = users.map(user => {
       const userObj = user.toObject();
-      let score = 0;
 
-      let distanceKm = null;
-      if (effectiveLat && effectiveLng) {
-        let userLat, userLng;
-        if (user.location?.coordinates && user.location.coordinates.length >= 2 &&
-            !(user.location.coordinates[0] === 0 && user.location.coordinates[1] === 0)) {
-          userLng = user.location.coordinates[0];
-          userLat = user.location.coordinates[1];
-        } else if (user.location?.lat && user.location?.lng) {
-          userLat = user.location.lat;
-          userLng = user.location.lng;
-        }
+      const distanceKm = distanceToUser(effectiveLat, effectiveLng, user.location);
 
-        if (userLat != null && userLng != null) {
-          distanceKm = calculateDistance(effectiveLat, effectiveLng, userLat, userLng);
-        }
-      }
-      if (distanceKm === null) {
-        distanceKm = 99999;
-      }
+      const { total: score, breakdown } = calculateMatchScore(
+        userObj,
+        currentUser,
+        isGlobal ? null : distanceKm,
+        maxDist
+      );
 
-      if (!isGlobal) {
-        score += Math.max(0, maxDist - distanceKm);
-      }
-
-      if (myInterests.length > 0 && user.interests?.length > 0) {
-        const mySet = new Set(myInterests.map(i => i.toLowerCase()));
-        const shared = user.interests.filter(i => mySet.has(i.toLowerCase()));
-        score += shared.length * 10;
-      }
-
-      if (currentUser.lifestyle?.personalityType && user.lifestyle?.personalityType === currentUser.lifestyle?.personalityType) {
-        score += 30;
-      }
-
-      if (user.verified) {
-        score += 5;
-      }
-
-      return { ...userObj, score, distance: distanceKm };
+      return { ...userObj, score, scoreBreakdown: breakdown, distance: distanceKm };
     });
 
-    users.sort((a, b) => b.score - a.score);
-
-    const isPremium = currentUser.premium?.isActive;
-
-    if (!isGlobal && !isPremium && effectiveLat && effectiveLng) {
-      users = users.filter(u => u.distance <= maxDist);
+    if (!isGlobal && hasOrigin && !isPremium) {
+      users = users.filter(u => u.distance == null || u.distance <= maxDist);
     }
+
+    users.sort((a, b) => b.score - a.score);
 
     users = users.slice(0, 40);
 
@@ -372,11 +377,13 @@ router.get('/nearby', protect, async (req, res) => {
       const isOnline = user.onlineStatus === 'online' || user.online;
       const distanceVisible = isPremium || privacy.showDistance !== false;
 
-      // Filter photos by per-photo privacy — in discovery (no match yet) only show public photos
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
+      // eslint-disable-next-line no-unused-vars
+      const { scoreBreakdown, ...userWithoutBreakdown } = user;
+
       return {
-        ...user,
+        ...userWithoutBreakdown,
         photos: visiblePhotos,
         age: privacy.hideAge ? null : user.age,
         online: privacy.showOnlineStatus === false ? null : isOnline,
@@ -388,7 +395,6 @@ router.get('/nearby', protect, async (req, res) => {
 
     console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
 
-    // Cache discovery results for 2 minutes
     await redis.set(cacheKey, users, 120);
 
     res.json({
@@ -402,9 +408,6 @@ router.get('/nearby', protect, async (req, res) => {
 });
 
 
-// @route   GET /api/users/profile-views
-// @desc    Get users who viewed current user's profile
-// @access  Private
 router.get('/profile-views', protect, async (req, res) => {
   try {
     const isPremium = req.user.premium?.isActive;
@@ -419,7 +422,6 @@ router.get('/profile-views', protect, async (req, res) => {
     const user = await User.findById(req.user._id)
       .populate('profileViews.user', 'name username photos age gender');
     
-    // Sort by latest view and remove duplicates (only latest view from each user)
     const uniqueViews = [];
     const seenUsers = new Set();
     
@@ -455,7 +457,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       return res.json({ success: true, views: [], isPremium });
     }
     
-    // Sort by latest view and remove duplicates (only latest view from each user)
     const uniqueViews = [];
     const seenUsers = new Set();
     
@@ -466,7 +467,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
       }
     });
 
-    // For non-premium users, blur photos but show name and age
     const processedViews = uniqueViews.map(view => {
       const viewData = {
         _id: view.user._id,
@@ -517,9 +517,6 @@ router.get('/who-viewed-me', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/users/:id
-// @desc    Get user by ID
-// @access  Private
 router.get('/:id', protect, async (req, res) => {
   try {
     if (!req.user.emailVerified) {
@@ -537,10 +534,23 @@ router.get('/:id', protect, async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    // Do not return sensitive info like password, OTP etc.
     const { password, resetPasswordToken, resetPasswordExpire, verificationOTP, verificationOTPExpire, ...otherUserInfo } = user.toObject();
 
-    // Log profile view (don't log if viewing own profile)
+    if (req.user._id.toString() !== req.params.id) {
+      delete otherUserInfo.email;
+      delete otherUserInfo.resetPasswordOTP;
+      delete otherUserInfo.resetPasswordOTPExpire;
+      delete otherUserInfo.banned;
+      delete otherUserInfo.banReason;
+      delete otherUserInfo.bannedAt;
+      delete otherUserInfo.appeal;
+      delete otherUserInfo.suspended;
+      delete otherUserInfo.suspendedUntil;
+      delete otherUserInfo.tokenVersion;
+      delete otherUserInfo.verificationOTP;
+      delete otherUserInfo.verificationOTPExpire;
+    }
+
     if (req.user._id.toString() !== req.params.id) {
       await User.findByIdAndUpdate(req.params.id, {
         $push: {
@@ -552,7 +562,6 @@ router.get('/:id', protect, async (req, res) => {
       });
     }
 
-    // Apply privacy settings
     const isPremium = req.user.premium?.isActive;
     const privacy = user.privacySettings || {};
 
@@ -562,15 +571,12 @@ router.get('/:id', protect, async (req, res) => {
       otherUserInfo.onlineStatus = null;
     }
 
-    // Feature: Distance viewing is premium only
     if (!isPremium && (privacy.showDistance === false || !isPremium)) {
       otherUserInfo.distance = null;
     }
 
     if (privacy.showLastActive === false) otherUserInfo.lastActive = null;
 
-    // Enforce per-photo privacy
-    // Check if viewer is matched with the profile owner (friends-level access)
     const Match = require('../models/Match');
     const isMatched = await Match.exists({
       users: { $all: [req.user._id, user._id] },
@@ -594,9 +600,6 @@ router.get('/:id', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/users/photos/:photoIndex
-// @desc    Delete a specific photo from user's profile
-// @access  Private
 router.delete('/photos/:photoIndex', protect, async (req, res) => {
   try {
     const { photoIndex } = req.params;
@@ -611,15 +614,12 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid photo index' });
     }
     
-    // Don't allow deleting all photos
-    if (user.photos.length === 1) {
-      return res.status(400).json({ success: false, message: 'You must have at least one photo' });
+    if (user.photos.length <= 4) {
+      return res.status(400).json({ success: false, message: 'You need at least 4 photos on your profile. Add more before deleting this one.' });
     }
     
-    // Remove photo
     user.photos.splice(index, 1);
     
-    // Reset primary photo if needed
     if (user.photos.length > 0) {
       user.photos = user.photos.map((photo, idx) => ({
         ...photo,
@@ -637,9 +637,6 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
   }
 });
 
-// @route   DELETE /api/users/me
-// @desc    Delete user account
-// @access  Private
 router.delete('/me', protect, async (req, res) => {
   try {
     await User.findByIdAndDelete(req.user._id);
@@ -649,24 +646,6 @@ router.delete('/me', protect, async (req, res) => {
   }
 });
 
-function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const φ1 = lat1 * Math.PI / 180;
-  const φ2 = lat2 * Math.PI / 180;
-  const Δφ = (lat2 - lat1) * Math.PI / 180;
-  const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) *
-    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  // Return distance in kilometers with one decimal precision (e.g., 1.3 km)
-  const distanceKm = R * c;
-  return Math.max(0, Number(distanceKm.toFixed(1)));
-}
-
-// Location routes
 router.post('/me/locations', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
@@ -677,9 +656,58 @@ router.post('/me/locations', protect, async (req, res) => {
     if (user.additionalLocations.length >= 3) {
       return res.status(400).json({ success: false, message: 'Maximum 3 additional locations reached' });
     }
-    user.additionalLocations.push({ name: req.body.name });
+
+    const { name } = req.body;
+    if (!name?.trim()) {
+      return res.status(400).json({ success: false, message: 'Location name is required' });
+    }
+
+    let lat = null, lng = null, city = '', country = '';
+    try {
+      const geoUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`;
+      const geoRes = await fetch(geoUrl, { headers: { 'User-Agent': 'AfroConnect/1.0' } });
+      const geoData = await geoRes.json();
+      if (geoData && geoData.length > 0) {
+        lat = parseFloat(geoData[0].lat);
+        lng = parseFloat(geoData[0].lon);
+        const display = geoData[0].display_name?.split(',') || [];
+        city = display[0]?.trim() || name;
+        country = display[display.length - 1]?.trim() || '';
+      }
+    } catch (geoErr) {
+      console.warn('Geocoding failed for location:', name, geoErr.message);
+    }
+
+    user.additionalLocations.push({ name: name.trim(), lat, lng, city, country });
     await user.save();
     res.json({ success: true, locations: user.additionalLocations });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/me/locations/active', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const { locationId } = req.body;
+
+    if (!locationId) {
+      user.activeLocationId = null;
+      await user.save();
+      return res.json({ success: true, message: 'Reverted to GPS location', activeLocationId: null });
+    }
+
+    const loc = (user.additionalLocations || []).find(l => l._id.toString() === locationId);
+    if (!loc) {
+      return res.status(404).json({ success: false, message: 'Location not found' });
+    }
+    if (!loc.lat || !loc.lng) {
+      return res.status(400).json({ success: false, message: 'This location could not be geocoded. Please try a more specific name.' });
+    }
+
+    user.activeLocationId = loc._id;
+    await user.save();
+    res.json({ success: true, message: `Discovery set to ${loc.city || loc.name}`, activeLocationId: loc._id, location: loc });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -718,11 +746,14 @@ router.post('/passport-location', protect, async (req, res) => {
 router.delete('/me/locations/:locationId', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    user.additionalLocations = user.additionalLocations.filter(
+    if (user.activeLocationId?.toString() === req.params.locationId) {
+      user.activeLocationId = null;
+    }
+    user.additionalLocations = (user.additionalLocations || []).filter(
       loc => loc._id.toString() !== req.params.locationId
     );
     await user.save();
-    res.json({ success: true, locations: user.additionalLocations });
+    res.json({ success: true, locations: user.additionalLocations, activeLocationId: user.activeLocationId });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

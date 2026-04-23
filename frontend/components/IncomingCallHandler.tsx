@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
 import { useAuth } from '@/hooks/useAuth';
 import socketService from '@/services/socket';
@@ -20,6 +21,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { setupNotificationListeners } from '@/services/notifications';
 import { useCallContext } from '@/contexts/CallContext';
+import {
+  displayIncomingCall,
+  endCallKeepCall,
+  reportCallEnded,
+  setupCallKeepListeners,
+  removeCallKeepListeners,
+  setCallActive,
+} from '@/services/callkeep';
 
 interface IncomingCallData {
   callData: any;
@@ -36,11 +45,18 @@ export default function IncomingCallHandler() {
   const { user, token } = useAuth();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const { setActiveCall, clearCall } = useCallContext();
+  const { setActiveCall, clearCall, activeCall } = useCallContext();
 
   const [incomingCall, setIncomingCall] = useState<IncomingCallData | null>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [inActiveCall, setInActiveCall] = useState(false);
+
+  const isVisibleRef = useRef(false);
+  const activeCallRef = useRef(activeCall);
+  const incomingCallRef = useRef<IncomingCallData | null>(null);
+
+  useEffect(() => { isVisibleRef.current = isVisible; }, [isVisible]);
+  useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+  useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
 
   const slideAnim   = useRef(new Animated.Value(-300)).current;
   const pulseAnim   = useRef(new Animated.Value(1)).current;
@@ -48,6 +64,8 @@ export default function IncomingCallHandler() {
   const ringtoneRef = useRef<Audio.Sound | null>(null);
   const hapticIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoDismissRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pulseLoopRef      = useRef<any>(null);
+  const coldStartHandledRef = useRef(false);
 
   /* ── ringtone ── */
   const stopRingtone = useCallback(async () => {
@@ -59,6 +77,10 @@ export default function IncomingCallHandler() {
       clearTimeout(autoDismissRef.current);
       autoDismissRef.current = null;
     }
+    if (pulseLoopRef.current) {
+      pulseLoopRef.current.stop();
+      pulseLoopRef.current = null;
+    }
     Vibration.cancel();
     try {
       if (ringtoneRef.current) {
@@ -67,6 +89,14 @@ export default function IncomingCallHandler() {
         await s.stopAsync().catch(() => {});
         await s.unloadAsync().catch(() => {});
       }
+    } catch {}
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        playThroughEarpieceAndroid: true,
+      });
     } catch {}
   }, []);
 
@@ -101,7 +131,101 @@ export default function IncomingCallHandler() {
     });
   }, [slideAnim, opacityAnim]);
 
-  /* ── main socket listener ── */
+  const showCallUI = useCallback(async (data: IncomingCallData) => {
+    setIncomingCall(data);
+    setIsVisible(true);
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+
+    const callerName = data.callerInfo?.name || 'Unknown';
+    const hasVideo   = data.callData?.callType === 'video';
+    if (Platform.OS !== 'web') {
+      displayIncomingCall(data.callerId, callerName, hasVideo);
+    }
+
+    await playRingtone();
+
+    Animated.parallel([
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 55, friction: 8 }),
+      Animated.timing(opacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+    ]).start();
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    pulseLoopRef.current = loop;
+    loop.start();
+
+    hapticIntervalRef.current = setInterval(() => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }, 2200);
+
+    autoDismissRef.current = setTimeout(async () => {
+      await stopRingtone();
+      reportCallEnded(data.callerId);
+      socketService.missedCall?.({ targetUserId: data.callerId, callType: data.callData?.callType || 'audio' });
+      dismissModal();
+    }, AUTO_DISMISS_MS);
+  }, [playRingtone, slideAnim, opacityAnim, pulseAnim, stopRingtone, dismissModal]);
+
+  /* ── CallKeep native UI event listeners ── */
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    setupCallKeepListeners({
+      onAnswer: (callerId) => {
+        console.log('[CallKeep] Native answer pressed — callerId:', callerId);
+        const call = incomingCallRef.current;
+        if (!call) return;
+
+        stopRingtone();
+
+        socketService.acceptCall({ callerId: call.callerId, callData: call.callData });
+        setCallActive(call.callerId);
+
+        const callTypeFromData = call.callData?.callType === 'video' ? 'video' : 'voice';
+        setActiveCall({
+          userId: call.callerId,
+          userName: call.callerInfo?.name || 'Unknown',
+          userPhoto: call.callerInfo?.photo,
+          isIncoming: true,
+          callStatus: 'connected',
+          callType: callTypeFromData,
+          duration: 0,
+        });
+
+        setIsVisible(false);
+        setIncomingCall(null);
+
+        navigation.navigate(callTypeFromData === 'video' ? 'VideoCall' : 'VoiceCall', {
+          userId:       call.callerId,
+          userName:     call.callerInfo?.name || 'Unknown',
+          userPhoto:    call.callerInfo?.photo || '',
+          isIncoming:   true,
+          callData:     call.callData,
+          callerId:     call.callerId,
+          callAccepted: true,
+        });
+      },
+      onEnd: (callerId) => {
+        console.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
+        const call = incomingCallRef.current;
+        if (!call) return;
+        stopRingtone();
+        socketService.declineCall({ callerId: call.callerId });
+        dismissModal();
+      },
+    });
+
+    return () => {
+      removeCallKeepListeners();
+    };
+  }, []);
+
+  /* ── Socket listeners ── */
   useEffect(() => {
     const myUserId = (user as any)?._id || user?.id;
     if (!myUserId || !token) return;
@@ -109,151 +233,164 @@ export default function IncomingCallHandler() {
     const handleIncomingCall = async (data: IncomingCallData) => {
       console.log('Incoming call:', data);
 
-      // Already in a call → auto-decline (busy)
-      if (inActiveCall || isVisible) {
-        socketService.declineCall({
+      const currentActiveCall = activeCallRef.current;
+      const currentlyVisible = isVisibleRef.current;
+
+      const inActiveCall = currentActiveCall && (
+        currentActiveCall.callStatus === 'connected' ||
+        currentActiveCall.callStatus === 'ringing' ||
+        currentActiveCall.callStatus === 'connecting'
+      );
+
+      if (inActiveCall || currentlyVisible) {
+        socketService.busyCall({
           callerId: data.callerId,
           callType: data.callData?.callType || 'audio',
         });
         return;
       }
 
-      setIncomingCall(data);
-      setIsVisible(true);
+      await showCallUI(data);
+    };
 
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      await playRingtone();
+    const handleCallEnded = async () => {
+      await stopRingtone();
+      const call = incomingCallRef.current;
+      if (call) reportCallEnded(call.callerId);
+      dismissModal();
+    };
 
-      // Animate in
-      Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 55, friction: 8 }),
-        Animated.timing(opacityAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
-      ]).start();
-
-      // Pulse avatar
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.12, duration: 700, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
-        ])
-      ).start();
-
-      // Haptic repeater
-      hapticIntervalRef.current = setInterval(() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }, 2200);
-
-      // Auto-dismiss if not answered
-      autoDismissRef.current = setTimeout(async () => {
-        await stopRingtone();
-        socketService.missedCall?.({ targetUserId: data.callerId, callType: data.callData?.callType || 'audio' });
-        dismissModal();
-      }, AUTO_DISMISS_MS);
+    const handleCallDeclined = async () => {
+      await stopRingtone();
+      const call = incomingCallRef.current;
+      if (call) reportCallEnded(call.callerId);
+      dismissModal();
     };
 
     socketService.onIncomingCall(handleIncomingCall);
-
-    // Caller ended before answer
-    const handleCallEnded = async () => {
-      await stopRingtone();
-      dismissModal();
-      setInActiveCall(false);
-    };
     socketService.on('call:ended', handleCallEnded);
-
-    // Caller cancelled while ringing
-    const handleCallDeclined = async () => {
-      await stopRingtone();
-      dismissModal();
-    };
     socketService.on('call:declined', handleCallDeclined);
 
-    // Notification tap while backgrounded
-    const unsubscribe = setupNotificationListeners(
-      () => {},
-      (response) => {
-        const data = response.notification.request.content.data;
-        if (data?.type === 'call') {
-          navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
-            userId: data.callerId,
-            userName: data.callerName,
-            userPhoto: data.callerPhoto,
-            isIncoming: true,
-            callData: data.callData,
-            callerId: data.callerId,
-          });
-        } else if (data?.type === 'message') {
-          navigation.navigate('ChatDetail', {
-            userId: data.senderId,
-            userName: data.senderName,
-          });
-        }
-      }
-    );
+    const pendingVoip = (global as any).__pendingVoipCall;
+    if (pendingVoip) {
+      (global as any).__pendingVoipCall = null;
+      handleIncomingCall({
+        callerId: pendingVoip.callerId,
+        callerInfo: { name: pendingVoip.callerName, photo: '' },
+        callData: { callType: pendingVoip.callType, ...pendingVoip.callData },
+      });
+    }
 
     return () => {
       socketService.off('call:incoming');
       socketService.off('call:ended');
       socketService.off('call:declined');
-      if (unsubscribe) unsubscribe();
       stopRingtone();
     };
-  }, [user?.id, token, inActiveCall, isVisible]);
+  }, [(user as any)?._id || user?.id, token]);
 
-  /* ── Accept ── */
+  /* ── Handle notification tap (cold start / tapped-from-background) ── */
+  const handleNotificationResponse = useCallback(async (response: any) => {
+    const data = response?.notification?.request?.content?.data;
+    if (!data) return;
+
+    if (data?.type === 'call') {
+      await stopRingtone();
+      const callerId = data.callerId;
+      if (callerId) reportCallEnded(callerId);
+      dismissModal();
+      socketService.acceptCall({ callerId: data.callerId, callData: data.callData });
+      navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
+        userId:       data.callerId,
+        userName:     data.callerName,
+        userPhoto:    data.callerPhoto || '',
+        isIncoming:   true,
+        callData:     data.callData,
+        callerId:     data.callerId,
+        callAccepted: true,
+      });
+    } else if (data?.type === 'message') {
+      navigation.navigate('ChatDetail', {
+        userId:   data.senderId,
+        userName: data.senderName,
+      });
+    } else if (data?.type === 'match') {
+      navigation.navigate('Discovery');
+    }
+  }, [stopRingtone, dismissModal, navigation]);
+
+  useEffect(() => {
+    if (!coldStartHandledRef.current) {
+      coldStartHandledRef.current = true;
+      Notifications.getLastNotificationResponseAsync().then((response) => {
+        if (response) handleNotificationResponse(response);
+      });
+    }
+
+    const unsubscribe = setupNotificationListeners(
+      () => {},
+      handleNotificationResponse,
+    );
+    return unsubscribe;
+  }, [handleNotificationResponse]);
+
+  /* ── Accept (in-app button) ── */
   const handleAccept = useCallback(async () => {
-    if (!incomingCall) return;
+    const call = incomingCallRef.current;
+    if (!call) return;
     await stopRingtone();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    // Signal server
     socketService.acceptCall({
-      callerId: incomingCall.callerId,
-      callData: incomingCall.callData,
+      callerId: call.callerId,
+      callData: call.callData,
     });
+
+    setCallActive(call.callerId);
 
     setIsVisible(false);
-    setInActiveCall(true);
 
-    // Register in global call context
+    const callTypeFromData = call.callData?.callType === 'video' ? 'video' : 'voice';
     setActiveCall({
-      userId: incomingCall.callerId,
-      userName: incomingCall.callerInfo?.name || 'Unknown',
-      userPhoto: incomingCall.callerInfo?.photo,
-      isIncoming: true,
-      callStatus: 'connected',
-      duration: 0,
+      userId:      call.callerId,
+      userName:    call.callerInfo?.name || 'Unknown',
+      userPhoto:   call.callerInfo?.photo,
+      isIncoming:  true,
+      callStatus:  'connected',
+      callType:    callTypeFromData,
+      duration:    0,
     });
 
-    const callType   = incomingCall.callData?.callType || 'voice';
-    const screenName = callType === 'video' ? 'VideoCall' : 'VoiceCall';
-
-    navigation.navigate(screenName, {
-      userId:       incomingCall.callerId,
-      userName:     incomingCall.callerInfo?.name || 'Unknown',
-      userPhoto:    incomingCall.callerInfo?.photo || '',
+    navigation.navigate(callTypeFromData === 'video' ? 'VideoCall' : 'VoiceCall', {
+      userId:       call.callerId,
+      userName:     call.callerInfo?.name || 'Unknown',
+      userPhoto:    call.callerInfo?.photo || '',
       isIncoming:   true,
-      callData:     incomingCall.callData,
-      callerId:     incomingCall.callerId,
-      callAccepted: true,   // skip ringing — already accepted
+      callData:     call.callData,
+      callerId:     call.callerId,
+      callAccepted: true,
     });
 
     setIncomingCall(null);
-  }, [incomingCall, stopRingtone, setActiveCall, navigation]);
+  }, [stopRingtone, setActiveCall, navigation]);
 
-  /* ── Decline ── */
+  /* ── Decline (in-app button) ── */
   const handleDecline = useCallback(async () => {
-    if (!incomingCall) return;
+    const call = incomingCallRef.current;
+    if (!call) return;
     await stopRingtone();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    socketService.declineCall({ callerId: incomingCall.callerId });
+
+    endCallKeepCall(call.callerId);
+
+    socketService.declineCall({ callerId: call.callerId });
     dismissModal();
-  }, [incomingCall, stopRingtone, dismissModal]);
+  }, [stopRingtone, dismissModal]);
 
   if (!isVisible || !incomingCall) return null;
 
-  const callType  = incomingCall.callData?.callType || 'voice';
-  const isVideo   = callType === 'video';
+  const callType   = incomingCall.callData?.callType || 'voice';
+  const isVideo    = callType === 'video';
   const callerName = incomingCall.callerInfo?.name || 'Unknown';
 
   return (
@@ -277,7 +414,6 @@ export default function IncomingCallHandler() {
             end={{ x: 1, y: 1 }}
             style={styles.gradient}
           >
-            {/* Header label */}
             <View style={styles.headerPill}>
               <Ionicons
                 name={isVideo ? 'videocam' : 'call'}
@@ -289,14 +425,12 @@ export default function IncomingCallHandler() {
               </ThemedText>
             </View>
 
-            {/* Caller info */}
             <View style={styles.callerRow}>
               <Animated.View style={[styles.avatarWrap, { transform: [{ scale: pulseAnim }] }]}>
                 <SafeImage
                   source={{ uri: incomingCall.callerInfo?.photo || 'https://via.placeholder.com/80' }}
                   style={styles.avatar}
                 />
-                {/* Live indicator */}
                 <View style={styles.liveIndicator} />
               </Animated.View>
 
@@ -310,12 +444,9 @@ export default function IncomingCallHandler() {
               </View>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider} />
 
-            {/* Action buttons */}
             <View style={styles.actions}>
-              {/* Decline */}
               <View style={styles.actionWrap}>
                 <Pressable style={styles.declineBtn} onPress={handleDecline}>
                   <Ionicons
@@ -328,7 +459,6 @@ export default function IncomingCallHandler() {
                 <ThemedText style={styles.actionLabel}>Decline</ThemedText>
               </View>
 
-              {/* Accept */}
               <View style={styles.actionWrap}>
                 <Pressable style={styles.acceptBtn} onPress={handleAccept}>
                   <Ionicons

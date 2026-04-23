@@ -4,30 +4,64 @@
     "slug": "afroconnect",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/app-icon-new.png",
     "scheme": "afroconnect",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.afroconnect.app"
+      "bundleIdentifier": "com.afroconnect.app",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "backgroundModes": ["voip", "audio", "fetch", "remote-notification"],
+      "infoPlist": {
+        "UIBackgroundModes": ["voip", "audio", "fetch", "remote-notification"]
+      },
+      "entitlements": {
+        "com.apple.developer.telephony.call-capability": "com.apple.developer.telephony.call-capability"
+      }
     },
     "android": {
       "package": "com.afroconnect.app",
+      "googleServicesFile": "./google-services.json",
+      "useNextNotificationsApi": true,
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
+        "backgroundColor": "#1A0A2E",
+        "foregroundImage": "./assets/images/android-adaptive-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.MANAGE_OWN_CALLS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+      ]
     },
     "web": {
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withCallKeep",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       [
         "expo-splash-screen",
         {
@@ -40,6 +74,30 @@
           }
         }
       ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/android-icon-monochrome.png",
+          "color": "#FF6B9D",
+          "defaultChannel": "default",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Allow AfroConnect to access your microphone to record voice messages."
+        }
+      ],
       "expo-web-browser",
       [
         "expo-media-library",
@@ -47,17 +105,22 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to save images.",
           "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos to your gallery.",
           "isAccessMediaLocationEnabled": true,
-          "granularPermissions": ["photo", "video"]
+          "granularPermissions": [
+            "photo",
+            "video"
+          ]
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "reactCompiler": false
     },
     "extra": {
       "eas": {
-        "projectId": "e53d3faf-7f55-4f6a-a3e8-6eb3e1637703"
+        "projectId": "6d96f0e1-1af8-4b2c-aec1-43be03ba7fa1"
       }
-    }
+    },
+    "owner": "oluwanifemidavid"
   }
 }

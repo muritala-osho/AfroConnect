@@ -28,11 +28,9 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
 
-  // UI entrance animation — fast
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
 
-  // Crossfade slideshow
   const [currentIndex, setCurrentIndex] = useState(0);
   const [nextIndex, setNextIndex] = useState(1);
   const crossfade = useRef(new Animated.Value(0)).current;
@@ -44,13 +42,11 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    // Entrance animation — snappy 400ms
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
       Animated.timing(slideAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
     ]).start();
 
-    // Slideshow tick every 4 seconds
     const interval = setInterval(() => {
       if (isAnimating.current) return;
       isAnimating.current = true;

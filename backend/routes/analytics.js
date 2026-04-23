@@ -5,9 +5,6 @@ const { protect } = require('../middleware/auth');
 const Activity = require('../models/Activity');
 const Match = require('../models/Match');
 
-// @route   GET /api/analytics/profile-views
-// @desc    Get profile view analytics
-// @access  Private
 router.get('/profile-views', protect, async (req, res) => {
   try {
     const { period = '7d' } = req.query;
@@ -37,9 +34,6 @@ router.get('/profile-views', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/analytics/match-rate
-// @desc    Get match success rate
-// @access  Private
 router.get('/match-rate', protect, async (req, res) => {
   try {
     const User = require('../models/User');

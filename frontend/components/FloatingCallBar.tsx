@@ -19,13 +19,19 @@ function formatDuration(s: number) {
 }
 
 export default function FloatingCallBar() {
-  const { activeCall, isCallMinimized, maximizeCall } = useCallContext();
+  const { activeCall, isCallMinimized, isOnCallScreen, maximizeCall } = useCallContext();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-80)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const show = !!(activeCall && isCallMinimized && activeCall.callStatus === "connected");
+  /* Only show the bar when minimized AND not currently on a call screen */
+  const show = !!(
+    activeCall &&
+    isCallMinimized &&
+    activeCall.callStatus === "connected" &&
+    !isOnCallScreen
+  );
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -48,7 +54,8 @@ export default function FloatingCallBar() {
     return () => loop.stop();
   }, [show]);
 
-  if (!activeCall) return null;
+  /* Never render on top of the call screens */
+  if (!activeCall || isOnCallScreen) return null;
 
   const handleTap = () => {
     maximizeCall();

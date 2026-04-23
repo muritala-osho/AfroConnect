@@ -29,6 +29,7 @@ import { StoredUser } from "@/utils/storage";
 import { getPhotoSource } from "@/utils/photos";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { Image as ExpoImage } from "expo-image";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import LikeCard from "@/components/LikeCard";
 import socketService from "@/services/socket";
 
@@ -156,11 +157,7 @@ const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibil
             {item.user.name}, {item.user.age}
           </ThemedText>
           {item.user.verified && (
-            <ExpoImage
-              source={require("@/assets/icons/verified-tick.png")}
-              style={{ width: 18, height: 18, marginLeft: 4 }}
-              contentFit="contain"
-            />
+            <VerificationBadge size={14} />
           )}
         </View>
         {item.user.location ? (
@@ -197,7 +194,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     }, [token])
   );
 
-  // Real-time: when a first message is sent in any match, clear that match's countdown immediately
   useEffect(() => {
     const handleNewMessage = (data: any) => {
       const matchId = data.matchId || data.message?.matchId;
@@ -208,11 +204,22 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         )
       );
     };
+    const handleFirstMessage = (data: any) => {
+      const matchId = data?.matchId;
+      if (!matchId) return;
+      setMatches((prev) =>
+        prev.map((m) =>
+          m.id === matchId ? { ...m, hasFirstMessage: true, expiresAt: null } : m
+        )
+      );
+    };
     socketService.on("chat:new-message", handleNewMessage);
     socketService.on("message:new", handleNewMessage);
+    socketService.on("match:first-message", handleFirstMessage);
     return () => {
       socketService.off("chat:new-message");
       socketService.off("message:new");
+      socketService.off("match:first-message");
     };
   }, []);
 
@@ -238,7 +245,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     
     setLoading(true);
     try {
-      // Fetch matches and likes
       const [matchesRes, likesRes] = await Promise.all([
         api.get<{ success: boolean; matches: any[] }>('/match/my-matches', token),
         api.get<{ success: boolean; users: any[] }>('/match/who-likes-me', token)
@@ -349,12 +355,10 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const handleLikeBack = async (likeUserId: string) => {
     if (!token) return;
     try {
-      // Use friends/request endpoint which handles mutual likes and creates matches
       const response = await api.post<{ isMatch?: boolean; matchedUser?: any }>('/friends/request', { receiverId: likeUserId }, token);
       if (response.success) {
         setWhoLikesMe(prev => prev.filter(u => u._id !== likeUserId));
         
-        // If it's a match, show the match popup
         if (response.data?.isMatch && response.data?.matchedUser) {
           const matchedUser = response.data.matchedUser;
           navigation.navigate('MatchPopup', {

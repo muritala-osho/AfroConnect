@@ -167,7 +167,15 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         );
         return;
       } else {
-        showAlert("Sign In Failed", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
+        const isNetworkError =
+          errorMsg.toLowerCase().includes("network") ||
+          errorMsg.toLowerCase().includes("fetch") ||
+          errorMsg.toLowerCase().includes("connection") ||
+          error.name === "TypeError";
+        const displayMsg = isNetworkError
+          ? "Couldn't connect to the server. Please check your internet connection and try again."
+          : errorMsg;
+        showAlert("Sign In Failed", displayMsg, [{ text: "Try Again", style: "default" }], "alert-circle");
       }
     } finally {
       setLoading(false);

@@ -30,7 +30,6 @@ const storiesRoutes = require('./routes/stories');
 const aiRoutes = require('./routes/ai');
 const radarRoutes = require('./routes/radar');
 const agoraRoutes = require('./routes/agora');
-const icebreakerRoutes = require('./routes/icebreakers');
 const activityRoutes = require('./routes/activity');
 const promptsRoutes = require('./routes/prompts');
 const quizRoutes = require('./routes/quiz');
@@ -40,7 +39,8 @@ const supportRoutes = require('./routes/support');
 
 const successStoriesRoutes = require('./routes/successStories');
 const subscriptionRoutes = require('./routes/subscription');
-const commentsRoutes = require('./routes/comments');
+const muteRoutes = require('./routes/mute');
+const sessionsRoutes = require('./routes/sessions');
 
 const compression = require('compression');
 const helmet = require('helmet');
@@ -62,7 +62,10 @@ const isOriginAllowed = (origin) => {
   if (!origin) return true; // allow non-browser requests (mobile apps, Postman)
   if (ALLOWED_ORIGINS.length === 0) return true; // dev mode: no restriction
   return ALLOWED_ORIGINS.some(allowed =>
-    origin === allowed || origin.endsWith('.replit.app') || origin.endsWith('.replit.dev')
+    origin === allowed ||
+    origin.endsWith('.replit.app') ||
+    origin.endsWith('.replit.dev') ||
+    origin.endsWith('.vercel.app')
   );
 };
 
@@ -85,6 +88,8 @@ const io = socketIO(server, {
   pingTimeout: 5000,
   maxHttpBufferSize: 1e6
 });
+
+app.set('io', io);
 
 // Optional Redis setup for socket scaling / shared state
 let redisClient;
@@ -174,10 +179,19 @@ app.use(compression());
 // Middleware - CORS first
 app.use(cors(corsOptions));
 
-// Lightweight request logging (only in development to avoid performance hit)
+// Lightweight request logging (non-production: log everything; production: log notification routes always)
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
     console.log(`[BACKEND] ${req.method} ${req.url}`);
+    next();
+  });
+} else {
+  // In production, always log push-notification-related routes so we can
+  // diagnose delivery issues without enabling full verbose logging.
+  app.use((req, res, next) => {
+    if (req.url.startsWith('/api/notifications') || req.url.startsWith('/api/engagement')) {
+      console.log(`[BACKEND] ${req.method} ${req.url}`);
+    }
     next();
   });
 }
@@ -186,7 +200,7 @@ if (process.env.NODE_ENV !== 'production') {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Sanitize request data against NoSQL injection
+// Sanitize request data against NoSQL injection (custom deep sanitizer)
 // Recursively removes keys starting with $ or containing . from req.body and req.params
 const sanitizeObject = (obj) => {
   if (!obj || typeof obj !== 'object') return;
@@ -201,6 +215,27 @@ const sanitizeObject = (obj) => {
 app.use((req, res, next) => {
   sanitizeObject(req.body);
   sanitizeObject(req.params);
+  next();
+});
+
+// XSS protection — strip dangerous HTML tags from string values in req.body only
+// (avoids the req.query getter-only issue that breaks xss-clean on this Express version)
+const xssSanitize = (obj) => {
+  if (!obj || typeof obj !== 'object') return;
+  Object.keys(obj).forEach(key => {
+    if (typeof obj[key] === 'string') {
+      obj[key] = obj[key]
+        .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/javascript:/gi, '')
+        .replace(/on\w+\s*=/gi, '');
+    } else if (typeof obj[key] === 'object') {
+      xssSanitize(obj[key]);
+    }
+  });
+};
+app.use((req, res, next) => {
+  if (req.body) xssSanitize(req.body);
   next();
 });
 
@@ -302,6 +337,23 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'AfroConnect API is running' });
 });
 
+/*
+ * ── App version check ──────────────────────────────────────────────────────
+ * Update `latestVersion` here whenever you release a new build.
+ * Set `minimumVersion` to force-block older builds that are incompatible.
+ * Set `forceUpdate: true` to show an un-dismissible modal instead of a banner.
+ */
+app.get('/api/app-version', (req, res) => {
+  res.json({
+    latestVersion:  '1.0.0',
+    minimumVersion: '1.0.0',
+    forceUpdate:    false,
+    message:        'A new version of AfroConnect is available with improvements and bug fixes.',
+    androidUrl:     'https://play.google.com/store/apps/details?id=com.afroconnect',
+    iosUrl:         'https://apps.apple.com/app/afroconnect/id0000000000',
+  });
+});
+
 // DEBUG: Log all registered routes after they are defined
 const logRoutes = () => {
   if (app._router && app._router.stack) {
@@ -314,11 +366,34 @@ const logRoutes = () => {
 };
 
 app.get('/health', (req, res) => {
+  const settings = adminRoutes.getSettings ? adminRoutes.getSettings() : {};
+  if (settings.maintenanceMode) {
+    return res.status(503).json({
+      status: 'maintenance',
+      maintenance: true,
+      message: 'AfroConnect is under maintenance.',
+      timestamp: Date.now(),
+    });
+  }
   res.json({
     status: 'ok',
     uptime: process.uptime(),
     mongo: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     timestamp: Date.now(),
+  });
+});
+
+// ─── Maintenance mode gate ────────────────────────────────────────────────────
+// Reads live appSettings from adminRoutes; admin + auth routes always pass through.
+app.use((req, res, next) => {
+  const settings = adminRoutes.getSettings ? adminRoutes.getSettings() : {};
+  if (!settings.maintenanceMode) return next();
+  // Always allow admin API and auth routes so admins can deactivate the switch
+  if (req.path.startsWith('/api/admin') || req.path.startsWith('/api/auth')) return next();
+  return res.status(503).json({
+    success: false,
+    maintenance: true,
+    message: 'AfroConnect is currently undergoing maintenance. Please try again shortly.',
   });
 });
 
@@ -330,6 +405,10 @@ app.use('/api/chat', messageLimiter, chatRoutes);
 app.use('/api/call', callRoutes);
 app.use('/api/upload', uploadLimiter, uploadRoutes);
 app.use('/api/verification', verificationRoutes);
+app.post('/upload-verification-video', protect, (req, res, next) => {
+  req.url = '/upload-verification-video';
+  verificationRoutes(req, res, next);
+});
 app.use('/api/reports', reportRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/analytics', analyticsRoutes);
@@ -337,13 +416,16 @@ app.use('/api/legal', legalRoutes);
 app.use('/api/account', accountRoutes);
 app.use('/api/block', blockRoutes);
 app.use('/api/admin', adminRoutes);
+const auditLogRoutes = require('./routes/auditLog');
+app.use('/api/admin/audit-log', auditLogRoutes);
+const scheduledBroadcastRoutes = require('./routes/scheduledBroadcasts');
+app.use('/api/admin/scheduled-broadcasts', scheduledBroadcastRoutes);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use('/api/stories', storiesRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/radar', radarRoutes);
 app.use('/api/agora', agoraRoutes);
-app.use('/api/icebreakers', icebreakerRoutes);
 app.use('/api/activity', activityRoutes);
 app.use('/api/prompts', promptsRoutes);
 app.use('/api/quiz', quizRoutes);
@@ -354,9 +436,15 @@ app.use('/api/success-stories', successStoriesRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 const engagementRoutes = require('./routes/engagement');
 app.use('/api/engagement', engagementRoutes);
-app.use('/api/comments', commentsRoutes);
-const streakRoutes = require('./routes/streak');
-app.use('/api/streak', streakRoutes);
+const spotifyRoutes = require('./routes/spotify');
+app.use('/api/spotify', spotifyRoutes);
+app.use('/api/mute', muteRoutes);
+app.use('/api/sessions', sessionsRoutes);
+/* Alias: some redirect URIs may be registered without the /api prefix */
+app.get('/auth/spotify/callback', (req, res) => {
+  const qs = Object.keys(req.query).map(k => `${k}=${encodeURIComponent(req.query[k])}`).join('&');
+  res.redirect(`/api/spotify/callback${qs ? '?' + qs : ''}`);
+});
 
 logRoutes();
 
@@ -666,24 +754,63 @@ io.on('connection', (socket) => {
       const isTargetOnline = onlineUsers.has(targetUserId);
       if (!isTargetOnline) {
         try {
-          const targetUser = await User.findById(targetUserId).select('pushToken pushNotificationsEnabled muteSettings');
           const callType = callData?.callType || 'voice';
-          const isMutedByCaller = targetUser?.muteSettings?.mutedUsers?.some(
-            (m) =>
-              m.userId.toString() === callerId &&
-              (m.muteAll || (callType === 'voice' ? m.muteVoiceCalls : m.muteVideoCalls))
+          const notifType = callType === 'video' ? 'video_call' : 'voice_call';
+          const targetUser = await User.findById(targetUserId).select(
+            'pushToken voipPushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences'
           );
-          if (targetUser?.pushToken && targetUser.pushNotificationsEnabled && !isMutedByCaller) {
-            const callerName = callerInfo?.name || 'Someone';
-            await sendExpoPushNotification(targetUser.pushToken, {
+          const callerName = callerInfo?.name || 'Someone';
+
+          // 1) iOS — VoIP (PushKit) push: wakes the app even when killed and triggers native CallKit UI
+          if (targetUser?.voipPushToken) {
+            try {
+              const { sendVoipPush } = require('./utils/voipPush');
+              await sendVoipPush(targetUser.voipPushToken, {
+                callerId,
+                callerName,
+                callType,
+                callData,
+              });
+            } catch (voipErr) {
+              console.error('[VoIP Push] Error:', voipErr?.message || voipErr);
+            }
+          }
+
+          // 2) Android — FCM data-only message: wakes killed app → Firebase background
+          //    handler calls CallKeep.displayIncomingCall() → native ConnectionService UI
+          if (targetUser?.fcmToken) {
+            try {
+              const { sendCallDataMessage } = require('./utils/fcmPush');
+              await sendCallDataMessage(targetUser.fcmToken, {
+                callerId,
+                callerName,
+                callType,
+                callData,
+              });
+            } catch (fcmErr) {
+              console.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
+            }
+          }
+
+          // 3) Regular Expo push (covers Android and iOS as fallback)
+          const { sendSmartNotification } = require('./utils/pushNotifications');
+          await sendSmartNotification(
+            targetUser,
+            {
               title: `Incoming ${callType} call`,
               body: `${callerName} is calling you...`,
-              data: { type: 'call', callerId, callType, callData, callerName, callerPhoto: callerInfo?.photo || '' },
-              priority: 'high',
-              sound: 'default',
-              channelId: 'calls'
-            });
-          }
+              data: {
+                type: 'call',
+                callerId,
+                callType,
+                callData,
+                callerName,
+                callerPhoto: callerInfo?.photo || '',
+              },
+            },
+            notifType,
+            callerId,
+          );
         } catch (err) {
           console.error('Failed to send call push notification:', err);
         }
@@ -748,6 +875,22 @@ io.on('connection', (socket) => {
         declinedBy: socket.userId
       });
       console.log(`Call declined by ${socket.userId}`);
+    }
+  });
+
+  // User is busy — forward busy signal to the caller
+  socket.on('call:busy', async (data) => {
+    const { callerId, callType } = data;
+    if (callerId) {
+      // Clear pending call state without saving a history entry
+      socket.pendingCall = null;
+      const callerSocketId = onlineUsers.get(callerId);
+      if (callerSocketId) {
+        const callerSocket = io.sockets.sockets.get(callerSocketId);
+        if (callerSocket) callerSocket.pendingCall = null;
+      }
+      io.to(callerId).emit('call:busy', { targetUserId: socket.userId });
+      console.log(`User ${socket.userId} is busy — notified caller ${callerId}`);
     }
   });
 
@@ -876,6 +1019,11 @@ const startServer = () => {
     console.log(`📡 Backend API ready`);
     const { startScheduledJobs } = require('./utils/scheduledJobs');
     startScheduledJobs();
+    const { startBroadcastScheduler } = require('./jobs/broadcastScheduler');
+    startBroadcastScheduler();
+    // Pre-warm face AI models so the first request isn't slow
+    const { loadModels: loadVerifier } = require('./utils/faceVerifier');
+    loadVerifier().then(() => console.log('🤖 Face AI models ready')).catch(() => {});
   });
 
   serverInstance.on('error', (e) => {

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from 'react-native';
-import { Image } from 'expo-image';
-import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
+import { Video, ResizeMode } from 'expo-av';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -13,6 +12,7 @@ import { Camera, CameraView } from 'expo-camera';
 import { useAuth } from '@/hooks/useAuth';
 import { useApi } from '@/hooks/useApi';
 import { getApiBaseUrl } from '@/constants/config';
+import { VerificationBadge } from '@/components/VerificationBadge';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -34,7 +34,7 @@ const BENEFITS = [
 ];
 
 const STEPS = [
-  { num: 1, icon: 'camera-outline', title: 'Take a selfie', desc: 'Front camera, good lighting' },
+  { num: 1, icon: 'videocam-outline', title: 'Record a video', desc: 'Front camera, good lighting' },
   { num: 2, icon: 'cloud-upload-outline', title: 'Submit for review', desc: 'Our team reviews within 24h' },
   { num: 3, icon: 'checkmark-circle-outline', title: 'Get your badge', desc: 'Verified tick appears on profile' },
 ];
@@ -43,7 +43,7 @@ export default function VerificationScreen() {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const { token, user } = useAuth();
+  const { token, fetchUser } = useAuth();
   const { get } = useApi();
 
   const [verificationState, setVerificationState] = useState<VerificationState | null>(null);
@@ -51,9 +51,21 @@ export default function VerificationScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [capturedSelfiePhoto, setCapturedSelfiePhoto] = useState<string | null>(null);
+  const [capturedVerificationVideo, setCapturedVerificationVideo] = useState<string | null>(null);
   const [verificationStep, setVerificationStep] = useState<'selfie' | 'review'>('selfie');
+  const [recording, setRecording] = useState(false);
+  const [recordingReadyToSubmit, setRecordingReadyToSubmit] = useState(false);
   const cameraRef = useRef<any>(null);
+  const recordingPromiseRef = useRef<Promise<any> | null>(null);
+  const submitDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (submitDelayRef.current) {
+        clearTimeout(submitDelayRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     fetchVerificationStatus();
@@ -75,54 +87,84 @@ export default function VerificationScreen() {
   };
 
   const requestCameraPermission = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
-    if (status === 'granted') {
+    if (Platform.OS === 'web') {
+      Alert.alert('Use the mobile app', 'Video verification recording is available in the mobile app.');
+      return;
+    }
+
+    const [{ status: cameraStatus }, { status: microphoneStatus }] = await Promise.all([
+      Camera.requestCameraPermissionsAsync(),
+      Camera.requestMicrophonePermissionsAsync(),
+    ]);
+    const granted = cameraStatus === 'granted' && microphoneStatus === 'granted';
+    setHasPermission(granted);
+    if (granted) {
       setShowCamera(true);
     } else {
       Alert.alert(
         'Camera Permission Required',
-        'Please enable camera access in your device settings to verify your profile.',
+        'Please enable camera and microphone access in your device settings to verify your profile.',
         [{ text: 'OK' }]
       );
     }
   };
 
-  const takePhoto = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
-        if (photo) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setCapturedSelfiePhoto(photo.uri);
-          setVerificationStep('review');
-          setShowCamera(false);
-        }
-      } catch (error) {
-        console.error('Failed to take photo:', error);
-        Alert.alert('Error', 'Failed to capture photo. Please try again.');
+  const startRecording = async () => {
+    if (!cameraRef.current || recording) return;
+    if (typeof cameraRef.current.recordAsync !== 'function') {
+      Alert.alert('Video unavailable', 'Video recording is not available on this device right now.');
+      return;
+    }
+
+    try {
+      setCapturedVerificationVideo(null);
+      setRecording(true);
+      setRecordingReadyToSubmit(false);
+      if (submitDelayRef.current) clearTimeout(submitDelayRef.current);
+      submitDelayRef.current = setTimeout(() => setRecordingReadyToSubmit(true), 5000);
+      recordingPromiseRef.current = cameraRef.current.recordAsync({ maxDuration: 30 });
+      const video = await recordingPromiseRef.current;
+      if (video?.uri) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setCapturedVerificationVideo(video.uri);
+        setVerificationStep('review');
+        setShowCamera(false);
       }
+    } catch (error) {
+      console.error('Failed to record video:', error);
+      Alert.alert('Error', 'Failed to record verification video. Please try again.');
+    } finally {
+      if (submitDelayRef.current) clearTimeout(submitDelayRef.current);
+      setRecording(false);
+      setRecordingReadyToSubmit(false);
+      recordingPromiseRef.current = null;
     }
   };
 
-  const retakePhoto = () => {
-    setCapturedSelfiePhoto(null);
+  const stopRecording = () => {
+    if (!cameraRef.current || !recording || !recordingReadyToSubmit) return;
+    cameraRef.current.stopRecording();
+  };
+
+  const retakeVideo = () => {
+    setCapturedVerificationVideo(null);
     setVerificationStep('selfie');
     setShowCamera(true);
   };
 
   const submitVerification = async () => {
-    if (!capturedSelfiePhoto || !token) return;
+    if (!capturedVerificationVideo || !token) return;
     setSubmitting(true);
     try {
       const formData = new FormData();
-      formData.append('selfiePhoto', {
-        uri: capturedSelfiePhoto,
-        type: 'image/jpeg',
-        name: 'selfie.jpg',
+      const isQuickTime = capturedVerificationVideo.toLowerCase().endsWith('.mov');
+      formData.append('video', {
+        uri: capturedVerificationVideo,
+        type: isQuickTime ? 'video/quicktime' : 'video/mp4',
+        name: isQuickTime ? 'verification.mov' : 'verification.mp4',
       } as any);
 
-      const response = await fetch(`${getApiBaseUrl()}/api/verification/request`, {
+      const response = await fetch(`${getApiBaseUrl()}/api/verification/upload-verification-video`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -134,9 +176,18 @@ export default function VerificationScreen() {
       const data = await response.json();
       if (data.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setVerificationState(prev => ({
+          ...prev,
+          verified: false,
+          status: 'pending',
+          requestDate: new Date().toISOString(),
+          approvedAt: null,
+          rejectionReason: null,
+        }));
+        fetchUser().catch(error => console.error('Failed to refresh user after verification upload:', error));
         Alert.alert(
           'Submitted!',
-          'Your selfie has been submitted. Our team will compare it with your profile photos and award your verified badge within 24 hours.',
+          'Your verification video has been sent to the admin review queue. Our team will compare it with your profile photos and award your verified badge within 24 hours.',
           [{ text: 'Got it', onPress: () => navigation.goBack() }]
         );
       } else {
@@ -152,7 +203,7 @@ export default function VerificationScreen() {
   if (showCamera) {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" />
+        <CameraView ref={cameraRef} style={StyleSheet.absoluteFill} facing="front" mode="video" />
 
         <LinearGradient
           colors={['rgba(0,0,0,0.7)', 'transparent']}
@@ -162,12 +213,12 @@ export default function VerificationScreen() {
             <Pressable style={styles.cameraCloseBtn} onPress={() => setShowCamera(false)}>
               <Ionicons name="close" size={24} color="#FFF" />
             </Pressable>
-            <ThemedText style={styles.cameraTitle}>Take a Selfie</ThemedText>
+            <ThemedText style={styles.cameraTitle}>Record Video</ThemedText>
             <View style={{ width: 44 }} />
           </View>
 
           <View style={styles.tipsList}>
-            {['Face centered & visible', 'Good lighting', 'No sunglasses or hats'].map((tip, i) => (
+            {['Face centered & visible', 'Good lighting', 'Blink and turn your head slowly'].map((tip, i) => (
               <View key={i} style={styles.tipRow}>
                 <View style={styles.tipDot} />
                 <ThemedText style={styles.tipText}>{tip}</ThemedText>
@@ -190,23 +241,37 @@ export default function VerificationScreen() {
           colors={['transparent', 'rgba(0,0,0,0.8)']}
           style={[styles.cameraBottomOverlay, { paddingBottom: insets.bottom + 24 }]}
         >
-          <Pressable style={styles.captureBtn} onPress={takePhoto}>
+          {recording && (
+            <View style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <ThemedText style={styles.recordingText}>Recording</ThemedText>
+            </View>
+          )}
+          <Pressable
+            style={[styles.captureBtn, recording && !recordingReadyToSubmit && { opacity: 0.55 }]}
+            onPress={recording ? stopRecording : startRecording}
+            disabled={recording && !recordingReadyToSubmit}
+          >
             <View style={styles.captureBtnOuter}>
               <LinearGradient
-                colors={['#4CAF50', '#2E7D32']}
+                colors={recording ? ['#F44336', '#B71C1C'] : ['#4CAF50', '#2E7D32']}
                 style={styles.captureBtnInner}
               >
-                <Ionicons name="camera" size={28} color="#FFF" />
+                <Ionicons name={recording ? 'stop' : 'videocam'} size={28} color="#FFF" />
               </LinearGradient>
             </View>
           </Pressable>
-          <ThemedText style={styles.captureBtnLabel}>Tap to capture</ThemedText>
+          <ThemedText style={styles.captureBtnLabel}>
+            {recording
+              ? recordingReadyToSubmit ? 'Tap to review video' : 'Keep recording for at least 5 seconds'
+              : 'Tap to start recording • Max 30 seconds'}
+          </ThemedText>
         </LinearGradient>
       </View>
     );
   }
 
-  if (verificationStep === 'review' && capturedSelfiePhoto) {
+  if (verificationStep === 'review' && capturedVerificationVideo) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
         <LinearGradient
@@ -216,20 +281,23 @@ export default function VerificationScreen() {
           <Pressable style={styles.backBtn} onPress={() => navigation.canGoBack() ? navigation.goBack() : (navigation as any).navigate('MainTabs')}>
             <Ionicons name="arrow-back" size={22} color={theme.text} />
           </Pressable>
-          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Review Photo</ThemedText>
+          <ThemedText style={[styles.headerTitle, { color: theme.text }]}>Review Video</ThemedText>
           <View style={{ width: 40 }} />
         </LinearGradient>
 
         <ScrollView contentContainerStyle={styles.reviewContent}>
           <View style={styles.reviewPhotoWrapper}>
-            <LinearGradient
-              colors={[theme.primary, theme.primary + '80']}
-              style={styles.reviewPhotoRing}
-            >
-              <SafeImage source={{ uri: capturedSelfiePhoto }} style={styles.reviewPhoto} />
-            </LinearGradient>
+            <View style={[styles.reviewVideoWrapper, { borderColor: theme.primary + '80' }]}>
+              <Video
+                source={{ uri: capturedVerificationVideo }}
+                style={styles.reviewVideo}
+                resizeMode={ResizeMode.COVER}
+                useNativeControls
+                shouldPlay={false}
+              />
+            </View>
             <ThemedText style={[styles.reviewPhotoLabel, { color: theme.textSecondary }]}>
-              Your selfie
+              Your verification video
             </ThemedText>
           </View>
 
@@ -239,14 +307,14 @@ export default function VerificationScreen() {
                 <Ionicons name="eye-outline" size={20} color={theme.primary} />
               </View>
               <ThemedText style={[styles.reviewInfoText, { color: theme.textSecondary }]}>
-                Our team will compare this selfie with your profile photos to confirm your identity. Only our moderators will see it.
+                Our team will compare this video with your profile photos to confirm your identity. Only our moderators will see it.
               </ThemedText>
             </View>
           </View>
 
-          <Pressable style={[styles.retakeBtn, { borderColor: theme.border }]} onPress={retakePhoto}>
+          <Pressable style={[styles.retakeBtn, { borderColor: theme.border }]} onPress={retakeVideo}>
             <Ionicons name="refresh-outline" size={18} color={theme.primary} />
-            <ThemedText style={[styles.retakeBtnText, { color: theme.primary }]}>Retake Photo</ThemedText>
+            <ThemedText style={[styles.retakeBtnText, { color: theme.primary }]}>Record Again</ThemedText>
           </Pressable>
         </ScrollView>
 
@@ -266,8 +334,8 @@ export default function VerificationScreen() {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <>
-                  <Ionicons name="shield-checkmark" size={20} color="#FFF" />
-                  <ThemedText style={styles.submitBtnText}>Submit for Verification</ThemedText>
+                  <Ionicons name="cloud-upload" size={20} color="#FFF" />
+                  <ThemedText style={styles.submitBtnText}>Submit Video</ThemedText>
                 </>
               )}
             </LinearGradient>
@@ -317,12 +385,12 @@ export default function VerificationScreen() {
                 Verify Your Identity
               </ThemedText>
               <ThemedText style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
-                A quick selfie is all it takes. Get your verified badge and stand out.
+                A quick video is all it takes. Get your verified badge and stand out.
               </ThemedText>
 
               {verificationState?.verified && (
                 <View style={[styles.statusPill, { backgroundColor: '#4CAF5025' }]}>
-                  <Image source={require("@/assets/icons/verified-tick.png")} style={{ width: 18, height: 18 }} contentFit="contain" />
+                  <VerificationBadge size={18} />
                   <ThemedText style={[styles.statusPillText, { color: '#4CAF50' }]}>You're Verified</ThemedText>
                 </View>
               )}
@@ -381,7 +449,7 @@ export default function VerificationScreen() {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <ThemedText style={[styles.alertTitle, { color: '#FFC107' }]}>Under Review</ThemedText>
                 <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  We're reviewing your selfie now. This usually takes up to 24 hours.
+                  We're reviewing your verification video now. This usually takes up to 24 hours.
                 </ThemedText>
               </View>
             </View>
@@ -419,7 +487,7 @@ export default function VerificationScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.startBtnGradient}
               >
-                <Ionicons name="camera" size={22} color="#FFF" />
+                <Ionicons name="videocam" size={22} color="#FFF" />
                 <ThemedText style={styles.startBtnText}>Start Verification</ThemedText>
               </LinearGradient>
             </Pressable>
@@ -658,6 +726,19 @@ const styles = StyleSheet.create({
     height: 240,
     borderRadius: 120,
   },
+  reviewVideoWrapper: {
+    width: Math.min(SCREEN_WIDTH - 48, 360),
+    height: Math.min((SCREEN_WIDTH - 48) * 1.2, 430),
+    borderRadius: 28,
+    overflow: 'hidden',
+    borderWidth: 3,
+    backgroundColor: '#000',
+    marginBottom: 10,
+  },
+  reviewVideo: {
+    width: '100%',
+    height: '100%',
+  },
   reviewPhotoLabel: {
     fontSize: 14,
     fontWeight: '500',
@@ -847,6 +928,29 @@ const styles = StyleSheet.create({
   },
   captureBtn: {
     marginBottom: 10,
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(244,67,54,0.22)',
+    marginBottom: 14,
+  },
+  recordingDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#F44336',
+  },
+  recordingText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   captureBtnOuter: {
     width: 80,

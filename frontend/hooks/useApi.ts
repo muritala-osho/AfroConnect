@@ -1,22 +1,37 @@
 
 import { useState, useCallback, useRef } from 'react';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 import { getApiBaseUrl } from '@/constants/config';
+import { useMaintenance } from '@/context/MaintenanceContext';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;
+
+function getDeviceHeaders(): Record<string, string> {
+  const osName = Device.osName || (Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web');
+  const osVersion = Device.osVersion || '';
+  const model = Device.modelName || osName;
+  const deviceName = osVersion ? `${model} · ${osName} ${osVersion}` : `${model} · ${osName}`;
+  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  return { 'x-device-name': deviceName, 'x-platform': platform };
+}
 
 interface ApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string;
   error?: string;
+  [key: string]: any;
 }
 
 export function useApi() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const loadingRef = useRef(false);
-  const errorRef = useRef<string | null>(null);
+  const errorRef   = useRef<string | null>(null);
+
+  const { setMaintenance } = useMaintenance();
 
   const request = useCallback(async <T,>(
     endpoint: string,
@@ -32,15 +47,28 @@ export function useApi() {
         ...options,
         headers: {
           'Content-Type': 'application/json',
+          ...getDeviceHeaders(),
           ...options.headers,
         },
       });
+
+      if (response.status === 503) {
+        const data = await response.json().catch(() => ({}));
+        if (data.maintenance) {
+          setMaintenance(true);
+          const err = 'Platform is under maintenance.';
+          setError(err);
+          return { success: false, error: err, message: err };
+        }
+      }
+
+      setMaintenance(false);
 
       const contentType = response.headers.get('content-type');
       if (contentType && !contentType.includes('application/json')) {
         const text = await response.text();
         console.error('Non-JSON response received:', text.substring(0, 200));
-        throw new Error('Server returned an invalid response (not JSON). The backend might be down or waking up.');
+        throw new Error('Server returned an invalid response. The backend might be down or restarting.');
       }
 
       const jsonData = await response.json();
@@ -51,13 +79,13 @@ export function useApi() {
 
       loadingRef.current = false;
       setLoading(false);
-      
+
       const responseData = jsonData.data !== undefined ? jsonData.data : jsonData;
-      
-      return { 
-        success: jsonData.success ?? true, 
+
+      return {
+        success: jsonData.success ?? true,
         data: responseData as T,
-        message: jsonData.message 
+        message: jsonData.message,
       };
     } catch (err: any) {
       const errorMessage = err.message || 'Network error';
@@ -67,12 +95,12 @@ export function useApi() {
       setLoading(false);
       return { success: false, error: errorMessage, message: errorMessage };
     }
-  }, []);
+  }, [setMaintenance]);
 
   const get = useCallback(<T,>(endpoint: string, paramsOrToken?: Record<string, any> | string, token?: string) => {
     let url = endpoint;
     let authToken: string | undefined = token;
-    
+
     if (typeof paramsOrToken === 'string') {
       authToken = paramsOrToken;
     } else if (paramsOrToken && typeof paramsOrToken === 'object' && Object.keys(paramsOrToken).length > 0) {
@@ -82,7 +110,7 @@ export function useApi() {
         .join('&');
       url = `${endpoint}?${queryString}`;
     }
-    
+
     return request<T>(url, {
       method: 'GET',
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},

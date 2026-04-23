@@ -134,9 +134,7 @@ export default function DailyMatchScreen() {
         setHasError(true);
         return;
       }
-      // Handle both { data: { match } } and { match } and { success: false } shapes
       if (res.success === false) {
-        // Not an error – just no match today
         setMatch(null);
         setMessage(res.message || "Check back tomorrow for a new match!");
       } else {

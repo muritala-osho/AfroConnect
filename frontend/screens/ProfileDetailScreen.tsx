@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -6,9 +6,10 @@ import {
   Pressable,
   Image,
   Dimensions,
-  Animated,
   ScrollView,
   Alert,
+  Modal,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
@@ -23,13 +24,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { getPhotoSource } from "@/utils/photos";
 import ActivityStatus from "@/components/ActivityStatus";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.25;
 
 const INTEREST_COLORS = [
@@ -151,6 +153,7 @@ function getUserLocalTime(user: any): string {
     return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 }
+
 export default function ProfileDetailScreen() {
   const { theme } = useTheme();
   const { token, user: currentUser } = useAuth();
@@ -165,6 +168,18 @@ export default function ProfileDetailScreen() {
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [liked, setLiked] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [zoomVisible, setZoomVisible] = useState(false);
+  const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
+  const zoomScrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (zoomVisible && zoomPhotoIndex > 0) {
+      const timer = setTimeout(() => {
+        zoomScrollRef.current?.scrollTo({ x: SCREEN_WIDTH * zoomPhotoIndex, animated: false });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [zoomVisible]);
 
   useEffect(() => {
     fetchUser();
@@ -283,7 +298,15 @@ export default function ProfileDetailScreen() {
           onPress: async () => {
             try {
               if (token) {
-                await post('/reports', { reportedUserId: userId, reason: 'inappropriate' }, token);
+                const currentPhoto = user?.photos?.[currentPhotoIndex];
+                await post('/reports', {
+                  reportedUserId: userId,
+                  reason: 'inappropriate',
+                  contentType: currentPhoto ? 'profile_photo' : 'user',
+                  contentId: currentPhoto ? String(currentPhotoIndex) : undefined,
+                  contentUrl: currentPhoto?.url || currentPhoto,
+                  description: currentPhoto ? `Profile photo #${currentPhotoIndex + 1}` : 'Profile report'
+                }, token);
               }
               Alert.alert('Reported', 'Thank you for your report. We will review it shortly.');
             } catch (error) {
@@ -354,7 +377,14 @@ export default function ProfileDetailScreen() {
         contentContainerStyle={{ paddingTop: 0, paddingHorizontal: 0 }}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={handleTap} style={styles.photoContainer}>
+        <Pressable
+          onPress={handleTap}
+          onLongPress={() => {
+            setZoomPhotoIndex(currentPhotoIndex);
+            setZoomVisible(true);
+          }}
+          style={styles.photoContainer}
+        >
           {user.photos && user.photos.length > 0 ? (
             <Image
               source={getPhotoSource(user.photos[currentPhotoIndex]) || require("@/assets/images/placeholder-1.jpg")}
@@ -401,11 +431,7 @@ export default function ProfileDetailScreen() {
                 ) : null}
               </ThemedText>
               {user.verified && (
-                <Image
-                  source={require("@/assets/icons/verified-tick.png")}
-                  style={{ width: 22, height: 22, marginLeft: 8 }}
-                  resizeMode="contain"
-                />
+                <VerificationBadge size={18} />
               )}
               {user.premium?.isActive && (
                 <PremiumBadge size="medium" style={{ marginLeft: 6 }} />
@@ -442,6 +468,18 @@ export default function ProfileDetailScreen() {
           <Pressable style={[styles.floatBack, { top: insets.top + 10 }]} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color="#FFF" />
           </Pressable>
+
+          {/* Zoom hint button */}
+          <TouchableOpacity
+            style={[styles.zoomBtn, { top: insets.top + 10 }]}
+            onPress={() => {
+              setZoomPhotoIndex(currentPhotoIndex);
+              setZoomVisible(true);
+            }}
+            hitSlop={10}
+          >
+            <Ionicons name="expand-outline" size={20} color="#FFF" />
+          </TouchableOpacity>
         </Pressable>
 
         <View style={[styles.contentWrapper, { backgroundColor: theme.background }]}>
@@ -527,17 +565,18 @@ export default function ProfileDetailScreen() {
                 {user.relationshipGoal && <DetailItem icon="ribbon-outline" label="Relationship Goal" value={user.relationshipGoal} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
                 {user.jobTitle && <DetailItem icon="briefcase-outline" label="Job" value={user.jobTitle} />}
-                {user.education && <DetailItem icon="school-outline" label="Education" value={user.education} />}
+                {(user as any)?.school && <DetailItem icon="school-outline" label="School" value={(user as any).school} />}
+                {user.education && <DetailItem icon="ribbon-outline" label="Education" value={user.education} />}
                 {user.lifestyle?.personalityType && <DetailItem icon="bulb-outline" label="Personality" value={user.lifestyle.personalityType} />}
                 {user.lifestyle?.communicationStyle && <DetailItem icon="chatbubbles-outline" label="Communication" value={user.lifestyle.communicationStyle} />}
                 {user.lifestyle?.loveStyle && <DetailItem icon="heart-circle-outline" label="Love Style" value={user.lifestyle.loveStyle} />}
                 {user.lifestyle?.relationshipStatus && <DetailItem icon="heart-half-outline" label="Relationship" value={user.lifestyle.relationshipStatus} />}
-                {user.lifestyle?.religion && <DetailItem icon="sunny-outline" label="Religion" value={user.lifestyle.religion} />}
-                {user.lifestyle?.ethnicity && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle.ethnicity} />}
+                {(user.lifestyle?.religion || (user as any)?.religion) && <DetailItem icon="sunny-outline" label="Religion" value={user.lifestyle?.religion || (user as any)?.religion} />}
+                {(user.lifestyle?.ethnicity || (user as any)?.ethnicity) && <DetailItem icon="globe-outline" label="Ethnicity" value={user.lifestyle?.ethnicity || (user as any)?.ethnicity} />}
               </View>
             </View>
 
-            {(user.lifestyle?.smoking || user.lifestyle?.drinking || user.lifestyle?.workout || user.lifestyle?.pets || user.lifestyle?.hasKids != null || user.lifestyle?.wantsKids != null) && (
+            {(user.lifestyle?.smoking || user.lifestyle?.drinking || user.lifestyle?.workout || user.lifestyle?.pets || (user.lifestyle as any)?.hasPets != null || user.lifestyle?.hasKids != null || user.lifestyle?.wantsKids != null) && (
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Ionicons name="leaf-outline" size={18} color={theme.primary} />
@@ -548,6 +587,7 @@ export default function ProfileDetailScreen() {
                   {user.lifestyle?.drinking && <DetailItem icon="wine-outline" label="Drinking" value={user.lifestyle.drinking} />}
                   {user.lifestyle?.workout && <DetailItem icon="barbell-outline" label="Workout" value={user.lifestyle.workout} />}
                   {user.lifestyle?.pets && <DetailItem icon="paw-outline" label="Pets" value={user.lifestyle.pets} />}
+                  {!(user.lifestyle?.pets) && (user.lifestyle as any)?.hasPets != null && <DetailItem icon="paw-outline" label="Has Pets" value={(user.lifestyle as any).hasPets ? 'Yes' : 'No'} />}
                   {user.lifestyle?.hasKids != null && <DetailItem icon="people-outline" label="Has Kids" value={user.lifestyle.hasKids ? 'Yes' : 'No'} />}
                   {user.lifestyle?.wantsKids != null && <DetailItem icon="happy-outline" label="Wants Kids" value={user.lifestyle.wantsKids ? 'Yes' : 'No'} />}
                 </View>
@@ -574,6 +614,47 @@ export default function ProfileDetailScreen() {
                       </View>
                     );
                   })}
+                </View>
+              </View>
+            )}
+
+            {(user as any).favoriteSong?.title && (
+              <View style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Feather name="music" size={18} color="#1DB954" />
+                  <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Soundtrack</ThemedText>
+                  {(user as any).spotify?.connected && (
+                    <View style={{ marginLeft: 6, backgroundColor: '#1DB95420', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                      <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>Spotify</ThemedText>
+                    </View>
+                  )}
+                </View>
+                <View style={[styles.spotifySongCard, { backgroundColor: theme.surface, borderColor: '#1DB95430' }]}>
+                  {(user as any).favoriteSong?.albumArt ? (
+                    <Image source={{ uri: (user as any).favoriteSong.albumArt }} style={styles.spotifyAlbumArt} />
+                  ) : (
+                    <LinearGradient colors={['#1DB954', '#158f3f']} style={styles.spotifyIconBox}>
+                      <Feather name="music" size={20} color="#FFF" />
+                    </LinearGradient>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.spotifySongTitle, { color: theme.text }]} numberOfLines={2}>
+                      {(user as any).favoriteSong.title}
+                    </ThemedText>
+                    {(user as any).favoriteSong.artist ? (
+                      <ThemedText style={[styles.spotifySongArtist, { color: theme.textSecondary }]} numberOfLines={1}>
+                        {(user as any).favoriteSong.artist}
+                      </ThemedText>
+                    ) : null}
+                  </View>
+                  <SpotifyEmbedPlayer
+                    spotifyUri={(user as any).favoriteSong?.spotifyUri}
+                    previewUrl={(user as any).favoriteSong?.previewUrl}
+                    title={(user as any).favoriteSong?.title}
+                    artist={(user as any).favoriteSong?.artist}
+                    albumArt={(user as any).favoriteSong?.albumArt}
+                    size={20}
+                  />
                 </View>
               </View>
             )}
@@ -619,6 +700,36 @@ export default function ProfileDetailScreen() {
                   voiceBioUrl={(user as any).voiceBio.url}
                   duration={(user as any).voiceBio.duration || 0}
                   isOwn={false}
+                  onReport={() => {
+                    Alert.alert(
+                      'Report Voice Bio',
+                      'Report this voice bio as inappropriate?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Report',
+                          style: 'destructive',
+                          onPress: async () => {
+                            try {
+                              if (token) {
+                                await post('/reports', {
+                                  reportedUserId: userId,
+                                  reason: 'inappropriate',
+                                  contentType: 'voice_bio',
+                                  contentId: userId,
+                                  contentUrl: (user as any).voiceBio.url,
+                                  description: 'Voice bio report',
+                                }, token);
+                              }
+                              Alert.alert('Reported', 'Thank you. We will review this voice bio.');
+                            } catch {
+                              Alert.alert('Error', 'Could not submit report.');
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
                 />
               </View>
             )}
@@ -681,6 +792,81 @@ export default function ProfileDetailScreen() {
           </View>
         </View>
       </ScreenScrollView>
+
+      {/* ── Full-screen zoom photo modal ── */}
+      <Modal
+        visible={zoomVisible}
+        transparent={false}
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setZoomVisible(false)}
+      >
+        <View style={[styles.zoomModalContainer, { flex: 1 }]}>
+          {user?.photos && user.photos.length > 0 && (
+            <ScrollView
+              ref={zoomScrollRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              style={{ flex: 1 }}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setZoomPhotoIndex(idx);
+              }}
+            >
+              {user.photos.map((photo: any, index: number) => {
+                const source = getPhotoSource(photo) || require('@/assets/images/placeholder-1.jpg');
+                return (
+                  <View key={index} style={styles.zoomPhotoPage}>
+                    <Image
+                      source={source}
+                      style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Photo count indicator dots */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={[styles.zoomIndicators, { top: insets.top + 56 }]}>
+              {user.photos.map((_: any, idx: number) => (
+                <Pressable
+                  key={idx}
+                  onPress={() => {
+                    setZoomPhotoIndex(idx);
+                    zoomScrollRef.current?.scrollTo({ x: SCREEN_WIDTH * idx, animated: true });
+                  }}
+                  style={[
+                    styles.zoomDot,
+                    { backgroundColor: idx === zoomPhotoIndex ? "#fff" : "rgba(255,255,255,0.35)" }
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Photo counter text */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={[styles.zoomCounter, { top: insets.top + 16 }]}>
+              <ThemedText style={styles.zoomCounterText}>
+                {zoomPhotoIndex + 1} / {user.photos.length}
+              </ThemedText>
+            </View>
+          )}
+
+          {/* Close button */}
+          <TouchableOpacity
+            style={[styles.zoomClose, { top: insets.top + 16 }]}
+            onPress={() => setZoomVisible(false)}
+          >
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -751,7 +937,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     width: '100%',
-    marginBotttom: 6,
+    marginBottom: 6,
     flexWrap: 'nowrap',
   },
   name: {
@@ -941,7 +1127,6 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   detailTextWrap: {
-    //flex: 1,
   },
   detailLabel: {
     display: 'none',
@@ -965,6 +1150,34 @@ const styles = StyleSheet.create({
   interestChipText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  spotifySongCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  spotifyAlbumArt: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+  },
+  spotifyIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  spotifySongTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  spotifySongArtist: {
+    fontSize: 13,
   },
   galleryContainer: {
     gap: 10,
@@ -1077,5 +1290,85 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
     marginTop: 20,
+  },
+  zoomBtn: {
+    position: 'absolute',
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomModalContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  zoomScrollContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.5,
+  },
+  zoomClose: {
+    position: 'absolute',
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomIndicators: {
+    position: 'absolute',
+    bottom: 80,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  zoomDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  zoomLeft: {
+    position: 'absolute',
+    left: 0,
+    top: '20%',
+    width: '30%',
+    height: '60%',
+  },
+  zoomRight: {
+    position: 'absolute',
+    right: 0,
+    top: '20%',
+    width: '30%',
+    height: '60%',
+  },
+  zoomCounter: {
+    position: 'absolute',
+    alignSelf: 'center',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  zoomCounterText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
+  },
+  zoomPhotoPage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000',
   },
 });

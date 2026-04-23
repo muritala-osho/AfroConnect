@@ -272,13 +272,11 @@ export default function SuccessStoriesScreen() {
         get<any>('/success-stories/stats', token || undefined),
       ]);
 
-      // Check if data exists and is an array
       let finalStories: SuccessStory[] = [];
       if (storiesRes && storiesRes.success && storiesRes.data && Array.isArray(storiesRes.data)) {
         finalStories = storiesRes.data;
       }
 
-      // If no stories from server, use dummy stories
       if (finalStories.length === 0 && !selectedFilter) {
         finalStories = DUMMY_SUCCESS_STORIES;
       }
@@ -320,20 +318,17 @@ export default function SuccessStoriesScreen() {
     }
   }, [get, token]);
 
-  // Track loading state, auth changes, and filter changes
   const hasInitiallyLoaded = useRef(false);
   const prevFilterRef = useRef<string | null>(null);
   const prevTokenRef = useRef<string | null>(null);
   
   useEffect(() => {
-    // Reset on logout
     if (!token) {
       hasInitiallyLoaded.current = false;
       prevTokenRef.current = null;
       return;
     }
     
-    // Reload on initial mount or auth change (login/profile switch)
     if (!hasInitiallyLoaded.current || prevTokenRef.current !== token) {
       hasInitiallyLoaded.current = true;
       prevTokenRef.current = token;
@@ -343,7 +338,6 @@ export default function SuccessStoriesScreen() {
       return;
     }
     
-    // Reload when filter changes
     if (prevFilterRef.current !== selectedFilter) {
       prevFilterRef.current = selectedFilter;
       setLoading(true);
@@ -420,6 +414,37 @@ export default function SuccessStoriesScreen() {
     );
   };
 
+  const handleReportStory = (item: SuccessStory) => {
+    Alert.alert(
+      'Report Story',
+      'Is this story inappropriate or misleading?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Report',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const reportedUserId = item.couple?.[0]?._id;
+              if (!reportedUserId || !token) return;
+              await post('/reports', {
+                reportedUserId,
+                reason: 'inappropriate',
+                contentType: 'success_story',
+                contentId: item._id,
+                contentPreview: item.title,
+                description: 'Success story report',
+              }, token);
+              Alert.alert('Reported', 'Thank you. We will review this story.');
+            } catch {
+              Alert.alert('Error', 'Could not submit report. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -462,14 +487,12 @@ export default function SuccessStoriesScreen() {
 
     setCreating(true);
     try {
-      // Upload photos to Cloudinary first (skip already-uploaded URLs)
       let uploadedPhotoUrls: string[] = [];
       let uploadFailed = false;
       
       if (storyPhotos.length > 0) {
         for (const photoUri of storyPhotos) {
           try {
-            // Skip if already a remote URL
             if (photoUri.startsWith('http://') || photoUri.startsWith('https://')) {
               uploadedPhotoUrls.push(photoUri);
               continue;
@@ -506,7 +529,6 @@ export default function SuccessStoriesScreen() {
           }
         }
         
-        // Alert user if some photos failed to upload
         if (uploadFailed && uploadedPhotoUrls.length < storyPhotos.length) {
           Alert.alert(
             t('warning') || 'Warning',
@@ -751,6 +773,15 @@ export default function SuccessStoriesScreen() {
               onPress={() => handleDeleteStory(item._id)}
             >
               <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
+            </TouchableOpacity>
+          )}
+          {!item.isOwn && (
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={() => handleReportStory(item)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="flag-outline" size={17} color={theme.textSecondary} />
             </TouchableOpacity>
           )}
         </View>

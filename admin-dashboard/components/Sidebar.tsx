@@ -1,7 +1,7 @@
-import React from "react";
-import { NAV_ITEMS } from "../constants";
-import { AdminRole } from "../types";
-import { LogOut } from "lucide-react";
+import React, { useState } from 'react';
+import { NAV_ITEMS } from '../constants';
+import { AdminRole } from '../types';
+import { LogOut, ChevronDown } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
@@ -10,35 +10,48 @@ interface SidebarProps {
   adminName: string;
   adminAvatar?: string;
   onLogout: () => void;
+  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number };
 }
 
+const SECTION_GROUPS = [
+  {
+    label: 'Overview',
+    ids: ['dashboard'],
+  },
+  {
+    label: 'Management',
+    ids: ['users', 'verification', 'reports', 'content', 'appeals', 'churn'],
+  },
+  {
+    label: 'Revenue',
+    ids: ['payments', 'analytics'],
+  },
+  {
+    label: 'Communication',
+    ids: ['broadcasts', 'support', 'agent'],
+  },
+  {
+    label: 'System',
+    ids: ['settings', 'profile'],
+  },
+];
+
+const BADGE_MAP: Record<string, keyof NonNullable<SidebarProps['pendingCounts']>> = {
+  reports: 'reports',
+  verification: 'verifications',
+  support: 'tickets',
+  agent: 'unreadTickets',
+};
+
 const AfroLogo = () => (
-  <svg
-    width="60"
-    height="60"
-    viewBox="0 0 200 200"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path
-      d="M100 20C55.8 20 20 55.8 20 100C20 144.2 55.8 180 100 180C144.2 180 180 144.2 180 100C180 55.8 144.2 20 100 20Z"
-      fill="#14B8A6"
-    />
-    <path
-      d="M75 90C75 80 85 75 100 75C115 75 125 80 125 90V130C125 135 120 140 115 140H85C80 140 75 135 75 130V90Z"
-      fill="white"
-    />
-    <circle cx="100" cy="55" r="20" fill="white" />
-    <path
-      d="M100 25C108 25 115 32 115 40C115 48 108 55 100 55C92 55 85 48 85 40C85 32 92 25 100 25Z"
-      fill="#2DD4BF"
-    />
-    <path
-      d="M100 10C115 10 125 20 125 35C125 50 115 60 100 60C85 60 75 50 75 35C75 20 85 10 100 10Z"
-      fill="#2DD4BF"
-      opacity="0.3"
-    />
-  </svg>
+  <img
+    src="/logo.png"
+    alt="AfroConnect"
+    width={52}
+    height={52}
+    style={{ borderRadius: 14, objectFit: 'cover' }}
+    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+  />
 );
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -48,88 +61,128 @@ const Sidebar: React.FC<SidebarProps> = ({
   adminName,
   adminAvatar,
   onLogout,
+  pendingCounts,
 }) => {
-  const filteredItems = NAV_ITEMS.filter((item) =>
-    item.roles.includes(adminRole),
-  );
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const filteredItems = NAV_ITEMS.filter(item => item.roles.includes(adminRole));
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections(prev => ({ ...prev, [label]: !prev[label] }));
+  };
+
+  const getBadge = (id: string): number => {
+    const key = BADGE_MAP[id];
+    if (!key || !pendingCounts) return 0;
+    return pendingCounts[key] || 0;
+  };
 
   return (
-    <div className="flex flex-col h-screen w-64 bg-teal-900 text-white transition-all duration-300 dark:bg-slate-900 border-r border-teal-800 dark:border-slate-800 shrink-0">
-      <div className="flex flex-col items-center justify-center py-8 border-b border-teal-800 dark:border-slate-800">
-        <div
-          className="mb-2 hover:scale-105 transition-transform cursor-pointer"
-          onClick={() => setActiveTab("dashboard")}
-        >
+    <div className="flex flex-col h-screen w-[220px] bg-[#0d3d38] text-white shrink-0 border-r border-white/5 select-none">
+      <div
+        className="flex flex-col items-center justify-center py-6 border-b border-white/5 cursor-pointer group"
+        onClick={() => setActiveTab('dashboard')}
+      >
+        <div className="mb-2.5 group-hover:scale-105 transition-transform duration-200">
           <AfroLogo />
         </div>
-        <span className="text-xl font-bold tracking-tight">
-          Afro<span className="text-cyan-400">Connect</span>
+        <span className="text-[15px] font-black tracking-tight">
+          Afro<span className="text-teal-400">Connect</span>
         </span>
-        <span className="text-[10px] font-black text-teal-400 uppercase tracking-widest mt-1 opacity-80">
-          Admin Command
+        <span className="text-[9px] font-black text-teal-500/70 uppercase tracking-[0.2em] mt-1">
+          Staff Portal
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4">
-        <div className="px-6 mb-4 text-xs font-semibold text-teal-400 dark:text-slate-500 uppercase tracking-widest">
-          Main Console
-        </div>
-        <nav className="space-y-1 px-3">
-          {filteredItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                activeTab === item.id
-                  ? "bg-teal-700 dark:bg-cyan-600 text-white shadow-lg translate-x-1 border-l-4 border-cyan-400"
-                  : "text-teal-100 hover:bg-teal-800 dark:hover:bg-slate-800 hover:text-white"
-              }`}
-            >
-              <span
-                className={`mr-3 transition-transform ${activeTab === item.id ? "scale-110 text-cyan-400" : ""}`}
+      <div className="flex-1 overflow-y-auto custom-scrollbar py-3">
+        {SECTION_GROUPS.map(group => {
+          const groupItems = filteredItems.filter(item => group.ids.includes(item.id));
+          if (groupItems.length === 0) return null;
+          const isCollapsed = collapsedSections[group.label];
+
+          return (
+            <div key={group.label} className="mb-1">
+              <button
+                onClick={() => toggleSection(group.label)}
+                className="flex items-center justify-between w-full px-4 py-2 text-[9px] font-black text-teal-500/60 uppercase tracking-[0.18em] hover:text-teal-400 transition-colors"
               >
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
+                {group.label}
+                <ChevronDown
+                  size={10}
+                  className={`transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+                />
+              </button>
+
+              {!isCollapsed && (
+                <nav className="space-y-0.5 px-2">
+                  {groupItems.map(item => {
+                    const isActive = activeTab === item.id;
+                    const badge = getBadge(item.id);
+
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`flex items-center justify-between w-full px-3 py-2.5 text-sm rounded-xl transition-all duration-150 group/item ${
+                          isActive
+                            ? 'bg-teal-600/30 text-white font-bold border-l-[3px] border-teal-400 pl-[9px]'
+                            : 'text-teal-100/70 hover:bg-white/5 hover:text-white font-medium border-l-[3px] border-transparent pl-[9px]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className={`shrink-0 transition-colors ${isActive ? 'text-teal-400' : 'text-teal-500/50 group-hover/item:text-teal-400'}`}>
+                            {item.icon}
+                          </span>
+                          <span className="truncate text-[13px]">{item.label}</span>
+                        </div>
+
+                        {badge > 0 && (
+                          <span className="shrink-0 h-5 min-w-[20px] px-1.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-badgePop">
+                            {badge > 99 ? '99+' : badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </nav>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="p-4 border-t border-teal-800 dark:border-slate-800">
-        <div
-          className="flex items-center mb-4 px-2 group cursor-pointer"
-          onClick={() => setActiveTab("profile")}
+      <div className="border-t border-white/5 p-3 space-y-1">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className="flex items-center w-full px-3 py-2.5 rounded-xl hover:bg-white/5 transition-colors group"
         >
-          <div className="relative">
+          <div className="relative shrink-0">
             <img
-              src={
-                adminAvatar ||
-                `https://ui-avatars.com/api/?name=${adminName}&background=14b8a6&color=fff&bold=true`
-              }
-              className="h-10 w-10 rounded-xl border-2 border-teal-700 group-hover:border-cyan-400 transition-colors object-cover"
+              src={adminAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=14b8a6&color=fff&bold=true`}
+              className="h-9 w-9 rounded-xl border-2 border-teal-700/50 group-hover:border-teal-400/50 transition-colors object-cover"
               alt="Admin"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(adminName)}&background=14b8a6&color=fff&bold=true`;
+              }}
             />
-            <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-emerald-500 rounded-full border-2 border-teal-900"></div>
+            <div className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-[#0d3d38]" />
           </div>
-          <div className="ml-3 overflow-hidden">
-            <p className="text-sm font-semibold text-white truncate group-hover:text-cyan-400 transition-colors">
+          <div className="ml-3 overflow-hidden text-left">
+            <p className="text-[13px] font-bold text-white truncate group-hover:text-teal-300 transition-colors leading-tight">
               {adminName}
             </p>
-            <p className="text-[10px] text-teal-400 dark:text-slate-500 uppercase font-black">
+            <p className="text-[9px] text-teal-500/60 font-black uppercase tracking-widest leading-tight mt-0.5">
               {adminRole}
             </p>
           </div>
-        </div>
+        </button>
+
         <button
           onClick={onLogout}
-          className="flex items-center w-full px-4 py-3 text-sm font-bold text-teal-100 hover:text-white hover:bg-red-600/20 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-xl transition-all group"
+          className="flex items-center w-full px-3 py-2.5 text-[13px] font-semibold text-teal-100/50 hover:text-rose-400 hover:bg-rose-500/5 rounded-xl transition-all group"
         >
-          <LogOut
-            size={18}
-            className="mr-3 group-hover:-translate-x-1 transition-transform"
-          />
-          Terminate
+          <LogOut size={15} className="mr-2.5 group-hover:-translate-x-0.5 transition-transform" />
+          Sign Out
         </button>
       </div>
     </div>

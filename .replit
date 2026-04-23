@@ -1,6 +1,7 @@
-modules = ["nodejs-20"]
+modules = ["nodejs-20", "python-3.11"]
 [nix]
 channel = "stable-25_05"
+packages = ["freetype", "lcms2", "libimagequant", "libjpeg", "libtiff", "libwebp", "libxcrypt", "oneDNN", "openjpeg", "re2", "tcl", "tk", "zlib"]
 
 [agent]
 expertMode = true
@@ -24,6 +25,10 @@ args = "Expo QR (Mobile)"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Admin Dashboard"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "InsightFace Service"
 
 [[workflows.workflow]]
 name = "Start Backend"
@@ -52,17 +57,29 @@ args = "cd frontend && npm install --legacy-peer-deps && ./node_modules/.bin/exp
 name = "Admin Dashboard"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd admin-dashboard && npm run dev"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd admin-dashboard && npm install --legacy-peer-deps && npm run dev"
+waitForPort = 5000
+
+[[workflows.workflow]]
+name = "InsightFace Service"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "INSIGHTFACE_PORT=6800 bash insightface_service/startup.sh"
+waitForPort = 6800
+
 [[ports]]
 localPort = 3001
-externalPort = 3001
+externalPort = 80
 
 [[ports]]
 localPort = 5000
@@ -76,10 +93,17 @@ externalPort = 3000
 localPort = 5904
 externalPort = 3003
 
+localPort = 6800
+externalPort = 6800
+
 [[ports]]
 localPort = 8081
 externalPort = 8081
 
 [[ports]]
 localPort = 8082
-externalPort = 3002
+externalPort = 3000
+
+[[ports]]
+localPort = 19000
+externalPort = 3001

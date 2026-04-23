@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Dimensions, Platform, ScrollView } from "react-native";
+import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Dimensions, Platform, ScrollView, Modal } from "react-native";
 
-// ActionSheetIOS is iOS-only, use dynamic check to avoid webpack warnings on web
 const ActionSheetIOS = Platform.OS === 'ios' ? require('react-native').ActionSheetIOS : null;
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
@@ -16,6 +15,8 @@ import { Feather } from "@expo/vector-icons";
 import { getApiBaseUrl } from "@/constants/config";
 import { getPhotoSource } from "@/utils/photos";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { GestureDetector, Gesture } from "react-native-gesture-handler";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 type ChangeProfilePictureScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "ChangeProfilePicture">;
 
@@ -35,6 +36,62 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
   const [uploading, setUploading] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = Math.max(1, Math.min(savedScale.value * e.scale, 5));
+    })
+    .onEnd(() => {
+      savedScale.value = scale.value;
+      if (scale.value < 1.05) {
+        scale.value = withSpring(1);
+        savedScale.value = 1;
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      }
+    });
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      if (scale.value > 1) {
+        translateX.value = savedTranslateX.value + e.translationX;
+        translateY.value = savedTranslateY.value + e.translationY;
+      }
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  const composedGesture = Gesture.Simultaneous(pinchGesture, panGesture);
+
+  const animatedImageStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  const openPhotoViewer = (photoUrl: string) => {
+    scale.value = 1;
+    savedScale.value = 1;
+    translateX.value = 0;
+    translateY.value = 0;
+    savedTranslateX.value = 0;
+    savedTranslateY.value = 0;
+    setViewingPhoto(photoUrl);
+  };
 
   const photos = user?.photos || [];
 
@@ -45,7 +102,6 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : 'image/jpeg';
       
-      // Use 'file' as the field name as expected by the backend's catch-all upload field
       formData.append('file', {
         uri,
         name: filename,
@@ -74,6 +130,10 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
   };
 
   const pickImage = async (useCamera: boolean, replaceIndex?: number) => {
+    if (replaceIndex === undefined && photos.length >= MAX_PHOTOS) {
+      Alert.alert("Maximum Photos Reached", `You can only upload up to ${MAX_PHOTOS} photos.`);
+      return;
+    }
     const permission = useCamera
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -139,8 +199,8 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
     const photo = photos[index];
     if (!photo) return;
 
-    if (photos.length <= 1) {
-      Alert.alert("Cannot Delete", "You must have at least one photo.");
+    if (photos.length <= 4) {
+      Alert.alert("Cannot Delete", "You must keep at least 4 photos on your profile.");
       return;
     }
 
@@ -155,7 +215,7 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
           onPress: async () => {
             setDeletingIndex(index);
             try {
-              await del(`/upload/photo?publicId=${encodeURIComponent(photo.publicId || photo._id)}`, token);
+              await del(`/upload/photo?publicId=${encodeURIComponent(photo.publicId || photo._id || '')}`, token ?? undefined);
               await fetchUser();
             } catch (error) {
               console.error('Delete photo error:', error);
@@ -263,13 +323,17 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
 
     if (photo) {
       const source = getPhotoSource(photo);
+      const photoUrl = typeof photo === 'string' ? photo : photo.url;
+      const canDelete = photos.length > 4;
       return (
-        <Pressable
-          key={index}
-          style={[styles.photoSlot, { backgroundColor: theme.surface }]}
-          onPress={() => showPhotoOptions(index)}
-          disabled={uploading || isDeleting}
-        >
+        <View key={index} style={[styles.photoSlot, { backgroundColor: theme.surface }]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => showPhotoOptions(index)}
+            onLongPress={() => photoUrl && openPhotoViewer(photoUrl)}
+            delayLongPress={300}
+            disabled={uploading || isDeleting}
+          />
           <Image source={source} style={styles.photoImage} contentFit="cover" />
           {index === 0 && (
             <View style={[styles.primaryBadge, { backgroundColor: theme.primary }]}>
@@ -281,10 +345,18 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
               <ActivityIndicator color={theme.buttonText} />
             </View>
           )}
-          <View style={[styles.editBadge, { backgroundColor: theme.surfaceElevated }]}>
-            <Feather name="edit-2" size={12} color={theme.text} />
-          </View>
-        </Pressable>
+          {/* Visible delete button — red X when deletable, lock icon when at minimum */}
+          <Pressable
+            style={[
+              styles.deleteBtn,
+              { backgroundColor: canDelete ? '#EF4444' : 'rgba(100,100,100,0.7)' },
+            ]}
+            onPress={() => canDelete ? handleDeletePhoto(index) : Alert.alert('Minimum Photos', 'You must keep at least 4 photos.')}
+            hitSlop={6}
+          >
+            <Feather name={canDelete ? 'x' : 'lock'} size={11} color="#fff" />
+          </Pressable>
+        </View>
       );
     }
 
@@ -363,6 +435,32 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
           </View>
         </View>
       </ScrollView>
+
+      {/* Full-screen photo viewer with pinch-to-zoom */}
+      <Modal
+        visible={!!viewingPhoto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setViewingPhoto(null)}
+      >
+        <View style={styles.viewerBackdrop}>
+          <Pressable style={styles.viewerClose} onPress={() => setViewingPhoto(null)}>
+            <Feather name="x" size={24} color="#FFF" />
+          </Pressable>
+          <GestureDetector gesture={composedGesture}>
+            <Animated.View style={[styles.viewerImageWrap, animatedImageStyle]}>
+              {viewingPhoto && (
+                <Image
+                  source={{ uri: viewingPhoto }}
+                  style={styles.viewerImage}
+                  contentFit="contain"
+                />
+              )}
+            </Animated.View>
+          </GestureDetector>
+          <ThemedText style={styles.viewerHint}>Pinch to zoom · Long press photo to open</ThemedText>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -447,6 +545,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  deleteBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
   photoOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -475,5 +584,38 @@ const styles = StyleSheet.create({
   tipText: {
     ...Typography.body,
     flex: 1,
+  },
+  viewerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewerImageWrap: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_WIDTH * 1.25,
+  },
+  viewerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  viewerHint: {
+    position: 'absolute',
+    bottom: 40,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    textAlign: 'center',
   },
 });

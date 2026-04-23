@@ -39,7 +39,9 @@ import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
-
+import { VerificationBadge } from "@/components/VerificationBadge";
+import { FALLBACK_COUNTRIES, PASSPORT_CITIES, DiscoverUser } from "@/constants/discoveryConstants";
+import logger from "@/utils/logger";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
@@ -54,50 +56,7 @@ interface DiscoveryScreenProps {
   navigation: DiscoveryScreenNavigationProp;
 }
 
-interface DiscoverUser {
-  id: string;
-  name: string;
-  age: number | null;
-  livingIn?: string;
-  bio: string;
-  photos: any[];
-  interests: string[];
-  online: boolean | null;
-  distance: number | null;
-  similarityScore?: number;
-  gender?: string;
-  verified?: boolean;
-  location?: {
-    city?: string;
-    state?: string;
-  };
-  religion?: string;
-  personalityType?: string;
-  needsVerification?: boolean;
-  premium?: { isActive: boolean };
-}
-
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
-
-const FALLBACK_COUNTRIES = [
-  'Nigeria', 'Ghana', 'Kenya', 'South Africa', 'Tanzania', 'Uganda',
-  'Ethiopia', 'Cameroon', 'Senegal', 'Ivory Coast', 'Zimbabwe',
-  'USA', 'UK', 'Canada', 'France', 'Germany', 'Brazil', 'India',
-  'Australia', 'UAE', 'Japan', 'Netherlands', 'Italy', 'Spain',
-];
-
-const PASSPORT_CITIES = [
-  { name: 'New York', lat: 40.7128, lng: -74.0060, country: 'USA' },
-  { name: 'London', lat: 51.5074, lng: -0.1278, country: 'UK' },
-  { name: 'Paris', lat: 48.8566, lng: 2.3522, country: 'France' },
-  { name: 'Lagos', lat: 6.5244, lng: 3.3792, country: 'Nigeria' },
-  { name: 'Nairobi', lat: -1.2921, lng: 36.8219, country: 'Kenya' },
-  { name: 'Tokyo', lat: 35.6762, lng: 139.6503, country: 'Japan' },
-  { name: 'Dubai', lat: 25.2048, lng: 55.2708, country: 'UAE' },
-  { name: 'São Paulo', lat: -23.5505, lng: -46.6333, country: 'Brazil' },
-  { name: 'Johannesburg', lat: -26.2041, lng: 28.0473, country: 'South Africa' },
-  { name: 'Accra', lat: 5.6037, lng: -0.1870, country: 'Ghana' },
-];
 
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const { theme, isDark } = useTheme();
@@ -161,7 +120,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setCountries(response.data.countries);
       }
     } catch (error) {
-      console.error('Failed to fetch countries:', error);
+      logger.error('Failed to fetch countries:', error);
     }
   }, [token, api]);
 
@@ -175,11 +134,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
   const fetchRadarNearbyUsers = useCallback(async () => {
     if (!token) {
-      console.log('[DISCOVERY RADAR] Skipped - no token');
+      logger.log('[DISCOVERY RADAR] Skipped - no token');
       return;
     }
     if (hasLocationPermission === false) {
-      console.log('[DISCOVERY RADAR] Skipped - no location permission');
+      logger.log('[DISCOVERY RADAR] Skipped - no location permission');
       return;
     }
     
@@ -231,12 +190,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       );
 
       const data = await response.json();
-      console.log(`[DISCOVERY RADAR] Received ${data.users?.length || 0} users from radar`);
+      logger.log(`[DISCOVERY RADAR] Received ${data.users?.length || 0} users from radar`);
       if (data.success && data.users?.length > 0) {
         const radarUsers: DiscoverUser[] = data.users.map((u: any) => {
-          // Use profilePhoto URL directly, or fallback to photos array
           const photoUrl = u.profilePhoto || (u.photos?.[0]?.url || u.photos?.[0]);
-          console.log(`[DISCOVERY RADAR] User ${u.name}: photo=${photoUrl ? 'YES' : 'NO'}`);
           return {
             id: u.id || u._id,
             name: u.name || 'Unknown',
@@ -262,20 +219,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             if (Platform.OS !== 'web') {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             }
-            // Clear loading state since we now have users
             setLoading(false);
             return [...prev, ...newUsers];
           }
           return prev;
         });
-        // If radar returned users but none were new, still clear loading
         setLoading(false);
       } else {
-        // No users from radar, still clear loading
         setLoading(false);
       }
     } catch (error) {
-      console.error("Radar fetch error:", error);
+      logger.error("Radar fetch error:", error);
       setLoading(false);
     } finally {
       setRadarScanning(false);
@@ -284,12 +238,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
   const loadPotentialMatches = useCallback(async () => {
     if (!user?.id || !token) {
-      console.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
+      logger.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
       setLoading(false);
       return;
     }
 
-    console.log('[DISCOVERY] loadPotentialMatches starting...');
+    logger.log('[DISCOVERY] loadPotentialMatches starting...');
     try {
       setLoading(true);
       const params: Record<string, any> = {
@@ -299,7 +253,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (discoveryType === 'local' && user.location?.lat && user.location?.lng) {
         params.lat = user.location.lat;
         params.lng = user.location.lng;
-        params.maxDistance = user.preferences?.maxDistance || 50;
+        const rawMax = user.preferences?.maxDistance || 50;
+        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 50);
       } else if (discoveryType === 'global') {
         params.global = true;
         if (selectedCountry) {
@@ -307,14 +262,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
       }
 
-      if ((user.preferences as any)?.ageRange) {
-        params.minAge = (user.preferences as any).ageRange.min;
-        params.maxAge = (user.preferences as any).ageRange.max;
+      const prefs = user.preferences as any;
+
+      if (prefs?.ageRange) {
+        params.minAge = Number(prefs.ageRange.min);
+        params.maxAge = Number(prefs.ageRange.max);
       }
 
       const userGender = user.gender?.toLowerCase();
-      const prefs = user.preferences as any;
-      if (prefs?.genderPreference && prefs.genderPreference !== 'any') {
+      if (prefs?.genderPreference && prefs.genderPreference !== 'any' && prefs.genderPreference !== 'both') {
         params.genders = prefs.genderPreference;
       } else if (prefs?.gender && prefs.gender !== 'any') {
         params.genders = prefs.gender;
@@ -324,32 +280,41 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         params.genders = 'male';
       }
 
+      if (prefs?.showVerifiedOnly) params.verifiedOnly = 'true';
+      if (prefs?.onlineNow) params.onlineOnly = 'true';
+
+      const lifestyle = (user as any).lifestyle;
+      if (lifestyle?.lookingFor) params.lookingFor = lifestyle.lookingFor;
+      if (lifestyle?.religion) params.religion = lifestyle.religion;
+      if (prefs?.smoking) params.smoking = prefs.smoking;
+      if (prefs?.drinking) params.drinking = prefs.drinking;
+      if (prefs?.wantsKids != null) params.wantsKids = String(prefs.wantsKids);
+
       const response = await api.get<{ success: boolean; users: any[] }>('/users/nearby', params, token);
-      console.log('API Response Success:', response.success);
-      console.log('API Params:', JSON.stringify(params));
+      logger.log('API Response Success:', response.success);
+      logger.log('API Params:', JSON.stringify(params));
       if (response.data) {
-        console.log('Users Array Length:', response.data.users?.length);
+        logger.log('Users Array Length:', response.data.users?.length);
         if (response.data.users?.length > 0) {
-          console.log('First User sample:', JSON.stringify(response.data.users[0]).substring(0, 100));
+          logger.log('First User sample:', JSON.stringify(response.data.users[0]).substring(0, 100));
         } else {
-          console.log('[DISCOVERY] API returned success but empty users array');
+          logger.log('[DISCOVERY] API returned success but empty users array');
         }
       } else {
-        console.log('[DISCOVERY] API response has no data property');
+        logger.log('[DISCOVERY] API response has no data property');
       }
       
-      console.log('[DISCOVERY] API call complete, response:', response.success);
+      logger.log('[DISCOVERY] API call complete, response:', response.success);
       if (response.success && response.data?.users) {
-        console.log(`[DISCOVERY] Success. Raw users count: ${response.data.users.length}`);
+        logger.log(`[DISCOVERY] Success. Raw users count: ${response.data.users.length}`);
         const myInterests = new Set(user.interests || []);
 
         const usersWithSimilarity = response.data.users.map((u: any) => {
           const userPhotos = u.photos && u.photos.length > 0 ? u.photos : (u.profilePhoto ? [u.profilePhoto] : []);
           if (userPhotos.length === 0) {
-            console.log(`[DISCOVERY] User ${u._id} has NO photos in raw data`);
+            logger.log(`[DISCOVERY] User ${u._id} has NO photos in raw data`);
           }
           
-          // Flatten photos if they are objects with url property
           const processedPhotos = userPhotos.map((p: any) => {
             if (typeof p === 'string') return p;
             if (p && typeof p === 'object' && p.url) return p.url;
@@ -357,17 +322,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           }).filter(Boolean);
           
           if (processedPhotos.length === 0) {
-             console.log(`[DISCOVERY] User ${u._id} has NO valid photo URLs`);
+             logger.log(`[DISCOVERY] User ${u._id} has NO valid photo URLs`);
           }
 
           const theirInterests = u.interests || [];
           const sharedInterests = theirInterests.filter((i: string) => myInterests.has(i));
           
-          // Personality match logic
           const personalityMatch = (user as any).personalityType && (u as any).personalityType && (user as any).personalityType === (u as any).personalityType;
           const personalityBonus = personalityMatch ? 20 : 0;
 
-          // Similarity based on interests + personality
           const similarityScore = myInterests.size > 0
             ? Math.min(100, ((sharedInterests.length / Math.max(myInterests.size, theirInterests.length)) * 100) + personalityBonus)
             : personalityBonus;
@@ -394,6 +357,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         usersWithSimilarity.sort((a, b) => {
           if (a.isBoosted && !b.isBoosted) return -1;
           if (!a.isBoosted && b.isBoosted) return 1;
+          if (discoveryType === 'local') {
+            const da = a.distance ?? 99999;
+            const db = b.distance ?? 99999;
+            return da - db;
+          }
           return Math.random() - 0.5;
         });
         
@@ -406,47 +374,49 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setUsers([]);
       }
     } catch (error) {
-      console.error("[DISCOVERY] Error loading nearby users:", error);
-      // Don't set users to empty - leave existing users from radar
+      logger.error("[DISCOVERY] Error loading nearby users:", error);
     } finally {
       setLoading(false);
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry]);
 
-  // Stable reference to track if initial load happened
   const hasInitiallyLoaded = useRef(false);
-  // Track the preferences that should trigger a reload
   const preferencesRef = useRef<string>('');
   
   useEffect(() => {
     if (!user?.id || !token) return;
     
-    // Check if user has photos, if not, they might be blocked by the verification screen
-    // but we want to make sure discovery still tries to load
     if (user?.photos?.length === 0) {
-      console.log('[DISCOVERY] User has no photos, might be stuck');
+      logger.log('[DISCOVERY] User has no photos, might be stuck');
     }
 
-    // Create a hash of current preferences to detect changes
+    const prefs = user?.preferences as any;
+    const lifestyle = (user as any)?.lifestyle;
     const currentPrefs = JSON.stringify({
       lat: user?.location?.lat,
       lng: user?.location?.lng,
-      maxDistance: user?.preferences?.maxDistance,
-      ageMin: user?.preferences?.ageRange?.min,
-      ageMax: user?.preferences?.ageRange?.max,
+      maxDistance: prefs?.maxDistance,
+      ageMin: prefs?.ageRange?.min,
+      ageMax: prefs?.ageRange?.max,
       gender: user?.gender,
+      genderPref: prefs?.genderPreference,
+      verifiedOnly: prefs?.showVerifiedOnly,
+      onlineNow: prefs?.onlineNow,
+      lookingFor: lifestyle?.lookingFor,
+      religion: lifestyle?.religion,
+      smoking: prefs?.smoking,
+      drinking: prefs?.drinking,
+      wantsKids: prefs?.wantsKids,
       discoveryType: discoveryType,
-      selectedCountry: selectedCountry
+      selectedCountry: selectedCountry,
     });
     
-    // Load on initial mount or when preferences actually change
     if (!hasInitiallyLoaded.current || currentPrefs !== preferencesRef.current) {
       hasInitiallyLoaded.current = true;
       preferencesRef.current = currentPrefs;
       
       const loadData = async () => {
         setLoading(true);
-        // Load from both sources in parallel for faster results
         await Promise.all([
           loadPotentialMatches(),
           fetchRadarNearbyUsers()
@@ -456,21 +426,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
 
-  // Radar scanning on focus - reduced dependencies to prevent infinite loops
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   useFocusEffect(
     useCallback(() => {
       checkLocationPermission();
       
-      // Initial radar scan with delay
       const initialScanTimeout = setTimeout(() => {
         if (hasLocationPermission !== false && token) {
           fetchRadarNearbyUsers();
         }
       }, 1000);
       
-      // Setup interval for periodic scans
       radarIntervalRef.current = setInterval(() => {
         if (hasLocationPermission !== false && token) {
           fetchRadarNearbyUsers();
@@ -652,7 +619,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         loadPotentialMatches();
       }
     } catch (error) {
-      console.error('Passport set error:', error);
+      logger.error('Passport set error:', error);
     }
   }, [token, api, showAlert, loadPotentialMatches]);
 
@@ -673,7 +640,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         loadPotentialMatches();
       }
     } catch (error) {
-      console.error('Passport clear error:', error);
+      logger.error('Passport clear error:', error);
     }
   }, [token, api, showAlert, loadPotentialMatches]);
 
@@ -687,7 +654,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setSecondChanceProfiles(res.data.profiles);
       }
     } catch (e) {
-      console.error('Second chance fetch error:', e);
+      logger.error('Second chance fetch error:', e);
     } finally {
       setSecondChanceLoading(false);
     }
@@ -699,7 +666,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       await api.post<any>('/friends/request', { receiverId: targetUser._id }, token);
       setSecondChanceProfiles(prev => prev.filter(p => p._id !== targetUser._id));
     } catch (e) {
-      console.error('Second chance like error:', e);
+      logger.error('Second chance like error:', e);
     }
   }, [token, api]);
 
@@ -709,7 +676,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       await api.post<any>('/match/second-chance/pass', { targetUserId: targetUser._id }, token);
       setSecondChanceProfiles(prev => prev.filter(p => p._id !== targetUser._id));
     } catch (e) {
-      console.error('Second chance pass error:', e);
+      logger.error('Second chance pass error:', e);
     }
   }, [token, api]);
 
@@ -810,7 +777,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (!user || !token) return;
     
     try {
-      // Send a match request (auto-accepts if they already liked you)
       const response = await api.post<{ success: boolean; isMatch?: boolean; friendRequest?: any; matchedUser?: any; message?: string }>(
         '/friends/request',
         { receiverId: targetUser.id },
@@ -823,7 +789,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
         
         if (response.data?.isMatch) {
-          // It's a mutual match! Navigate to the match popup
           navigation.navigate('MatchPopup', {
             currentUser: {
               id: user.id,
@@ -854,7 +819,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       } else if (errMsg.includes('already sent')) {
         showAlert('Already Sent', `You've already sent a request to ${targetUser.name}`, [{ text: 'OK', style: 'default' }], 'info');
       } else {
-        console.error("Error sending match request:", error);
+        logger.error("Error sending match request:", error);
       }
     }
   }, [user, token, api, showAlert, navigation]);
@@ -865,7 +830,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     try {
       await api.post('/match/swipe', { targetUserId: targetUser.id, action: 'pass' }, token);
     } catch (error) {
-      console.error("Error recording pass:", error);
+      logger.error("Error recording pass:", error);
     }
   }, [token, api]);
 
@@ -969,7 +934,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     try {
       await api.post('/match/rewind', {}, token || '');
     } catch (error) {
-      console.error('Rewind API error:', error);
+      logger.error('Rewind API error:', error);
     }
     const previousUser = userHistory.current.pop();
     if (previousUser) {
@@ -1013,7 +978,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (currentIndex >= users.length) return;
     const targetUser = users[currentIndex];
     
-    // Check premium status before making API call
     if (!user?.premium?.isActive) {
       showAlert(
         'Premium Feature', 
@@ -1063,7 +1027,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       
       setTimeout(() => animateSwipe('right'), 500);
     } catch (error: any) {
-      console.error("Super like error:", error);
+      logger.error("Super like error:", error);
       const errMsg = error?.message || error?.response?.data?.message || '';
       if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
         showAlert(
@@ -1128,7 +1092,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         loadPotentialMatches();
       }
     } catch (error) {
-      console.error('Location sharing error:', error);
+      logger.error('Location sharing error:', error);
       showAlert(t('error'), t('locationError'), [{ text: t('ok'), style: 'default' }], 'alert-circle');
     } finally {
       setLocationLoading(false);
@@ -1501,7 +1465,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               )}
 
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.95)']}
+                colors={['transparent', 'rgba(0,0,0,0.55)', 'rgba(0,0,0,0.98)']}
                 style={styles.cardGradient}
               />
 
@@ -1514,7 +1478,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               </Animated.View>
 
 
-              <View style={styles.cardInfoOverlay}>
+              <Pressable
+                style={styles.profileIconButton}
+                onPress={handleViewProfile}
+              >
+                <Feather name="user" size={20} color="#FFF" />
+              </Pressable>
+
+              <View style={[styles.cardInfoOverlay, { zIndex: 10 }]}>
                 <View style={styles.nameRow}>
                   <ThemedText style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit={false}>
                     {currentUser.name?.split(' ')[0]}
@@ -1523,11 +1494,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     )}
                   </ThemedText>
                   {currentUser.verified && (
-                    <Image 
-                      source={require("@/assets/icons/verified-tick.png")} 
-                      style={styles.verifiedTick} 
-                      contentFit="contain"
-                    />
+                    <VerificationBadge size={22} />
                   )}
                   {(currentUser as any).premium?.isActive && (
                     <PremiumBadge size="small" style={{ marginLeft: 4 }} />
@@ -1542,19 +1509,6 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     </ThemedText>
                   </View>
                 )}
-
-                <Pressable 
-                  style={styles.basicsRow}
-                  onPress={handleViewProfile}
-                >
-                  <View style={styles.basicsIconContainer}>
-                    <Feather name="grid" size={14} color="#FFF" />
-                  </View>
-                  <ThemedText style={styles.basicsText}>{t('basicsLifestyle')}</ThemedText>
-                  <View style={styles.chevronContainer}>
-                    <Feather name="chevron-right" size={18} color="#FFF" />
-                  </View>
-                </Pressable>
 
                 <View style={styles.lifestyleRow}>
                   {currentUser.religion && (
@@ -1642,7 +1596,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                   showAlert('Boost', data?.message || 'Failed to activate boost', [{ text: 'OK', style: 'default' }], 'info');
                 }
               } catch (error: any) {
-                console.error("Boost error:", error);
+                logger.error("Boost error:", error);
                 const errorMsg = error?.response?.data?.message || error?.message || '';
                 if (errorMsg.includes('already have an active boost')) {
                   showAlert('Boost Active', 'You already have an active boost! Your profile is being featured to more users.', [{ text: 'OK', style: 'default' }], 'zap');
@@ -2009,10 +1963,6 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.95 }],
     opacity: 0.3,
   },
-  profileImageFull: {
-    width: "100%",
-    height: "100%",
-  },
   noPhotoContainer: {
     alignItems: "center",
     justifyContent: "center",
@@ -2055,16 +2005,16 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    paddingBottom: 25,
-    height: '60%',
-    justifyContent: 'flex-end',
+    paddingBottom: 20,
+    zIndex: 10,
   },
   nameRow: {
     flexDirection: "row",
-    alignItems: "baseline",
+    alignItems: "center",
     marginBottom: 6,
     flexWrap: 'nowrap',
     width: '100%',
+    gap: 6,
   },
   profileName: {
     fontSize: 32,
@@ -2197,16 +2147,49 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  viewProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 30,
+    alignSelf: "flex-start",
+  },
+  viewProfileButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#FFF",
+    letterSpacing: 0.3,
+  },
   tag: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "rgba(50, 50, 50, 0.85)",
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.15)",
+    borderColor: "rgba(255, 255, 255, 0.35)",
+  },
+  profileIconButton: {
+    position: "absolute",
+    top: 20,
+    left: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 20,
   },
   tagText: {
     fontSize: 13,

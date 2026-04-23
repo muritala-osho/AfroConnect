@@ -1,9 +1,8 @@
 
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
-import { PanGestureHandler } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  useAnimatedGestureHandler,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -28,17 +27,19 @@ export function SwipeCard({ children, onSwipeLeft, onSwipeRight, onSwipeUp }: Sw
   const { theme } = useTheme();
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
 
-  const gestureHandler = useAnimatedGestureHandler({
-    onStart: (_, ctx: any) => {
-      ctx.startX = translateX.value;
-      ctx.startY = translateY.value;
-    },
-    onActive: (event, ctx: any) => {
-      translateX.value = ctx.startX + event.translationX;
-      translateY.value = ctx.startY + event.translationY;
-    },
-    onEnd: (event) => {
+  const panGesture = Gesture.Pan()
+    .onBegin(() => {
+      startX.value = translateX.value;
+      startY.value = translateY.value;
+    })
+    .onChange((event) => {
+      translateX.value = startX.value + event.translationX;
+      translateY.value = startY.value + event.translationY;
+    })
+    .onEnd(() => {
       if (Math.abs(translateX.value) > SWIPE_THRESHOLD) {
         if (translateX.value > 0) {
           runOnJS(onSwipeRight)();
@@ -55,8 +56,7 @@ export function SwipeCard({ children, onSwipeLeft, onSwipeRight, onSwipeUp }: Sw
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
       }
-    },
-  });
+    });
 
   const cardStyle = useAnimatedStyle(() => {
     const rotate = interpolate(
@@ -104,7 +104,7 @@ export function SwipeCard({ children, onSwipeLeft, onSwipeRight, onSwipeUp }: Sw
   }));
 
   return (
-    <PanGestureHandler onGestureEvent={gestureHandler}>
+    <GestureDetector gesture={panGesture}>
       <Animated.View style={[styles.card, cardStyle]}>
         <Animated.View style={[styles.overlay, styles.likeOverlay, likeOpacity]}>
           <ThemedText style={[styles.overlayText, { color: theme.like }]}>LIKE</ThemedText>
@@ -117,7 +117,7 @@ export function SwipeCard({ children, onSwipeLeft, onSwipeRight, onSwipeUp }: Sw
         </Animated.View>
         {children}
       </Animated.View>
-    </PanGestureHandler>
+    </GestureDetector>
   );
 }
 

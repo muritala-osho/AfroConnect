@@ -20,6 +20,7 @@ interface Props {
   hideHeader?: boolean;
   onRecord?: (uri: string, duration: number) => Promise<void>;
   onDelete?: () => Promise<void>;
+  onReport?: () => void;
 }
 
 const BAR_COUNT = 28;
@@ -30,7 +31,7 @@ function formatTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hideHeader = false, onRecord, onDelete }: Props) {
+export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hideHeader = false, onRecord, onDelete, onReport }: Props) {
   const { theme } = useTheme();
   const [playing, setPlaying] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -217,6 +218,11 @@ export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hid
           {isOwn && hasVoiceBio && !recording && (
             <Pressable onPress={handleDelete} hitSlop={8}>
               <Feather name="trash-2" size={16} color={theme.textSecondary} />
+            </Pressable>
+          )}
+          {!isOwn && hasVoiceBio && !recording && onReport && (
+            <Pressable onPress={onReport} hitSlop={8}>
+              <Feather name="flag" size={15} color={theme.textSecondary} />
             </Pressable>
           )}
         </View>

@@ -16,6 +16,7 @@ export interface ActiveCallInfo {
 interface CallContextValue {
   activeCall: ActiveCallInfo | null;
   isCallMinimized: boolean;
+  isOnCallScreen: boolean;
   setActiveCall: (call: ActiveCallInfo | null) => void;
   updateCallStatus: (status: CallStatus) => void;
   startGlobalTimer: () => void;
@@ -23,6 +24,7 @@ interface CallContextValue {
   minimizeCall: () => void;
   maximizeCall: () => void;
   clearCall: () => void;
+  setIsOnCallScreen: (value: boolean) => void;
 }
 
 const CallContext = createContext<CallContextValue | null>(null);
@@ -30,6 +32,7 @@ const CallContext = createContext<CallContextValue | null>(null);
 export function CallProvider({ children }: { children: React.ReactNode }) {
   const [activeCall, setActiveCallState] = useState<ActiveCallInfo | null>(null);
   const [isCallMinimized, setIsCallMinimized] = useState(false);
+  const [isOnCallScreen, setIsOnCallScreen] = useState(false);
   const globalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const stopGlobalTimer = useCallback(() => {
@@ -78,6 +81,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
     <CallContext.Provider value={{
       activeCall,
       isCallMinimized,
+      isOnCallScreen,
       setActiveCall,
       updateCallStatus,
       startGlobalTimer,
@@ -85,6 +89,7 @@ export function CallProvider({ children }: { children: React.ReactNode }) {
       minimizeCall,
       maximizeCall,
       clearCall,
+      setIsOnCallScreen,
     }}>
       {children}
     </CallContext.Provider>

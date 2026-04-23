@@ -7,35 +7,24 @@ if (typeof global !== 'undefined') {
 
 export const GlobalPlatform = Platform;
 
-// ─── WHERE TO PUT YOUR RENDER URL ────────────────────────────────────────────
-// In frontend/.env add:
-//   EXPO_PUBLIC_API_URL=https://your-app-name.onrender.com
-//
-// That single line is all you need. The function below will pick it up
-// automatically and use it everywhere in the app.
-// ─────────────────────────────────────────────────────────────────────────────
 
 export const getApiBaseUrl = (): string => {
-  // 1. Production / Render — set EXPO_PUBLIC_API_URL in frontend/.env
   if (process.env.EXPO_PUBLIC_API_URL) {
-    return process.env.EXPO_PUBLIC_API_URL;
+    return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, ''); // strip trailing slash
   }
 
-  // 2. Web (browser) — use current host
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    const { protocol, hostname, port } = window.location;
-    if (port === '3001') return '';
-    return `${protocol}//${hostname}:3001`;
-  }
-
-  // 3. Mobile dev on Replit — use the tunnelled domain
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}`;
   }
 
-  // 4. Local machine fallback
-  return 'http://localhost:3001';
+  throw new Error(
+    '[Config] EXPO_PUBLIC_API_URL is not set. ' +
+    'Add it to your .env file: EXPO_PUBLIC_API_URL=https://your-backend-url.onrender.com'
+  );
 };
+
+const _resolvedUrl = getApiBaseUrl();
+console.log(`[Config] API base URL: ${_resolvedUrl}`);
 
 export const getSocketUrl = (): string => {
   return getApiBaseUrl();

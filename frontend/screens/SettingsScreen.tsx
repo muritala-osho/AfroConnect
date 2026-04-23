@@ -69,7 +69,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     setter(value);
     if (!token) return;
     try {
-      // If it's the master notification toggle
       if (key === 'notificationsEnabled') {
         const response = await put('/account/settings', { pushNotifications: value }, token);
         if (response.success) {
@@ -80,7 +79,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         return;
       }
 
-      // Use the generic /users/me endpoint for privacy settings to ensure compatibility
       const response = await put('/users/me', { 
         privacySettings: {
           ...user?.privacySettings,
@@ -250,8 +248,13 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           />
           <SettingItem 
             icon="check-circle" 
-            label="Photo Verification" 
-            value={(user as any)?.verified ? 'Verified' : ''} 
+            label="Video Verification" 
+            value={
+              (user as any)?.verified ? 'Verified'
+              : (user as any)?.verificationStatus === 'pending' ? 'Under Review'
+              : (user as any)?.verificationStatus === 'rejected' ? 'Try Again'
+              : ''
+            }
             onPress={() => navigation.navigate('Verification' as any)} 
           />
           <SettingItem 
@@ -315,6 +318,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 trackColor={{ false: theme.border, true: theme.primary }}
               />
             }
+          />
+          <SettingItem 
+            icon="monitor" 
+            label="Active Sessions" 
+            onPress={() => navigation.navigate('DeviceManagement' as any)} 
           />
           <SettingItem 
             icon="slash" 

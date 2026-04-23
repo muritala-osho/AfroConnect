@@ -1,7 +1,10 @@
-import React, { useState, useRef } from "react";
-import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, FlatList } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { SafeImage } from "@/components/SafeImage";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { CompositeNavigationProp } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -19,7 +22,9 @@ import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
 import ProfilePrompts from "@/components/ProfilePrompts";
+import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { VerificationBadge } from "@/components/VerificationBadge";
 import VoiceBio from "@/components/VoiceBio";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -73,7 +78,6 @@ const EDUCATION_LABELS: { [key: string]: string } = {
 
 
 const LIFESTYLE_LABELS: { [key: string]: string } = {
-  // Drinking / Smoking / Workout frequency
   never: 'Never',
   socially: 'Socially',
   regularly: 'Regularly',
@@ -83,13 +87,11 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   sometimes: 'Sometimes',
   prefer_not_to_say: 'Prefer not to say',
 
-  // Personality type
   introverted: 'Introverted',
   ambiverted: 'Ambiverted',
   ambivert: 'Ambivert',
   extroverted: 'Extroverted',
 
-  // Love style
   romantic: 'Romantic',
   playful: 'Playful',
   passionate: 'Passionate',
@@ -104,13 +106,11 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   quality_time: 'Quality Time',
   gift_giving: 'Gift Giving',
 
-  // Communication style
   big_talker: 'Big Talker',
   listener: 'Good Listener',
   texter: 'Texter',
   caller: 'Phone Caller',
 
-  // Religion
   christian: 'Christian',
   muslim: 'Muslim',
   traditional: 'Traditional',
@@ -122,26 +122,22 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   agnostic: 'Agnostic',
   other: 'Other',
 
-  // Kids
   yes: 'Yes',
   no: 'No',
   open_to_it: 'Open to it',
   not_sure: 'Not sure',
 
-  // Pets
   none: 'No pets',
   dog: 'Dog lover',
   cat: 'Cat lover',
   parrot: 'Parrot',
   allergic: 'Allergic to pets',
 
-  // Ethnicity
   african: 'African',
   african_american: 'African American',
   caribbean: 'Caribbean',
   mixed: 'Mixed',
 
-  // Relationship goal
   short_term: 'Short-term Dating',
   long_term: 'Long-term Relationship',
   friendship: 'Friendship',
@@ -151,12 +147,10 @@ const LIFESTYLE_LABELS: { [key: string]: string } = {
   open_to_everything: 'Open to Everything',
   not_sure_yet: 'Not Sure Yet',
 
-  // Looking for
   relationship: 'Relationship',
   hookup: 'Hookup',
   both: 'Both',
 
-  // Diaspora generation
   first: '1st Generation',
   second: '2nd Generation',
   third: '3rd+ Generation',
@@ -175,7 +169,19 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<number>(0);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [currentHeroPhoto, setCurrentHeroPhoto] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (photoModalVisible && selectedPhoto > 0) {
+      const timer = setTimeout(() => {
+        flatListRef.current?.scrollTo({
+          x: width * selectedPhoto,
+          animated: false,
+        });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [photoModalVisible]);
 
   const handleLogout = () => {
     showAlert(
@@ -199,8 +205,8 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const photo = user?.photos?.[photoIndex];
     if (!photo) return;
 
-    if (user?.photos?.length === 1) {
-      showAlert(t('error'), "You must have at least one photo on your profile.", [{ text: t('ok'), style: 'default' }], 'alert-circle');
+    if ((user?.photos?.length ?? 0) <= 4) {
+      showAlert(t('error'), "You need at least 4 photos on your profile. Add more before deleting this one.", [{ text: t('ok'), style: 'default' }], 'alert-circle');
       return;
     }
 
@@ -250,7 +256,6 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const tapX = evt.nativeEvent.locationX;
     const tapY = evt.nativeEvent.locationY;
     
-    // If tapping the top area or indicators, don't trigger photo change
     if (tapY < 60) return;
 
     if (totalPhotos <= 1) return;
@@ -292,6 +297,11 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: t('work'),
       value: (user as any).jobTitle,
     },
+    (user as any)?.school && {
+      icon: 'book-open' as const,
+      label: 'School',
+      value: (user as any).school,
+    },
     (user as any)?.education && {
       icon: 'book' as const,
       label: t('education'),
@@ -322,25 +332,29 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
       label: 'Drinking',
       value: LIFESTYLE_LABELS[(user as any).lifestyle.drinking] || (user as any).lifestyle.drinking,
     },
-    (user as any)?.lifestyle?.religion && {
+    ((user as any)?.lifestyle?.religion || (user as any)?.religion) && {
       icon: 'sun' as const,
       label: 'Religion',
-      value: LIFESTYLE_LABELS[(user as any).lifestyle.religion] || (user as any).lifestyle.religion,
+      value: LIFESTYLE_LABELS[(user as any).lifestyle?.religion || (user as any).religion] || (user as any).lifestyle?.religion || (user as any).religion,
     },
-    (user as any)?.lifestyle?.ethnicity && {
+    ((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity) && {
       icon: 'globe' as const,
       label: 'Ethnicity',
-      value: (user as any).lifestyle.ethnicity,
+      value: (user as any).lifestyle?.ethnicity || (user as any).ethnicity,
     },
     (user as any)?.lifestyle?.personalityType && {
       icon: 'zap' as const,
       label: 'Personality',
       value: (user as any).lifestyle.personalityType,
     },
-    (user as any)?.lifestyle?.pets && {
+    (user as any)?.lifestyle?.pets ? {
       icon: 'heart' as const,
       label: 'Pets',
-      value: (user as any).lifestyle.pets,
+      value: LIFESTYLE_LABELS[(user as any).lifestyle.pets] || (user as any).lifestyle.pets,
+    } : (user as any)?.lifestyle?.hasPets != null && {
+      icon: 'heart' as const,
+      label: 'Has Pets',
+      value: (user as any).lifestyle.hasPets ? 'Yes' : 'No',
     },
     (user as any)?.lifestyle?.relationshipStatus && {
       icon: 'heart' as const,
@@ -408,7 +422,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
     const source = getPhotoSource(item);
     return (
       <View style={styles.photoSlideContainer}>
-        <SafeImage source={source} style={styles.fullPhoto} contentFit="contain" />
+        <ZoomablePhoto source={source} width={width} height={height * 0.75} />
       </View>
     );
   };
@@ -443,13 +457,23 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               style={styles.tapArea} 
               onPress={() => {
                 handleIndicatorPress((currentHeroPhoto - 1 + totalPhotos) % totalPhotos);
-              }} 
+              }}
+              onLongPress={() => {
+                setSelectedPhoto(currentHeroPhoto);
+                setPhotoModalVisible(true);
+              }}
+              delayLongPress={300}
             />
             <Pressable 
               style={styles.tapArea} 
               onPress={() => {
                 handleIndicatorPress((currentHeroPhoto + 1) % totalPhotos);
-              }} 
+              }}
+              onLongPress={() => {
+                setSelectedPhoto(currentHeroPhoto);
+                setPhotoModalVisible(true);
+              }}
+              delayLongPress={300}
             />
           </View>
 
@@ -478,6 +502,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={styles.heroAge}>, {user.age}</ThemedText>
                 )}
               </ThemedText>
+              {(user as any)?.verified && <VerificationBadge verified size="small" />}
               {user?.premium?.isActive && <PremiumBadge size="medium" />}
             </View>
             {((user as any)?.livingIn || (user as any)?.location?.city || (user as any)?.location?.address) && (
@@ -666,7 +691,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         )}
 
         {/* LIFESTYLE SECTION */}
-        {((user as any)?.lifestyle?.smoking || (user as any)?.lifestyle?.drinking || (user as any)?.lifestyle?.workout || (user as any)?.lifestyle?.pets || (user as any)?.lifestyle?.hasKids !== undefined || (user as any)?.lifestyle?.wantsKids !== undefined) && (
+        {((user as any)?.lifestyle?.smoking || (user as any)?.lifestyle?.drinking || (user as any)?.lifestyle?.workout || (user as any)?.lifestyle?.pets || (user as any)?.lifestyle?.hasPets != null || (user as any)?.lifestyle?.hasKids !== undefined || (user as any)?.lifestyle?.wantsKids !== undefined) && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
               <View style={[styles.sectionIconBubble, { backgroundColor: '#10B98120' }]}>
@@ -711,6 +736,15 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>
                     {LIFESTYLE_LABELS[(user as any).lifestyle.pets] || (user as any).lifestyle.pets}
                   </ThemedText>
+                </View>
+              )}
+              {!(user as any)?.lifestyle?.pets && (user as any)?.lifestyle?.hasPets != null && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#10B98115' }]}><Feather name="heart" size={15} color="#10B981" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Has Pets</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).lifestyle.hasPets ? 'Yes' : 'No'}</ThemedText>
                 </View>
               )}
               {(user as any)?.lifestyle?.hasKids !== undefined && (
@@ -823,7 +857,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         </View>
 
         {/* BACKGROUND SECTION */}
-        {((user as any)?.lifestyle?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.education || user?.gender || (user as any)?.height) && (
+        {((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity || (user as any)?.lifestyle?.religion || (user as any)?.religion || (user as any)?.education || (user as any)?.school || user?.gender || (user as any)?.height) && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
               <View style={[styles.sectionIconBubble, { backgroundColor: '#0EA5E920' }]}>
@@ -850,31 +884,40 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).height} cm</ThemedText>
                 </View>
               )}
-              {(user as any)?.lifestyle?.ethnicity && (
+              {((user as any)?.lifestyle?.ethnicity || (user as any)?.ethnicity) && (
                 <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="globe" size={15} color="#0EA5E9" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Ethnicity</ThemedText>
                   </View>
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>
-                    {LIFESTYLE_LABELS[(user as any).lifestyle.ethnicity] || (user as any).lifestyle.ethnicity}
+                    {LIFESTYLE_LABELS[(user as any).lifestyle?.ethnicity || (user as any).ethnicity] || (user as any).lifestyle?.ethnicity || (user as any).ethnicity}
                   </ThemedText>
                 </View>
               )}
-              {(user as any)?.lifestyle?.religion && (
+              {((user as any)?.lifestyle?.religion || (user as any)?.religion) && (
                 <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="sun" size={15} color="#0EA5E9" /></View>
                     <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Religion</ThemedText>
                   </View>
-                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle.religion] || (user as any).lifestyle.religion}</ThemedText>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{LIFESTYLE_LABELS[(user as any).lifestyle?.religion || (user as any).religion] || (user as any).lifestyle?.religion || (user as any).religion}</ThemedText>
+                </View>
+              )}
+              {(user as any)?.school && (
+                <View style={[styles.detailRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
+                  <View style={styles.detailLeft}>
+                    <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="book-open" size={15} color="#0EA5E9" /></View>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>School</ThemedText>
+                  </View>
+                  <ThemedText style={[styles.detailValue, { color: theme.text }]}>{(user as any).school}</ThemedText>
                 </View>
               )}
               {(user as any)?.education && (
                 <View style={styles.detailRow}>
                   <View style={styles.detailLeft}>
                     <View style={[styles.detailIconContainer, { backgroundColor: '#0EA5E915' }]}><Feather name="book" size={15} color="#0EA5E9" /></View>
-                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Education</ThemedText>
+                    <ThemedText style={[styles.detailLabel, { color: theme.textSecondary }]}>Education Level</ThemedText>
                   </View>
                   <ThemedText style={[styles.detailValue, { color: theme.text }]}>{EDUCATION_LABELS[(user as any).education] || (user as any).education}</ThemedText>
                 </View>
@@ -940,22 +983,42 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
         {(user as any)?.favoriteSong?.title && (
           <View style={styles.section}>
             <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.border + '60' }]}>
-              <View style={[styles.sectionIconBubble, { backgroundColor: '#9333EA20' }]}>
-                <Feather name="music" size={15} color="#9333EA" />
+              <View style={[styles.sectionIconBubble, { backgroundColor: '#1DB95420' }]}>
+                <Feather name="music" size={15} color="#1DB954" />
               </View>
               <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>Soundtrack</ThemedText>
+              {(user as any)?.spotify?.connected && (
+                <View style={{ marginLeft: 8, backgroundColor: '#1DB95420', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 }}>
+                  <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>Spotify</ThemedText>
+                </View>
+              )}
             </View>
             <View style={[styles.card, { backgroundColor: theme.surface }]}>
               <View style={styles.songRow}>
-                <View style={[styles.songIconWrap, { backgroundColor: '#9333EA' }]}>
-                  <Feather name="music" size={18} color="#FFF" />
-                </View>
+                {(user as any).favoriteSong?.albumArt ? (
+                  <SafeImage
+                    source={{ uri: (user as any).favoriteSong.albumArt }}
+                    style={{ width: 44, height: 44, borderRadius: 10 }}
+                  />
+                ) : (
+                  <LinearGradient colors={['#1DB954', '#158f3f']} style={[styles.songIconWrap, { borderRadius: 12 }]}>
+                    <Feather name="music" size={18} color="#FFF" />
+                  </LinearGradient>
+                )}
                 <View style={{ flex: 1 }}>
                   <ThemedText style={[styles.songTitle, { color: theme.text }]}>{(user as any).favoriteSong.title}</ThemedText>
                   {(user as any).favoriteSong.artist && (
                     <ThemedText style={[styles.songArtist, { color: theme.textSecondary }]}>{(user as any).favoriteSong.artist}</ThemedText>
                   )}
                 </View>
+                <SpotifyEmbedPlayer
+                  spotifyUri={(user as any).favoriteSong?.spotifyUri}
+                  previewUrl={(user as any).favoriteSong?.previewUrl}
+                  title={(user as any).favoriteSong?.title}
+                  artist={(user as any).favoriteSong?.artist}
+                  albumArt={(user as any).favoriteSong?.albumArt}
+                  size={18}
+                />
               </View>
             </View>
           </View>
@@ -1102,70 +1165,88 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
 
       <Modal
         visible={photoModalVisible}
-        transparent
+        transparent={false}
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setPhotoModalVisible(false)}
       >
+        <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.photoModalOverlay}>
-          <Pressable 
-            style={styles.photoModalClose} 
+          {user?.photos && user.photos.length > 0 && (
+            <ScrollView
+              ref={flatListRef}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
+              style={{ flex: 1 }}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+                setSelectedPhoto(idx);
+              }}
+            >
+              {user.photos.map((item: any, index: number) => {
+                const source = getPhotoSource(item);
+                return (
+                  <View key={index} style={styles.photoSlideContainer}>
+                    <ZoomablePhoto source={source} width={width} height={height * 0.75} />
+                  </View>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* Close */}
+          <TouchableOpacity
+            style={[styles.photoModalClose, { top: insets.top + 16 }]}
             onPress={() => setPhotoModalVisible(false)}
           >
-            <Feather name="x" size={28} color="#fff" />
-          </Pressable>
-          
-          {user?.photos && user.photos.length > 0 && (
-            <>
-              <FlatList
-                ref={flatListRef}
-                data={user.photos}
-                renderItem={renderPhotoItem}
-                keyExtractor={(_, index) => index.toString()}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onViewableItemsChanged={onViewableItemsChanged}
-                viewabilityConfig={viewabilityConfig}
-                initialScrollIndex={selectedPhoto}
-                getItemLayout={(_, index) => ({
-                  length: width,
-                  offset: width * index,
-                  index,
-                })}
-              />
+            <Ionicons name="close" size={24} color="#fff" />
+          </TouchableOpacity>
 
-              <View style={styles.photoModalActions}>
-                <Pressable 
-                  style={[styles.photoModalButton, { backgroundColor: theme.error }]}
-                  onPress={() => handleDeletePhoto(selectedPhoto)}
-                >
-                  <Feather name="trash-2" size={18} color="#FFF" />
-                  <ThemedText style={styles.photoModalButtonText}>{t('delete')}</ThemedText>
-                </Pressable>
-              </View>
-
-              <View style={styles.modalPhotoIndicators}>
-                {user.photos.map((_, index) => (
-                  <Pressable 
-                    key={index} 
-                    onPress={() => {
-                      setSelectedPhoto(index);
-                      flatListRef.current?.scrollToIndex({ index, animated: true });
-                    }}
-                    style={[
-                      styles.modalPhotoIndicator, 
-                      { backgroundColor: index === selectedPhoto ? '#fff' : 'rgba(255,255,255,0.4)' }
-                    ]} 
-                  />
-                ))}
-              </View>
-
-              <ThemedText style={styles.photoCounter}>
-                {selectedPhoto + 1} / {user.photos.length}
-              </ThemedText>
-            </>
+          {/* Dot indicators */}
+          {user?.photos && user.photos.length > 1 && (
+            <View style={[styles.modalPhotoIndicators, { top: insets.top + 56 }]}>
+              {user.photos.map((_, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => {
+                    setSelectedPhoto(index);
+                    flatListRef.current?.scrollTo({ x: width * index, animated: true });
+                  }}
+                  style={[
+                    styles.modalPhotoIndicator,
+                    { backgroundColor: index === selectedPhoto ? '#fff' : 'rgba(255,255,255,0.4)' }
+                  ]}
+                />
+              ))}
+            </View>
           )}
+
+          {/* Delete + counter at bottom */}
+          <View style={[styles.photoModalActions, { bottom: insets.bottom + 24 }]}>
+            <ThemedText style={styles.photoCounter}>
+              {selectedPhoto + 1} / {user?.photos?.length ?? 0}
+            </ThemedText>
+            <Pressable
+              style={[styles.photoModalButton, { backgroundColor: theme.error }]}
+              onPress={() => {
+                setPhotoModalVisible(false);
+                handleDeletePhoto(selectedPhoto);
+              }}
+            >
+              <Feather name="trash-2" size={16} color="#FFF" />
+              <ThemedText style={styles.photoModalButtonText}>{t('delete')}</ThemedText>
+            </Pressable>
+          </View>
+
+          {/* Hint */}
+          <View style={{ position: 'absolute', bottom: insets.bottom + 72, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Ionicons name="search-outline" size={12} color="rgba(255,255,255,0.4)" />
+            <ThemedText style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>Pinch or double-tap to zoom</ThemedText>
+          </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
       <AlertComponent />
     </View>
@@ -1419,30 +1500,38 @@ const styles = StyleSheet.create({
   },
   photoModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: '#000',
   },
   photoModalClose: {
     position: 'absolute',
-    top: 50,
-    right: 20,
+    right: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
     zIndex: 10,
-    padding: Spacing.sm,
   },
   photoSlideContainer: {
     width: width,
+    height: height,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#000',
   },
   fullPhoto: {
     width: width,
     height: width * 1.2,
   },
   photoModalActions: {
+    position: 'absolute',
     flexDirection: 'row',
-    gap: Spacing.md,
-    marginTop: Spacing.xl,
+    alignItems: 'center',
+    gap: Spacing.lg,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
   },
   photoModalButton: {
     flexDirection: 'row',
@@ -1457,19 +1546,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalPhotoIndicators: {
+    position: 'absolute',
     flexDirection: 'row',
-    gap: 8,
-    marginTop: Spacing.lg,
+    gap: 6,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
   },
   modalPhotoIndicator: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
   },
   photoCounter: {
     color: '#fff',
-    marginTop: Spacing.md,
     opacity: 0.7,
+    fontSize: 14,
+    fontWeight: '500',
   },
   premiumBadgeContainer: {
     flexDirection: 'row',

@@ -3,7 +3,6 @@ const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { QuizQuestion, UserQuizResponse } = require('../models/CompatibilityQuiz');
 
-// Get all quiz questions
 router.get('/questions', protect, async (req, res) => {
   try {
     const questions = await QuizQuestion.find({ isActive: true })
@@ -19,7 +18,6 @@ router.get('/questions', protect, async (req, res) => {
   }
 });
 
-// Get user's quiz responses
 router.get('/responses', protect, async (req, res) => {
   try {
     const userResponse = await UserQuizResponse.findOne({ userId: req.user._id })
@@ -37,7 +35,6 @@ router.get('/responses', protect, async (req, res) => {
   }
 });
 
-// Submit quiz responses
 router.post('/submit', protect, async (req, res) => {
   try {
     const { responses } = req.body;
@@ -49,7 +46,6 @@ router.post('/submit', protect, async (req, res) => {
       });
     }
 
-    // Validate all question IDs exist
     const questionIds = responses.map(r => r.questionId);
     const validQuestions = await QuizQuestion.find({ 
       _id: { $in: questionIds },
@@ -63,7 +59,6 @@ router.post('/submit', protect, async (req, res) => {
       });
     }
 
-    // Format responses
     const formattedResponses = responses.map(r => ({
       questionId: r.questionId,
       selectedOption: {
@@ -73,7 +68,6 @@ router.post('/submit', protect, async (req, res) => {
       answeredAt: new Date()
     }));
 
-    // Upsert user response
     const userResponse = await UserQuizResponse.findOneAndUpdate(
       { userId: req.user._id },
       {
@@ -85,7 +79,6 @@ router.post('/submit', protect, async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Calculate user's profile from their responses
     const categoryScores = {};
     const categoryTotals = {};
     
@@ -106,7 +99,6 @@ router.post('/submit', protect, async (req, res) => {
       profile[cat] = Math.round(categoryScores[cat] / categoryTotals[cat]);
     }
 
-    // Determine personality type based on responses
     const avgScore = Object.values(categoryScores).reduce((a, b) => a + b, 0) / 
                      Object.values(categoryTotals).reduce((a, b) => a + b, 0);
     
@@ -148,12 +140,19 @@ function getCategoryLabel(category, score) {
   return catLabels[Math.min(Math.max(0, score - 1), 4)];
 }
 
-// Calculate compatibility with another user
 router.get('/compatibility/:userId', protect, async (req, res) => {
   try {
     const { userId } = req.params;
+
+    const Match = require('../models/Match');
+    const match = await Match.findOne({
+      users: { $all: [req.user._id, userId] },
+      status: 'active'
+    });
+    if (!match) {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
     
-    // Get both users' responses
     const [myResponses, theirResponses] = await Promise.all([
       UserQuizResponse.findOne({ userId: req.user._id }),
       UserQuizResponse.findOne({ userId })
@@ -175,7 +174,6 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
       });
     }
 
-    // Calculate compatibility score
     const myResponseMap = new Map();
     myResponses.responses.forEach(r => {
       myResponseMap.set(r.questionId.toString(), r.selectedOption.value);
@@ -185,12 +183,10 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
     let matchScore = 0;
     const questionWeights = new Map();
     
-    // Get question weights
     const questionIds = theirResponses.responses.map(r => r.questionId);
     const questions = await QuizQuestion.find({ _id: { $in: questionIds } });
     questions.forEach(q => questionWeights.set(q._id.toString(), q.weight));
 
-    // Compare responses
     for (const theirResponse of theirResponses.responses) {
       const qId = theirResponse.questionId.toString();
       const myValue = myResponseMap.get(qId);
@@ -199,7 +195,6 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
         const weight = questionWeights.get(qId) || 1;
         totalWeight += weight;
         
-        // Calculate similarity (closer values = higher match)
         const theirValue = theirResponse.selectedOption.value;
         const diff = Math.abs(myValue - theirValue);
         const maxDiff = 4; // Values range 1-5, max diff is 4
@@ -212,7 +207,6 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
       ? Math.round((matchScore / totalWeight) * 100)
       : 0;
 
-    // Get category breakdown
     const categoryScores = {};
     const categoryTotals = {};
     
@@ -255,7 +249,6 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
   }
 });
 
-// Seed default quiz questions (admin or first run)
 router.post('/seed', protect, async (req, res) => {
   try {
     const existingCount = await QuizQuestion.countDocuments();
@@ -268,7 +261,6 @@ router.post('/seed', protect, async (req, res) => {
     }
 
     const defaultQuestions = [
-      // Lifestyle
       {
         question: "How do you prefer to spend your weekends?",
         category: "lifestyle",
@@ -305,7 +297,6 @@ router.post('/seed', protect, async (req, res) => {
         ],
         weight: 2
       },
-      // Values
       {
         question: "How important is religion/spirituality in your life?",
         category: "values",
@@ -342,7 +333,6 @@ router.post('/seed', protect, async (req, res) => {
         ],
         weight: 2
       },
-      // Personality
       {
         question: "In social situations, you typically:",
         category: "personality",
@@ -379,7 +369,6 @@ router.post('/seed', protect, async (req, res) => {
         ],
         weight: 2
       },
-      // Relationship
       {
         question: "How much personal space do you need in a relationship?",
         category: "relationship",
@@ -416,7 +405,6 @@ router.post('/seed', protect, async (req, res) => {
         ],
         weight: 1
       },
-      // Future
       {
         question: "Do you want children?",
         category: "future",

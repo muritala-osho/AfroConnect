@@ -81,7 +81,6 @@ export default function BoostCenterScreen({ navigation }: any) {
   const handleActivateBoost = async (packageId: string) => {
     if (!token) return;
     
-    // Check if premium
     if (!user?.premium?.isActive) {
       Alert.alert(
         'Premium Feature',

@@ -1,10 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
+import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
+import * as Device from "expo-device";
 import { useApi } from "./useApi";
 import socketService from "@/services/socket";
 import { getApiBaseUrl } from "@/constants/config";
+import logger from "@/utils/logger";
+
+function getDeviceInfo(): { deviceName: string; platform: string } {
+  const model = Device.modelName || "Unknown Device";
+  const osName = Device.osName || (Platform.OS === "ios" ? "iOS" : Platform.OS === "android" ? "Android" : "Web");
+  const osVersion = Device.osVersion || "";
+  const deviceName = osVersion ? `${model} · ${osName} ${osVersion}` : `${model} · ${osName}`;
+  const platform = Platform.OS === "ios" ? "ios" : Platform.OS === "android" ? "android" : "web";
+  return { deviceName, platform };
+}
 
 export interface UserPhoto {
+  _id?: string;
   url: string;
   publicId?: string;
   isPrimary?: boolean;
@@ -64,12 +78,26 @@ export interface User {
     smoking?: string;
     workout?: string;
     pets?: string;
+    hasKids?: boolean;
+    hasPets?: boolean;
+    wantsKids?: boolean;
+    communicationStyle?: string;
+    loveStyle?: string;
+    personalityType?: string;
+    ethnicity?: string;
+    relationshipStatus?: string;
   };
   googleId?: string;
   isAdmin?: boolean;
   premium?: { isActive: boolean; plan: string; expiresAt?: string };
   needsVerification?: boolean;
   profileIncomplete?: boolean;
+  height?: string | number;
+  language?: string;
+  religion?: string;
+  ethnicity?: string;
+  additionalLocations?: Array<{ city?: string; country?: string; coordinates?: [number, number] }>;
+  settings?: Record<string, any>;
 }
 
 interface AuthContextType {
@@ -96,6 +124,18 @@ const PENDING_PROFILE_KEY = 'pending_profile_setup';
 const LANGUAGE_SYNCED_KEY = 'app_language_synced';
 const LANGUAGE_STORAGE_KEY = 'app_language_preference';
 
+async function saveToken(token: string) {
+  await SecureStore.setItemAsync(TOKEN_KEY, token);
+}
+
+async function getToken(): Promise<string | null> {
+  return SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+async function deleteToken() {
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -107,33 +147,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadAuthData();
   }, []);
 
-  // Only connect socket when user is fully authenticated (profile complete)
   const userProfileComplete = useMemo(() => {
     const hasPhotos = !!user?.photos && Array.isArray(user.photos) && user.photos.length > 0;
     return !!user && hasPhotos;
   }, [user?.photos, user]);
   
   useEffect(() => {
-    // Connect socket for real-time features
     const uid = (user as any)?._id || user?.id;
     if (uid && token) {
       try {
         socketService.connect(token);
         socketService.setUserOnline(uid);
+
+        const handleBanned = (data: { reason?: string }) => {
+          Alert.alert(
+            'Account Suspended',
+            `Your account has been suspended${data?.reason ? `: ${data.reason}` : '.'}`,
+            [{ text: 'OK', onPress: () => clearAuthData() }],
+            { cancelable: false }
+          );
+        };
+        const handleSuspended = (data: { days?: number }) => {
+          Alert.alert(
+            'Account Temporarily Suspended',
+            `Your account has been suspended for ${data?.days ?? 'several'} day(s). You will be logged out now.`,
+            [{ text: 'OK', onPress: () => clearAuthData() }],
+            { cancelable: false }
+          );
+        };
+        socketService.on('user:banned', handleBanned);
+        socketService.on('user:suspended', handleSuspended);
+
+        return () => {
+          socketService.off('user:banned', handleBanned);
+          socketService.off('user:suspended', handleSuspended);
+        };
       } catch (err) {
-        console.error('Socket connection failed:', err);
+        logger.error('Socket connection failed:', err);
       }
     }
-    
-    return () => {
-      // Don't disconnect socket on unmount - keep it connected for background notifications
-    };
+    return () => {};
   }, [user?.id, token]);
 
   const loadAuthData = async () => {
     try {
       const [storedToken, storedUser, pendingSetup] = await Promise.all([
-        AsyncStorage.getItem(TOKEN_KEY),
+        getToken(),
         AsyncStorage.getItem(USER_KEY),
         AsyncStorage.getItem(PENDING_PROFILE_KEY),
       ]);
@@ -144,7 +203,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setPendingProfileSetup(pendingSetup === 'true');
       }
     } catch (error) {
-      console.error("Error loading auth data:", error);
+      logger.error("Error loading auth data:", error);
     } finally {
       setIsLoading(false);
     }
@@ -152,7 +211,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const saveAuthData = async (authToken: string, userData: User) => {
     try {
-      // Fetch full user data to ensure we have all fields
       const baseUrl = getApiBaseUrl();
       const userResponse = await fetch(`${baseUrl}/api/users/me`, {
         headers: { 'Authorization': `Bearer ${authToken}` }
@@ -161,16 +219,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const finalUserData = userDataFull.success ? userDataFull.user : userData;
 
       await Promise.all([
-        AsyncStorage.setItem(TOKEN_KEY, authToken),
+        saveToken(authToken),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(finalUserData)),
       ]);
       setToken(authToken);
       setUser(finalUserData);
     } catch (error) {
-      console.error("Error saving auth data:", error);
-      // Fallback to provided data if fetch fails
+      logger.error("Error saving auth data:", error);
       await Promise.all([
-        AsyncStorage.setItem(TOKEN_KEY, authToken),
+        saveToken(authToken),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(userData)),
       ]);
       setToken(authToken);
@@ -181,16 +238,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuthData = async () => {
     try {
       const currentUserId = user?.id;
-      const keysToRemove = [
-        TOKEN_KEY,
-        USER_KEY,
-        PENDING_PROFILE_KEY,
-        LANGUAGE_STORAGE_KEY,
-      ];
+      const asyncKeys = [USER_KEY, PENDING_PROFILE_KEY, LANGUAGE_STORAGE_KEY];
       if (currentUserId) {
-        keysToRemove.push(`${LANGUAGE_SYNCED_KEY}_${currentUserId}`);
+        asyncKeys.push(`${LANGUAGE_SYNCED_KEY}_${currentUserId}`);
       }
-      await Promise.all(keysToRemove.map(key => AsyncStorage.removeItem(key)));
+      await Promise.all([
+        ...asyncKeys.map(key => AsyncStorage.removeItem(key)),
+        deleteToken(),
+      ]);
       setToken(null);
       setUser(null);
       setPendingProfileSetup(false);
@@ -198,7 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         socketService.disconnect();
       }
     } catch (error) {
-      console.error("Error clearing auth data:", error);
+      logger.error("Error clearing auth data:", error);
     }
   };
 
@@ -207,19 +262,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loginUrl = `${baseUrl}/api/auth/login`;
     
     try {
-      console.log('🔐 Attempting login to:', loginUrl);
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, ...getDeviceInfo() }),
       });
 
-      console.log('📡 Response status:', response.status);
       const responseText = await response.text();
-      console.log('Login raw response:', responseText.substring(0, 200));
 
       if (responseText.startsWith('<')) {
         throw new Error('Server returned HTML instead of JSON. Check backend status.');
@@ -227,7 +279,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = JSON.parse(responseText);
       if (!response.ok) {
-        // Create error with additional properties for banned users
         const error: any = new Error(data.message || `Login failed (${response.status})`);
         error.isBanned = data.isBanned || false;
         error.status = response.status;
@@ -239,11 +290,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw error;
       }
 
-      // After login, fetch full profile immediately to ensure persistence
       await saveAuthData(data.token, data.user);
       await fetchUser();
     } catch (error: any) {
-      console.error('❌ Login error:', error.message);
+      logger.error('Login error:', error.message);
       throw error;
     }
   };
@@ -252,11 +302,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const baseUrl = getApiBaseUrl();
     const signupUrl = `${baseUrl}/api/auth/signup`;
     try {
-      console.log('\n\n========== SIGNUP ATTEMPT ==========');
-      console.log('📝 Signup URL:', signupUrl);
-      console.log('✉️  Email:', email);
-      console.log('====================================\n\n');
-
       const response = await fetch(signupUrl, {
         method: 'POST',
         headers: {
@@ -266,28 +311,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
-      console.log('📡 Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
       const responseText = await response.text();
-      console.log('Raw response (first 500 chars):', responseText.substring(0, 500));
       
-      // Check if response is HTML (error page)
       if (responseText.startsWith('<')) {
-        console.error('ERROR: Server returned HTML instead of JSON');
-        console.error('Response HTML:', responseText.substring(0, 1000));
         throw new Error('Server returned HTML error page. Backend may be down or misconfigured.');
       }
       
       let data;
       try {
         data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error('JSON parse error. Response was:', responseText.substring(0, 500));
+      } catch {
         throw new Error(`Server returned invalid response: ${responseText.substring(0, 200)}`);
       }
-      
-      console.log('Response data:', data);
 
       if (!response.ok) {
         throw new Error(data.message || `Signup failed with status ${response.status}`);
@@ -295,10 +330,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       return data;
     } catch (error: any) {
-      console.error('\n\n========== SIGNUP ERROR ==========');
-      console.error('❌ Error:', error.message);
-      console.error('📝 Attempted URL:', signupUrl);
-      console.error('====================================\n\n');
       throw new Error(error.message || 'Network request failed');
     }
   };
@@ -307,12 +338,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await post<{ token: string; user: any }>('/auth/verify-otp', {
       userId,
       otp,
+      ...getDeviceInfo(),
     });
 
     if (response.success && response.data) {
-      // Save token and basic user data, but mark as pending profile setup
       await Promise.all([
-        AsyncStorage.setItem(TOKEN_KEY, response.data.token),
+        saveToken(response.data.token),
         AsyncStorage.setItem(USER_KEY, JSON.stringify(response.data.user)),
         AsyncStorage.setItem(PENDING_PROFILE_KEY, 'true'),
       ]);
@@ -354,6 +385,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    try {
+      const currentToken = token || await getToken();
+      if (currentToken) {
+        await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`,
+          },
+        });
+      }
+    } catch (_) {}
     await clearAuthData();
   };
 
@@ -377,14 +420,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await get<{ user: User }>('/users/me', {}, token);
 
     if (response.success && response.data) {
-      const updatedUser = response.data.user;
+      const updatedUser = response.data.user as any;
       await AsyncStorage.setItem(USER_KEY, JSON.stringify(updatedUser));
       setUser(updatedUser);
+
+      try {
+        if (updatedUser.notificationPreferences) {
+          await AsyncStorage.setItem(
+            'notificationPreferences',
+            JSON.stringify(updatedUser.notificationPreferences)
+          );
+        }
+        const pushEnabled = updatedUser.settings?.pushNotifications;
+        if (pushEnabled !== undefined) {
+          await AsyncStorage.setItem(
+            'pushNotificationsEnabled',
+            pushEnabled ? 'true' : 'false'
+          );
+        }
+      } catch {}
     }
   };
 
-  // User is fully authenticated only if they have completed profile setup
-  // Note: hasPhotos and userProfileComplete are computed above for socket connection
   const isProfileComplete = userProfileComplete;
   const isAuthenticated = !!token && !!user && isProfileComplete && !pendingProfileSetup;
 

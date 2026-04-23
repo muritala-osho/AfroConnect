@@ -145,14 +145,11 @@ export default function StoryUploadScreen({
         const uploadPath = storyType === "image" ? "photo" : "video";
         const fieldName = "file";
         
-        // Handle web vs native differently
         if (Platform.OS === 'web') {
-          // On web, fetch the blob from the URI
           const response = await fetch(uri!);
           const blob = await response.blob();
           formData.append(fieldName, blob, `story_${Date.now()}.${storyType === "image" ? "jpg" : "mp4"}`);
         } else {
-          // On native, use the object format
           formData.append(fieldName, {
             uri: uri,
             type: storyType === "image" ? "image/jpeg" : "video/mp4",
@@ -206,14 +203,12 @@ export default function StoryUploadScreen({
       if (response.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         
-        // Update user state locally to include the new story immediately
         if (user) {
           const newStory = response.data?.story || {
             _id: Date.now().toString(),
             ...storyData,
             createdAt: new Date().toISOString()
           };
-          // We don't have a direct setAuthUser here, so we rely on fetchUser or navigation reload
         }
 
         await AsyncStorage.setItem('@story_posted', Date.now().toString());

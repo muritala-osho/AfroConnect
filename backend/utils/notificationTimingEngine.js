@@ -18,13 +18,11 @@
  *   notificationEngagement: [{ hour: 0, sent: N, opened: N, lastUpdated: Date }, ...]
  */
 
-const { sendExpoPushNotification } = require('./pushNotifications');
+const { sendSmartNotification } = require('./pushNotifications');
 
-// Minimum open rate threshold — below this we fall back to a sensible default
 const MIN_SAMPLES_FOR_LEARNING = 5;
 const DEFAULT_SEND_HOURS = [9, 12, 18, 20]; // 9am, noon, 6pm, 8pm (UTC)
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Returns the hour (0-23, UTC) with the highest open rate for this user.
@@ -36,7 +34,6 @@ const getOptimalSendHour = (user) => {
   const totalSent  = engagement.reduce((s, e) => s + (e.sent || 0), 0);
 
   if (totalSent < MIN_SAMPLES_FOR_LEARNING) {
-    // Not enough data — pick the default hour closest to now
     const nowHour = new Date().getUTCHours();
     return DEFAULT_SEND_HOURS.reduce((best, h) => {
       const distBest = Math.min(Math.abs(nowHour - best), 24 - Math.abs(nowHour - best));
@@ -45,7 +42,6 @@ const getOptimalSendHour = (user) => {
     }, DEFAULT_SEND_HOURS[0]);
   }
 
-  // Find hour with the best open rate (opened / sent)
   let bestHour = DEFAULT_SEND_HOURS[0];
   let bestRate = -1;
 
@@ -72,7 +68,6 @@ const msUntilNextOccurrence = (targetHour) => {
   
   let targetMs = todayUTC.getTime();
   
-  // If that hour already passed today, schedule for tomorrow
   if (targetMs < nowMs - 30 * 60 * 1000) {
     targetMs += 24 * 60 * 60 * 1000;
   }
@@ -122,43 +117,43 @@ const recordNotificationOpened = (user, hourUTC) => {
  * @param {Object} user     - Mongoose user document (must have pushToken, notificationEngagement)
  * @param {Object} payload  - { title, body, data, channelId }
  * @param {boolean} sendNow - Bypass timing and send immediately
+ * @param {string} type     - Notification type passed to sendSmartNotification
  * @returns {{ scheduled: boolean, delayMs: number }}
  */
-const scheduleNotification = async (user, payload, sendNow = false) => {
+const scheduleNotification = async (user, payload, sendNow = false, type = 'system') => {
   if (!user?.pushToken) {
     return { scheduled: false, reason: 'no_push_token' };
   }
 
   const optimalHour = getOptimalSendHour(user);
   const delayMs     = sendNow ? 0 : msUntilNextOccurrence(optimalHour);
-  const nowHourUTC  = new Date().getUTCHours();
 
-  const doSend = async () => {
+  const doSend = async (targetUser) => {
     try {
       const sendHourUTC = new Date().getUTCHours();
-      recordNotificationSent(user, sendHourUTC);
-      await user.save();
-      await sendExpoPushNotification(user.pushToken, payload);
+      recordNotificationSent(targetUser, sendHourUTC);
+      await targetUser.save();
+      await sendSmartNotification(targetUser, payload, type);
     } catch (err) {
       console.error('[TimingEngine] Push send error:', err.message);
     }
   };
 
   if (delayMs === 0) {
-    await doSend();
+    await doSend(user);
     return { scheduled: true, delayMs: 0, sentNow: true };
   } else {
-    // Queue for later — use setTimeout (fire and forget)
     setTimeout(async () => {
       try {
-        // Re-fetch user to get fresh pushToken before delayed send
         const User = require('../models/User');
-        const freshUser = await User.findById(user._id).select('pushToken notificationEngagement settings');
-        if (freshUser?.pushToken && freshUser.settings?.pushNotifications !== false) {
+        const freshUser = await User.findById(user._id).select(
+          'pushToken notificationEngagement pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        if (freshUser?.pushToken) {
           const sendHourUTC = new Date().getUTCHours();
           recordNotificationSent(freshUser, sendHourUTC);
           await freshUser.save();
-          await sendExpoPushNotification(freshUser.pushToken, payload);
+          await sendSmartNotification(freshUser, payload, type);
         }
       } catch (err) {
         console.error('[TimingEngine] Delayed push error:', err.message);

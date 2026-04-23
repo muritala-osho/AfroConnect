@@ -1,6 +1,46 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **CallKit (iOS) / ConnectionService (Android) — native call UI when app is killed**:
+  - Installed `react-native-callkeep` (wraps CallKit on iOS and ConnectionService on Android) and `react-native-voip-push-notification` (PushKit VoIP token for iOS).
+  - `frontend/services/callkeep.ts` (NEW): Wrapper service — `initCallKeep()`, `displayIncomingCall()`, `endCallKeepCall()`, `reportCallEnded()`, `setCallActive()`, `setupCallKeepListeners()`, `removeCallKeepListeners()`. Calls `RNCallKeep.displayIncomingCall()` so the OS-level native incoming call screen appears regardless of app state.
+  - `frontend/services/voipPush.ts` (NEW): Registers for iOS PushKit VoIP push token and handles `notification` events when the app is killed — immediately calls `displayIncomingCall()` to show CallKit UI before any JS UI renders.
+  - `frontend/components/IncomingCallHandler.tsx` (UPDATED): Now calls `displayIncomingCall()` on every incoming call for both foreground and background. Sets up `setupCallKeepListeners` to handle native Accept/Decline button presses. In-app modal and native CallKit screen are shown simultaneously — native accept/decline routes through socket then navigates to the call screen.
+  - `frontend/App.tsx` (UPDATED): `initCallKeep('AfroConnect')` called at module level (before any auth). `registerVoipPushNotifications()` called after user authenticates; the received VoIP token is POSTed to `/api/notifications/register-voip-token`.
+  - `frontend/index.js` (UPDATED): Registers a `BackgroundCallTask` headless task on Android — triggered by native background FCM data messages to call `displayIncomingCall` and set `global.__pendingVoipCall` before the React tree mounts.
+  - `frontend/app.json` (UPDATED): iOS — added `backgroundModes: ['voip','audio','fetch','remote-notification']`, `UIBackgroundModes`, CallKit entitlement. Android — added `MANAGE_OWN_CALLS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`, `CALL_PHONE`, `READ_PHONE_STATE`, `READ_PHONE_NUMBERS`, `BIND_TELECOM_CONNECTION_SERVICE` permissions.
+  - `frontend/plugins/withCallKeep.js` (NEW): Expo config plugin that injects `RNCallKeepConnectionService` into AndroidManifest.xml and adds the `android.hardware.telephony` `<uses-feature>`.
+  - `backend/utils/voipPush.js` (NEW): Sends APNs VoIP pushes via `node-apn`. Reads `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY`, `APNS_BUNDLE_ID` env vars; logs a warning and skips gracefully if unconfigured.
+  - `backend/models/User.js` (UPDATED): Added `voipPushToken` field.
+  - `backend/routes/notifications.js` (UPDATED): Added `POST /api/notifications/register-voip-token` endpoint.
+  - `backend/server.js` (UPDATED): On `call:initiate`, if target user has a `voipPushToken` the server now sends a VoIP push (wakes killed iOS app → triggers CallKit UI) before the regular Expo push.
+  - **Firebase Messaging added**: Installed `@react-native-firebase/app` and `@react-native-firebase/messaging`. `frontend/services/firebaseMessaging.ts` registers a background message handler; `frontend/index.js` calls it before `registerRootComponent`. The FCM token is fetched after login and stored in `backend/models/User.js` `fcmToken` field via `POST /api/notifications/register-fcm-token`. Backend `backend/utils/fcmPush.js` uses Firebase Admin SDK (`firebase-admin`) to send data-only FCM messages for calls.
+  - **To enable Android killed-app call ringing via Firebase**: set `FIREBASE_SERVICE_ACCOUNT` env var to the full JSON of your Firebase service account key (Firebase Console → Project Settings → Service Accounts → Generate New Private Key).
+  - **To enable iOS VoIP push for killed-app ringing**: set `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY` (contents of your .p8 key), and optionally `APNS_BUNDLE_ID` in environment variables. The app otherwise functions normally via the Expo notification fallback.
+- **Admin support and moderation fixes**:
+  - `admin-dashboard/App.tsx` and `admin-dashboard/constants.tsx`: Support agents no longer land on the admin-only dashboard or user search; they are routed to "My Tickets" to avoid misleading backend/API errors after successful support login.
+  - `backend/models/Report.js`, `backend/routes/reports.js`, and `backend/routes/admin.js`: Content Moderation is now end-to-end wired to real report records with `contentType`, `contentId`, and `contentUrl`. Admins can approve/reject reported profile photos, stories, and chat image messages; reject removes the real source content and resolves the report.
+  - `frontend/screens/ProfileDetailScreen.tsx`, `frontend/screens/StoryViewerScreen.tsx`, and `frontend/screens/ChatDetailScreen.tsx`: Mobile reporting now sends exact content references for profile photos, stories, and incoming chat images so they appear in the Content Moderation queue.
+- **Verification and appeal flow fixes**:
+  - `frontend/screens/VerificationScreen.tsx`: Switched verification submission from selfie photo capture to front-camera video recording. Users must record for at least 5 seconds before reviewing and submitting the video to `/api/verification/upload-verification-video`; recordings stop at a 30-second maximum.
+  - `frontend/screens/SettingsScreen.tsx`: Changed the verification row label from "Photo Verification" to "Video Verification" and replaced the rejected status label with "Try Again".
+  - `backend/routes/verification.js` and `backend/routes/admin.js`: Added profile cache invalidation after verification uploads, verification decisions, bans, and appeal changes so the mobile app sees fresh status immediately.
+  - `backend/routes/admin.js` and `frontend/screens/AppealBannedScreen.tsx`: Reset approved appeals after admin approval and treat old approved appeal records as submit-able when a user is banned again.
+- **Face verification liveness flow**:
+  - `frontend/screens/VerificationScreen.tsx`: Replaced timer/skip selfie flow with strict sequential steps (`0=blink`, `1=left`, `2=right`, `3=complete`). The camera records automatically, detects blink/head turns with lightweight face detection, and only stops after all steps complete.
+  - `backend/routes/verification.js`: Added `POST /upload-verification-video` for multipart video uploads with `userId`, cloud upload when configured, and local server fallback.
+  - `backend/models/User.js`: Added `verificationVideoUrl` and `verificationVideo` fields while preserving existing verification status logic; uploaded videos set `verificationStatus` to `pending`.
+  - `admin-dashboard/views/IDVerification.tsx`: The review panel now shows the submitted verification video beside the profile photo instead of the old submitted selfie image.
+  - `frontend/screens/VerificationScreen.tsx`: Added premium Lottie-powered prompt animation, SVG step icons, and MediaPipe-style landmark gating for centered face, usable landmarks, distance guidance, blink readiness, and opposite-direction head turns.
+  - `frontend/package.json`: Added `lottie-react-native` for animated guided verification prompts.
+- **Admin Dashboard — full interactivity upgrade**:
+  - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
+  - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.
+  - `IDVerification.tsx`: Removed all mock data. Added refresh button, editable rejection reason field, proper error/empty states.
+  - `ContentModeration.tsx`: Removed all mock data. Error state with retry, clean empty states, no fallback to fake data.
+  - All views: No mock/fake data anywhere — backend failure shows error banner with Retry button instead of silently falling back to placeholder rows.
+  - Vite config: Removed security headers from dev server (they belong at the reverse-proxy/deployment layer, not dev) so Replit preview iframe works correctly.
+  - Workflow: Added `waitForPort: 5000` and `npm install --legacy-peer-deps` step so Replit correctly detects startup.
 - **Centralized Support System** — full implementation across all three layers:
   - `backend/models/SupportTicket.js`: Extended model — added `assignedTo`, `unreadByUser`, `unreadByAgent` fields; `pending` status; `agent` role in messages; `senderName`/`senderId` fields.
   - `backend/models/User.js`: Added `isSupportAgent` boolean field for support agent role.

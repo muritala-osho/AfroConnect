@@ -42,7 +42,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
 
     try {
       setLoading(true);
-      const res = await post('/users/me/locations', { name: newLocation }, token);
+      const res = await post('/users/me/locations', { name: newLocation }, token ?? undefined);
       if (res.success) {
         setNewLocation("");
         if (fetchUser) await fetchUser();
@@ -60,7 +60,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
   const handleDeleteLocation = async (id: string) => {
     try {
       setLoading(true);
-      const res = await del(`/users/me/locations/${id}`, token);
+      const res = await del(`/users/me/locations/${id}`, token ?? undefined);
       if (res.success) {
         if (fetchUser) await fetchUser();
         setLocations(res.locations || []);
@@ -86,7 +86,7 @@ export default function ManageLocationsScreen({ navigation }: any) {
         <View style={[styles.currentLocationCard, { backgroundColor: theme.surface }]}>
           <ThemedText style={styles.label}>Current Location</ThemedText>
           <View style={styles.locationRow}>
-            <Ionicons name="map-pin" size={20} color={theme.primary} />
+            <Ionicons name="location-outline" size={20} color={theme.primary} />
             <ThemedText style={styles.locationText}>{user?.livingIn || 'Not set'}</ThemedText>
           </View>
         </View>

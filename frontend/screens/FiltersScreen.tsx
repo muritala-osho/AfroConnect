@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   Switch,
   Animated,
   Dimensions,
+  Text,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -15,12 +16,14 @@ import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
-import { useApi } from "@/hooks/useApi";
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Spacing, BorderRadius, Shadow } from "@/constants/theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const FILTERS_STORAGE_KEY = "afroconnect_filters_draft";
 
 const { width } = Dimensions.get("window");
 
@@ -30,20 +33,28 @@ interface FiltersScreenProps {
 }
 
 const INTEREST_OPTIONS = [
-  { label: "🎵 Music", value: "Music" },
-  { label: "✈️ Travel", value: "Travel" },
-  { label: "🍕 Food", value: "Food" },
-  { label: "⚽ Sports", value: "Sports" },
-  { label: "🎨 Art", value: "Art" },
-  { label: "🎬 Movies", value: "Movies" },
-  { label: "📚 Reading", value: "Reading" },
-  { label: "🎮 Gaming", value: "Gaming" },
-  { label: "💪 Fitness", value: "Fitness" },
-  { label: "📸 Photography", value: "Photography" },
-  { label: "💃 Dancing", value: "Dancing" },
-  { label: "👨‍🍳 Cooking", value: "Cooking" },
-  { label: "👗 Fashion", value: "Fashion" },
-  { label: "💻 Technology", value: "Technology" },
+  { id: "music", label: "Music", icon: "musical-notes" },
+  { id: "travel", label: "Travel", icon: "airplane" },
+  { id: "cooking", label: "Cooking", icon: "restaurant" },
+  { id: "fitness", label: "Fitness", icon: "fitness" },
+  { id: "art", label: "Art", icon: "color-palette" },
+  { id: "gaming", label: "Gaming", icon: "game-controller" },
+  { id: "movies", label: "Movies", icon: "film" },
+  { id: "reading", label: "Reading", icon: "book" },
+  { id: "photography", label: "Photography", icon: "camera" },
+  { id: "dancing", label: "Dancing", icon: "footsteps" },
+  { id: "coding", label: "Coding", icon: "code-slash" },
+  { id: "sports", label: "Sports", icon: "basketball" },
+  { id: "fashion", label: "Fashion", icon: "shirt" },
+  { id: "nature", label: "Nature", icon: "leaf" },
+  { id: "technology", label: "Technology", icon: "hardware-chip" },
+  { id: "business", label: "Business", icon: "briefcase" },
+  { id: "outdoors", label: "Outdoors", icon: "trail-sign" },
+  { id: "socializing", label: "Socializing", icon: "people" },
+  { id: "wellness", label: "Wellness", icon: "heart-half" },
+  { id: "creativity", label: "Creativity", icon: "brush" },
+  { id: "values", label: "Values", icon: "diamond" },
+  { id: "food", label: "Food", icon: "fast-food" },
 ];
 
 interface SectionProps {
@@ -83,33 +94,60 @@ function FilterSection({ icon, iconColor, iconBg, title, subtitle, badge, badgeC
 export default function FiltersScreen({ navigation }: FiltersScreenProps) {
   const { theme } = useTheme();
   const { user, token, updateProfile } = useAuth();
-  const api = useApi();
   const insets = useSafeAreaInsets();
 
   const [minAge, setMinAge] = useState(user?.preferences?.ageRange?.min ?? 18);
   const [maxAge, setMaxAge] = useState(user?.preferences?.ageRange?.max ?? 35);
-  const [distance, setDistance] = useState(user?.preferences?.maxDistance ?? 50);
-  const [genderPref, setGenderPref] = useState<string>(user?.preferences?.genderPreference ?? "both");
-  const [lookingFor, setLookingFor] = useState<string>(user?.lifestyle?.lookingFor ?? "relationship");
+  const [distance, setDistance] = useState(
+    Math.min(user?.preferences?.maxDistance ?? 50, user?.premium?.isActive ? 200 : 50)
+  );
+  const [genderPref, setGenderPref] = useState<string>((user?.preferences as any)?.genderPreference ?? "both");
+  const [lookingFor, setLookingFor] = useState<string>(user?.lookingFor ?? (user?.lifestyle as any)?.lookingFor ?? "relationship");
   const [religion, setReligion] = useState<string>(user?.lifestyle?.religion ?? "any");
-  const [smoking, setSmoking] = useState<string>(user?.preferences?.smoking ?? "any");
-  const [drinking, setDrinking] = useState<string>(user?.preferences?.drinking ?? "any");
+  const [smoking, setSmoking] = useState<string>((user?.preferences as any)?.smoking ?? "any");
+  const [drinking, setDrinking] = useState<string>((user?.preferences as any)?.drinking ?? "any");
   const [wantsKids, setWantsKids] = useState<string>(
-    user?.preferences?.wantsKids != null ? String(user.preferences.wantsKids) : "any"
+    (user?.preferences as any)?.wantsKids != null ? String((user?.preferences as any).wantsKids) : "any"
   );
   const [selectedInterests, setSelectedInterests] = useState<string[]>(
-    user?.preferences?.interests ?? []
+    ((user?.preferences as any)?.interests ?? []).map((i: string) => i.toLowerCase())
   );
   const [showVerifiedOnly, setShowVerifiedOnly] = useState<boolean>(
-    user?.preferences?.showVerifiedOnly ?? false
+    (user?.preferences as any)?.showVerifiedOnly ?? false
   );
   const [onlineNow, setOnlineNow] = useState<boolean>(
-    user?.preferences?.onlineNow ?? false
+    (user?.preferences as any)?.onlineNow ?? false
   );
   const [saving, setSaving] = useState(false);
   const isPremium = user?.premium?.isActive;
+  const FREE_MAX_DISTANCE = 50;
+  const maxAllowedDistance = isPremium ? 200 : FREE_MAX_DISTANCE;
 
   const buttonScaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loadSavedFilters = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(FILTERS_STORAGE_KEY);
+        if (saved) {
+          const d = JSON.parse(saved);
+          if (d.minAge != null) setMinAge(d.minAge);
+          if (d.maxAge != null) setMaxAge(d.maxAge);
+          if (d.distance != null) setDistance(Math.min(d.distance, maxAllowedDistance));
+          if (d.genderPref) setGenderPref(d.genderPref);
+          if (d.lookingFor) setLookingFor(d.lookingFor);
+          if (d.religion) setReligion(d.religion);
+          if (d.smoking) setSmoking(d.smoking);
+          if (d.drinking) setDrinking(d.drinking);
+          if (d.wantsKids) setWantsKids(d.wantsKids);
+          if (d.selectedInterests) setSelectedInterests(d.selectedInterests);
+          if (d.showVerifiedOnly != null) setShowVerifiedOnly(d.showVerifiedOnly);
+          if (d.onlineNow != null) setOnlineNow(d.onlineNow);
+        }
+      } catch {}
+    };
+    loadSavedFilters();
+  }, []);
 
   const handleApply = async () => {
     if (!token) return;
@@ -124,34 +162,42 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
       const updatedPreferences = {
         ...user?.preferences,
         ageRange: { min: minAge, max: maxAge },
-        maxDistance: distance,
+        maxDistance: Math.min(distance, maxAllowedDistance),
         genderPreference: genderPref,
-        smoking: smoking === "any" ? undefined : smoking,
-        drinking: drinking === "any" ? undefined : drinking,
-        wantsKids: wantsKids === "any" ? undefined : wantsKids === "true",
+        smoking,
+        drinking,
+        wantsKids: wantsKids === "any" ? null : wantsKids === "true",
         showVerifiedOnly: isPremium ? showVerifiedOnly : false,
         onlineNow,
-        interests: selectedInterests.length > 0 ? selectedInterests : undefined,
+        interests: selectedInterests,
       };
 
       const lifestyleUpdates = {
-        lookingFor,
-        religion: religion === "any" ? undefined : religion,
+        religion: religion === "any" ? null : religion,
       };
 
-      const response = await api.put<{ success: boolean }>(
-        "/users/me",
-        { preferences: updatedPreferences, lifestyle: lifestyleUpdates },
-        token
-      );
+      const filterSnapshot = {
+        minAge,
+        maxAge,
+        distance: Math.min(distance, maxAllowedDistance),
+        genderPref,
+        lookingFor,
+        religion,
+        smoking,
+        drinking,
+        wantsKids,
+        selectedInterests,
+        showVerifiedOnly: isPremium ? showVerifiedOnly : false,
+        onlineNow,
+      };
+      await AsyncStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(filterSnapshot));
 
-      if (response.success) {
-        await updateProfile({
-          preferences: updatedPreferences,
-          lifestyle: { ...user?.lifestyle, ...lifestyleUpdates },
-        });
-        navigation.goBack();
-      }
+      await updateProfile({
+        preferences: updatedPreferences,
+        lookingFor,
+        lifestyle: { ...user?.lifestyle, ...lifestyleUpdates },
+      } as any);
+      navigation.goBack();
     } catch (error) {
       console.error("Filter update error:", error);
     } finally {
@@ -159,7 +205,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
     }
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setMinAge(18);
     setMaxAge(35);
@@ -173,6 +219,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
     setSelectedInterests([]);
     setShowVerifiedOnly(false);
     setOnlineNow(false);
+    try { await AsyncStorage.removeItem(FILTERS_STORAGE_KEY); } catch {}
   };
 
   const toggleInterest = (val: string) => {
@@ -327,10 +374,14 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
           <Slider
             style={[styles.slider, { marginTop: 4 }]}
             minimumValue={1}
-            maximumValue={200}
+            maximumValue={maxAllowedDistance}
             step={1}
             value={distance}
-            onValueChange={(v) => { setDistance(Math.round(v)); Haptics.selectionAsync(); }}
+            onValueChange={(v) => {
+              const capped = Math.min(Math.round(v), maxAllowedDistance);
+              setDistance(capped);
+              Haptics.selectionAsync();
+            }}
             minimumTrackTintColor="#FF6B9D"
             maximumTrackTintColor={theme.border}
             thumbTintColor="#FF6B9D"
@@ -341,8 +392,18 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               <Feather name="map-pin" size={11} color="#FF6B9D" />
               <ThemedText style={[styles.distancePillText, { color: "#FF6B9D" }]}>{distance} km radius</ThemedText>
             </View>
-            <ThemedText style={[styles.rangeEndText, { color: theme.textSecondary }]}>200 km</ThemedText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <ThemedText style={[styles.rangeEndText, { color: theme.textSecondary }]}>{maxAllowedDistance} km</ThemedText>
+              {!isPremium && (
+                <Feather name="lock" size={11} color={theme.primary} />
+              )}
+            </View>
           </View>
+          {!isPremium && (
+            <ThemedText style={[styles.rangeEndText, { color: theme.primary, textAlign: 'center', marginTop: 6, fontSize: 12 }]}>
+              Upgrade to Premium to discover beyond 50 km
+            </ThemedText>
+          )}
         </FilterSection>
 
         {/* ─── Show Me ─── */}
@@ -438,19 +499,23 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
         >
           <View style={styles.chipsWrap}>
             {INTEREST_OPTIONS.map((item) => {
-              const active = selectedInterests.includes(item.value);
+              const active = selectedInterests.includes(item.id);
               return (
                 <Pressable
-                  key={item.value}
-                  onPress={() => toggleInterest(item.value)}
+                  key={item.id}
+                  onPress={() => toggleInterest(item.id)}
                   style={[
                     styles.chip,
                     {
                       borderColor: active ? theme.primary : theme.border,
                       backgroundColor: active ? theme.primary : theme.background,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
                     },
                   ]}
                 >
+                  <Ionicons name={item.icon as any} size={14} color={active ? "#fff" : theme.text} />
                   <ThemedText style={[styles.chipText, { color: active ? "#fff" : theme.text }]}>
                     {item.label}
                   </ThemedText>
@@ -482,6 +547,7 @@ export default function FiltersScreen({ navigation }: FiltersScreenProps) {
               { value: "spiritual", label: "Spiritual", emoji: "🌟" },
               { value: "atheist", label: "Atheist", emoji: "🔬" },
               { value: "agnostic", label: "Agnostic", emoji: "🤔" },
+              { value: "deist", label: "Deist", emoji: "🌌" },
             ].map((opt) => {
               const active = religion === opt.value;
               return (
@@ -993,6 +1059,9 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: BorderRadius.full,
     borderWidth: 1.5,
+  },
+  chipEmoji: {
+    fontSize: 14,
   },
   chipText: {
     fontSize: 13,

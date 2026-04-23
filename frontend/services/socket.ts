@@ -39,10 +39,8 @@ class SocketService {
       console.log('✅ Socket connected successfully');
       this.reconnectAttempts = 0;
       
-      // Re-register all listeners
       this.reattachListeners();
       
-      // Execute connection callbacks
       this.connectionCallbacks.forEach(cb => cb());
     });
 
@@ -53,16 +51,13 @@ class SocketService {
         return;
       }
 
-      // Handle different disconnect reasons
       if (reason === 'io server disconnect') {
-        // Server forced disconnect, reconnect manually
         this.socket?.connect();
       }
     });
 
     this.socket.on('connect_error', (error) => {
       this.reconnectAttempts++;
-      // Only log first few attempts to reduce noise
       if (this.reconnectAttempts <= 3) {
         console.warn(`Socket connection error (attempt ${this.reconnectAttempts}):`, error.message || (error as any).type || error);
       }
@@ -95,7 +90,6 @@ class SocketService {
       clearTimeout(this.reconnectTimer);
     }
 
-    // Exponential backoff: wait longer between retries (max 2 minutes)
     const delay = Math.min(120000, 30000 * Math.floor(this.reconnectAttempts / 10));
 
     this.reconnectTimer = setTimeout(() => {
@@ -107,7 +101,6 @@ class SocketService {
   }
 
   private reattachListeners() {
-    // Reattach all stored listeners after reconnection
     this.listeners.forEach((callbacks, event) => {
       callbacks.forEach(callback => {
         if (this.socket) {
@@ -201,7 +194,6 @@ class SocketService {
         this.socket.connect();
       }
       
-      // Wait for connection with timeout
       let attempts = 0;
       const maxAttempts = 10;
       const checkInterval = setInterval(() => {
@@ -244,9 +236,7 @@ class SocketService {
     }
   }
 
-  // Chat specific methods
   joinChat(chatId: string) {
-    // Ensure the server receives the join request even if the socket is still connecting.
     this.emitWithRetry('chat:join', chatId, 5);
   }
 
@@ -255,7 +245,6 @@ class SocketService {
   }
 
   markMessagesRead(data: { chatId: string; userId: string; messageId?: string }) {
-    // Retry in case socket is still connecting or momentarily disconnected
     this.emitWithRetry('chat:mark-read', data, 3);
   }
 
@@ -293,7 +282,6 @@ class SocketService {
     this.on('user:status', callback);
   }
 
-  // Call signaling methods
   initiateCall(data: { targetUserId: string; callData: any; callerInfo: { name: string; photo: string; id: string } }) {
     this.emitWithRetry('call:initiate', data, 5);
   }
@@ -304,6 +292,10 @@ class SocketService {
 
   declineCall(data: { callerId: string; callType?: string }) {
     this.emitWithRetry('call:decline', data, 3);
+  }
+
+  busyCall(data: { callerId: string; callType?: string }) {
+    this.emitWithRetry('call:busy', data, 3);
   }
 
   endCall(data: { targetUserId: string; callType?: string; duration?: number; wasAnswered?: boolean }) {

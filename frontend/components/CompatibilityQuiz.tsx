@@ -95,7 +95,7 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
       if (response.success && response.questions.length > 0) {
         setQuestions(response.questions);
       } else {
-        await api.post('/api/quiz/seed');
+        await api.post('/api/quiz/seed', {});
         const retry = await api.get('/api/quiz/questions');
         if (retry.success) {
           setQuestions(retry.questions);
@@ -168,7 +168,6 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
       
       if (response.success) {
         setCompleted(true);
-        // Add a small delay before calling onComplete to let user see success state
         setTimeout(() => {
           onComplete?.();
         }, 2000);
@@ -397,7 +396,6 @@ export const CompatibilityQuiz: React.FC<CompatibilityQuizProps> = ({
   );
 };
 
-// Compatibility Score Display Component
 interface CompatibilityScoreProps {
   userId: string;
   compact?: boolean;
@@ -424,7 +422,6 @@ export const CompatibilityScore: React.FC<CompatibilityScoreProps> = ({
   const fetchCompatibility = async () => {
     try {
       setLoading(true);
-      // Remove leading /api if it exists because useApi already adds it
       const endpoint = userId.startsWith('/api') ? userId.replace('/api', '') : `/quiz/compatibility/${userId}`;
       const response = await api.get(endpoint);
       
@@ -740,7 +737,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
   },
-  // Score Display Styles
   scoreContainer: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,72 +1,48 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  withSequence,
-} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 interface VerificationBadgeProps {
   verified?: boolean;
-  size?: 'small' | 'medium' | 'large';
+  size?: number | 'small' | 'medium' | 'large';
 }
 
-const AnimatedView = Animated.createAnimatedComponent(View);
+const SIZE_MAP: Record<string, number> = {
+  small: 14,
+  medium: 18,
+  large: 22,
+};
 
 export function VerificationBadge({
-  verified = false,
-  size = 'medium',
+  verified = true,
+  size = 14,
 }: VerificationBadgeProps) {
-  const scale = useSharedValue(1);
-
-  React.useEffect(() => {
-    if (verified) {
-      scale.value = withRepeat(
-        withSequence(
-          withTiming(1.1, { duration: 600 }),
-          withTiming(1, { duration: 200 })
-        ),
-        -1,
-        true
-      );
-    }
-  }, [verified]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const sizes = {
-    small: 36,
-    medium: 48,
-    large: 64,
-  };
-
-  const badgeSize = sizes[size];
-
   if (!verified) return null;
 
+  const badgeSize = typeof size === 'number' ? size : (SIZE_MAP[size] ?? 14);
+  const iconSize = Math.round(badgeSize * 0.65);
+
   return (
-    <AnimatedView style={[styles.container, animatedStyle]}>
-      <Image
-        source={require('@/assets/icons/verified-tick.png')}
-        style={{
+    <View
+      style={[
+        styles.badge,
+        {
           width: badgeSize,
           height: badgeSize,
-        }}
-        contentFit="contain"
-      />
-    </AnimatedView>
+          borderRadius: badgeSize / 2,
+          marginLeft: 4,
+        },
+      ]}
+    >
+      <Ionicons name="checkmark" size={iconSize} color="#FFFFFF" />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginLeft: 6,
-    justifyContent: 'center',
+  badge: {
+    backgroundColor: '#FF6600',
     alignItems: 'center',
+    justifyContent: 'center',
   },
 });

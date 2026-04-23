@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
   Switch,
   Platform,
+  Image,
+  Linking,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -27,6 +29,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import VoiceBio from "@/components/VoiceBio";
 import { getApiBaseUrl } from "@/constants/config";
+import * as WebBrowser from "expo-web-browser";
 
 type EditProfileScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "EditProfile">;
 
@@ -37,18 +40,18 @@ interface EditProfileScreenProps {
 const EDIT_PROFILE_STORAGE_KEY = "afroconnect_edit_profile_draft";
 
 const ZODIAC_OPTIONS = [
-  { value: 'aries', label: 'Aries â™ˆ' },
-  { value: 'taurus', label: 'Taurus â™‰' },
-  { value: 'gemini', label: 'Gemini â™Š' },
-  { value: 'cancer', label: 'Cancer â™‹' },
-  { value: 'leo', label: 'Leo â™Œ' },
-  { value: 'virgo', label: 'Virgo â™' },
-  { value: 'libra', label: 'Libra â™Ž' },
-  { value: 'scorpio', label: 'Scorpio â™' },
-  { value: 'sagittarius', label: 'Sagittarius â™' },
-  { value: 'capricorn', label: 'Capricorn â™‘' },
-  { value: 'aquarius', label: 'Aquarius â™’' },
-  { value: 'pisces', label: 'Pisces â™“' },
+  { value: 'aries', label: 'Aries' },
+  { value: 'taurus', label: 'Taurus' },
+  { value: 'gemini', label: 'Gemini' },
+  { value: 'cancer', label: 'Cancer' },
+  { value: 'leo', label: 'Leo' },
+  { value: 'virgo', label: 'Virgo' },
+  { value: 'libra', label: 'Libra' },
+  { value: 'scorpio', label: 'Scorpio' },
+  { value: 'sagittarius', label: 'Sagittarius' },
+  { value: 'capricorn', label: 'Capricorn' },
+  { value: 'aquarius', label: 'Aquarius' },
+  { value: 'pisces', label: 'Pisces' },
 ];
 
 const EDUCATION_OPTIONS = [
@@ -97,6 +100,7 @@ const RELIGION_OPTIONS = [
   { value: 'traditional', label: 'Traditional' },
   { value: 'atheist', label: 'Atheist' },
   { value: 'agnostic', label: 'Agnostic' },
+  { value: 'deist', label: 'Deist' },
   { value: 'spiritual', label: 'Spiritual' },
   { value: 'other', label: 'Other' },
   { value: 'prefer_not_to_say', label: 'Prefer not to say' },
@@ -112,16 +116,19 @@ const ETHNICITY_OPTIONS = [
 ];
 
 const PETS_OPTIONS = [
-  { value: 'none', label: 'No pets' },
-  { value: 'dog', label: 'Dog' },
-  { value: 'cat', label: 'Cat' },
-  { value: 'parrot', label: 'Parrot' },
+  { value: 'dog', label: 'Dog 🐕' },
+  { value: 'cat', label: 'Cat 🐈' },
+  { value: 'parrot', label: 'Parrot 🦜' },
+  { value: 'fish', label: 'Fish 🐟' },
+  { value: 'rabbit', label: 'Rabbit 🐇' },
   { value: 'other', label: 'Other' },
+  { value: 'none', label: 'No pets' },
   { value: 'allergic', label: 'Allergic to pets' },
 ];
 
 const RELATIONSHIP_STATUS_OPTIONS = [
   { value: 'single', label: 'Single' },
+  { value: 'dating', label: 'Dating' },
   { value: 'married', label: 'Married' },
   { value: 'single_parent', label: 'Single Parent' },
   { value: 'divorced', label: 'Divorced' },
@@ -209,6 +216,295 @@ const DIASPORA_GENERATION_OPTIONS = [
   { value: 'not_applicable', label: 'Not Applicable' },
 ];
 
+const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <View style={styles.fieldContainer}>
+      <View style={styles.fieldLabelRow}>
+        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
+        {value?.length > 0 && (
+          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
+        )}
+      </View>
+      <View style={[
+        styles.inputRow,
+        {
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
+          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
+        },
+      ]}>
+        {icon && (
+          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
+          </View>
+        )}
+        <TextInput
+          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={theme.textSecondary}
+          multiline={multiline}
+        />
+      </View>
+    </View>
+  );
+};
+
+const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
+  const hasValue = !!value;
+  return (
+    <Pressable
+      style={[
+        styles.selectButton,
+        {
+          backgroundColor: hasValue
+            ? (accent ? accent + '10' : theme.primary + '0D')
+            : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
+          borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
+        },
+      ]}
+      onPress={onPress}
+    >
+      {icon && (
+        <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
+          <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
+        </View>
+      )}
+      <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
+        {displayLabel || label}
+      </ThemedText>
+      <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
+    </Pressable>
+  );
+};
+
+const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
+      <View style={styles.toggleLeft}>
+        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
+          <Feather name={icon} size={16} color={accent || theme.primary} />
+        </View>
+        <View style={styles.toggleTextGroup}>
+          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
+          {description && (
+            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+          )}
+        </View>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
+        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
+      />
+    </View>
+  );
+};
+
+const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => {
+  const { theme } = useTheme();
+  return (
+    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
+      <LinearGradient
+        colors={[color + '25', color + '10']}
+        style={styles.sectionIconWrap}
+      >
+        <Feather name={icon} size={17} color={color} />
+      </LinearGradient>
+      <View style={styles.sectionHeaderText}>
+        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
+        {description && (
+          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
+        )}
+      </View>
+    </View>
+  );
+};
+
+const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
+              {subtitle && (
+                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
+              )}
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={options}
+            keyExtractor={(item: any) => item.value}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            renderItem={({ item }: any) => {
+              const isSelected = selectedValue === item.value;
+              return (
+                <Pressable
+                  style={[
+                    styles.optionItem,
+                    { borderBottomColor: theme.border },
+                    isSelected && { backgroundColor: theme.primary + '0C' },
+                  ]}
+                  onPress={() => { onSelect(item.value); onClose(); }}
+                >
+                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const MultiSelectModal = ({ visible, onClose, title, options, selectedValues, onSelect }: any) => {
+  const { theme, isDark } = useTheme();
+  const toggle = (value: string) => {
+    const exclusive = ['none', 'allergic'];
+    if (exclusive.includes(value)) {
+      onSelect([value]);
+      return;
+    }
+    const current: string[] = (selectedValues || []).filter((v: string) => !exclusive.includes(v));
+    if (current.includes(value)) {
+      onSelect(current.filter((v: string) => v !== value));
+    } else {
+      onSelect([...current, value]);
+    }
+  };
+  const selected: string[] = selectedValues || [];
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>Select all that apply</ThemedText>
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={options}
+            keyExtractor={(item: any) => item.value}
+            contentContainerStyle={{ paddingVertical: 8 }}
+            renderItem={({ item }: any) => {
+              const isSelected = selected.includes(item.value);
+              return (
+                <Pressable
+                  style={[
+                    styles.optionItem,
+                    { borderBottomColor: theme.border },
+                    isSelected && { backgroundColor: theme.primary + '0C' },
+                  ]}
+                  onPress={() => toggle(item.value)}
+                >
+                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={12} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const InterestModal = ({ visible, onClose, interests, toggleInterest, insetsBottom }: any) => {
+  const { theme, isDark } = useTheme();
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <View style={styles.modalBackdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
+          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View>
+              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
+              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                {interests.length} selected
+              </ThemedText>
+            </View>
+            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
+              <Feather name="x" size={18} color={theme.text} />
+            </Pressable>
+          </View>
+          <FlatList
+            data={INTEREST_OPTIONS}
+            keyExtractor={(item) => item.id}
+            numColumns={2}
+            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
+            renderItem={({ item }) => {
+              const isSelected = interests.includes(item.id);
+              return (
+                <Pressable
+                  style={[
+                    styles.interestOptionItem,
+                    {
+                      borderColor: isSelected ? theme.primary : theme.border,
+                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                    },
+                  ]}
+                  onPress={() => toggleInterest(item.id)}
+                >
+                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
+                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
+                  </View>
+                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
+                    {item.label}
+                  </ThemedText>
+                  {isSelected && (
+                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
+                      <Feather name="check" size={10} color="#FFF" />
+                    </View>
+                  )}
+                </Pressable>
+              );
+            }}
+          />
+          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insetsBottom + 8 }]}>
+            <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
+              <ThemedText style={styles.doneButtonText}>Done  ·  {interests.length} selected</ThemedText>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function EditProfileScreen({ navigation }: EditProfileScreenProps) {
   const { theme, isDark } = useTheme();
   const { user, updateProfile, fetchUser, token } = useAuth();
@@ -230,8 +526,13 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [drinking, setDrinking] = useState(user?.lifestyle?.drinking || "");
   const [workout, setWorkout] = useState(user?.lifestyle?.workout || "");
   const [religion, setReligion] = useState(user?.lifestyle?.religion || "");
-  const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || "");
-  const [pets, setPets] = useState(user?.lifestyle?.pets || "");
+  const [ethnicity, setEthnicity] = useState(user?.lifestyle?.ethnicity || (user as any)?.ethnicity || "");
+  const rawPets = user?.lifestyle?.pets;
+  const [pets, setPets] = useState<string[]>(
+    Array.isArray(rawPets)
+      ? rawPets
+      : (rawPets ? String(rawPets).split(',').map((p: string) => p.trim()).filter(Boolean) : [])
+  );
   const [relationshipStatus, setRelationshipStatus] = useState(user?.lifestyle?.relationshipStatus || "");
   const [personalityType, setPersonalityType] = useState(user?.lifestyle?.personalityType || "");
   const [communicationStyle, setCommunicationStyle] = useState(user?.lifestyle?.communicationStyle || "");
@@ -239,9 +540,18 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [hasKids, setHasKids] = useState<boolean>(user?.lifestyle?.hasKids ?? false);
   const [wantsKids, setWantsKids] = useState<boolean>(user?.lifestyle?.wantsKids ?? false);
   const [relationshipGoal, setRelationshipGoal] = useState((user as any)?.relationshipGoal || "");
-  const [gender, setGender] = useState(user?.gender || "");
+  const normalizeGender = (g?: string) => {
+    if (!g) return "";
+    const lower = g.toLowerCase();
+    if (lower === "male") return "man";
+    if (lower === "female") return "woman";
+    return lower;
+  };
+  const [gender, setGender] = useState(normalizeGender(user?.gender));
   const [height, setHeight] = useState(user?.height?.toString() || "");
-  const [interests, setInterests] = useState<string[]>(user?.interests || []);
+  const [interests, setInterests] = useState<string[]>(
+    (user?.interests || []).map((i: string) => i.toLowerCase())
+  );
   const [saving, setSaving] = useState(false);
 
   const [countryOfOrigin, setCountryOfOrigin] = useState((user as any)?.countryOfOrigin || "");
@@ -254,6 +564,17 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const [interestsModalVisible, setInterestsModalVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'vibes' | 'roots' | 'more'>('profile');
+
+  const [spotifyConnected, setSpotifyConnected] = useState((user as any)?.spotify?.connected || false);
+  const [spotifyDisplayName, setSpotifyDisplayName] = useState((user as any)?.spotify?.displayName || "");
+  const [connectingSpotify, setConnectingSpotify] = useState(false);
+  const [spotifySearchQuery, setSpotifySearchQuery] = useState("");
+  const [spotifySearchResults, setSpotifySearchResults] = useState<any[]>([]);
+  const [spotifySearchVisible, setSpotifySearchVisible] = useState(false);
+  const [searchingSpotify, setSearchingSpotify] = useState(false);
+  const [songAlbumArt, setSongAlbumArt] = useState((user as any)?.favoriteSong?.albumArt || "");
+  const [songSpotifyUri, setSongSpotifyUri] = useState((user as any)?.favoriteSong?.spotifyUri || "");
+  const [songPreviewUrl, setSongPreviewUrl] = useState((user as any)?.favoriteSong?.previewUrl || "");
 
   useEffect(() => {
     const loadDraft = async () => {
@@ -275,7 +596,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           if (d.workout) setWorkout(d.workout);
           if (d.religion) setReligion(d.religion);
           if (d.ethnicity) setEthnicity(d.ethnicity);
-          if (d.pets) setPets(d.pets);
+          if (d.pets) setPets(Array.isArray(d.pets) ? d.pets : [d.pets]);
           if (d.relationshipStatus) setRelationshipStatus(d.relationshipStatus);
           if (d.personalityType) setPersonalityType(d.personalityType);
           if (d.communicationStyle) setCommunicationStyle(d.communicationStyle);
@@ -291,6 +612,115 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     };
     loadDraft();
   }, []);
+
+  const handleConnectSpotify = async () => {
+    if (!token) return;
+    setConnectingSpotify(true);
+    try {
+      const resp = await fetch(`${getApiBaseUrl()}/api/spotify/auth-url`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!data.success || !data.authUrl) {
+        Alert.alert("Spotify", data.message || "Could not connect to Spotify. Make sure Spotify integration is configured.");
+        return;
+      }
+      await WebBrowser.openBrowserAsync(data.authUrl);
+      const statusResp = await fetch(`${getApiBaseUrl()}/api/spotify/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const statusData = await statusResp.json();
+      if (statusData.connected) {
+        setSpotifyConnected(true);
+        setSpotifyDisplayName(statusData.displayName || "");
+        if (statusData.favoriteSong?.title) {
+          setSongTitle(statusData.favoriteSong.title);
+          setSongArtist(statusData.favoriteSong.artist || "");
+          setSongAlbumArt(statusData.favoriteSong.albumArt || "");
+          setSongSpotifyUri(statusData.favoriteSong.spotifyUri || "");
+          setSongPreviewUrl(statusData.favoriteSong.previewUrl || "");
+        }
+        if (fetchUser) await fetchUser();
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to connect Spotify. Please try again.");
+    } finally {
+      setConnectingSpotify(false);
+    }
+  };
+
+  const handleDisconnectSpotify = () => {
+    if (!token) return;
+    Alert.alert("Disconnect Spotify", "Are you sure you want to disconnect your Spotify account?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Disconnect",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await fetch(`${getApiBaseUrl()}/api/spotify/disconnect`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            setSpotifyConnected(false);
+            setSpotifyDisplayName("");
+            if (fetchUser) await fetchUser();
+          } catch (err) {
+            Alert.alert("Error", "Failed to disconnect Spotify.");
+          }
+        },
+      },
+    ]);
+  };
+
+  const handleSpotifySearch = async () => {
+    if (!spotifySearchQuery.trim() || !token) return;
+    setSearchingSpotify(true);
+    try {
+      const resp = await fetch(
+        `${getApiBaseUrl()}/api/spotify/search?q=${encodeURIComponent(spotifySearchQuery.trim())}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await resp.json();
+      if (data.success) {
+        setSpotifySearchResults(data.tracks || []);
+      } else {
+        Alert.alert("Search Failed", data.message || "Could not search Spotify.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "Failed to search Spotify.");
+    } finally {
+      setSearchingSpotify(false);
+    }
+  };
+
+  const handleSelectSpotifySong = async (track: any) => {
+    if (!token) return;
+    setSongTitle(track.title);
+    setSongArtist(track.artist);
+    setSongAlbumArt(track.albumArt || "");
+    setSongSpotifyUri(track.spotifyUri || "");
+    setSongPreviewUrl(track.previewUrl || "");
+    setSpotifySearchVisible(false);
+    setSpotifySearchQuery("");
+    setSpotifySearchResults([]);
+    try {
+      await fetch(`${getApiBaseUrl()}/api/spotify/set-song`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          spotifyUri: track.spotifyUri,
+          albumArt: track.albumArt,
+          previewUrl: track.previewUrl,
+        }),
+      });
+      if (fetchUser) await fetchUser();
+    } catch (err) {
+      console.error("Failed to save Spotify song:", err);
+    }
+  };
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -313,6 +743,9 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         favoriteSong: (songTitle.trim() || songArtist.trim()) ? {
           title: songTitle.trim(),
           artist: songArtist.trim(),
+          ...(songAlbumArt ? { albumArt: songAlbumArt } : {}),
+          ...(songSpotifyUri ? { spotifyUri: songSpotifyUri } : {}),
+          ...(songPreviewUrl ? { previewUrl: songPreviewUrl } : {}),
         } : undefined,
         lifestyle: {
           smoking: smoking || undefined,
@@ -320,7 +753,7 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           workout: workout || undefined,
           religion: religion || undefined,
           ethnicity: ethnicity || undefined,
-          pets: pets || undefined,
+          pets: pets.length > 0 ? pets : undefined,
           relationshipStatus: relationshipStatus || undefined,
           personalityType: personalityType.trim() || undefined,
           communicationStyle: communicationStyle || undefined,
@@ -393,215 +826,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
     }
   };
 
-  const InterestModal = ({ visible, onClose }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>Your Interests</ThemedText>
-              <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
-                {interests.length} selected
-              </ThemedText>
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={INTEREST_OPTIONS}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
-            renderItem={({ item }) => {
-              const isSelected = interests.includes(item.id);
-              return (
-                <Pressable
-                  style={[
-                    styles.interestOptionItem,
-                    {
-                      borderColor: isSelected ? theme.primary : theme.border,
-                      backgroundColor: isSelected ? theme.primary + '18' : isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
-                    },
-                  ]}
-                  onPress={() => toggleInterest(item.id)}
-                >
-                  <View style={[styles.interestIconWrap, { backgroundColor: isSelected ? theme.primary + '25' : theme.border + '40' }]}>
-                    <Ionicons name={item.icon as any} size={16} color={isSelected ? theme.primary : theme.textSecondary} />
-                  </View>
-                  <ThemedText style={[styles.interestOptionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '500' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.interestCheckBadge, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={10} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-          <View style={[styles.modalFooter, { borderTopColor: theme.border, backgroundColor: theme.surface, paddingBottom: insets.bottom + 8 }]}>
-            <Pressable style={[styles.doneButton, { backgroundColor: theme.primary }]} onPress={onClose}>
-              <ThemedText style={styles.doneButtonText}>Done  Â·  {interests.length} selected</ThemedText>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const OptionModal = ({ visible, onClose, title, subtitle, options, selectedValue, onSelect }: any) => (
-    <Modal visible={visible} transparent animationType="slide">
-      <View style={styles.modalBackdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
-          <View style={[styles.modalDragHandle, { backgroundColor: theme.border }]} />
-          <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-            <View>
-              <ThemedText style={[styles.modalTitle, { color: theme.text }]}>{title}</ThemedText>
-              {subtitle && (
-                <ThemedText style={[styles.modalSubtitle, { color: theme.textSecondary }]}>{subtitle}</ThemedText>
-              )}
-            </View>
-            <Pressable onPress={onClose} style={[styles.modalCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F0' }]}>
-              <Feather name="x" size={18} color={theme.text} />
-            </Pressable>
-          </View>
-          <FlatList
-            data={options}
-            keyExtractor={(item: any) => item.value}
-            contentContainerStyle={{ paddingVertical: 8 }}
-            renderItem={({ item }: any) => {
-              const isSelected = selectedValue === item.value;
-              return (
-                <Pressable
-                  style={[
-                    styles.optionItem,
-                    { borderBottomColor: theme.border },
-                    isSelected && { backgroundColor: theme.primary + '0C' },
-                  ]}
-                  onPress={() => { onSelect(item.value); onClose(); }}
-                >
-                  <ThemedText style={[styles.optionLabel, { color: isSelected ? theme.primary : theme.text, fontWeight: isSelected ? '700' : '400' }]}>
-                    {item.label}
-                  </ThemedText>
-                  {isSelected && (
-                    <View style={[styles.optionCheckCircle, { backgroundColor: theme.primary }]}>
-                      <Feather name="check" size={12} color="#FFF" />
-                    </View>
-                  )}
-                </Pressable>
-              );
-            }}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const SelectButton = ({ label, value, options, onPress, icon, accent }: any) => {
-    const displayLabel = options ? options.find((o: any) => o.value === value)?.label : value;
-    const hasValue = !!value;
-    return (
-      <Pressable
-        style={[
-          styles.selectButton,
-          {
-            backgroundColor: hasValue
-              ? (accent ? accent + '10' : theme.primary + '0D')
-              : (isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA'),
-            borderColor: hasValue ? (accent || theme.primary) + '40' : theme.border,
-          },
-        ]}
-        onPress={onPress}
-      >
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: hasValue ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <ThemedText style={[styles.selectButtonText, { color: hasValue ? theme.text : theme.textSecondary, fontWeight: hasValue ? '500' : '400' }]}>
-          {displayLabel || label}
-        </ThemedText>
-        <Feather name="chevron-down" size={16} color={hasValue ? (accent || theme.primary) : theme.textSecondary} />
-      </Pressable>
-    );
-  };
-
-  const InputField = ({ label, value, onChangeText, placeholder, multiline, icon, accent }: any) => (
-    <View style={styles.fieldContainer}>
-      <View style={styles.fieldLabelRow}>
-        <ThemedText style={[styles.fieldLabel, { color: theme.textSecondary }]}>{label}</ThemedText>
-        {value?.length > 0 && (
-          <View style={[styles.fieldFilledDot, { backgroundColor: accent || theme.primary }]} />
-        )}
-      </View>
-      <View style={[
-        styles.inputRow,
-        {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA',
-          borderColor: value?.length > 0 ? (accent || theme.primary) + '40' : theme.border,
-        },
-      ]}>
-        {icon && (
-          <View style={[styles.selectIconWrap, { backgroundColor: value?.length > 0 ? (accent || theme.primary) + '15' : theme.border + '50' }]}>
-            <Feather name={icon} size={15} color={value?.length > 0 ? (accent || theme.primary) : theme.textSecondary} />
-          </View>
-        )}
-        <TextInput
-          style={[styles.textInput, { color: theme.text }, multiline && styles.multilineInput]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={theme.textSecondary}
-          multiline={multiline}
-        />
-      </View>
-    </View>
-  );
-
-  const ToggleField = ({ label, description, value, onValueChange, icon, accent }: any) => (
-    <View style={[styles.toggleRow, { backgroundColor: 'transparent' }]}>
-      <View style={styles.toggleLeft}>
-        <View style={[styles.toggleIconWrap, { backgroundColor: (accent || theme.primary) + '15' }]}>
-          <Feather name={icon} size={16} color={accent || theme.primary} />
-        </View>
-        <View style={styles.toggleTextGroup}>
-          <ThemedText style={[styles.toggleLabel, { color: theme.text }]}>{label}</ThemedText>
-          {description && (
-            <ThemedText style={[styles.toggleDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-          )}
-        </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: theme.border, true: (accent || theme.primary) + '90' }}
-        thumbColor={value ? (accent || theme.primary) : isDark ? '#888' : '#CCC'}
-      />
-    </View>
-  );
-
-  const SectionHeader = ({ icon, label, color, description }: { icon: any; label: string; color: string; description?: string }) => (
-    <View style={[styles.sectionHeader, { borderBottomColor: theme.border + '60' }]}>
-      <LinearGradient
-        colors={[color + '25', color + '10']}
-        style={styles.sectionIconWrap}
-      >
-        <Feather name={icon} size={17} color={color} />
-      </LinearGradient>
-      <View style={styles.sectionHeaderText}>
-        <ThemedText style={[styles.sectionTitle, { color: theme.text }]}>{label}</ThemedText>
-        {description && (
-          <ThemedText style={[styles.sectionDescription, { color: theme.textSecondary }]}>{description}</ThemedText>
-        )}
-      </View>
-    </View>
-  );
-
   const filledFields = [
     name, bio, jobTitle, livingIn, zodiacSign, education, lookingFor,
     songTitle, smoking, drinking, workout, religion, ethnicity, pets,
@@ -611,7 +835,6 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
   const totalFields = 23;
   const completionPct = Math.round((filledFields / totalFields) * 100);
 
-  // Auto-save diaspora selection immediately to the database when user picks an option
   const handleDiasporaSelect = async (value: string) => {
     setDiasporaGeneration(value);
     try {
@@ -860,7 +1083,14 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
                   </View>
                   <View style={styles.half}>
                     <ThemedText style={[styles.miniLabel, { color: theme.textSecondary }]}>Pets</ThemedText>
-                    <SelectButton label="Pets?" value={pets} options={PETS_OPTIONS} onPress={() => setActiveModal('pets')} icon="heart" accent="#10B981" />
+                    <SelectButton
+                      label="Pets?"
+                      value={pets.length > 0 ? pets.map((v: string) => PETS_OPTIONS.find((o: any) => o.value === v)?.label || v).join(', ') : ''}
+                      options={PETS_OPTIONS}
+                      onPress={() => setActiveModal('pets')}
+                      icon="heart"
+                      accent="#10B981"
+                    />
                   </View>
                 </View>
                 <View style={[styles.toggleCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F8FA', borderColor: theme.border }]}>
@@ -959,38 +1189,159 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={[styles.cardHeader, { borderBottomColor: theme.border + '60' }]}>
-                <LinearGradient colors={['#9333EA28', '#9333EA10']} style={styles.cardIconWrap}>
-                  <Feather name="music" size={16} color="#9333EA" />
+                <LinearGradient colors={['#1DB95428', '#1DB95410']} style={styles.cardIconWrap}>
+                  <Feather name="music" size={16} color="#1DB954" />
                 </LinearGradient>
-                <View>
+                <View style={{ flex: 1 }}>
                   <ThemedText style={[styles.cardTitle, { color: theme.text }]}>Soundtrack</ThemedText>
                   <ThemedText style={[styles.cardSub, { color: theme.textSecondary }]}>Your current anthem</ThemedText>
                 </View>
+                {spotifyConnected && (
+                  <View style={[styles.spotifyBadge, { backgroundColor: '#1DB95420' }]}>
+                    <ThemedText style={{ color: '#1DB954', fontSize: 11, fontWeight: '600' }}>● Spotify</ThemedText>
+                  </View>
+                )}
               </View>
               <View style={styles.cardBody}>
-                <View style={[styles.songCard, { backgroundColor: isDark ? 'rgba(147,51,234,0.08)' : '#9333EA0A', borderColor: '#9333EA25' }]}>
-                  <LinearGradient colors={['#9333EA', '#7C3AED']} style={styles.songIconBox}>
-                    <Feather name="music" size={20} color="#FFF" />
-                  </LinearGradient>
+                {!spotifyConnected ? (
+                  <Pressable
+                    style={[styles.spotifyConnectBtn, { backgroundColor: '#1DB954', opacity: connectingSpotify ? 0.7 : 1 }]}
+                    onPress={handleConnectSpotify}
+                    disabled={connectingSpotify}
+                  >
+                    {connectingSpotify ? (
+                      <ActivityIndicator color="#FFF" size="small" />
+                    ) : (
+                      <>
+                        <Feather name="music" size={18} color="#FFF" />
+                        <ThemedText style={styles.spotifyConnectText}>Connect with Spotify</ThemedText>
+                      </>
+                    )}
+                  </Pressable>
+                ) : (
+                  <View style={styles.spotifyConnectedRow}>
+                    <View style={[styles.spotifyAvatarWrap, { backgroundColor: '#1DB95420' }]}>
+                      <Feather name="music" size={18} color="#1DB954" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText style={[styles.spotifyConnectedName, { color: theme.text }]}>{spotifyDisplayName || "Spotify"}</ThemedText>
+                      <ThemedText style={[styles.spotifyConnectedSub, { color: '#1DB954' }]}>Connected</ThemedText>
+                    </View>
+                    <Pressable onPress={handleDisconnectSpotify} style={[styles.spotifyDisconnectBtn, { borderColor: theme.border }]}>
+                      <ThemedText style={{ color: theme.textSecondary, fontSize: 12 }}>Disconnect</ThemedText>
+                    </Pressable>
+                  </View>
+                )}
+
+                <View style={[styles.songCard, { backgroundColor: isDark ? 'rgba(29,185,84,0.06)' : '#1DB9540A', borderColor: '#1DB95425', marginTop: 12 }]}>
+                  {songAlbumArt ? (
+                    <Image source={{ uri: songAlbumArt }} style={styles.songAlbumArt} />
+                  ) : (
+                    <LinearGradient colors={['#1DB954', '#158f3f']} style={styles.songIconBox}>
+                      <Feather name="music" size={20} color="#FFF" />
+                    </LinearGradient>
+                  )}
                   <View style={{ flex: 1 }}>
-                    <TextInput
-                      style={[styles.songTitleInput, { color: theme.text, borderBottomColor: theme.border }]}
-                      value={songTitle}
-                      onChangeText={setSongTitle}
-                      placeholder="Song title"
-                      placeholderTextColor={theme.textSecondary}
-                    />
-                    <TextInput
-                      style={[styles.songArtistInput, { color: theme.textSecondary }]}
-                      value={songArtist}
-                      onChangeText={setSongArtist}
-                      placeholder="Artist name"
-                      placeholderTextColor={theme.textSecondary + '90'}
-                    />
+                    {spotifyConnected ? (
+                      <Pressable onPress={() => setSpotifySearchVisible(true)} style={styles.spotifyPickSong}>
+                        <ThemedText style={[styles.songTitleInput, { color: songTitle ? theme.text : theme.textSecondary, paddingVertical: 6 }]} numberOfLines={1}>
+                          {songTitle || "Tap to search songs on Spotify"}
+                        </ThemedText>
+                        {songArtist ? (
+                          <ThemedText style={[styles.songArtistInput, { color: theme.textSecondary }]} numberOfLines={1}>{songArtist}</ThemedText>
+                        ) : null}
+                      </Pressable>
+                    ) : (
+                      <>
+                        <TextInput
+                          style={[styles.songTitleInput, { color: theme.text, borderBottomColor: theme.border }]}
+                          value={songTitle}
+                          onChangeText={setSongTitle}
+                          placeholder="Song title"
+                          placeholderTextColor={theme.textSecondary}
+                        />
+                        <TextInput
+                          style={[styles.songArtistInput, { color: theme.textSecondary }]}
+                          value={songArtist}
+                          onChangeText={setSongArtist}
+                          placeholder="Artist name"
+                          placeholderTextColor={theme.textSecondary + '90'}
+                        />
+                      </>
+                    )}
                   </View>
                 </View>
               </View>
             </View>
+
+            <Modal
+              visible={spotifySearchVisible}
+              animationType="slide"
+              presentationStyle="pageSheet"
+              onRequestClose={() => setSpotifySearchVisible(false)}
+            >
+              <View style={[styles.spotifyModal, { backgroundColor: theme.background }]}>
+                <View style={[styles.spotifyModalHeader, { borderBottomColor: theme.border }]}>
+                  <Pressable onPress={() => setSpotifySearchVisible(false)} style={{ padding: 8 }}>
+                    <Ionicons name="close" size={24} color={theme.text} />
+                  </Pressable>
+                  <ThemedText style={[styles.spotifyModalTitle, { color: theme.text }]}>Search Songs</ThemedText>
+                  <View style={{ width: 40 }} />
+                </View>
+                <View style={[styles.spotifySearchBar, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                  <Feather name="search" size={18} color={theme.textSecondary} />
+                  <TextInput
+                    style={[styles.spotifySearchInput, { color: theme.text }]}
+                    value={spotifySearchQuery}
+                    onChangeText={setSpotifySearchQuery}
+                    placeholder="Search songs, artists..."
+                    placeholderTextColor={theme.textSecondary}
+                    returnKeyType="search"
+                    onSubmitEditing={handleSpotifySearch}
+                    autoFocus
+                  />
+                  {searchingSpotify ? (
+                    <ActivityIndicator size="small" color="#1DB954" />
+                  ) : (
+                    <Pressable onPress={handleSpotifySearch} style={[styles.spotifySearchGo, { backgroundColor: '#1DB954' }]}>
+                      <ThemedText style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }}>Go</ThemedText>
+                    </Pressable>
+                  )}
+                </View>
+                <FlatList
+                  data={spotifySearchResults}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+                  ListEmptyComponent={
+                    <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                      <Feather name="music" size={40} color={theme.textSecondary} style={{ opacity: 0.4 }} />
+                      <ThemedText style={{ color: theme.textSecondary, marginTop: 12 }}>Search for a song above</ThemedText>
+                    </View>
+                  }
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={[styles.spotifyTrackRow, { borderBottomColor: theme.border }]}
+                      onPress={() => handleSelectSpotifySong(item)}
+                    >
+                      {item.albumArt ? (
+                        <Image source={{ uri: item.albumArt }} style={styles.spotifyTrackArt} />
+                      ) : (
+                        <View style={[styles.spotifyTrackArt, { backgroundColor: '#1DB95420', alignItems: 'center', justifyContent: 'center' }]}>
+                          <Feather name="music" size={16} color="#1DB954" />
+                        </View>
+                      )}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <ThemedText style={[styles.spotifyTrackTitle, { color: theme.text }]} numberOfLines={1}>{item.title}</ThemedText>
+                        <ThemedText style={[styles.spotifyTrackArtist, { color: theme.textSecondary }]} numberOfLines={1}>{item.artist}</ThemedText>
+                      </View>
+                      {songTitle === item.title && songArtist === item.artist && (
+                        <Ionicons name="checkmark-circle" size={20} color="#1DB954" />
+                      )}
+                    </Pressable>
+                  )}
+                />
+              </View>
+            </Modal>
 
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={[styles.cardHeader, { borderBottomColor: theme.border + '60' }]}>
@@ -1043,11 +1394,11 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
       <OptionModal visible={activeModal === 'zodiac'} onClose={() => setActiveModal(null)} title="Zodiac Sign" options={ZODIAC_OPTIONS} selectedValue={zodiacSign} onSelect={setZodiacSign} />
       <OptionModal visible={activeModal === 'education'} onClose={() => setActiveModal(null)} title="Education" options={EDUCATION_OPTIONS} selectedValue={education} onSelect={setEducation} />
       <OptionModal visible={activeModal === 'ethnicity'} onClose={() => setActiveModal(null)} title="Ethnicity" options={ETHNICITY_OPTIONS} selectedValue={ethnicity} onSelect={setEthnicity} />
-      <OptionModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValue={pets} onSelect={setPets} />
+      <MultiSelectModal visible={activeModal === 'pets'} onClose={() => setActiveModal(null)} title="Pets" options={PETS_OPTIONS} selectedValues={pets} onSelect={setPets} />
       <OptionModal visible={activeModal === 'communicationStyle'} onClose={() => setActiveModal(null)} title="Communication Style" options={COMMUNICATION_STYLE_OPTIONS} selectedValue={communicationStyle} onSelect={setCommunicationStyle} />
       <OptionModal visible={activeModal === 'loveStyle'} onClose={() => setActiveModal(null)} title="Love Language" subtitle="How do you give and receive love?" options={LOVE_STYLE_OPTIONS} selectedValue={loveStyle} onSelect={setLoveStyle} />
       <OptionModal visible={activeModal === 'diasporaGeneration'} onClose={() => setActiveModal(null)} title="Diaspora Generation" subtitle="Which generation of the African diaspora are you?" options={DIASPORA_GENERATION_OPTIONS} selectedValue={diasporaGeneration} onSelect={handleDiasporaSelect} />
-      <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} />
+      <InterestModal visible={interestsModalVisible} onClose={() => setInterestsModalVisible(false)} interests={interests} toggleInterest={toggleInterest} insetsBottom={insets.bottom} />
       <AlertComponent />
     </View>
   );
@@ -1056,14 +1407,12 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
 const styles = StyleSheet.create({
   container: { flex: 1 },
 
-  // HEADER
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
   headerBack: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '700', letterSpacing: 0.1 },
   headerSaveBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, minWidth: 70, justifyContent: 'center' },
   headerSaveBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
 
-  // HERO
   hero: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, gap: 14 },
   heroLeft: {},
   heroRing: { width: 72, height: 72, borderRadius: 36, borderWidth: 2.5, overflow: 'visible' as const, position: 'relative' },
@@ -1078,15 +1427,12 @@ const styles = StyleSheet.create({
   heroBarFill: { height: '100%' as any, borderRadius: 3 },
   heroBarLabel: { fontSize: 12, fontWeight: '700', minWidth: 32 },
 
-  // TAB BAR
   tabBar: { flexDirection: 'row' as const, borderBottomWidth: 1, paddingHorizontal: 4 },
   tabItem: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 11, borderBottomWidth: 2.5, borderBottomColor: 'transparent' },
   tabLabel: { fontSize: 12, letterSpacing: 0.1 },
 
-  // SCROLL CONTENT
   scrollContent: { paddingHorizontal: 14, paddingTop: 16, gap: 14 },
 
-  // CARD
   card: { borderRadius: 18, overflow: 'hidden' as const, borderWidth: 1 },
   cardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, gap: 12 },
   cardIconWrap: { width: 36, height: 36, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
@@ -1094,13 +1440,11 @@ const styles = StyleSheet.create({
   cardSub: { fontSize: 12, marginTop: 1 },
   cardBody: { padding: 14, gap: 12 },
 
-  // FIELDS
   fieldWrap: { gap: 6 },
   miniLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   row2: { flexDirection: 'row' as const, gap: 10 },
   half: { flex: 1, gap: 6 },
 
-  // INPUT FIELD sub-component styles
   fieldContainer: {},
   fieldLabelRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 7, gap: 6 },
   fieldLabel: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase' as const, letterSpacing: 0.6 },
@@ -1109,12 +1453,16 @@ const styles = StyleSheet.create({
   textInput: { flex: 1, fontSize: 15, paddingVertical: 12 },
   multilineInput: { minHeight: 90, textAlignVertical: 'top' as const },
 
-  // SELECT BUTTON sub-component styles
   selectButton: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   selectIconWrap: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+
+  sectionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, gap: 12 },
+  sectionIconWrap: { width: 34, height: 34, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  sectionHeaderText: { flex: 1 },
+  sectionTitle: { fontSize: 15, fontWeight: '700' as const },
+  sectionDescription: { fontSize: 12, marginTop: 2 },
   selectButtonText: { fontSize: 14, flex: 1 },
 
-  // INTERESTS TRIGGER
   triggerRow: { height: 50, borderRadius: 12, borderWidth: 1, flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, gap: 10 },
   triggerIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   triggerText: { flex: 1, fontSize: 14 },
@@ -1122,7 +1470,6 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, gap: 5 },
   chipText: { fontSize: 12, fontWeight: '500' },
 
-  // TOGGLE CARD
   toggleCard: { borderRadius: 12, borderWidth: 1, overflow: 'hidden' as const },
   toggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: 'transparent' },
   toggleLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, flex: 1, gap: 12 },
@@ -1132,23 +1479,40 @@ const styles = StyleSheet.create({
   toggleDescription: { fontSize: 12, marginTop: 1 },
   toggleDivider: { height: 1, marginHorizontal: 14 },
 
-  // SONG CARD
   songCard: { borderRadius: 14, borderWidth: 1, padding: 14, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
   songIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
+  songAlbumArt: { width: 48, height: 48, borderRadius: 14 },
   songTitleInput: { fontSize: 15, fontWeight: '600', paddingVertical: 6, borderBottomWidth: 1, marginBottom: 4 },
   songArtistInput: { fontSize: 13, paddingVertical: 4 },
 
-  // QUIZ CTA
+  spotifyConnectBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, paddingVertical: 13, borderRadius: 12 },
+  spotifyConnectText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  spotifyConnectedRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  spotifyAvatarWrap: { width: 40, height: 40, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const },
+  spotifyConnectedName: { fontSize: 14, fontWeight: '600' },
+  spotifyConnectedSub: { fontSize: 12 },
+  spotifyDisconnectBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1 },
+  spotifyBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  spotifyPickSong: { flex: 1 },
+  spotifyModal: { flex: 1 },
+  spotifyModalHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  spotifyModalTitle: { fontSize: 17, fontWeight: '700' },
+  spotifySearchBar: { flexDirection: 'row' as const, alignItems: 'center' as const, margin: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, gap: 10 },
+  spotifySearchInput: { flex: 1, fontSize: 15, paddingVertical: 2 },
+  spotifySearchGo: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  spotifyTrackRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 12, borderBottomWidth: 0.5 },
+  spotifyTrackArt: { width: 50, height: 50, borderRadius: 8 },
+  spotifyTrackTitle: { fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  spotifyTrackArtist: { fontSize: 12 },
+
   quizCta: { borderRadius: 14, overflow: 'hidden' as const, marginTop: 4 },
   quizCtaGradient: { borderRadius: 14, paddingHorizontal: 16, paddingVertical: 13, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
   quizCtaTitle: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   quizCtaSub: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 1 },
 
-  // BOTTOM SAVE
   bottomSave: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, height: 54, borderRadius: 27, marginTop: 4 },
   bottomSaveText: { color: '#FFF', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
 
-  // MODALS
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' as const },
   modalSheet: { borderTopLeftRadius: 26, borderTopRightRadius: 26, maxHeight: '82%' as any },
   modalDragHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center' as const, marginTop: 10, marginBottom: 2 },

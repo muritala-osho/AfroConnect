@@ -12,14 +12,10 @@ const formatDate = (date) =>
     day: 'numeric', month: 'long', year: 'numeric',
   });
 
-// ─── Renewal Reminder Job ────────────────────────────────────────────────────
-// Sends a reminder email 3 and 7 days before a premium subscription expires.
-// Tracks sent reminders using a field on the user doc to avoid duplicate sends.
 const runRenewalReminders = async () => {
   try {
     const now = new Date();
 
-    // Find premium users whose subscription expires within the next 7 days
     const users = await User.find({
       'premium.isActive': true,
       'premium.plan': { $ne: 'free' },
@@ -34,7 +30,6 @@ const runRenewalReminders = async () => {
         const msUntilExpiry = new Date(user.premium.expiresAt).getTime() - now.getTime();
         const daysLeft = Math.ceil(msUntilExpiry / (24 * 60 * 60 * 1000));
 
-        // Only send once per renewal window (guard against duplicate sends per hour)
         const lastSent = user.renewalReminderSentAt
           ? new Date(user.renewalReminderSentAt).getTime()
           : 0;
@@ -64,8 +59,6 @@ const runRenewalReminders = async () => {
   }
 };
 
-// ─── Inactivity Re-engagement Job ────────────────────────────────────────────
-// Sends a "We miss you" email once to users who haven't been active in 30 days.
 const runInactivityEmails = async () => {
   try {
     const thirtyDaysAgo = new Date(Date.now() - THIRTY_DAYS_MS);
@@ -96,10 +89,6 @@ const runInactivityEmails = async () => {
   }
 };
 
-// ─── Premium Expiry Sweep ─────────────────────────────────────────────────────
-// Finds users whose premium subscription has passed expiresAt and marks them
-// as no longer active. This is a safety net in addition to the per-request
-// check in auth middleware.
 const runPremiumExpiry = async () => {
   try {
     const result = await User.updateMany(
@@ -117,11 +106,9 @@ const runPremiumExpiry = async () => {
   }
 };
 
-// ─── Start All Jobs ───────────────────────────────────────────────────────────
 const startScheduledJobs = () => {
   console.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
 
-  // Run email jobs immediately on startup, then on interval
   runRenewalReminders();
   runInactivityEmails();
   runPremiumExpiry();
@@ -130,9 +117,7 @@ const startScheduledJobs = () => {
   setInterval(runInactivityEmails, CHECK_INTERVAL);
   setInterval(runPremiumExpiry, CHECK_INTERVAL);
 
-  // Churn prediction runs every 6 hours (more intensive — queries multiple collections)
   const SIX_HOURS = 6 * 60 * 60 * 1000;
-  // Delay first churn run by 2 minutes so DB connection is settled
   setTimeout(() => {
     runChurnPrediction();
     setInterval(runChurnPrediction, SIX_HOURS);

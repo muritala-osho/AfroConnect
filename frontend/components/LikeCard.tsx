@@ -15,6 +15,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { Feather } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import { Spacing, BorderRadius } from "@/constants/theme";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 const { width } = Dimensions.get("window");
 const CARD_GAP = 10;
@@ -164,11 +165,7 @@ function LikeCardComponent({
                 {likeUser.isBlurred ? `${(likeUser.name || '?')[0]}***` : likeUser.name}{likeUser.age && !likeUser.isBlurred ? `, ${likeUser.age}` : ''}
               </ThemedText>
               {likeUser.verified && !likeUser.isBlurred && (
-                <Image 
-                  source={require("@/assets/icons/verified-tick.png")} 
-                  style={{ width: 16, height: 16, marginLeft: 4 }} 
-                  contentFit="contain"
-                />
+                <VerificationBadge size={14} />
               )}
             </View>
             <View style={styles.actionButtons}>

@@ -1,12 +1,15 @@
+const logger = require('../utils/logger');
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
+const Session = require("../models/Session");
 const {
   sendPasswordResetEmail,
   sendWelcomeEmail,
 } = require("../utils/emailService");
+const { sendSmartNotification } = require('../utils/pushNotifications');
 const {
   authLimiter,
   otpLimiter,
@@ -15,16 +18,58 @@ const {
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
-// Generate JWT token
-const generateToken = (userId) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRE || "30d",
+const generateToken = (userId, tokenVersion = 0, sessionId = null) => {
+  const payload = { id: userId, tokenVersion };
+  if (sessionId) payload.sessionId = sessionId;
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRE || "7d",
   });
 };
 
-// @route   POST /api/auth/signup
-// @desc    Register new user and send OTP
-// @access  Public
+async function createSession(userId, req) {
+  try {
+    const sessionId = crypto.randomUUID();
+    const rawDeviceName = req.body.deviceName || req.headers['x-device-name'] || null;
+    const deviceName = rawDeviceName || 'Unknown Device';
+    const platform = req.body.platform || req.headers['x-platform'] || 'unknown';
+    const ipAddress = req.ip || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || null;
+    const cleanIp = ipAddress && ipAddress.startsWith('::ffff:') ? ipAddress.slice(7) : ipAddress;
+
+    let city = null;
+    let country = null;
+    if (cleanIp && cleanIp !== '127.0.0.1' && cleanIp !== '::1' && !cleanIp.startsWith('::ffff:127')) {
+      try {
+        const geoRes = await fetch(`http://ip-api.com/json/${cleanIp}?fields=city,country,status`, { signal: AbortSignal.timeout(3000) });
+        const geo = await geoRes.json();
+        if (geo.status === 'success') {
+          city = geo.city || null;
+          country = geo.country || null;
+        }
+      } catch (_) {}
+    }
+
+    // Remove any existing sessions for the same device to prevent duplicates
+    if (rawDeviceName) {
+      await Session.deleteMany({ userId, deviceName: rawDeviceName });
+    }
+
+    // Cap sessions at 5 per user — delete the oldest ones if over the limit
+    const SESSION_CAP = 5;
+    const existingSessions = await Session.find({ userId }).sort({ lastActive: 1 });
+    if (existingSessions.length >= SESSION_CAP) {
+      const toDelete = existingSessions.slice(0, existingSessions.length - SESSION_CAP + 1);
+      const idsToDelete = toDelete.map(s => s.sessionId);
+      await Session.deleteMany({ sessionId: { $in: idsToDelete } });
+    }
+
+    await Session.create({ userId, sessionId, deviceName, platform, ipAddress: cleanIp, city, country });
+    return { sessionId, deviceName, ipAddress: cleanIp, city, country };
+  } catch (err) {
+    logger.error('Failed to create session:', err.message);
+    return { sessionId: crypto.randomUUID(), deviceName: 'Unknown Device', ipAddress: null, city: null, country: null };
+  }
+}
+
 router.post(
   "/signup",
   authLimiter,
@@ -33,8 +78,6 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      // Validation — only email and password are required at signup
-      // Name and other profile fields are collected later during profile setup
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -57,10 +100,8 @@ router.post(
         });
       }
 
-      // Check if user exists
       let existingUser = await User.findOne({ email });
 
-      // If user exists and has verified their email, they should login instead
       if (existingUser && existingUser.emailVerified) {
         return res.status(400).json({
           success: false,
@@ -68,18 +109,14 @@ router.post(
         });
       }
 
-      // If user exists but email not verified (abandoned signup), delete and recreate
       if (existingUser && !existingUser.emailVerified) {
         await User.deleteOne({ _id: existingUser._id });
-        console.log("Deleted unverified user for re-registration (user ID redacted).");
+        logger.log("Deleted unverified user for re-registration (user ID redacted).");
       }
 
-      // Generate OTP
-      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const { generateOTP, sendOTP } = require("../utils/emailService");
       const otpCode = generateOTP();
 
-      // Create user with minimal data - not verified yet
-      // Name/age/gender/etc. will be filled in during profile setup after OTP verification
       const user = await User.create({
         name: "User",
         email,
@@ -95,12 +132,10 @@ router.post(
         verificationOTPExpire: Date.now() + 10 * 60 * 1000, // 10 minutes
       });
 
-      // Send OTP email
       try {
-        await sendOTPEmail(email, "User", otpCode);
+        await sendOTP(email, otpCode);
       } catch (emailError) {
-        console.error("Failed to send OTP email:", emailError);
-        // Continue anyway - user can request resend
+        logger.error("Failed to send OTP email:", emailError);
       }
 
       res.status(201).json({
@@ -110,7 +145,7 @@ router.post(
         email: user.email,
       });
     } catch (error) {
-      console.error("Signup error");
+      logger.error("Signup error");
       res.status(500).json({
         success: false,
         message: "Server error during signup",
@@ -119,9 +154,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/verify-otp
-// @desc    Verify OTP and complete registration
-// @access  Public
 router.post("/verify-otp", otpLimiter, async (req, res) => {
   try {
     const { userId, otp } = req.body;
@@ -145,12 +177,13 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
     user.expireAt = undefined; // Stop auto-deletion once verified
     await user.save();
 
-    // Send welcome email — fire and forget, don't block the response
     sendWelcomeEmail(user.email, user.name || "there").catch((err) =>
-      console.error("Welcome email failed (non-blocking):", err.message),
+      logger.error("Welcome email failed (non-blocking):", err.message),
     );
 
-    const token = generateToken(user._id);
+    const freshUser = await User.findById(user._id).select('+tokenVersion');
+    const sessionId = await createSession(user._id, req);
+    const token = generateToken(user._id, freshUser.tokenVersion || 0, sessionId);
 
     res.json({
       success: true,
@@ -167,7 +200,7 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("OTP verification error:", error);
+    logger.error("OTP verification error:", error);
     res.status(500).json({
       success: false,
       message: "Server error during verification",
@@ -175,9 +208,6 @@ router.post("/verify-otp", otpLimiter, async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/resend-otp
-// @desc    Resend OTP
-// @access  Public
 router.post("/resend-otp", otpLimiter, async (req, res) => {
   try {
     const { userId } = req.body;
@@ -197,21 +227,21 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
       });
     }
 
-    const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+    const { generateOTP, sendOTP } = require("../utils/emailService");
     const otpCode = generateOTP();
 
     user.verificationOTP = otpCode;
     user.verificationOTPExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    await sendOTPEmail(user.email, user.name, otpCode);
+    await sendOTP(user.email, otpCode);
 
     res.json({
       success: true,
       message: "New verification code sent to your email",
     });
   } catch (error) {
-    console.error("Resend OTP error:", error);
+    logger.error("Resend OTP error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to resend verification code",
@@ -219,9 +249,6 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
   }
 });
 
-// @route   POST /api/auth/login
-// @desc    Login user
-// @access  Public
 router.post(
   "/login",
   authLimiter,
@@ -230,7 +257,6 @@ router.post(
     try {
       const { email, password } = req.body;
 
-      // Validation
       if (!email || !password) {
         return res.status(400).json({
           success: false,
@@ -238,7 +264,6 @@ router.post(
         });
       }
 
-      // Check user exists
       const user = await User.findOne({ email }).select("+password");
       if (!user) {
         return res.status(401).json({
@@ -247,9 +272,7 @@ router.post(
         });
       }
 
-      // Check if user is banned
       if (user.banned) {
-        // Generate a short-lived appeal token (15 minutes)
         const appealToken = jwt.sign(
           { id: user._id, purpose: "appeal", email: user.email },
           process.env.JWT_SECRET,
@@ -269,7 +292,6 @@ router.post(
         });
       }
 
-      // Check password
       const isMatch = await user.comparePassword(password);
       if (!isMatch) {
         return res.status(401).json({
@@ -278,12 +300,45 @@ router.post(
         });
       }
 
-      // Update last active
       user.lastActive = Date.now();
       user.onlineStatus = "online";
       await user.save();
 
-      const token = generateToken(user._id);
+      const userWithVersion = await User.findById(user._id).select('+tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings');
+      const newSession = await createSession(user._id, req);
+      const { sessionId } = newSession;
+      const token = generateToken(user._id, userWithVersion.tokenVersion || 0, sessionId);
+
+      // ── Suspicious login detection (fire-and-forget) ───────────────────────
+      setImmediate(async () => {
+        try {
+          const prevSessions = await Session.find({ userId: user._id, sessionId: { $ne: sessionId } }).lean();
+          if (prevSessions.length > 0) {
+            const knownDevices = new Set(prevSessions.map(s => s.deviceName).filter(Boolean));
+            const knownIPs    = new Set(prevSessions.map(s => s.ipAddress).filter(Boolean));
+            const isNewDevice = newSession.deviceName && !knownDevices.has(newSession.deviceName);
+            const isNewIP     = newSession.ipAddress  && !knownIPs.has(newSession.ipAddress);
+
+            if (isNewDevice || isNewIP) {
+              const locationStr = [newSession.city, newSession.country].filter(Boolean).join(', ') || 'Unknown location';
+              const deviceStr   = newSession.deviceName || 'Unknown device';
+              await sendSmartNotification(
+                userWithVersion,
+                {
+                  title: '⚠️ New sign-in detected',
+                  body: `${deviceStr} · ${locationStr}. If this wasn't you, go to Active Sessions to revoke it.`,
+                  data:  { type: 'security', screen: 'DeviceManagement' },
+                  channelId: 'security',
+                },
+                'security',
+              );
+              logger.info(`[Auth] Suspicious login alert sent → user ${user._id} | device: ${deviceStr} | IP: ${newSession.ipAddress}`);
+            }
+          }
+        } catch (alertErr) {
+          logger.warn('[Auth] Suspicious login alert failed (non-fatal):', alertErr.message);
+        }
+      });
 
       res.json({
         success: true,
@@ -309,7 +364,7 @@ router.post(
         },
       });
     } catch (error) {
-      console.error("Login error:", error);
+      logger.error("Login error:", error);
       res.status(500).json({
         success: false,
         message: "Server error during login",
@@ -318,9 +373,6 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/forgot-password
-// @desc    Request password reset via OTP
-// @access  Public
 router.post(
   "/forgot-password",
   forgotPasswordLimiter,
@@ -332,7 +384,6 @@ router.post(
 
       const user = await User.findOne({ email: normalizedEmail });
 
-      // Always return the same response to prevent email enumeration
       if (!user) {
         return res.json({
           success: true,
@@ -341,7 +392,7 @@ router.post(
         });
       }
 
-      const { generateOTP, sendOTPEmail } = require("../utils/emailService");
+      const { generateOTP, sendOTP } = require("../utils/emailService");
       const otpCode = generateOTP();
 
       user.resetPasswordOTP = otpCode;
@@ -349,9 +400,9 @@ router.post(
       await user.save();
 
       try {
-        await sendOTPEmail(user.email, user.name, otpCode);
+        await sendOTP(user.email, otpCode);
       } catch (emailError) {
-        console.error("Forgot password email failed");
+        logger.error("Forgot password email failed");
       }
 
       res.json({
@@ -361,15 +412,12 @@ router.post(
         userId: user._id,
       });
     } catch (error) {
-      console.error("Forgot password error");
+      logger.error("Forgot password error");
       res.status(500).json({ success: false, message: "Server error" });
     }
   },
 );
 
-// @route   POST /api/auth/reset-password
-// @desc    Step 3: Reset password with OTP and new password
-// @access  Public
 router.post(
   "/reset-password",
   validate(schemas.auth.resetPassword),
@@ -392,14 +440,13 @@ router.post(
       });
 
       if (!user) {
-        console.log("[RESET_PASSWORD] User not found for provided email.");
+        logger.log("[RESET_PASSWORD] User not found for provided email.");
         return res.status(400).json({
           success: false,
           message: "Invalid verification code",
         });
       }
 
-      // Only accept the dedicated password reset OTP — never cross-accept signup OTPs
       const matchesOTP =
         user.resetPasswordOTP && user.resetPasswordOTP === providedOTP;
 
@@ -422,6 +469,7 @@ router.post(
       user.password = newPassword;
       user.resetPasswordOTP = undefined;
       user.resetPasswordOTPExpire = undefined;
+      user.tokenVersion = (user.tokenVersion || 0) + 1;
       await user.save();
 
       res.json({
@@ -429,7 +477,7 @@ router.post(
         message: "Password reset successful",
       });
     } catch (error) {
-      console.error("Reset password error:", error);
+      logger.error("Reset password error:", error);
       res.status(500).json({
         success: false,
         message: "Server error",
@@ -438,9 +486,25 @@ router.post(
   },
 );
 
-// @route   POST /api/auth/appeal
-// @desc    Submit a ban appeal
-// @access  Public (via appeal token)
+router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        await User.findByIdAndUpdate(decoded.id, { $inc: { tokenVersion: 1 } });
+        if (decoded.sessionId) {
+          await Session.deleteOne({ sessionId: decoded.sessionId });
+        }
+      } catch (_) {}
+    }
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
 router.post("/appeal", async (req, res) => {
   try {
     const { appealToken, message } = req.body;
@@ -466,7 +530,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Verify the appeal token
     let decoded;
     try {
       decoded = jwt.verify(appealToken, process.env.JWT_SECRET);
@@ -478,7 +541,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Ensure it's an appeal token
     if (decoded.purpose !== "appeal") {
       return res.status(401).json({
         success: false,
@@ -501,7 +563,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Check if already has pending appeal
     if (user.appeal && user.appeal.status === "pending") {
       return res.status(400).json({
         success: false,
@@ -509,7 +570,6 @@ router.post("/appeal", async (req, res) => {
       });
     }
 
-    // Check 30-day cooldown after rejection ONLY
     if (
       user.appeal &&
       user.appeal.status === "rejected" &&
@@ -526,7 +586,6 @@ router.post("/appeal", async (req, res) => {
       }
     }
 
-    // Note: If appeal was accepted, user can appeal again if banned again later
 
     user.appeal = {
       status: "pending",
@@ -540,7 +599,7 @@ router.post("/appeal", async (req, res) => {
       message: "Appeal submitted successfully. Admins will review it soon.",
     });
   } catch (error) {
-    console.error("Appeal submission error:", error);
+    logger.error("Appeal submission error:", error);
     res.status(500).json({
       success: false,
       message: "Server error",

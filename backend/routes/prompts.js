@@ -7,7 +7,6 @@ router.get('/available', protect, async (req, res) => {
   try {
     let prompts = await ProfilePrompt.find({ isActive: true }).sort({ category: 1 });
     
-    // Auto-seed if no prompts exist
     if (prompts.length === 0) {
       const defaultPrompts = [
         { category: 'personality', question: "I'm convinced that...", placeholder: "Share a strong belief" },
@@ -66,8 +65,21 @@ router.get('/my-responses', protect, async (req, res) => {
 
 router.get('/user/:userId', protect, async (req, res) => {
   try {
+    const { userId } = req.params;
+
+    if (userId !== req.user._id.toString()) {
+      const Match = require('../models/Match');
+      const match = await Match.findOne({
+        users: { $all: [req.user._id, userId] },
+        status: 'active'
+      });
+      if (!match) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+    }
+
     const responses = await UserPromptResponse.find({ 
-      userId: req.params.userId,
+      userId,
       isVisible: true 
     })
     .populate('promptId', 'question category')

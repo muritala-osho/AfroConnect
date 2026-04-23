@@ -48,7 +48,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ showToast }) => {
   const fetchTickets = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Server returns only assigned tickets for agents
       const data = await adminApi.getAllSupportTickets();
       if (data.success) {
         setTickets(data.tickets || []);
@@ -68,7 +67,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ showToast }) => {
     fetchTickets();
   }, []);
 
-  // Poll every 15 seconds for new messages
   useEffect(() => {
     pollingRef.current = setInterval(() => fetchTickets(true), 15000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
@@ -93,7 +91,6 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({ showToast }) => {
     setSending(true);
     const content = replyText.trim();
 
-    // Optimistic update
     const optimisticMsg: TicketMessage = {
       role: 'agent',
       content,

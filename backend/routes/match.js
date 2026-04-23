@@ -9,10 +9,8 @@ const validate = require('../middleware/validate');
 const { swipeLimiter } = require('../middleware/rateLimiter');
 const schemas = require('../validators/schemas');
 const redis = require('../utils/redis');
+const { distanceToUser, extractLatLng, normaliseMaxDistanceKm } = require('../utils/distance');
 
-// @route   GET /api/match/who-likes-me
-// @desc    Get list of users who liked current user (pending friend requests)
-// @access  Private
 router.get('/who-likes-me', protect, async (req, res) => {
   try {
     const FriendRequest = require('../models/FriendRequest');
@@ -21,13 +19,11 @@ router.get('/who-likes-me', protect, async (req, res) => {
     const cached = await redis.get(cacheKey);
     if (cached) return res.json({ success: true, users: cached, fromCache: true });
 
-    // Find pending friend requests where this user is the receiver
     const pendingRequests = await FriendRequest.find({
       receiver: req.user._id,
       status: 'pending'
     }).populate('sender', 'name age bio photos location onlineStatus lastActive interests verified lifestyle gender');
     
-    // Extract the users who sent requests (already plain objects from populate)
     const usersWhoLikedMe = pendingRequests
       .filter(req => req.sender)
       .map(req => req.sender.toObject ? req.sender.toObject() : req.sender);
@@ -36,7 +32,6 @@ router.get('/who-likes-me', protect, async (req, res) => {
       const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
       let score = 0;
       
-      // Compatibility scoring (Worldwide Focus)
       if (req.user.lifestyle?.personalityType && userObj.lifestyle?.personalityType === req.user.lifestyle?.personalityType) {
         score += 100;
       }
@@ -47,18 +42,15 @@ router.get('/who-likes-me', protect, async (req, res) => {
       return { ...userObj, compatibilityScore: score };
     });
 
-    // Sort by compatibility (Worldwide Priority)
     processedUsers.sort((a, b) => b.compatibilityScore - a.compatibilityScore);
 
     if (!isPremium) {
       processedUsers = processedUsers.map(u => {
         const userObj = typeof u.toObject === 'function' ? u.toObject() : u;
         let distance = null;
-        if (req.user.location?.coordinates && userObj.location?.coordinates) {
-          distance = calculateDistance(
-            req.user.location.coordinates,
-            userObj.location.coordinates
-          );
+        {
+          const { lat: myLat, lng: myLng } = extractLatLng(req.user.location);
+          distance = distanceToUser(myLat, myLng, userObj.location);
         }
 
         return {
@@ -86,9 +78,6 @@ router.get('/who-likes-me', protect, async (req, res) => {
   }
 });
 
-// @route   POST /api/match/swipe
-// @desc    Swipe right/left/super on a user
-// @access  Private
 router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), async (req, res) => {
   try {
     const { targetUserId, action } = req.body;
@@ -149,31 +138,30 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
         await currentUser.save();
 
-        // Send match push notifications to both users (non-blocking)
         try {
-          const { sendExpoPushNotification } = require('../utils/pushNotifications');
+          const { sendSmartNotification } = require('../utils/pushNotifications');
           const [currentUserFull, targetUserFull] = await Promise.all([
-            User.findById(currentUser._id).select('pushToken pushNotificationsEnabled name'),
-            User.findById(targetUserId).select('pushToken pushNotificationsEnabled name'),
+            User.findById(currentUser._id).select('pushToken pushNotificationsEnabled muteSettings notificationPreferences name'),
+            User.findById(targetUserId).select('pushToken pushNotificationsEnabled muteSettings notificationPreferences name'),
           ]);
-          const matchPayload = (recipientToken, senderName) => ({
-            title: "It's a Match! 🎉",
-            body: `You and ${senderName} liked each other!`,
-            data: { type: 'match' },
-            sound: 'default',
-            channelId: 'matches',
-          });
-          if (currentUserFull?.pushToken && currentUserFull.pushNotificationsEnabled) {
-            sendExpoPushNotification(currentUserFull.pushToken, matchPayload(currentUserFull.pushToken, targetUser.name)).catch(() => {});
+          if (currentUserFull) {
+            sendSmartNotification(currentUserFull, {
+              title: "It's a Match! 🎉",
+              body: `You and ${targetUser.name} liked each other!`,
+              data: { type: 'match' },
+            }, 'match').catch(() => {});
           }
-          if (targetUserFull?.pushToken && targetUserFull.pushNotificationsEnabled) {
-            sendExpoPushNotification(targetUserFull.pushToken, matchPayload(targetUserFull.pushToken, currentUser.name)).catch(() => {});
+          if (targetUserFull) {
+            sendSmartNotification(targetUserFull, {
+              title: "It's a Match! 🎉",
+              body: `You and ${currentUser.name} liked each other!`,
+              data: { type: 'match' },
+            }, 'match').catch(() => {});
           }
         } catch (pushErr) {
           console.error('Match push notification error (non-critical):', pushErr.message);
         }
 
-        // Send match notification emails to both users (non-blocking)
         try {
           const { sendNewMatchEmail } = require('../utils/emailService');
           const currentUserPhoto = currentUser.photos?.[0] || null;
@@ -201,7 +189,33 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     }
 
     await currentUser.save();
-    // Invalidate who-likes-me cache for target user and my-matches for both
+
+    if (action === 'like' || action === 'superlike') {
+      try {
+        const { sendSmartNotification } = require('../utils/pushNotifications');
+        const targetUserForNotif = await User.findById(targetUserId).select(
+          'pushToken pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        if (targetUserForNotif) {
+          const isSuper = action === 'superlike';
+          sendSmartNotification(
+            targetUserForNotif,
+            {
+              title: isSuper ? '⭐ You got a Super Like!' : '💚 Someone liked you!',
+              body: isSuper
+                ? `${currentUser.name} Super Liked your profile — open AfroConnect to see!`
+                : 'Someone on AfroConnect liked your profile. Come see!',
+              data: { type: 'like', screen: 'Likes' },
+            },
+            'like',
+          ).catch(() => {});
+          console.log(`[Push] Like notification queued → user ${targetUserId} (${isSuper ? 'superlike' : 'like'})`);
+        }
+      } catch (likeNotifErr) {
+        console.error('[Push] Like notification error (non-critical):', likeNotifErr.message);
+      }
+    }
+
     await Promise.all([
       redis.del(`wholikesme:${targetUserId}:premium`),
       redis.del(`wholikesme:${targetUserId}:free`),
@@ -352,9 +366,6 @@ router.post('/rewind', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/match/cultural-score/:userId
-// @desc    Get cultural compatibility breakdown between current user and another user
-// @access  Private
 router.get('/cultural-score/:userId', protect, async (req, res) => {
   try {
     const cacheKey = `culturalscore:${req.user._id}:${req.params.userId}`;
@@ -376,9 +387,6 @@ router.get('/cultural-score/:userId', protect, async (req, res) => {
   }
 });
 
-// @route   GET /api/match/daily-match
-// @desc    Get today's single curated match (The One Today)
-// @access  Private
 router.get('/daily-match', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -421,15 +429,15 @@ router.get('/daily-match', protect, async (req, res) => {
       ...genderFilter
     }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(60);
 
-    // Filter by distance if user has location and a maxDistance preference
-    const maxDist = me.preferences?.maxDistance;
-    if (maxDist && me.location?.coordinates?.length === 2) {
-      const myCoords = me.location.coordinates;
-      candidates = candidates.filter(c => {
-        if (!c.location?.coordinates?.length) return true; // include users without location
-        const dist = calculateDistance(myCoords, c.location.coordinates);
-        return dist <= maxDist;
-      });
+    const maxDist = normaliseMaxDistanceKm(me.preferences?.maxDistance, 0);
+    if (maxDist > 0) {
+      const { lat: myLat, lng: myLng } = extractLatLng(me.location);
+      if (myLat != null && myLng != null) {
+        candidates = candidates.filter(c => {
+          const d = distanceToUser(myLat, myLng, c.location);
+          return d == null || d <= maxDist;
+        });
+      }
     }
 
     if (!candidates.length) {
@@ -511,17 +519,6 @@ function calculateCulturalScore(me, other) {
   total += genScore;
 
   return { totalScore: total, maxScore: 100, breakdown };
-}
-
-function calculateDistance(coords1, coords2) {
-  const [lon1, lat1] = coords1;
-  const [lon2, lat2] = coords2;
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return Math.round(R * c * 10) / 10;
 }
 
 module.exports = router;

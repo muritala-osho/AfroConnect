@@ -45,6 +45,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { Audio, Video, ResizeMode } from "expo-av";
 import { useApi } from "@/hooks/useApi";
+import { KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
 import { getApiBaseUrl } from "@/constants/config";
@@ -52,6 +53,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/context/UnreadContext";
+import { VerificationBadge } from "@/components/VerificationBadge";
+import SwipeableMessage from "@/components/chat/SwipeableMessage";
+import WavyWaveform from "@/components/chat/WavyWaveform";
+import { Message, MessageReaction } from "@/types/chat";
+import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
+import logger from "@/utils/logger";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -66,290 +73,7 @@ interface ChatDetailScreenProps {
   route: ChatDetailScreenRouteProp;
 }
 
-interface MessageReaction {
-  user: string | { _id: string };
-  emoji: string;
-}
 
-interface Message {
-  _id: string;
-  sender: string | { _id: string };
-  content?: string;
-  text?: string;
-  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply";
-  imageUrl?: string;
-  videoUrl?: string;
-  audioUrl?: string;
-  latitude?: number;
-  longitude?: number;
-  address?: string;
-  createdAt: string;
-  status?: "sent" | "delivered" | "seen";
-  replyTo?: {
-    messageId: string;
-    content: string;
-    type: string;
-    senderName: string;
-  };
-  deletedForEveryone?: boolean;
-  deletedFor?: string[];
-  reactions?: MessageReaction[];
-  viewOnce?: boolean;
-  viewOnceOpenedBy?: string[];
-  edited?: boolean;
-  editedAt?: string;
-  storyReaction?: {
-    storyId: string;
-    emoji?: string;
-    storyType?: string;
-    storyPreview?: string;
-  };
-}
-
-const EMOJI_LIST = [
-  "😀","😂","😍","🥰","😘","🤗","😊","🙂","😉","😎","🤩","🥳","😋","🤤",
-  "😜","🤪","😏","😌","😓","😪","🤒","😷",
-  "🤕","🤢","🤮","🥵","🥶","😱","😨","😰","😥","😢","😭","😤","😠","🤬",
-  "😈","👿","💀","☠️","💩","🤡","👹","👺","👻","👽","👾","🤖","🎃","😺",
-  "😸","😹","😻","😼","😽","🙀","😿","😾","❤️","🧡","💛","💚","💙","💜",
-  "🖤","🤍","🤎","💓","💕","💕","💞","💓","💗","💖","💘","💑","💎",
-  "👍","🙌","🤝","✌️","🤟","🤘","🤙","👋","🖖","✋","👌","🤌",
-  "🔥","✨","⭐","🎈","🎀",
-  "🏆","🥇","🥈","🥉",
-];
-
-const REPORT_REASONS = [
-  { id: "inappropriate", label: "Inappropriate Content", icon: "alert-circle" },
-  { id: "harassment", label: "Harassment or Bullying", icon: "user-x" },
-  { id: "spam", label: "Spam or Scam", icon: "mail" },
-  { id: "fake", label: "Fake Profile", icon: "user-check" },
-  { id: "underage", label: "Underage User", icon: "shield-off" },
-  { id: "other", label: "Other", icon: "more-horizontal" },
-];
-
-const CHAT_THEMES = [
-  { id: "default", name: "Default", image: null },
-  { id: "luxury", name: "Luxury", image: require("@/assets/chat-themes/afroconnect_luxury.png") },
-  { id: "blue_doodle", name: "Blue Doodle", image: require("@/assets/chat-themes/theme-blue-doodle.png") },
-  { id: "cats", name: "Cats", image: require("@/assets/chat-themes/theme_cats.png") },
-  { id: "dark_doodle", name: "Dark Doodle", image: require("@/assets/chat-themes/theme-dark-doodle.png") },
-  { id: "dots", name: "Dots", image: require("@/assets/chat-themes/theme-dots.png") },
-  { id: "geometry", name: "Geometry", image: require("@/assets/chat-themes/theme-geometry.jpg") },
-  { id: "hearts_outline", name: "Hearts Outline", image: require("@/assets/chat-themes/theme_hearts_outline.png") },
-  { id: "hearts_purple", name: "Hearts Purple", image: require("@/assets/chat-themes/theme_hearts_purple.png") },
-  { id: "light_doodle", name: "Light Doodle", image: require("@/assets/chat-themes/theme-light-doodle.png") },
-  { id: "love_dark", name: "Love Dark", image: require("@/assets/chat-themes/theme_love_dark.png") },
-  { id: "love_pink", name: "Love Pink", image: require("@/assets/chat-themes/theme_love_pink.png") },
-  { id: "magic", name: "Magic", image: require("@/assets/chat-themes/theme-magic.jpg") },
-  { id: "rainbow", name: "Rainbow", image: require("@/assets/chat-themes/theme-rainbow.png") },
-  { id: "sky_doodle", name: "Sky Doodle", image: require("@/assets/chat-themes/theme-sky-doodle.png") },
-  { id: "valentine_black", name: "Valentine Black", image: require("@/assets/chat-themes/theme_valentine_black.png") },
-];
-
-const AI_SUGGESTIONS = [
-  "Hey! How's your day going? 😊",
-  "I love your profile! What are your hobbies?",
-  "What's your favorite thing to do on weekends?",
-  "I noticed we have similar interests! Tell me more about yourself",
-  "You seem really interesting! What do you do for fun?",
-  "Hi there! What made you swipe right on me? 😄",
-  "I'd love to get to know you better!",
-  "What's the best trip you've ever taken?",
-];
-
-
-const SwipeableMessage = React.memo(
-  ({
-    item,
-    isMe,
-    children,
-    onReply,
-    themeTextSecondary,
-  }: {
-    item: Message;
-    isMe: boolean;
-    children: React.ReactNode;
-    onReply: (item: Message) => void;
-    themeTextSecondary: string;
-  }) => {
-    const translateX = useRef(new Animated.Value(0)).current;
-    const itemRef = useRef(item);
-    const onReplyRef = useRef(onReply);
-    itemRef.current = item;
-    onReplyRef.current = onReply;
-
-    const panResponder = useRef(
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gestureState) => {
-          return (
-            Math.abs(gestureState.dx) > 10 &&
-            Math.abs(gestureState.dy) < 10 &&
-            gestureState.dx < 0
-          );
-        },
-        onPanResponderMove: (_, gestureState) => {
-          if (gestureState.dx < 0) {
-            translateX.setValue(Math.max(gestureState.dx, -80));
-          }
-        },
-        onPanResponderRelease: (_, gestureState) => {
-          if (gestureState.dx < -50) {
-            onReplyRef.current(itemRef.current);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }).start();
-        },
-      }),
-    ).current;
-
-    return (
-      <View style={{ overflow: "hidden" }}>
-        <View
-          style={{
-            position: "absolute",
-            right: isMe ? undefined : 8,
-            left: isMe ? 8 : undefined,
-            top: 0,
-            bottom: 0,
-            justifyContent: "center",
-          }}
-        >
-          <Feather name="corner-up-left" size={20} color={themeTextSecondary} />
-        </View>
-        <Animated.View
-          style={{ transform: [{ translateX }] }}
-          {...panResponder.panHandlers}
-        >
-          {children}
-        </Animated.View>
-      </View>
-    );
-  },
-);
-
-
-const WAVEFORM_HEIGHTS = [
-  0.3, 0.5, 0.8, 0.6, 1.0, 0.7, 0.4, 0.9, 0.5, 0.7,
-  1.0, 0.6, 0.4, 0.8, 0.5, 0.9, 0.6, 0.3, 0.7, 0.5,
-  0.8, 1.0, 0.4, 0.6, 0.9, 0.5, 0.7, 0.3, 0.8, 0.6,
-];
-
-const WavyWaveform = ({
-  isPlaying,
-  progress,
-  isMe,
-  theme,
-  duration,
-}: {
-  isPlaying: boolean;
-  progress: number;
-  isMe: boolean;
-  theme: any;
-  duration?: number;
-}) => {
-  const BAR_COUNT = 30;
-  const [animations] = useState(() =>
-    WAVEFORM_HEIGHTS.slice(0, BAR_COUNT).map((h) => new Animated.Value(h)),
-  );
-  const loopsRef = useRef<Animated.CompositeAnimation[]>([]);
-
-  useEffect(() => {
-    if (isPlaying) {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = animations.map((anim, i) => {
-        const baseH = WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length];
-        const loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(anim, {
-              toValue: baseH * (0.3 + Math.random() * 0.7) + 0.4,
-              duration: 200 + (i % 5) * 60,
-              useNativeDriver: false,
-            }),
-            Animated.timing(anim, {
-              toValue: baseH * 0.6,
-              duration: 180 + (i % 4) * 50,
-              useNativeDriver: false,
-            }),
-          ]),
-        );
-        loop.start();
-        return loop;
-      });
-    } else {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = [];
-      animations.forEach((anim, i) => {
-        Animated.spring(anim, {
-          toValue: WAVEFORM_HEIGHTS[i % WAVEFORM_HEIGHTS.length],
-          useNativeDriver: false,
-          tension: 60,
-          friction: 8,
-        }).start();
-      });
-    }
-    return () => {
-      loopsRef.current.forEach((l) => l.stop());
-      loopsRef.current = [];
-    };
-  }, [isPlaying]);
-
-  const formatDuration = (secs?: number) => {
-    if (!secs) return "";
-    const m = Math.floor(secs / 60);
-    const s = Math.round(secs % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
-  return (
-    <View style={{ flex: 1 }}>
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          height: 28,
-          gap: 2,
-          flex: 1,
-          overflow: "hidden",
-        }}
-      >
-        {animations.map((anim, i) => {
-          const barProgress = i / BAR_COUNT;
-          const isActive = barProgress <= progress;
-          const isPast = progress > 0 && barProgress < progress;
-          return (
-            <Animated.View
-              key={i}
-              style={{
-                width: 3,
-                borderRadius: 2,
-                height: anim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [3, 22],
-                }),
-                backgroundColor: isPast || isActive
-                  ? isMe ? "rgba(255,255,255,0.95)" : theme.primary
-                  : isMe ? "rgba(255,255,255,0.35)" : theme.border + "AA",
-              }}
-            />
-          );
-        })}
-      </View>
-      {duration !== undefined && duration > 0 && (
-        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
-          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
-            {progress > 0 ? formatDuration(progress * duration) : "0:00"}
-          </ThemedText>
-          <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
-            {formatDuration(duration)}
-          </ThemedText>
-        </View>
-      )}
-    </View>
-  );
-};
 
 
 export default function ChatDetailScreen({
@@ -395,6 +119,7 @@ export default function ChatDetailScreen({
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [reportTargetMessage, setReportTargetMessage] = useState<Message | null>(null);
 
   const [chatTheme, setChatTheme] = useState<string>("default");
   const [isRecording, setIsRecording] = useState(false);
@@ -427,6 +152,16 @@ export default function ChatDetailScreen({
   const [openedViewOnceIds, setOpenedViewOnceIds] = useState<Set<string>>(new Set());
   const [viewOnceViewerActive, setViewOnceViewerActive] = useState(false);
   const viewOnceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const [viewOnceCountdown, setViewOnceCountdown] = useState(10);
+  const viewOnceCountdownRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  /* Clean up view-once timers on unmount */
+  useEffect(() => {
+    return () => {
+      if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+      if (viewOnceCountdownRef.current) clearInterval(viewOnceCountdownRef.current);
+    };
+  }, []);
 
   
   const setViewOnceModeSync = (val: boolean | ((prev: boolean) => boolean)) => {
@@ -435,7 +170,6 @@ export default function ChatDetailScreen({
     setViewOnceMode(next);
   };
 
-  // Load draft + saved translation language on mount
   useEffect(() => {
     const loadDraft = async () => {
       if (!userId) return;
@@ -447,7 +181,7 @@ export default function ChatDetailScreen({
         if (savedDraft) setMessage(savedDraft);
         if (savedLang) setSavedTranslateLang(savedLang);
       } catch (error) {
-        console.error("Failed to load draft:", error);
+        logger.error("Failed to load draft:", error);
       }
     };
     loadDraft();
@@ -463,31 +197,26 @@ export default function ChatDetailScreen({
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
-  // Keep matchId accessible in screenshot callback without stale closure
   const matchIdRef = useRef<string | null>(null);
 
   const [typingDotAnim1] = useState(new Animated.Value(0));
   const [typingDotAnim2] = useState(new Animated.Value(0));
   const [typingDotAnim3] = useState(new Animated.Value(0));
-  // FIX: only declared once here â€” was also incorrectly inside WavyWaveform
   const [recordingPulse] = useState(new Animated.Value(1));
 
   useFocusEffect(
     useCallback(() => {
-      // Tell the UnreadContext that the user is viewing a chat — suppress badge counting
       setChatScreenOpen(true);
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 300);
       return () => {
         clearTimeout(timer);
-        // User left the chat screen — badge counting can resume
         setChatScreenOpen(false);
       };
     }, [])
   );
 
-  // Typing dots animation
   useEffect(() => {
     if (isTyping) {
       const createDotAnimation = (anim: Animated.Value, delay: number) =>
@@ -509,7 +238,6 @@ export default function ChatDetailScreen({
     }
   }, [isTyping]);
 
-  // Recording pulse animation
   useEffect(() => {
     if (isRecording) {
       const pulse = Animated.loop(
@@ -523,49 +251,44 @@ export default function ChatDetailScreen({
     }
   }, [isRecording]);
 
-  // Track keyboard visibility — removes bottom-inset gap and scrolls to latest message
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
     const showSub = Keyboard.addListener(showEvent, () => {
       setIsKeyboardVisible(true);
       if (Platform.OS === "android") {
-        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
       }
     });
     const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
 
-  // Web keyboard
   useEffect(() => {
     if (Platform.OS !== "web") return;
     const vv = typeof window !== "undefined" ? (window as any).visualViewport : null;
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
     };
     vv.addEventListener("resize", handleResize);
     vv.addEventListener("scroll", handleResize);
     return () => { vv.removeEventListener("resize", handleResize); vv.removeEventListener("scroll", handleResize); };
   }, []);
 
-  // Load chat theme
   useEffect(() => {
     AsyncStorage.getItem(`chat_theme_${userId}`)
       .then((v) => { if (v) setChatTheme(v); })
       .catch(() => {});
   }, [userId]);
 
-  // Screenshot protection
   useEffect(() => {
     let subscription: ScreenCapture.Subscription | null = null;
     const setupListener = async () => {
       if (Platform.OS !== "web") {
         try {
           subscription = ScreenCapture.addScreenshotListener(async () => {
-            // Only notify if protection is OFF (if it's ON, screenshot is already blocked by OS)
             if (!screenshotProtection && matchIdRef.current && token) {
               const systemMsg = {
                 _id: `screenshot_${Date.now()}`,
@@ -586,15 +309,13 @@ export default function ChatDetailScreen({
             await ScreenCapture.allowScreenCaptureAsync();
           }
         } catch (e) {
-          console.log("Screenshot listener error:", e);
+          logger.log("Screenshot listener error:", e);
         }
       }
     };
     setupListener();
     return () => {
       if (subscription) subscription.remove();
-      // Only lift the protection on cleanup if it is NOT enabled.
-      // When protection is ON it should remain active app-wide even after navigating away.
       if (Platform.OS !== "web" && !screenshotProtection) {
         try { ScreenCapture.allowScreenCaptureAsync(); } catch (e) {}
       }
@@ -683,7 +404,6 @@ export default function ChatDetailScreen({
     navigation.setOptions({ headerShown: false });
   }, [navigation]);
 
-  // â”€â”€â”€ Load chat â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const loadChat = useCallback(async () => {
     if (!token) return;
     setLoading(true);
@@ -711,7 +431,6 @@ export default function ChatDetailScreen({
             if (otherUser.lastActive) setLastSeenDate(new Date(otherUser.lastActive));
           }
 
-          // FIX: load ALL messages with high limit
           const messagesResponse = await get<{ messages: Message[]; pagination: any }>(
             `/chat/${mId}?limit=1000`,
             token,
@@ -725,12 +444,11 @@ export default function ChatDetailScreen({
             }
           }
 
-          // Mark all as read on open
           put(`/chat/${mId}/read`, {}, token).catch(() => {});
         }
       }
     } catch (error) {
-      console.error("Chat load error:", error);
+      logger.error("Chat load error:", error);
     } finally {
       setLoading(false);
     }
@@ -740,7 +458,6 @@ export default function ChatDetailScreen({
     loadChat();
   }, [loadChat]);
 
-  // Load older messages when user scrolls to top
   const loadMoreMessages = useCallback(async () => {
     if (!matchId || !token || loadingMore || !hasMoreMessages) return;
     setLoadingMore(true);
@@ -759,13 +476,12 @@ export default function ChatDetailScreen({
         }
       }
     } catch (error) {
-      console.error("Load more error:", error);
+      logger.error("Load more error:", error);
     } finally {
       setLoadingMore(false);
     }
   }, [matchId, token, loadingMore, hasMoreMessages, messageSkip, get]);
 
-  // â”€â”€â”€ Socket listeners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   useEffect(() => {
     if (!matchId) return;
 
@@ -773,7 +489,6 @@ export default function ChatDetailScreen({
     socketService.joinChat(matchId);
     socketService.markMessagesRead({ chatId: matchId, userId: myId });
 
-    // â”€â”€ New message â”€â”€
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;
@@ -786,17 +501,13 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
 
-      // Since we are actively in the chat, immediately mark as read
-      // This makes ticks turn blue on sender's side without them refreshing
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
       DeviceEventEmitter.emit("chat:read-local", matchId);
     };
 
-    // â”€â”€ Delivered: sender's single tick â†’ double grey tick â”€â”€
-    // FIX: this listener was completely missing in the original
     const handleMessageDelivered = (data: any) => {
       if (!data.messageId) return;
       setMessages((prev) =>
@@ -808,16 +519,10 @@ export default function ChatDetailScreen({
       );
     };
 
-    // â”€â”€ Read receipt: double grey â†’ double blue â”€â”€
-    // FIX: removed the dangerous `|| (!msgMatchId && !readByUserId)` fallthrough
-    // FIX: works for ALL users not just premium (the backend now emits for everyone)
     const handleMessagesRead = (data: any) => {
       const msgMatchId = data.matchId || data.chatId || data.roomId;
       const readByUserId = data.userId || data.readBy;
 
-      // Only process read receipts from the OTHER user.
-      // When we open the chat, the server emits userId === myId.
-      // We ignore that  our own read action must not flip our sent messages to "seen".
       if (!readByUserId || String(readByUserId) === String(myId)) return;
 
       const matchesByRoom = msgMatchId && msgMatchId === matchId;
@@ -827,7 +532,6 @@ export default function ChatDetailScreen({
       setMessages((prev) =>
         prev.map((m) => {
           const senderId = typeof m.sender === "string" ? m.sender : m.sender?._id;
-          // Only upgrade MY sent messages, never downgrade
           if (String(senderId) === String(myId) && m.status !== "seen") {
             return { ...m, status: "seen" };
           }
@@ -912,7 +616,6 @@ export default function ChatDetailScreen({
     };
   }, [matchId, userId, myId, token, put]);
 
-  // â”€â”€â”€ Send message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const sendMessage = async (content?: string, type: string = "text", extraData?: any) => {
     const textToSend = content || message.trim();
     if (!textToSend && type === "text") return;
@@ -947,7 +650,7 @@ export default function ChatDetailScreen({
     };
     setMessages((prev) => [...prev, tempMessage]);
     setReplyingTo(null);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
 
     try {
       const response = await post<{ message: Message }>(
@@ -956,15 +659,20 @@ export default function ChatDetailScreen({
         token,
       );
       if (response.success && response.data?.message) {
-        // FIX: preserve "sent" status on replace â€” socket events will upgrade it
         setMessages((prev) =>
           prev.map((m) =>
-            m._id === tempMessage._id ? { ...response.data!.message, status: "sent" } : m,
+            m._id === tempMessage._id
+              ? {
+                  ...response.data!.message,
+                  status: "sent",
+                  ...(tempMessage.viewOnce ? { viewOnce: true } : {}),
+                }
+              : m,
           ),
         );
       }
     } catch (error) {
-      console.error("Send error:", error);
+      logger.error("Send error:", error);
       setMessages((prev) => prev.filter((m) => m._id !== tempMessage._id));
       Alert.alert("Error", "Failed to send message");
     } finally {
@@ -976,13 +684,45 @@ export default function ChatDetailScreen({
 
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
-    // Optimistic update — mark as viewed immediately so placeholder shows right away
     setOpenedViewOnceIds(prev => new Set(prev).add(messageId));
-    // Fire-and-forget API call in background
     fetch(`${getApiBaseUrl()}/api/chat/messages/${messageId}/view-once`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    }).catch(e => console.error("View once mark error:", e));
+    }).catch(e => logger.error("View once mark error:", e));
+  };
+
+  /** Start the 10-second view-once countdown and handle auto-close. */
+  const startViewOnceCountdown = (onClose: () => void) => {
+    if (Platform.OS !== "web" && !screenshotProtection) {
+      try { ScreenCapture.preventScreenCaptureAsync(); } catch (_) {}
+    }
+    if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
+    if (viewOnceCountdownRef.current) clearInterval(viewOnceCountdownRef.current);
+    setViewOnceCountdown(10);
+    let remaining = 10;
+    viewOnceCountdownRef.current = setInterval(() => {
+      remaining -= 1;
+      setViewOnceCountdown(remaining);
+      if (remaining <= 0 && viewOnceCountdownRef.current) {
+        clearInterval(viewOnceCountdownRef.current);
+        viewOnceCountdownRef.current = null;
+      }
+    }, 1000);
+    viewOnceTimerRef.current = setTimeout(() => {
+      onClose();
+      viewOnceTimerRef.current = null;
+    }, 10000);
+  };
+
+  /** Stop the countdown and re-allow screenshots (unless global protection is on). */
+  const stopViewOnceCountdown = () => {
+    if (viewOnceTimerRef.current) { clearTimeout(viewOnceTimerRef.current); viewOnceTimerRef.current = null; }
+    if (viewOnceCountdownRef.current) { clearInterval(viewOnceCountdownRef.current); viewOnceCountdownRef.current = null; }
+    if (Platform.OS !== "web" && !screenshotProtection) {
+      try { ScreenCapture.allowScreenCaptureAsync(); } catch (_) {}
+    }
+    setViewOnceViewerActive(false);
+    setViewOnceCountdown(10);
   };
 
   const handleTypingIndicator = useCallback(() => {
@@ -993,7 +733,6 @@ export default function ChatDetailScreen({
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
 
-  // â”€â”€â”€ Media pickers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -1018,7 +757,7 @@ export default function ChatDetailScreen({
           if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
       } catch (error) {
-        console.error("Image upload error:", error);
+        logger.error("Image upload error:", error);
         Alert.alert("Error", "Failed to upload image. Check your connection.");
       }
     }
@@ -1047,7 +786,7 @@ export default function ChatDetailScreen({
           if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
         } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
       } catch (error) {
-        console.error("Video upload error:", error);
+        logger.error("Video upload error:", error);
         Alert.alert("Error", "Failed to upload video. Check your connection.");
       }
     }
@@ -1097,7 +836,6 @@ export default function ChatDetailScreen({
     }
   };
 
-  // â”€â”€â”€ Recording â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const startRecording = async () => {
     if (Platform.OS === "web") { Alert.alert("Not Supported", "Voice recording is only available in the mobile app"); return; }
     if (isRecording || recordingRef.current) return;
@@ -1124,7 +862,7 @@ export default function ChatDetailScreen({
       }, 1000);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } catch (error) {
-      console.error("Recording error:", error);
+      logger.error("Recording error:", error);
       recordingRef.current = null;
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
       Alert.alert("Error", "Could not start recording. Please try again.");
@@ -1160,7 +898,7 @@ export default function ChatDetailScreen({
           if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
           else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
         } catch (error) {
-          console.error("Voice upload error:", error);
+          logger.error("Voice upload error:", error);
           Alert.alert("Error", "Failed to upload voice message");
         }
       } else if (uri && duration < 1) {
@@ -1170,7 +908,7 @@ export default function ChatDetailScreen({
       recordingDurationRef.current = 0;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (error) {
-      console.error("Stop recording error:", error);
+      logger.error("Stop recording error:", error);
       setIsRecording(false);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
@@ -1190,14 +928,13 @@ export default function ChatDetailScreen({
       } else {
         recordingRef.current = null;
       }
-    } catch (error) { console.log("Cancel recording cleanup:", error); }
+    } catch (error) { logger.log("Cancel recording cleanup:", error); }
     if (matchId) socketService.emit("chat:recording-voice", { chatId: matchId, userId: myId, isRecording: false });
     setIsRecording(false);
     setRecordingDuration(0);
     recordingDurationRef.current = 0;
   };
 
-  // â”€â”€â”€ Audio playback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const updatePlayingId = (id: string | null) => {
     playingAudioIdRef.current = id;
     setPlayingAudioId(id);
@@ -1221,7 +958,7 @@ export default function ChatDetailScreen({
             if (currentId === messageId && status.isPlaying) { await soundRef.current.pauseAsync(); updatePlayingId("paused:" + messageId); return; }
             if (currentId === "paused:" + messageId && !status.isPlaying) { await soundRef.current.playAsync(); updatePlayingId(messageId); return; }
           }
-        } catch (e) { console.log("Status check error:", e); }
+        } catch (e) { logger.log("Status check error:", e); }
         try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (cleanupErr) {}
         soundRef.current = null;
       }
@@ -1245,7 +982,7 @@ export default function ChatDetailScreen({
           const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
           soundRef.current = sound; updatePlayingId(messageId);
         } catch (expoError) {
-          console.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
+          logger.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
           try {
             const htmlAudio = new window.Audio(audioUrl);
             htmlAudioRef.current = htmlAudio;
@@ -1254,7 +991,7 @@ export default function ChatDetailScreen({
             htmlAudio.onerror = () => { updatePlayingId(null); setAudioProgress(0); Alert.alert("Playback Error", "Could not play this voice message. The audio format may not be supported."); };
             await htmlAudio.play(); updatePlayingId(messageId);
           } catch (htmlError: any) {
-            console.error("HTML5 Audio fallback also failed:", htmlError);
+            logger.error("HTML5 Audio fallback also failed:", htmlError);
             Alert.alert("Playback Error", `Could not play voice message: ${htmlError.message || "Unknown error"}`);
           }
         }
@@ -1265,12 +1002,11 @@ export default function ChatDetailScreen({
       const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
       soundRef.current = sound; updatePlayingId(messageId);
     } catch (error: any) {
-      console.error("Audio playback error for URL:", audioUrl, error);
+      logger.error("Audio playback error for URL:", audioUrl, error);
       Alert.alert("Playback Error", `Could not play voice message: ${error.message || "Unknown error"}`);
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
@@ -1284,7 +1020,6 @@ export default function ChatDetailScreen({
     };
   }, []);
 
-  // â”€â”€â”€ Save media â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const saveImage = async (imageUrl: string) => {
     try {
       if (Platform.OS === "web") { const link = document.createElement("a"); link.href = imageUrl; link.download = `afroconnect_${Date.now()}.jpg`; link.target = "_blank"; link.click(); return; }
@@ -1294,7 +1029,7 @@ export default function ChatDetailScreen({
       try { const { status } = await MediaLibrary.requestPermissionsAsync(); if (status === "granted") { await MediaLibrary.saveToLibraryAsync(downloadResult.uri); Alert.alert("Saved", "Image saved to your gallery."); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; } } catch (_permError) {}
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(downloadResult.uri, { mimeType: "image/jpeg", dialogTitle: "Save Image" }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
       else Alert.alert("Error", "Cannot save images in this environment. Try a development build.");
-    } catch (error) { console.error("Save image error:", error); Alert.alert("Error", "Could not save image."); }
+    } catch (error) { logger.error("Save image error:", error); Alert.alert("Error", "Could not save image."); }
   };
 
   const saveVideo = async (url: string) => {
@@ -1306,17 +1041,15 @@ export default function ChatDetailScreen({
       try { const { status } = await MediaLibrary.requestPermissionsAsync(); if (status === "granted") { await MediaLibrary.saveToLibraryAsync(downloadResult.uri); Alert.alert("Saved!", "Video saved to your gallery"); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); return; } } catch (_permError) {}
       if (await Sharing.isAvailableAsync()) { await Sharing.shareAsync(downloadResult.uri, { mimeType: "video/mp4", dialogTitle: "Save Video" }); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); }
       else Alert.alert("Error", "Cannot save videos in this environment. Try a development build.");
-    } catch (error) { console.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
+    } catch (error) { logger.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
-  // â”€â”€â”€ AI suggestions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const fetchAISuggestions = useCallback(() => {
     setShowAISuggestions(true);
     const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
     setAiSuggestions(shuffled);
   }, []);
 
-  // â”€â”€â”€ Block / Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleBlockUser = async () => {
     setShowOptionsMenu(false);
     Alert.alert("Block User", `Are you sure you want to block ${userName}? They won't be able to contact you anymore.`, [
@@ -1332,7 +1065,6 @@ export default function ChatDetailScreen({
     ]);
   };
 
-  // â”€â”€â”€ Message actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleMessageLongPress = useCallback((msg: Message) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedMessage(msg);
@@ -1459,7 +1191,7 @@ export default function ChatDetailScreen({
         ));
       }
     } catch (e) {
-      console.error('React error:', e);
+      logger.error('React error:', e);
     }
     setSelectedMessage(null);
   }, [selectedMessage, matchId, token, post]);
@@ -1468,13 +1200,30 @@ export default function ChatDetailScreen({
     if (!selectedReportReason) { Alert.alert("Select Reason", "Please select a reason for reporting"); return; }
     setSubmittingReport(true);
     try {
-      const response = await post("/reports", { reportedUserId: userId, reason: selectedReportReason, description: reportDetails, matchId }, token || "");
-      if (response.success) { setShowReportModal(false); setSelectedReportReason(null); setReportDetails(""); Alert.alert("Report Submitted", "Thank you for your report. Our team will review it shortly."); }
+      const payload: any = { reportedUserId: userId, reason: selectedReportReason, description: reportDetails, matchId };
+      if (reportTargetMessage) {
+        payload.contentId = reportTargetMessage._id;
+        if (reportTargetMessage.type === "image" && reportTargetMessage.imageUrl) {
+          payload.contentType = "message_image";
+          payload.contentUrl = reportTargetMessage.imageUrl;
+          payload.contentPreview = reportTargetMessage.content || "Reported image message";
+        } else if (reportTargetMessage.type === "audio") {
+          payload.contentType = "message_audio";
+          payload.contentPreview = "Voice message";
+        } else if (reportTargetMessage.type === "video") {
+          payload.contentType = "message_video";
+          payload.contentPreview = "Video message";
+        } else {
+          payload.contentType = "message_text";
+          payload.contentPreview = reportTargetMessage.content || reportTargetMessage.text || "Text message";
+        }
+      }
+      const response = await post("/reports", payload, token || "");
+      if (response.success) { setShowReportModal(false); setSelectedReportReason(null); setReportDetails(""); setReportTargetMessage(null); Alert.alert("Report Submitted", "Thank you for your report. Our team will review it shortly."); }
     } catch (error) { Alert.alert("Error", "Failed to submit report. Please try again."); }
     finally { setSubmittingReport(false); }
   };
 
-  // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   const formatDateHeader = (dateStr: string) => {
@@ -1494,13 +1243,19 @@ export default function ChatDetailScreen({
 
   type EnrichedMessage = Message & { _showDateHeader: boolean };
 
-  const enrichedMessages = useMemo<EnrichedMessage[]>(
-    () =>
-      messages.map((msg, index) => ({
-        ...msg,
-        _showDateHeader: shouldShowDateHeader(msg, index > 0 ? messages[index - 1] : null),
-      })),
-    [messages],
+  const enrichedMessages = useMemo<EnrichedMessage[]>(() => {
+    const sorted = [...messages].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+    return sorted.map((msg, index) => ({
+      ...msg,
+      _showDateHeader: shouldShowDateHeader(msg, index > 0 ? sorted[index - 1] : null),
+    }));
+  }, [messages]);
+
+  const invertedMessages = useMemo(
+    () => [...enrichedMessages].reverse(),
+    [enrichedMessages],
   );
 
   const formatRecordingTime = (seconds: number) => {
@@ -1512,19 +1267,19 @@ export default function ChatDetailScreen({
   const handleSwipeReply = useCallback((item: Message) => setReplyingTo(item), []);
 
   const scrollToMessage = useCallback((messageId: string) => {
-    const index = messages.findIndex(m => m._id === messageId);
-    if (index === -1) return;
+    const originalIndex = enrichedMessages.findIndex(m => m._id === messageId);
+    if (originalIndex === -1) return;
+    const invertedIndex = enrichedMessages.length - 1 - originalIndex;
     try {
-      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      flatListRef.current?.scrollToIndex({ index: invertedIndex, animated: true, viewPosition: 0.5 });
     } catch {
-      flatListRef.current?.scrollToEnd({ animated: true });
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     }
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     setHighlightedMessageId(messageId);
     highlightTimeoutRef.current = setTimeout(() => setHighlightedMessageId(null), 1500);
-  }, [messages]);
+  }, [enrichedMessages]);
 
-  // â”€â”€â”€ Render message â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const renderMessage = useCallback(
     ({ item }: { item: EnrichedMessage }) => {
       const senderId = typeof item.sender === "string" ? item.sender : item.sender?._id;
@@ -1631,7 +1386,15 @@ export default function ChatDetailScreen({
 
                     {item.type === "image" && item.imageUrl && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
-                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      const isViewedByMe = openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && isSender) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.10)' }]}>
+                            <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.7)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: 'rgba(255,255,255,0.75)' }]}>View once photo sent</ThemedText>
+                          </View>
+                        );
+                      }
                       if (item.viewOnce && !isSender && isViewedByMe) {
                         return (
                           <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
@@ -1647,11 +1410,10 @@ export default function ChatDetailScreen({
                               handleMarkViewOnce(item._id);
                               setViewOnceViewerActive(true);
                               setViewingImage(item.imageUrl!);
-                              if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
-                              viewOnceTimerRef.current = setTimeout(() => {
+                              startViewOnceCountdown(() => {
                                 setViewingImage(null);
-                                setViewOnceViewerActive(false);
-                              }, 10000);
+                                stopViewOnceCountdown();
+                              });
                             }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
                             <ThemedText style={[styles.viewOnceLabel, { color: theme.primary }]}>Tap to view (once)</ThemedText>
@@ -1659,24 +1421,25 @@ export default function ChatDetailScreen({
                         );
                       }
                       return (
-                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={!item.viewOnce ? () => saveImage(item.imageUrl!) : undefined}>
-                          {item.viewOnce && isSender && (
-                            <View style={styles.viewOnceSenderBadge}>
-                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
-                            </View>
-                          )}
+                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={() => saveImage(item.imageUrl!)}>
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                          {!item.viewOnce && (
-                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                              <Ionicons name="download-outline" size={16} color="#FFF" />
-                            </Pressable>
-                          )}
+                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                            <Ionicons name="download-outline" size={16} color="#FFF" />
+                          </Pressable>
                         </Pressable>
                       );
                     })()}
                     {item.type === "video" && (item.videoUrl || item.imageUrl) && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
-                      const isViewedByMe = isSender || openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      const isViewedByMe = openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
+                      if (item.viewOnce && isSender) {
+                        return (
+                          <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.10)' }]}>
+                            <Ionicons name="eye-outline" size={20} color="rgba(255,255,255,0.7)" />
+                            <ThemedText style={[styles.viewOnceLabel, { color: 'rgba(255,255,255,0.75)' }]}>View once video sent</ThemedText>
+                          </View>
+                        );
+                      }
                       if (item.viewOnce && !isSender && isViewedByMe) {
                         return (
                           <View style={[styles.viewOncePlaceholder, { backgroundColor: 'rgba(0,0,0,0.08)' }]}>
@@ -1694,11 +1457,10 @@ export default function ChatDetailScreen({
                                 handleMarkViewOnce(item._id);
                                 setViewOnceViewerActive(true);
                                 setViewingVideo(url);
-                                if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current);
-                                viewOnceTimerRef.current = setTimeout(() => {
+                                startViewOnceCountdown(() => {
                                   setViewingVideo(null);
-                                  setViewOnceViewerActive(false);
-                                }, 10000);
+                                  stopViewOnceCountdown();
+                                });
                               }
                             }}>
                             <Ionicons name="eye-outline" size={22} color={theme.primary} />
@@ -1708,11 +1470,6 @@ export default function ChatDetailScreen({
                       }
                       return (
                         <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
-                          {item.viewOnce && isSender && (
-                            <View style={styles.viewOnceSenderBadge}>
-                              <Ionicons name="eye-outline" size={12} color="rgba(255,255,255,0.9)" />
-                            </View>
-                          )}
                           {failedThumbnails.has(item._id) ? (
                             <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
                               <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
@@ -1850,8 +1607,10 @@ export default function ChatDetailScreen({
                     </View>
                   </View>
 
+                </View>
+
                   {item.reactions && item.reactions.length > 0 && (
-                    <View style={[styles.reactionsRow, isMe ? { alignSelf: 'flex-end', marginRight: 4 } : { alignSelf: 'flex-start', marginLeft: 48 }]}>
+                    <View style={[styles.reactionsRow, isMe ? { alignSelf: 'flex-end', marginRight: 12 } : { alignSelf: 'flex-start', marginLeft: 12 }]}>
                       {(() => {
                         const grouped: Record<string, number> = {};
                         (item.reactions || []).forEach(r => { grouped[r.emoji] = (grouped[r.emoji] || 0) + 1; });
@@ -1871,21 +1630,19 @@ export default function ChatDetailScreen({
                       })()}
                     </View>
                   )}
-                </View>
               </Pressable>
             </SwipeableMessage>
           )}
         </View>
       );
     },
-    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds],
   );
 
   const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);
   const currentTheme = CHAT_THEMES.find((t) => t.id === chatTheme);
   const photoSource = getPhotoSource(userPhoto);
 
-  // â”€â”€â”€ Chat body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const chatContent = (
     <>
       {loading ? (
@@ -1895,13 +1652,13 @@ export default function ChatDetailScreen({
       ) : (
         <FlatList
           ref={flatListRef}
-          data={enrichedMessages}
+          data={invertedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
-          extraData={[playingAudioId, audioProgress, highlightedMessageId]}
+          extraData={[playingAudioId, audioProgress, highlightedMessageId, openedViewOnceIds]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          inverted
           initialNumToRender={20}
           maxToRenderPerBatch={10}
           updateCellsBatchingPeriod={50}
@@ -1912,10 +1669,9 @@ export default function ChatDetailScreen({
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 300);
           }}
-          // FIX: load more old messages when user scrolls to top
-          onStartReached={loadMoreMessages}
-          onStartReachedThreshold={0.1}
-          ListHeaderComponent={
+          onEndReached={loadMoreMessages}
+          onEndReachedThreshold={0.1}
+          ListFooterComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 12, alignItems: "center" }}>
                 <ActivityIndicator size="small" color={theme.primary} />
@@ -1966,7 +1722,6 @@ export default function ChatDetailScreen({
     </>
   );
 
-  // â”€â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER */}
@@ -1983,7 +1738,7 @@ export default function ChatDetailScreen({
           <View style={styles.headerInfo}>
             <View style={styles.nameRow}>
               <ThemedText style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>{userName}</ThemedText>
-              {otherUserVerified && <Image source={require("@/assets/icons/verified-tick.png")} style={styles.verifiedBadge} contentFit="contain" />}
+              {otherUserVerified && <VerificationBadge size={14} />}
             </View>
             <ThemedText style={[styles.headerStatus, { color: isOtherRecording ? "#F44336" : isTyping ? theme.primary : isOnline ? "#4CAF50" : theme.textSecondary }]}>
               {getStatusText()}
@@ -1999,7 +1754,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0} enabled={Platform.OS !== "web"}>
+      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
@@ -2120,7 +1875,7 @@ export default function ChatDetailScreen({
             </>
           )}
         </View>
-      </KeyboardAvoidingView>
+      </KAVController>
 
       {/* Attachment modal */}
       <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
@@ -2183,7 +1938,7 @@ export default function ChatDetailScreen({
               <Feather name={isDark ? "sun" : "moon"} size={22} color={theme.text} />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>{isDark ? "Light Mode" : "Dark Mode"}</ThemedText>
             </Pressable>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowReportModal(true); }}>
+            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setReportTargetMessage(null); setShowReportModal(true); }}>
               <Feather name="flag" size={22} color="#FF9800" />
               <ThemedText style={[styles.optionText, { color: theme.text }]}>Report User</ThemedText>
             </Pressable>
@@ -2226,14 +1981,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Report modal */}
-      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
+      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => { setShowReportModal(false); setReportTargetMessage(null); }}>
         <View style={styles.modalOverlay}>
           <View style={[styles.reportModal, { backgroundColor: theme.background }]}>
             <View style={styles.reportHeader}>
-              <ThemedText style={[styles.reportTitle, { color: theme.text }]}>Report {userName}</ThemedText>
-              <Pressable onPress={() => setShowReportModal(false)}><Feather name="x" size={24} color={theme.text} /></Pressable>
+              <ThemedText style={[styles.reportTitle, { color: theme.text }]}>{reportTargetMessage ? "Report Image" : `Report ${userName}`}</ThemedText>
+              <Pressable onPress={() => { setShowReportModal(false); setReportTargetMessage(null); }}><Feather name="x" size={24} color={theme.text} /></Pressable>
             </View>
-            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>Why are you reporting this user?</ThemedText>
+            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>Why are you reporting this {reportTargetMessage ? "image" : "user"}?</ThemedText>
             <ScrollView style={styles.reportReasons}>
               {REPORT_REASONS.map((reason) => (
                 <Pressable key={reason.id} style={[styles.reportReasonItem, selectedReportReason === reason.id && { backgroundColor: theme.primary + "20", borderColor: theme.primary }, { borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} onPress={() => setSelectedReportReason(reason.id)}>
@@ -2252,14 +2007,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
                 <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
               </View>
             </View>
           ) : (
@@ -2272,14 +2027,14 @@ export default function ChatDetailScreen({
       </Modal>
 
       {/* Video viewer */}
-      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}>
+      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); if (viewOnceTimerRef.current) clearTimeout(viewOnceTimerRef.current); setViewOnceViewerActive(false); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
                 <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Auto-closes in 10s</ThemedText>
+                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
               </View>
             </View>
           ) : (
@@ -2335,6 +2090,15 @@ export default function ChatDetailScreen({
                 <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Edit Message</ThemedText>
               </Pressable>
             )}
+            {selectedMessage && (() => {
+              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
+              return String(sid) !== String(myId) && !selectedMessage.deletedForEveryone;
+            })() && (
+              <Pressable style={styles.messageMenuItem} onPress={() => { setReportTargetMessage(selectedMessage); setShowMessageMenu(false); setShowReportModal(true); }}>
+                <Feather name="flag" size={22} color="#F44336" />
+                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Report Message</ThemedText>
+              </Pressable>
+            )}
             <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
               <Feather name="trash-2" size={22} color="#FF9800" />
               <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
@@ -2356,7 +2120,13 @@ export default function ChatDetailScreen({
       <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setEditingMessage(null); }}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <Pressable style={styles.modalOverlay} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
-            <Pressable style={[styles.translateModal, { backgroundColor: theme.background }]} onPress={() => {}}>
+            {/* Plain View with onStartShouldSetResponder stops touches from bubbling
+                to the outer Pressable, so the modal stays open and the TextInput
+                keeps focus on every keystroke (fixes the one-letter-at-a-time bug). */}
+            <View
+              style={[styles.translateModal, { backgroundColor: theme.background }]}
+              onStartShouldSetResponder={() => true}
+            >
               <View style={styles.translateHeader}>
                 <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Edit Message</ThemedText>
                 <Pressable onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
@@ -2392,7 +2162,7 @@ export default function ChatDetailScreen({
                   )}
                 </Pressable>
               </View>
-            </Pressable>
+            </View>
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
@@ -2566,9 +2336,9 @@ const styles = StyleSheet.create<any>({
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
   audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4, marginBottom: 2 },
-  reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3 },
-  reactionEmoji: { fontSize: 14 },
+  reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: -8, marginBottom: 4, zIndex: 2, paddingHorizontal: 4 },
+  reactionBubble: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 3, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 4, elevation: 2 },
+  reactionEmoji: { fontSize: 13 },
   reactionCount: { fontSize: 11, fontWeight: "600" },
   quickReactionBar: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.08)", marginBottom: 4 },
   quickReactionBtn: { padding: 6 },
@@ -2637,7 +2407,6 @@ const styles = StyleSheet.create<any>({
   viewOnceLabel: { fontSize: 13, fontWeight: '600' },
   viewOnceSenderBadge: { position: 'absolute', top: 6, right: 6, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 10, padding: 3 },
   viewOnceToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', marginBottom: 12 },
-  // Persistent chip shown in the input bar while view-once mode is active
   viewOnceChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 14, backgroundColor: 'rgba(255,107,107,0.12)', borderWidth: 1, borderColor: 'rgba(255,107,107,0.3)', marginRight: 4 },
   viewOnceChipText: { fontSize: 11, color: '#FF6B6B', fontWeight: '600' },
   viewOnceToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },

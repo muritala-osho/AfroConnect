@@ -19,7 +19,6 @@ import { Feather } from "@expo/vector-icons";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import * as Haptics from "expo-haptics";
 
-// Hardcoded Emerald Green"#10B981";
 const ACCENT_COLOR = "10B981";
 
 const FONT_SIZES: { label: string; value: FontSizeOption; scale: number }[] = [
@@ -35,7 +34,6 @@ const CHAT_BUBBLE_STYLES: { label: string; value: ChatBubbleStyle }[] = [
 ];
 
 export default function CustomizeInterfaceScreen({ navigation }: any) {
-  // Destructure ONLY what exists in your useTheme hook
   const {
     theme,
     themeMode,
@@ -63,7 +61,6 @@ export default function CustomizeInterfaceScreen({ navigation }: any) {
   const themeOptions: { value: ThemeMode; label: string; icon: string }[] = [
     { value: "light", label: "Light", icon: "sun" },
     { value: "dark", label: "Dark", icon: "moon" },
-    { value: "grey", label: "Grey", icon: "cloud" },
     { value: "system", label: "Auto", icon: "monitor" },
   ];
 
