@@ -24,10 +24,12 @@ class SocketService {
       auth: { token },
       transports: ['polling', 'websocket'],
       reconnection: true,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 2000,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
-      timeout: 10000,
+      // Render free tier can take 50+ seconds to spin up from sleep.
+      // A 10s timeout was giving up before the server was awake.
+      timeout: 60000,
       autoConnect: true,
       forceNew: true,
       query: {
