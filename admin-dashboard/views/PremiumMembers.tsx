@@ -1,0 +1,477 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  Crown, Loader2, RefreshCw, AlertCircle, Search, Apple, Smartphone, Globe, Shield,
+  ChevronLeft, ChevronRight, X, Calendar, RotateCw, AlertTriangle, CheckCircle2, XCircle,
+} from 'lucide-react';
+import { adminApi } from '../services/adminApi';
+
+type PremiumFeatures = {
+  unlimitedSwipes?: boolean; seeWhoLikesYou?: boolean; unlimitedRewinds?: boolean;
+  boostPerMonth?: number; superLikesPerDay?: number; noAds?: boolean;
+  advancedFilters?: boolean; readReceipts?: boolean; priorityMatches?: boolean;
+  incognitoMode?: boolean;
+};
+
+type PremiumMember = {
+  _id: string;
+  name?: string;
+  email?: string;
+  avatar?: string;
+  createdAt?: string;
+  premium?: {
+    isActive?: boolean;
+    plan?: string;
+    source?: 'ios' | 'android' | 'web' | 'admin' | null;
+    productId?: string | null;
+    receipt?: string | null;
+    originalTransactionId?: string | null;
+    purchaseToken?: string | null;
+    environment?: 'Production' | 'Sandbox' | null;
+    activatedAt?: string | null;
+    restoredAt?: string | null;
+    cancelledAt?: string | null;
+    expiresAt?: string | null;
+    autoRenewing?: boolean | null;
+    lastEventType?: string | null;
+    lastEventAt?: string | null;
+    features?: PremiumFeatures;
+  };
+};
+
+type Summary = {
+  totalActive: number; ios: number; android: number; web: number;
+  cancelledButActive: number; autoRenewOff: number;
+};
+
+const SourceIcon: React.FC<{ source?: string | null; size?: number }> = ({ source, size = 14 }) => {
+  if (source === 'ios') return <Apple size={size} className="text-slate-700 dark:text-slate-300" />;
+  if (source === 'android') return <Smartphone size={size} className="text-emerald-600" />;
+  if (source === 'web') return <Globe size={size} className="text-cyan-600" />;
+  if (source === 'admin') return <Shield size={size} className="text-violet-600" />;
+  return <Globe size={size} className="text-slate-400" />;
+};
+
+const fmtDate = (s?: string | null) => {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return '—'; }
+};
+
+const fmtDateTime = (s?: string | null) => {
+  if (!s) return '—';
+  try { return new Date(s).toLocaleString(); }
+  catch { return '—'; }
+};
+
+const daysUntil = (s?: string | null): number | null => {
+  if (!s) return null;
+  const ms = new Date(s).getTime() - Date.now();
+  return Math.ceil(ms / (24 * 60 * 60 * 1000));
+};
+
+const PremiumMembers: React.FC = () => {
+  const [members, setMembers] = useState<PremiumMember[]>([]);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [source, setSource] = useState<string>('');
+  const [plan, setPlan] = useState<string>('');
+  const [status, setStatus] = useState<string>('');
+  const [autoRenew, setAutoRenew] = useState<string>('');
+  const [selected, setSelected] = useState<PremiumMember | null>(null);
+
+  const fetchData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    setError(null);
+    try {
+      const res = await adminApi.getPremiumMembers({
+        page, limit: 25, search: search || undefined,
+        source: source || undefined,
+        plan: plan || undefined,
+        status: status || undefined,
+        autoRenew: autoRenew || undefined,
+      });
+      if (res?.success) {
+        setMembers(res.members || []);
+        setSummary(res.summary || null);
+        setTotal(res.pagination?.total || 0);
+        setPages(res.pagination?.pages || 1);
+      } else {
+        setError(res?.message || 'Failed to load premium members.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load premium members.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, source, plan, status, autoRenew]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => { setPage(1); }, [search, source, plan, status, autoRenew]);
+
+  const onSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput.trim());
+  };
+
+  const filterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; onClear: () => void }> = [];
+    if (search) chips.push({ key: 'search', label: `Search: ${search}`, onClear: () => { setSearch(''); setSearchInput(''); } });
+    if (source) chips.push({ key: 'source', label: `Source: ${source}`, onClear: () => setSource('') });
+    if (plan) chips.push({ key: 'plan', label: `Plan: ${plan}`, onClear: () => setPlan('') });
+    if (status) chips.push({ key: 'status', label: `Status: ${status.replace('_', ' ')}`, onClear: () => setStatus('') });
+    if (autoRenew) chips.push({ key: 'auto', label: `Auto-renew: ${autoRenew}`, onClear: () => setAutoRenew('') });
+    return chips;
+  }, [search, source, plan, status, autoRenew]);
+
+  return (
+    <div className="space-y-6 animate-fadeIn">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Premium Members</h1>
+          <p className="text-gray-500 dark:text-slate-400 font-medium">
+            Live subscription state synced from Apple & Google webhooks
+          </p>
+        </div>
+        <button
+          onClick={() => fetchData(true)}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 transition-all"
+        >
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl text-sm text-rose-700 dark:text-rose-400 font-semibold">
+          <AlertCircle size={18} className="shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[
+          { label: 'Active Total', val: summary?.totalActive ?? '—', icon: <Crown size={18} />, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
+          { label: 'iOS', val: summary?.ios ?? '—', icon: <Apple size={18} />, color: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800' },
+          { label: 'Android', val: summary?.android ?? '—', icon: <Smartphone size={18} />, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { label: 'Cancel Pending', val: summary?.cancelledButActive ?? '—', icon: <AlertTriangle size={18} />, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-500/10' },
+          { label: 'Auto-Renew Off', val: summary?.autoRenewOff ?? '—', icon: <XCircle size={18} />, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
+        ].map((s, i) => (
+          <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center gap-3">
+            <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
+            <div>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.label}</p>
+              <p className="text-lg font-black dark:text-white">{s.val}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 space-y-3">
+        <div className="flex flex-col md:flex-row gap-3">
+          <form onSubmit={onSearchSubmit} className="flex-1 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search name, email, transaction ID, or purchase token…"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
+            />
+          </form>
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
+          >
+            <option value="">All Sources</option>
+            <option value="ios">iOS</option>
+            <option value="android">Android</option>
+            <option value="web">Web</option>
+            <option value="admin">Admin Granted</option>
+          </select>
+          <select
+            value={plan}
+            onChange={(e) => setPlan(e.target.value)}
+            className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
+          >
+            <option value="">All Plans</option>
+            <option value="day">Daily</option>
+            <option value="week">Weekly</option>
+            <option value="month">Monthly</option>
+            <option value="year">Yearly</option>
+            <option value="platinum">Platinum</option>
+          </select>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
+          >
+            <option value="">All Statuses</option>
+            <option value="expiring_soon">Expiring in 7 days</option>
+            <option value="cancelled_active">Cancelled (still active)</option>
+            <option value="expired">Expired</option>
+          </select>
+          <select
+            value={autoRenew}
+            onChange={(e) => setAutoRenew(e.target.value)}
+            className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
+          >
+            <option value="">Any Renewal</option>
+            <option value="true">Auto-renew On</option>
+            <option value="false">Auto-renew Off</option>
+          </select>
+        </div>
+        {filterChips.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {filterChips.map(c => (
+              <span
+                key={c.key}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 text-xs font-bold rounded-full"
+              >
+                {c.label}
+                <button onClick={c.onClear} className="hover:opacity-70"><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+        {loading && members.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24">
+            <Loader2 size={32} className="animate-spin text-cyan-500 mb-4" />
+            <span className="text-sm font-bold text-slate-400">Loading premium members…</span>
+          </div>
+        ) : members.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-24 opacity-60">
+            <Crown size={36} className="text-slate-300 mb-3" />
+            <p className="text-sm font-bold text-slate-400">No premium members match your filters</p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-slate-800/50">
+                  <tr className="text-left text-[10px] font-black uppercase tracking-widest text-gray-400">
+                    <th className="px-5 py-3">Member</th>
+                    <th className="px-5 py-3">Source / Plan</th>
+                    <th className="px-5 py-3">Expires</th>
+                    <th className="px-5 py-3">Auto-Renew</th>
+                    <th className="px-5 py-3">Last Event</th>
+                    <th className="px-5 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                  {members.map(m => {
+                    const days = daysUntil(m.premium?.expiresAt);
+                    const expiringSoon = days !== null && days <= 7 && days >= 0;
+                    const cancelled = !!m.premium?.cancelledAt;
+                    return (
+                      <tr key={m._id} className="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={m.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name || m.email || 'U')}&background=14b8a6&color=fff&bold=true`}
+                              className="h-9 w-9 rounded-xl object-cover"
+                              alt=""
+                            />
+                            <div className="min-w-0">
+                              <p className="font-bold text-gray-900 dark:text-white truncate">{m.name || '—'}</p>
+                              <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{m.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center gap-2">
+                            <SourceIcon source={m.premium?.source} />
+                            <span className="text-xs font-bold text-gray-700 dark:text-slate-200 capitalize">
+                              {m.premium?.source || 'unknown'}
+                            </span>
+                            <span className="text-[10px] text-slate-400">·</span>
+                            <span className="text-xs font-bold text-teal-600 capitalize">
+                              {m.premium?.plan || '—'}
+                            </span>
+                            {m.premium?.environment === 'Sandbox' && (
+                              <span className="ml-1 px-1.5 py-0.5 text-[9px] font-black uppercase bg-amber-100 text-amber-700 rounded">Sandbox</span>
+                            )}
+                          </div>
+                          {m.premium?.productId && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 truncate max-w-[220px]">{m.premium.productId}</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className={`text-xs font-bold ${expiringSoon ? 'text-orange-600' : 'text-gray-700 dark:text-slate-200'}`}>
+                            {fmtDate(m.premium?.expiresAt)}
+                          </p>
+                          {days !== null && days >= 0 && (
+                            <p className="text-[10px] text-slate-400">in {days} day{days === 1 ? '' : 's'}</p>
+                          )}
+                          {days !== null && days < 0 && (
+                            <p className="text-[10px] text-rose-500">expired {Math.abs(days)}d ago</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          {m.premium?.autoRenewing === true ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                              <RotateCw size={10} /> On
+                            </span>
+                          ) : m.premium?.autoRenewing === false ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300">
+                              <XCircle size={10} /> Off
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">unknown</span>
+                          )}
+                          {cancelled && (
+                            <p className="text-[10px] text-orange-500 mt-1">cancel pending</p>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          <p className="text-xs font-bold text-gray-700 dark:text-slate-200 truncate max-w-[180px]">
+                            {m.premium?.lastEventType || '—'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">{fmtDateTime(m.premium?.lastEventAt)}</p>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <button
+                            onClick={() => setSelected(m)}
+                            className="text-xs font-bold text-teal-600 hover:text-teal-700"
+                          >
+                            Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-slate-800">
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                Page {page} of {pages} · {total} member{total === 1 ? '' : 's'}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1 || loading}
+                  className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(pages, p + 1))}
+                  disabled={page >= pages || loading}
+                  className="p-2 rounded-lg border border-gray-200 dark:border-slate-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-slate-800"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Detail drawer */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelected(null)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="relative w-full max-w-md h-full bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex items-start justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-teal-600">Premium Member</p>
+                <h2 className="text-lg font-black dark:text-white">{selected.name || '—'}</h2>
+                <p className="text-xs text-gray-500 dark:text-slate-400">{selected.email}</p>
+              </div>
+              <button onClick={() => setSelected(null)} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-5">
+              <Field label="Source" value={
+                <span className="inline-flex items-center gap-2">
+                  <SourceIcon source={selected.premium?.source} size={14} />
+                  <span className="capitalize">{selected.premium?.source || 'unknown'}</span>
+                  {selected.premium?.environment === 'Sandbox' && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-black uppercase bg-amber-100 text-amber-700 rounded">Sandbox</span>
+                  )}
+                </span>
+              } />
+              <Field label="Plan" value={selected.premium?.plan || '—'} />
+              <Field label="Product ID" mono value={selected.premium?.productId || '—'} />
+              <Field label="Activated" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.activatedAt)} />
+              <Field label="Restored" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.restoredAt)} />
+              <Field label="Expires" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.expiresAt)} />
+              <Field label="Cancelled" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.cancelledAt)} />
+              <Field label="Auto-Renew" value={
+                selected.premium?.autoRenewing === true ? <span className="text-emerald-600 font-bold">On</span> :
+                selected.premium?.autoRenewing === false ? <span className="text-rose-600 font-bold">Off</span> :
+                <span className="text-slate-400">Unknown</span>
+              } />
+              <Field label="Last Event" value={
+                <div>
+                  <p>{selected.premium?.lastEventType || '—'}</p>
+                  <p className="text-[10px] text-slate-400">{fmtDateTime(selected.premium?.lastEventAt)}</p>
+                </div>
+              } />
+              {selected.premium?.originalTransactionId && (
+                <Field label="Apple Original Transaction ID" mono value={selected.premium.originalTransactionId} />
+              )}
+              {selected.premium?.purchaseToken && (
+                <Field label="Google Purchase Token" mono value={selected.premium.purchaseToken} />
+              )}
+
+              <div className="pt-3 border-t border-gray-100 dark:border-slate-800">
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Active Features</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(selected.premium?.features || {}).map(([k, v]) => (
+                    <div key={k} className="flex items-center gap-1.5 text-xs">
+                      {v ? (
+                        <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle size={12} className="text-slate-300 shrink-0" />
+                      )}
+                      <span className={typeof v === 'boolean' ? (v ? 'text-gray-700 dark:text-slate-200' : 'text-slate-400') : 'text-gray-700 dark:text-slate-200'}>
+                        {k}{typeof v === 'number' ? `: ${v}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Field: React.FC<{ label: string; value: React.ReactNode; mono?: boolean; icon?: React.ReactNode }> = ({ label, value, mono, icon }) => (
+  <div>
+    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1 flex items-center gap-1">
+      {icon}{label}
+    </p>
+    <div className={`text-sm text-gray-900 dark:text-slate-100 ${mono ? 'font-mono break-all' : 'font-medium'}`}>
+      {value}
+    </div>
+  </div>
+);
+
+export default PremiumMembers;

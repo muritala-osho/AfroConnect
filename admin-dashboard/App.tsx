@@ -6,6 +6,7 @@ import DashboardHome from './views/DashboardHome';
 import UserManagement from './views/UserManagement';
 import Analytics from './views/Analytics';
 import Payments from './views/Payments';
+import PremiumMembers from './views/PremiumMembers';
 import ReportsQueue from './views/ReportsQueue';
 import SystemSettings from './views/SystemSettings';
 import IDVerification from './views/IDVerification';
@@ -26,7 +27,7 @@ import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'audit'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'audit'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -35,7 +36,7 @@ const BADGE_POLL_MS = 90_000;
 
 const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard', users: 'User Management', analytics: 'Analytics',
-  payments: 'Finances & Revenue', reports: 'Safety Reports', content: 'Content Moderation',
+  payments: 'Finances & Revenue', premium: 'Premium Members', reports: 'Safety Reports', content: 'Content Moderation',
   support: 'Support Desk', agent: 'My Tickets', settings: 'System Settings',
   verification: 'Verification Requests', 'revoke-verification': 'Revoke Verified Badge',
   broadcasts: 'Broadcasts', appeals: 'Appeals',
@@ -430,6 +431,7 @@ const App: React.FC = () => {
                 {activeTab === 'users'        && canAccessTab('users')        && <UserManagement showToast={showToast} />}
                 {activeTab === 'analytics'    && canAccessTab('analytics')    && <Analytics />}
                 {activeTab === 'payments'     && canAccessTab('payments')     && <Payments />}
+                {activeTab === 'premium'      && canAccessTab('premium')      && <PremiumMembers />}
                 {activeTab === 'reports'      && canAccessTab('reports')      && <ReportsQueue showToast={showToast} />}
                 {activeTab === 'content'      && canAccessTab('content')      && <ContentModeration showToast={showToast} />}
                 {activeTab === 'support'      && canAccessTab('support')      && <SupportDesk showToast={showToast} />}

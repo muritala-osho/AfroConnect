@@ -50,6 +50,7 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   Broadcasts: send push notifications to segmented user groups.
     *   Support Desk: centralized system for managing support tickets, with agent assignment and chat interface.
     *   Payments & Revenue tracking.
+    *   Premium Members panel: per-user subscription state from `GET /admin/premium-members` showing source (iOS/Android/web/admin), plan, expiry, days-remaining, auto-renew status, last webhook event, transaction identifiers, and active feature flags. Filters by source, plan, status (expiring soon / cancelled-but-active / expired), auto-renew, plus search by name/email/transaction ID/purchase token.
     *   Dynamic content and user data, removing all mock data for production-ready administration.
 
 ## External Dependencies
