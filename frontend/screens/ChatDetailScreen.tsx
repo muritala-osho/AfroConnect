@@ -1948,13 +1948,26 @@ export default function ChatDetailScreen({
                       </View>
                     )}
 
-                    {item.type === "gif" && (item.gifUrl || item.gifPreview) && (() => {
-                      const gifSrc = item.gifUrl || item.gifPreview!;
+                    {item.type === "gif" && (() => {
+                      const gifSrc = item.gifUrl || item.gifPreview || "";
                       const aspect = item.gifWidth && item.gifHeight ? item.gifWidth / item.gifHeight : 1;
                       const gifW = 220;
                       const gifH = Math.max(120, Math.min(280, gifW / aspect));
                       const isFailed = (item as any).status === "failed";
                       const isSending = (item as any).status === "sending";
+                      if (!gifSrc) {
+                        return (
+                          <View style={[styles.messageImage, { width: gifW, height: 140, alignItems: "center", justifyContent: "center", backgroundColor: isMe ? "rgba(255,255,255,0.12)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }]}>
+                            <Ionicons name="image-outline" size={32} color={isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary} />
+                            <ThemedText style={{ marginTop: 6, fontSize: 12, color: isMe ? "rgba(255,255,255,0.75)" : theme.textSecondary }}>
+                              GIF unavailable
+                            </ThemedText>
+                            <View style={styles.gifBadge}>
+                              <ThemedText style={styles.gifBadgeText}>GIF</ThemedText>
+                            </View>
+                          </View>
+                        );
+                      }
                       return (
                         <Pressable
                           onPress={() => {
@@ -2291,7 +2304,7 @@ export default function ChatDetailScreen({
                       );
                     })()}
 
-                    {messageText && item.type !== "audio" && item.type !== "location" ? (
+                    {messageText && item.type !== "audio" && item.type !== "location" && item.type !== "gif" ? (
                       <ThemedText style={[styles.messageText, { color: isMe ? "#FFF" : theme.text }]}>{messageText}</ThemedText>
                     ) : null}
 
