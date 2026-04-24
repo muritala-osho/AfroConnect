@@ -21,6 +21,8 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   Notification services (FCM for Android, APNs VoIP for iOS) for calls and general push notifications.
     *   Support ticket system with agent assignment.
     *   Live location updates and daily matching algorithms.
+    *   In-app purchase (IAP) endpoints: `POST /subscription/validate-receipt` and `POST /subscription/restore-purchases` for Google Play / Apple IAP receipt validation. Server-side validation uses `GOOGLE_SERVICE_ACCOUNT_JSON` (Android) and `APPLE_IAP_SHARED_SECRET` (iOS); falls back to trusting client if credentials are absent.
+    *   Translation caching (in-memory, 24h TTL, 500-entry LRU) with graceful MYMEMORY WARNING detection returning user-friendly 429 responses.
 
 **2. Frontend (Expo / React Native):**
 *   **Stack**: Expo, React Native, TypeScript.
@@ -58,3 +60,5 @@ AfroConnect is built as a monorepo containing three distinct applications:
 *   **`react-native-callkeep`**: Integrates with iOS CallKit and Android ConnectionService for native call handling.
 *   **`react-native-voip-push-notification`**: For iOS PushKit VoIP token registration and handling.
 *   **`lottie-react-native`**: For rendering animated UI elements, particularly in the guided verification flow.
+*   **`react-native-iap`**: Handles in-app purchases (Google Play Billing / Apple StoreKit). Dynamically loaded in `iapService.ts` — if it fails to load, the Premium screen shows a "Coming Soon" message with graceful fallback.
+*   **`@shopify/flash-list`**: High-performance list rendering used in chat message lists and conversation lists as a FlatList replacement.

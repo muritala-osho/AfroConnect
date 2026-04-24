@@ -71,6 +71,7 @@ export default function PremiumScreen({ navigation }: any) {
   
   const [selectedTier, setSelectedTier] = useState<PriceTier>(PRICING_TIERS[2]);
   const [processing, setProcessing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [iapReady, setIapReady] = useState(false);
   const [storePrices, setStorePrices] = useState<Record<string, { localizedPrice: string; currency: string }>>({});
@@ -192,6 +193,45 @@ export default function PremiumScreen({ navigation }: any) {
     const stored = storePrices[tier.id];
     if (stored?.localizedPrice) return stored.localizedPrice;
     return formatPrice(tier.amount, tier.currency);
+  };
+
+  const handleRestore = async () => {
+    if (!token) {
+      Alert.alert('Login Required', 'Please log in to restore your purchases.');
+      return;
+    }
+    if (Platform.OS === 'web') {
+      Alert.alert('Mobile Only', 'Purchases can only be restored on the iOS or Android app.');
+      return;
+    }
+    if (!iapReady) {
+      Alert.alert('Unavailable', 'In-app purchases are not available on this device.');
+      return;
+    }
+
+    setRestoring(true);
+    try {
+      const { receipt, productId } = await iapService.restorePurchases();
+      if (!receipt) {
+        Alert.alert('No Purchases Found', 'We could not find any previous purchases to restore. If you believe this is an error, please contact support.');
+        return;
+      }
+      const response = await post<{ subscription?: any }>(
+        '/subscription/restore-purchases',
+        { platform: Platform.OS === 'ios' ? 'ios' : 'android', receipt, productId },
+        token
+      );
+      if (response.success) {
+        setIsActive(true);
+        Alert.alert('Purchases Restored!', 'Your Premium subscription has been restored successfully.');
+      } else {
+        Alert.alert('Restore Failed', response.message || 'Could not restore your purchase. Please try again.');
+      }
+    } catch (error: any) {
+      Alert.alert('Restore Failed', 'Something went wrong. Please try again or contact support.');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleSubscribe = async () => {
@@ -399,6 +439,20 @@ export default function PremiumScreen({ navigation }: any) {
             <Text style={styles.termsText}>
               By subscribing, you agree to our Terms of Service. Cancel anytime.
             </Text>
+
+            {Platform.OS !== 'web' && !isActive && (
+              <TouchableOpacity
+                onPress={handleRestore}
+                disabled={restoring || processing}
+                style={styles.restoreButton}
+              >
+                {restoring ? (
+                  <ActivityIndicator size="small" color="rgba(255,255,255,0.6)" />
+                ) : (
+                  <Text style={styles.restoreText}>Restore Purchases</Text>
+                )}
+              </TouchableOpacity>
+            )}
           </LinearGradient>
         </View>
       </SafeAreaView>
@@ -696,5 +750,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
+  },
+  restoreButton: {
+    alignSelf: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    marginTop: 4,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  restoreText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    textDecorationLine: 'underline',
   },
 });

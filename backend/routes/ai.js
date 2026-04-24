@@ -3,6 +3,27 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 
+// In-memory translation cache: key = "text|sourceLang|targetLang", value = { result, ts }
+const translationCache = new Map();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_MAX_SIZE = 500;
+
+function getCached(key) {
+  const entry = translationCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > CACHE_TTL_MS) { translationCache.delete(key); return null; }
+  return entry.result;
+}
+
+function setCache(key, result) {
+  if (translationCache.size >= CACHE_MAX_SIZE) {
+    // Evict oldest entry
+    const firstKey = translationCache.keys().next().value;
+    translationCache.delete(firstKey);
+  }
+  translationCache.set(key, { result, ts: Date.now() });
+}
+
 const LANG_NAME_TO_CODE = {
   'english': 'en', 'french': 'fr', 'spanish': 'es', 'portuguese': 'pt', 'arabic': 'ar',
   'swahili': 'sw', 'amharic': 'am', 'yoruba': 'yo', 'hausa': 'ha', 'igbo': 'ig',
@@ -56,29 +77,56 @@ router.post('/translate', protect, async (req, res) => {
       if (resolved) sourceCode = resolved;
     }
 
-    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=${sourceCode}|${targetCode}`;
+    const normalizedText = text.trim().substring(0, 500);
+    const cacheKey = `${normalizedText}|${sourceCode}|${targetCode}`;
+
+    // Serve from cache if available (avoids burning rate limit quota)
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return res.json({ success: true, translatedText: cached, fromCache: true });
+    }
+
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(normalizedText)}&langpair=${sourceCode}|${targetCode}`;
     let data;
     try {
       const response = await fetch(url);
       data = await response.json();
     } catch (fetchErr) {
       console.error('MyMemory fetch error:', fetchErr);
-      return res.status(502).json({ success: false, message: 'Translation service is temporarily unavailable.' });
+      return res.status(502).json({ success: false, message: 'Translation temporarily unavailable, try again later.' });
     }
 
-    if (data.responseData?.translatedText) {
-      let translatedText = data.responseData.translatedText;
+    // Detect daily rate limit warning — MyMemory embeds the warning in the translated text
+    const rawTranslated = data.responseData?.translatedText || '';
+    const isRateLimit =
+      rawTranslated.toUpperCase().includes('MYMEMORY WARNING') ||
+      (data.responseStatus && String(data.responseStatus) === '429') ||
+      (data.responseDetails && data.responseDetails.toUpperCase().includes('MYMEMORY WARNING'));
+
+    if (isRateLimit) {
+      console.warn('[Translation] MyMemory daily limit reached');
+      return res.status(429).json({ success: false, message: 'Translation limit reached for today. Please try again tomorrow.' });
+    }
+
+    if (rawTranslated) {
+      let translatedText = rawTranslated;
+      // If match confidence is low, look for a higher-quality match in the matches array
       if (data.responseData.match < 0.5 && data.matches && data.matches.length > 1) {
         const betterMatch = data.matches.find(m => m.translation && m.quality && parseInt(m.quality) > 50);
         if (betterMatch) translatedText = betterMatch.translation;
       }
+      setCache(cacheKey, translatedText);
       res.json({ success: true, translatedText });
     } else {
-      res.status(400).json({ success: false, message: data.responseDetails || 'Translation failed' });
+      const detail = data.responseDetails || '';
+      const userMsg = detail.toUpperCase().includes('MYMEMORY') || detail.toUpperCase().includes('WARNING')
+        ? 'Translation temporarily unavailable, try again later.'
+        : 'Translation failed. Please try again.';
+      res.status(400).json({ success: false, message: userMsg });
     }
   } catch (error) {
     console.error('Translation error:', error);
-    res.status(500).json({ success: false, message: 'Translation failed' });
+    res.status(500).json({ success: false, message: 'Translation failed. Please try again.' });
   }
 });
 

@@ -187,6 +187,28 @@ const addErrorListener = (callback: (error: any) => void) => {
   return () => subscription.remove();
 };
 
+const restorePurchases = async (): Promise<{ receipt: string | null; productId: string | null }> => {
+  if (!isIAPAvailable || !iapModule) return { receipt: null, productId: null };
+  try {
+    const history = await iapModule.getPurchaseHistory();
+    if (!Array.isArray(history) || history.length === 0) return { receipt: null, productId: null };
+
+    // Find the most recent premium subscription purchase
+    const premiumPurchases = history
+      .filter((p: any) => p.productId?.startsWith('afroconnect_premium'))
+      .sort((a: any, b: any) => Number(b.transactionDate || 0) - Number(a.transactionDate || 0));
+
+    if (premiumPurchases.length === 0) return { receipt: null, productId: null };
+
+    const latest = premiumPurchases[0];
+    const receipt = Platform.OS === 'ios' ? latest.transactionReceipt : latest.purchaseToken;
+    return { receipt: receipt || null, productId: latest.productId || null };
+  } catch (error) {
+    logger.log('Failed to restore purchases:', error);
+    return { receipt: null, productId: null };
+  }
+};
+
 export const iapService = {
   PRODUCT_IDS,
   SUBSCRIPTION_SKUS,
@@ -195,6 +217,7 @@ export const iapService = {
   getCachedPrice,
   requestSubscription,
   getPurchaseHistory,
+  restorePurchases,
   finishTransaction,
   endConnection,
   addPurchaseListener,

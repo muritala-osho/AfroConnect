@@ -275,4 +275,98 @@ router.post('/validate-receipt', protect, async (req, res) => {
   }
 });
 
+router.post('/restore-purchases', protect, async (req, res) => {
+  try {
+    const { platform, receipt, productId } = req.body;
+
+    if (!platform || !['android', 'ios'].includes(platform)) {
+      return res.status(400).json({ success: false, message: 'Invalid platform. Must be "android" or "ios".' });
+    }
+    if (!receipt) {
+      return res.status(400).json({ success: false, message: 'Receipt is required.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    let validationResult;
+    if (platform === 'ios') {
+      validationResult = await validateAppleReceipt(receipt);
+    } else {
+      const pid = productId || 'afroconnect_premium_monthly';
+      validationResult = await validateGoogleReceipt(receipt, pid);
+    }
+
+    if (!validationResult.valid) {
+      return res.status(402).json({ success: false, message: 'No valid purchase found to restore.' });
+    }
+
+    if (validationResult.skipped) {
+      logger.warn(`[IAP Restore] Server-side validation skipped for ${platform} — credentials not configured.`);
+    }
+
+    // For iOS: check in_app receipts for most recent active subscription
+    let resolvedProductId = productId || 'afroconnect_premium_monthly';
+    if (platform === 'ios' && validationResult.data?.receipt?.in_app) {
+      const inAppPurchases = validationResult.data.receipt.in_app;
+      const latest = inAppPurchases
+        .filter((p) => p.product_id && p.product_id.startsWith('afroconnect_premium'))
+        .sort((a, b) => Number(b.purchase_date_ms) - Number(a.purchase_date_ms))[0];
+      if (latest) resolvedProductId = latest.product_id;
+    }
+
+    const intervalMap = {
+      'afroconnect_premium_daily': 'day',
+      'afroconnect_premium_weekly': 'week',
+      'afroconnect_premium_monthly': 'month',
+      'afroconnect_premium_yearly': 'year'
+    };
+    const interval = intervalMap[resolvedProductId] || 'month';
+    const durationMs = {
+      day: 24 * 60 * 60 * 1000,
+      week: 7 * 24 * 60 * 60 * 1000,
+      month: 30 * 24 * 60 * 60 * 1000,
+      year: 365 * 24 * 60 * 60 * 1000
+    };
+
+    await User.findByIdAndUpdate(user._id, {
+      'premium.isActive': true,
+      'premium.plan': interval,
+      'premium.source': platform,
+      'premium.restoredAt': new Date(),
+      'premium.expiresAt': new Date(Date.now() + durationMs[interval]),
+      'premium.receipt': receipt,
+      'premium.productId': resolvedProductId,
+      'premium.features': {
+        unlimitedSwipes: true,
+        seeWhoLikesYou: true,
+        unlimitedRewinds: true,
+        boostPerMonth: 10,
+        superLikesPerDay: 10,
+        noAds: true,
+        advancedFilters: true,
+        readReceipts: true,
+        priorityMatches: true,
+        incognitoMode: true
+      }
+    });
+
+    logger.log(`[IAP Restore] Premium restored for user ${user._id} via ${platform}`);
+
+    res.json({
+      success: true,
+      message: 'Purchase restored successfully',
+      subscription: {
+        isActive: true,
+        plan: interval,
+        source: platform,
+        features: PREMIUM_INFO.features
+      }
+    });
+  } catch (error) {
+    logger.error('Restore purchase error:', error);
+    res.status(500).json({ success: false, message: 'Failed to restore purchase. Please try again.' });
+  }
+});
+
 module.exports = router;
