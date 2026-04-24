@@ -78,9 +78,11 @@ export default function StoryUploadScreen({
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: type === 'image' ? ['images'] : ['videos'],
-        quality: 0.8,
+        quality: 0.6,
         allowsEditing: true,
         aspect: [9, 16],
+        videoMaxDuration: 30,
+        exif: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -109,9 +111,11 @@ export default function StoryUploadScreen({
 
     try {
       const result = await ImagePicker.launchCameraAsync({
-        quality: 0.8,
+        quality: 0.6,
         allowsEditing: true,
         aspect: [9, 16],
+        videoMaxDuration: 30,
+        exif: false,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -203,23 +207,10 @@ export default function StoryUploadScreen({
 
       if (response.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        
-        if (user) {
-          const newStory = response.data?.story || {
-            _id: Date.now().toString(),
-            ...storyData,
-            createdAt: new Date().toISOString()
-          };
-        }
-
-        await AsyncStorage.setItem('@story_posted', Date.now().toString());
-        Alert.alert("Posted!", `Your story is now live for ${durationInt} hours!`, [
-          { text: "OK", onPress: () => {
-            AsyncStorage.setItem('@story_posted', Date.now().toString()).then(() => {
-              navigation.goBack();
-            });
-          }},
-        ]);
+        // Fire-and-forget the marker write so we don't block navigation.
+        AsyncStorage.setItem('@story_posted', Date.now().toString()).catch(() => {});
+        // Close immediately for a snappy feel — no blocking modal.
+        navigation.goBack();
       } else {
         throw new Error(response.message || "Failed to create story");
       }
