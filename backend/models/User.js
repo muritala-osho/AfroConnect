@@ -579,7 +579,19 @@ const userSchema = new mongoose.Schema({
       incognitoMode: { type: Boolean, default: false },
       voiceNoteLimit: { type: Number, default: 30 }, 
       unsendLimit: { type: Number, default: 15 } 
-    }
+    },
+    source: { type: String, enum: ['ios', 'android', 'web', 'admin', null], default: null },
+    productId: { type: String, default: null },
+    receipt: { type: String, default: null },
+    originalTransactionId: { type: String, default: null, index: true },
+    purchaseToken: { type: String, default: null, index: true },
+    environment: { type: String, enum: ['Production', 'Sandbox', null], default: null },
+    activatedAt: { type: Date, default: null },
+    restoredAt: { type: Date, default: null },
+    cancelledAt: { type: Date, default: null },
+    autoRenewing: { type: Boolean, default: null },
+    lastEventType: { type: String, default: null },
+    lastEventAt: { type: Date, default: null }
   },
   countryOfOrigin: {
     type: String,

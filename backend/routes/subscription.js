@@ -6,6 +6,21 @@ const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
 const { sendPremiumConfirmationEmail } = require('../utils/emailService');
+const { applyAppleNotification, applyGoogleNotification } = require('../services/iapWebhookService');
+
+function extractAppleOriginalTransactionId(validationData) {
+  if (!validationData) return null;
+  const inApp = validationData.receipt?.in_app;
+  if (Array.isArray(inApp) && inApp.length) {
+    const sorted = [...inApp].sort((a, b) => Number(b.purchase_date_ms || 0) - Number(a.purchase_date_ms || 0));
+    return sorted[0].original_transaction_id || null;
+  }
+  const latest = validationData.latest_receipt_info;
+  if (Array.isArray(latest) && latest.length) {
+    return latest[0].original_transaction_id || null;
+  }
+  return null;
+}
 
 const PREMIUM_INFO = {
   name: 'AfroConnect Premium',
@@ -232,7 +247,7 @@ router.post('/validate-receipt', protect, async (req, res) => {
       year: 365 * 24 * 60 * 60 * 1000
     };
 
-    await User.findByIdAndUpdate(user._id, {
+    const update = {
       'premium.isActive': true,
       'premium.plan': interval,
       'premium.source': platform,
@@ -240,6 +255,7 @@ router.post('/validate-receipt', protect, async (req, res) => {
       'premium.expiresAt': new Date(Date.now() + durationMs[interval]),
       'premium.receipt': receipt,
       'premium.productId': productId,
+      'premium.autoRenewing': true,
       'premium.features': {
         unlimitedSwipes: true,
         seeWhoLikesYou: true,
@@ -252,7 +268,16 @@ router.post('/validate-receipt', protect, async (req, res) => {
         priorityMatches: true,
         incognitoMode: true
       }
-    });
+    };
+    if (platform === 'android') {
+      update['premium.purchaseToken'] = receipt;
+    } else if (platform === 'ios') {
+      const otId = extractAppleOriginalTransactionId(validationResult.data);
+      if (otId) update['premium.originalTransactionId'] = otId;
+      if (validationResult.data?.environment) update['premium.environment'] = validationResult.data.environment;
+    }
+
+    await User.findByIdAndUpdate(user._id, update);
 
     logger.log(`Premium activated for user ${user._id} via ${platform} in-app purchase`);
 
@@ -329,7 +354,7 @@ router.post('/restore-purchases', protect, async (req, res) => {
       year: 365 * 24 * 60 * 60 * 1000
     };
 
-    await User.findByIdAndUpdate(user._id, {
+    const restoreUpdate = {
       'premium.isActive': true,
       'premium.plan': interval,
       'premium.source': platform,
@@ -337,6 +362,7 @@ router.post('/restore-purchases', protect, async (req, res) => {
       'premium.expiresAt': new Date(Date.now() + durationMs[interval]),
       'premium.receipt': receipt,
       'premium.productId': resolvedProductId,
+      'premium.autoRenewing': true,
       'premium.features': {
         unlimitedSwipes: true,
         seeWhoLikesYou: true,
@@ -349,7 +375,16 @@ router.post('/restore-purchases', protect, async (req, res) => {
         priorityMatches: true,
         incognitoMode: true
       }
-    });
+    };
+    if (platform === 'android') {
+      restoreUpdate['premium.purchaseToken'] = receipt;
+    } else if (platform === 'ios') {
+      const otId = extractAppleOriginalTransactionId(validationResult.data);
+      if (otId) restoreUpdate['premium.originalTransactionId'] = otId;
+      if (validationResult.data?.environment) restoreUpdate['premium.environment'] = validationResult.data.environment;
+    }
+
+    await User.findByIdAndUpdate(user._id, restoreUpdate);
 
     logger.log(`[IAP Restore] Premium restored for user ${user._id} via ${platform}`);
 
@@ -366,6 +401,46 @@ router.post('/restore-purchases', protect, async (req, res) => {
   } catch (error) {
     logger.error('Restore purchase error:', error);
     res.status(500).json({ success: false, message: 'Failed to restore purchase. Please try again.' });
+  }
+});
+
+// Apple App Store Server Notifications V2
+// Apple POSTs { signedPayload: <JWS> }. No JWT auth — verified via the signed payload.
+router.post('/webhook/apple', async (req, res) => {
+  try {
+    const signedPayload = req.body?.signedPayload;
+    if (!signedPayload || typeof signedPayload !== 'string') {
+      logger.warn('[Apple Webhook] Missing signedPayload');
+      return res.status(400).json({ success: false });
+    }
+    const result = await applyAppleNotification(signedPayload);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    logger.error('[Apple Webhook] Handler error:', err.message);
+    // Always 200 so Apple does not retry on parse-time bugs once acknowledged.
+    return res.status(200).json({ success: false, error: 'handler_error' });
+  }
+});
+
+// Google Real-Time Developer Notifications (RTDN) via Pub/Sub push.
+// Body shape: { message: { data: <base64-json>, ... }, subscription: <name> }.
+// Optional shared-secret protection via ?token= matching GOOGLE_RTDN_TOKEN.
+router.post('/webhook/google', async (req, res) => {
+  try {
+    const expectedToken = process.env.GOOGLE_RTDN_TOKEN;
+    if (expectedToken) {
+      const provided = req.query.token || req.headers['x-rtdn-token'];
+      if (provided !== expectedToken) {
+        logger.warn('[Google Webhook] Rejected: bad or missing shared token');
+        return res.status(401).json({ success: false });
+      }
+    }
+    const result = await applyGoogleNotification(req.body);
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    logger.error('[Google Webhook] Handler error:', err.message);
+    // Pub/Sub retries on non-2xx; respond 200 to avoid storms once we've parsed.
+    return res.status(200).json({ success: false, error: 'handler_error' });
   }
 });
 

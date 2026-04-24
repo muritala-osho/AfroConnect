@@ -21,7 +21,8 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   Notification services (FCM for Android, APNs VoIP for iOS) for calls and general push notifications.
     *   Support ticket system with agent assignment.
     *   Live location updates and daily matching algorithms.
-    *   In-app purchase (IAP) endpoints: `POST /subscription/validate-receipt` and `POST /subscription/restore-purchases` for Google Play / Apple IAP receipt validation. Server-side validation uses `GOOGLE_SERVICE_ACCOUNT_JSON` (Android) and `APPLE_IAP_SHARED_SECRET` (iOS); falls back to trusting client if credentials are absent.
+    *   In-app purchase (IAP) endpoints: `POST /subscription/validate-receipt` and `POST /subscription/restore-purchases` for Google Play / Apple IAP receipt validation. Server-side validation uses `GOOGLE_SERVICE_ACCOUNT_JSON` (Android) and `APPLE_IAP_SHARED_SECRET` (iOS); falls back to trusting client if credentials are absent. Both endpoints persist `premium.originalTransactionId` (iOS) and `premium.purchaseToken` (Android) so subscription lifecycle webhooks can locate the user.
+    *   Subscription lifecycle webhooks: `POST /subscription/webhook/apple` accepts Apple App Store Server Notifications V2 (`{ signedPayload }` JWS, ES256 leaf-cert verified by default; disable with `APPLE_WEBHOOK_VERIFY_SIGNATURE=false`). `POST /subscription/webhook/google` accepts Google Play Real-Time Developer Notifications via Pub/Sub push (`{ message: { data: base64-json } }`); optionally protected by `GOOGLE_RTDN_TOKEN` query/header. Handlers map renew/cancel/expire/refund/grace events to `User.premium` state via `services/iapWebhookService.js`.
     *   Translation caching (in-memory, 24h TTL, 500-entry LRU) with graceful MYMEMORY WARNING detection returning user-friendly 429 responses.
 
 **2. Frontend (Expo / React Native):**
