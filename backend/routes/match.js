@@ -341,7 +341,12 @@ router.get('/second-chance', protect, async (req, res) => {
       return res.json({ success: true, profiles: [] });
     }
 
-    const profiles = await User.find({ _id: { $in: eligibleIds } })
+    const profiles = await User.find({
+      _id: { $in: eligibleIds },
+      // Exclude users who have enabled Incognito Mode — they should not
+      // surface in any discovery / suggestion feed.
+      'privacySettings.incognitoMode': { $ne: true },
+    })
       .select('name age bio photos interests verified location lifestyle gender');
 
     const processedProfiles = profiles.map(p => {
@@ -473,6 +478,8 @@ router.get('/daily-match', protect, async (req, res) => {
       emailVerified: true,
       'photos.0': { $exists: true },
       age: { $gte: me.preferences?.ageRange?.min || 18, $lte: me.preferences?.ageRange?.max || 60 },
+      // Hide users in Incognito Mode from the daily match suggestion pool.
+      'privacySettings.incognitoMode': { $ne: true },
       ...genderFilter
     }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(60);
 

@@ -102,6 +102,8 @@ router.get('/nearby-users', protect, discoveryLimiter, async (req, res) => {
       _id: { $ne: req.user.id, $nin: excludedIds },
       banned: { $ne: true },
       suspended: { $ne: true },
+      // Users with Incognito Mode on must not appear on the radar feed.
+      'privacySettings.incognitoMode': { $ne: true },
       $or: [
         { 'location.coordinates': { $exists: true, $ne: [0, 0] } },
         { 'location.lat': { $exists: true } }
