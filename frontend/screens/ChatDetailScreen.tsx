@@ -62,6 +62,7 @@ import WavyWaveform from "@/components/chat/WavyWaveform";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
 import logger from "@/utils/logger";
+import { rememberSentGif, getCachedGifsForIds } from "@/utils/sentGifsCache";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
 import GifPicker, { GifResult } from "@/components/chat/GifPicker";
 
@@ -555,7 +556,40 @@ export default function ChatDetailScreen({
             token,
           );
           if (messagesResponse.success && messagesResponse.data) {
-            setMessages(messagesResponse.data.messages || []);
+            const fetched = messagesResponse.data.messages || [];
+            // Recover GIF URLs that may have been stripped server-side by older
+            // backend versions, using our local sent-GIFs cache (best effort).
+            try {
+              const gifIdsMissingUrl = fetched
+                .filter((m: any) => m && m.type === "gif" && !m.gifUrl && !m.gifPreview)
+                .map((m: any) => String(m._id));
+              if (gifIdsMissingUrl.length) {
+                const cached = await getCachedGifsForIds(gifIdsMissingUrl);
+                if (Object.keys(cached).length) {
+                  const merged = fetched.map((m: any) => {
+                    const c = cached[String(m._id)];
+                    if (m && m.type === "gif" && c && !m.gifUrl) {
+                      return {
+                        ...m,
+                        gifUrl: c.gifUrl,
+                        gifPreview: c.gifPreview || c.gifUrl,
+                        gifWidth: m.gifWidth || c.gifWidth,
+                        gifHeight: m.gifHeight || c.gifHeight,
+                        gifSource: m.gifSource || c.gifSource,
+                      };
+                    }
+                    return m;
+                  });
+                  setMessages(merged);
+                } else {
+                  setMessages(fetched);
+                }
+              } else {
+                setMessages(fetched);
+              }
+            } catch {
+              setMessages(fetched);
+            }
             const pagination = messagesResponse.data.pagination;
             if (pagination) {
               setHasMoreMessages(pagination.hasMore);
@@ -780,7 +814,9 @@ export default function ChatDetailScreen({
       content: textToSend,
       type: type as any,
       createdAt: new Date().toISOString(),
-      status: "sent",
+      // GIFs use a "sending" status so the bubble shows a loading spinner
+      // until the server confirms the send (other types keep prior behaviour).
+      status: type === "gif" ? "sending" : "sent",
       ...(replyData ? { replyTo: replyData } : {}),
       ...extraData,
     };
@@ -795,27 +831,39 @@ export default function ChatDetailScreen({
         token,
       );
       if (response.success && response.data?.message) {
+        const serverMsg = response.data!.message as any;
         setMessages((prev) =>
           prev.map((m) =>
             m._id === tempMessage._id
               ? {
-                  ...response.data!.message,
+                  ...serverMsg,
                   status: "sent",
                   ...(tempMessage.viewOnce ? { viewOnce: true } : {}),
                   // Preserve media fields locally if the server response
                   // doesn't echo them back (e.g. older deployed backend).
                   ...(type === "gif" ? {
                     type: "gif",
-                    gifUrl: (response.data!.message as any).gifUrl || (tempMessage as any).gifUrl,
-                    gifPreview: (response.data!.message as any).gifPreview || (tempMessage as any).gifPreview,
-                    gifWidth: (response.data!.message as any).gifWidth || (tempMessage as any).gifWidth,
-                    gifHeight: (response.data!.message as any).gifHeight || (tempMessage as any).gifHeight,
-                    gifSource: (response.data!.message as any).gifSource || (tempMessage as any).gifSource,
+                    gifUrl: serverMsg.gifUrl || (tempMessage as any).gifUrl,
+                    gifPreview: serverMsg.gifPreview || (tempMessage as any).gifPreview,
+                    gifWidth: serverMsg.gifWidth || (tempMessage as any).gifWidth,
+                    gifHeight: serverMsg.gifHeight || (tempMessage as any).gifHeight,
+                    gifSource: serverMsg.gifSource || (tempMessage as any).gifSource,
                   } : {}),
                 }
               : m,
           ),
         );
+        // Persist the sent GIF locally keyed by server message id so it
+        // survives chat reopen even if backend strips gif fields on read.
+        if (type === "gif" && serverMsg?._id && (extraData as any)?.gifUrl) {
+          rememberSentGif(String(serverMsg._id), {
+            gifUrl: (extraData as any).gifUrl,
+            gifPreview: (extraData as any).gifPreview,
+            gifWidth: (extraData as any).gifWidth,
+            gifHeight: (extraData as any).gifHeight,
+            gifSource: (extraData as any).gifSource,
+          }).catch(() => {});
+        }
         return response.data.message;
       }
     } catch (error) {

@@ -14,6 +14,7 @@ import { useApi } from "@/hooks/useApi";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { getPhotoSource } from "@/utils/photos";
+import { getCachedStories, setCachedStories } from "@/utils/storyCache";
 import * as Haptics from "expo-haptics";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -93,16 +94,33 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
 
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
+
     const fetchStories = async () => {
+      const isOwn = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id) || (route.params as any)?.isOwnStory === true;
+
+      // Show cached stories instantly so the viewer opens fast,
+      // then fetch fresh data in the background.
       try {
-        setLoading(true);
-        const isOwn = String(userId) === String(user?.id) || String(userId) === String((user as any)?._id) || (route.params as any)?.isOwnStory === true;
+        const cached = await getCachedStories<Story[]>(String(userId));
+        if (!cancelled && cached && cached.length > 0) {
+          setStories(cached);
+          setLoading(false);
+        } else if (!cancelled) {
+          setLoading(true);
+        }
+      } catch {
+        if (!cancelled) setLoading(true);
+      }
+
+      try {
         const endpoint = isOwn ? `/stories/my-stories` : `/stories/user/${userId}`;
         const response = await get<{ stories: Story[]; message?: string }>(endpoint, token);
-        
+        if (cancelled) return;
         if (response.success && response.data?.stories) {
           const fetchedStories = response.data.stories;
           setStories(fetchedStories);
+          setCachedStories(String(userId), fetchedStories).catch(() => {});
           if (fetchedStories.length > 0) {
             markStoryViewed(fetchedStories[0]._id);
           }
@@ -114,6 +132,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           }
         }
       } catch (error: any) {
+        if (cancelled) return;
         console.error("Error fetching stories:", error);
         if (userId === user?.id) {
           setStories([]);
@@ -122,11 +141,12 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           setAccessMessage("You need to match with this user to view their stories");
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchStories();
+    return () => { cancelled = true; };
   }, [userId, token, user?.id]);
 
   useEffect(() => {
