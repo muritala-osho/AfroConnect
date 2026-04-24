@@ -800,6 +800,16 @@ export default function ChatDetailScreen({
                   ...response.data!.message,
                   status: "sent",
                   ...(tempMessage.viewOnce ? { viewOnce: true } : {}),
+                  // Preserve media fields locally if the server response
+                  // doesn't echo them back (e.g. older deployed backend).
+                  ...(type === "gif" ? {
+                    type: "gif",
+                    gifUrl: (response.data!.message as any).gifUrl || (tempMessage as any).gifUrl,
+                    gifPreview: (response.data!.message as any).gifPreview || (tempMessage as any).gifPreview,
+                    gifWidth: (response.data!.message as any).gifWidth || (tempMessage as any).gifWidth,
+                    gifHeight: (response.data!.message as any).gifHeight || (tempMessage as any).gifHeight,
+                    gifSource: (response.data!.message as any).gifSource || (tempMessage as any).gifSource,
+                  } : {}),
                 }
               : m,
           ),
