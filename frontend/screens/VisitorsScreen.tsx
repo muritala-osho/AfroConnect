@@ -1,6 +1,7 @@
 import logger from '@/utils/logger';
 import React, { useState, useCallback } from "react";
-import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal, Text } from "react-native";
+import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, Platform, Modal, Text } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTheme } from "@/hooks/useTheme";
@@ -100,7 +101,8 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
               style={styles.photo} 
               contentFit="cover"
               blurRadius={showBlurred ? 20 : 0}
-            />
+            estimatedItemSize={80}
+      />
           ) : (
             <View style={[styles.photo, { backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }]}>
               <Feather name="user" size={30} color={theme.textSecondary} />
@@ -177,7 +179,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         </LinearGradient>
       )}
 
-      <FlatList
+      <FlashList
         data={visitors}
         renderItem={renderVisitor}
         keyExtractor={(item, index) => item._id || index.toString()}
@@ -194,6 +196,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
             </ThemedText>
           </View>
         }
+        estimatedItemSize={80}
       />
 
       {!isPremium && visitors.length > 0 && (

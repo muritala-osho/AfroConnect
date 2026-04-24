@@ -1,6 +1,7 @@
 import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, FlatList } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -238,11 +239,12 @@ export default function FriendRequestsScreen({ navigation }: FriendRequestsScree
         <View style={styles.headerSpacer} />
       </View>
       
-      <FlatList
+      <FlashList
         data={requests}
         renderItem={renderRequest}
         keyExtractor={(item) => item._id}
-        contentContainerStyle={styles.listContent}
+        estimatedItemSize={88}
+        contentContainerStyle={styles.listContent as any}
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
         refreshControl={

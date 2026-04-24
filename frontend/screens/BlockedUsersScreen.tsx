@@ -1,6 +1,7 @@
 import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, FlatList, ActivityIndicator, Pressable } from "react-native";
+import { View, StyleSheet, ActivityIndicator, Pressable } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/hooks/useTheme";
@@ -106,11 +107,12 @@ export default function BlockedUsersScreen() {
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={blockedUsers}
           renderItem={renderItem}
           keyExtractor={item => item._id}
-          contentContainerStyle={[styles.listContent, blockedUsers.length === 0 && { flex: 1 }]}
+          estimatedItemSize={72}
+          contentContainerStyle={[styles.listContent, blockedUsers.length === 0 && { flex: 1 }] as any}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <View style={[styles.emptyIcon, { backgroundColor: theme.primary + '15' }]}>

@@ -13,7 +13,6 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  FlatList,
   ActivityIndicator,
   RefreshControl,
   Modal,
@@ -23,6 +22,7 @@ import {
   Dimensions,
   DeviceEventEmitter,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { CompositeNavigationProp } from "@react-navigation/native";
@@ -1519,7 +1519,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         )}
       </View>
 
-      <FlatList
+      <FlashList
         data={filteredConversations}
         renderItem={({ item }) => (
           <ChatItem
@@ -1537,10 +1537,12 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
           />
         )}
         keyExtractor={(item) => item.id || item.user.id}
-        contentContainerStyle={[
-          styles.listContent,
-          filteredConversations.length === 0 && styles.emptyListContent,
-        ]}
+        estimatedItemSize={76}
+        contentContainerStyle={
+          filteredConversations.length === 0
+            ? { ...styles.listContent, ...styles.emptyListContent }
+            : styles.listContent
+        }
         ListEmptyComponent={renderEmptyState}
         ListFooterComponent={
           loadingMore ? (
@@ -1555,9 +1557,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         onEndReachedThreshold={0.3}
         showsVerticalScrollIndicator={false}
         initialNumToRender={15}
-        maxToRenderPerBatch={20}
-        windowSize={21}
-        removeClippedSubviews={true}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

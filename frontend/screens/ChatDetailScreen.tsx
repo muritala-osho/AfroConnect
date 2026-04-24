@@ -26,6 +26,7 @@ import {
   Linking,
   DeviceEventEmitter,
 } from "react-native";
+import { FlashList } from "@shopify/flash-list";
 import * as Clipboard from "expo-clipboard";
 import { Image } from "expo-image";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -107,7 +108,7 @@ export default function ChatDetailScreen({
   const [matchId, setMatchId] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const inputPaddingAnim = useRef(new Animated.Value(Math.max(insets.bottom, 4))).current;
   const [isOtherRecording, setIsOtherRecording] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const [otherUserVerified, setOtherUserVerified] = useState(false);
@@ -151,7 +152,7 @@ export default function ChatDetailScreen({
   const [imageGallery, setImageGallery] = useState<string[]>([]);
   const [imageViewerIndex, setImageViewerIndex] = useState(0);
   const [imageViewerZoomed, setImageViewerZoomed] = useState(false);
-  const imageViewerListRef = useRef<FlatList>(null);
+  const imageViewerListRef = useRef<FlatList<string>>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
 
@@ -283,7 +284,7 @@ export default function ChatDetailScreen({
   };
 
   const inputRef = useRef<TextInput>(null);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlashList<any>>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -349,15 +350,22 @@ export default function ChatDetailScreen({
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-    const showSub = Keyboard.addListener(showEvent, () => {
-      setIsKeyboardVisible(true);
-      if (Platform.OS === "android") {
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
-      }
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      Animated.timing(inputPaddingAnim, {
+        toValue: 4,
+        duration: Platform.OS === "ios" ? (e.duration || 250) : 80,
+        useNativeDriver: false,
+      }).start();
     });
-    const hideSub = Keyboard.addListener(hideEvent, () => setIsKeyboardVisible(false));
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      Animated.timing(inputPaddingAnim, {
+        toValue: Math.max(insets.bottom, 4),
+        duration: Platform.OS === "ios" ? (e.duration || 250) : 80,
+        useNativeDriver: false,
+      }).start();
+    });
     return () => { showSub.remove(); hideSub.remove(); };
-  }, []);
+  }, [insets.bottom]);
 
   useEffect(() => {
     if (Platform.OS !== "web") return;
@@ -2295,7 +2303,7 @@ export default function ChatDetailScreen({
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
-        <FlatList
+        <FlashList
           ref={flatListRef}
           data={invertedMessages}
           keyExtractor={keyExtractor}
@@ -2304,11 +2312,8 @@ export default function ChatDetailScreen({
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
           inverted
+          estimatedItemSize={80}
           initialNumToRender={20}
-          maxToRenderPerBatch={10}
-          updateCellsBatchingPeriod={50}
-          windowSize={10}
-          removeClippedSubviews={Platform.OS !== 'web'}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
@@ -2489,7 +2494,7 @@ export default function ChatDetailScreen({
           </Animated.View>
         ) : null}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 4 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
+        <Animated.View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: inputPaddingAnim, minHeight: 60 }]}>
           {recordingPreview ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={discardRecordingPreview} style={styles.cancelRecordButton}><Feather name="trash-2" size={22} color="#F44336" /></Pressable>
@@ -2582,7 +2587,7 @@ export default function ChatDetailScreen({
               )}
             </>
           )}
-        </View>
+        </Animated.View>
       </KAVController>
 
       {/* Attachment modal */}
