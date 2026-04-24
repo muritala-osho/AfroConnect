@@ -46,6 +46,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState((user as any)?.settings?.pushNotifications ?? true);
   const [incognitoMode, setIncognitoMode] = useState((user as any)?.privacySettings?.incognitoMode ?? false);
   const [hideAge, setHideAge] = useState((user as any)?.privacySettings?.hideAge ?? false);
+  const [hideOnlineStatus, setHideOnlineStatus] = useState(((user as any)?.privacySettings?.showOnlineStatus ?? true) === false);
   const [autoUpdateLocation, setAutoUpdateLocation] = useState((user as any)?.autoUpdateProfileLocation ?? false);
   
   const [themeModalVisible, setThemeModalVisible] = useState(false);
@@ -370,6 +371,19 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <Switch 
                 value={hideAge} 
                 onValueChange={(v) => handleToggle('hideAge', v, setHideAge)}
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            }
+          />
+          <SettingItem 
+            icon="wifi-off" 
+            label="Hide Online Status" 
+            value={hideOnlineStatus ? "Others won't see when you're online" : 'Others can see your online status'}
+            showChevron={false}
+            rightElement={
+              <Switch 
+                value={hideOnlineStatus} 
+                onValueChange={(v) => handleToggle('showOnlineStatus', !v, (next) => setHideOnlineStatus(!next))}
                 trackColor={{ false: theme.border, true: theme.primary }}
               />
             }
