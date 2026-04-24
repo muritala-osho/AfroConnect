@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   Image,
   Animated,
+  Linking,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -301,6 +303,55 @@ export default function SpotifyEmbedPlayer({
             </View>
           )}
 
+          {/* Open in external music app */}
+          <View style={styles.openInRow}>
+            {trackId ? (
+              <TouchableOpacity
+                onPress={async () => {
+                  // Try the native Spotify app first; fall back to the web player.
+                  const appUrl = `spotify://track/${trackId}`;
+                  const webUrl = `https://open.spotify.com/track/${trackId}`;
+                  try {
+                    const can = await Linking.canOpenURL(appUrl);
+                    Linking.openURL(can ? appUrl : webUrl).catch(() => Linking.openURL(webUrl));
+                  } catch {
+                    Linking.openURL(webUrl).catch(() => {});
+                  }
+                }}
+                style={[styles.openInBtn, styles.openInSpotify]}
+                activeOpacity={0.85}
+              >
+                <Feather name="external-link" size={14} color="#fff" />
+                <Text style={styles.openInTextLight}>Open in Spotify</Text>
+              </TouchableOpacity>
+            ) : null}
+            {(title || trackId) ? (
+              <TouchableOpacity
+                onPress={async () => {
+                  // Apple Music doesn't expose a direct lookup-by-Spotify-ID URL,
+                  // so we deep-link into a search that lands on the matching song.
+                  const q = encodeURIComponent(`${title || ""} ${artist || ""}`.trim());
+                  const isiOS = Platform.OS === "ios";
+                  const appUrl = isiOS
+                    ? `music://music.apple.com/search?term=${q}`
+                    : `https://music.apple.com/search?term=${q}`;
+                  const webUrl = `https://music.apple.com/search?term=${q}`;
+                  try {
+                    const can = await Linking.canOpenURL(appUrl);
+                    Linking.openURL(can ? appUrl : webUrl).catch(() => Linking.openURL(webUrl));
+                  } catch {
+                    Linking.openURL(webUrl).catch(() => {});
+                  }
+                }}
+                style={[styles.openInBtn, styles.openInApple]}
+                activeOpacity={0.85}
+              >
+                <Feather name="external-link" size={14} color="#fff" />
+                <Text style={styles.openInTextLight}>Apple Music</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
           <Text style={styles.previewLabel}>30-second preview</Text>
         </View>
       </Modal>
@@ -459,4 +510,25 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 4,
   },
+
+  openInRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+
+  openInBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 22,
+  },
+
+  openInSpotify: { backgroundColor: "#1DB954" },
+  openInApple: { backgroundColor: "#FA243C" },
+  openInTextLight: { color: "#fff", fontSize: 13, fontWeight: "700" },
 });

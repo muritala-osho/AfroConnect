@@ -124,6 +124,9 @@ export default function ChatDetailScreen({
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [icebreakerPopup, setIcebreakerPopup] = useState<string | null>(null);
+  const [icebreakerDismissed, setIcebreakerDismissed] = useState(false);
+  const icebreakerSlide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -792,6 +795,57 @@ export default function ChatDetailScreen({
   };
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
+
+  // Show a slide-in icebreaker suggestion when the conversation is brand new.
+  // Auto-fetches a single tailored question on first load. The popup hides
+  // itself the moment any message exists in the thread, or when dismissed.
+  useEffect(() => {
+    if (icebreakerDismissed) return;
+    if (messages.length > 0) {
+      if (icebreakerPopup) setIcebreakerPopup(null);
+      return;
+    }
+    if (icebreakerPopup || !userId || !token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/icebreakers/suggest/${userId}?limit=1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        const tailored = data?.suggestions?.[0]?.question;
+        const fallback = AI_SUGGESTIONS[Math.floor(Math.random() * AI_SUGGESTIONS.length)];
+        if (!cancelled) setIcebreakerPopup(tailored || fallback);
+      } catch {
+        if (!cancelled) setIcebreakerPopup(AI_SUGGESTIONS[Math.floor(Math.random() * AI_SUGGESTIONS.length)]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [messages.length, userId, token, icebreakerDismissed, icebreakerPopup]);
+
+  // Slide the popup in from the right when it appears, slide it out when it's gone.
+  useEffect(() => {
+    Animated.spring(icebreakerSlide, {
+      toValue: icebreakerPopup ? 0 : SCREEN_WIDTH,
+      useNativeDriver: true,
+      damping: 18,
+      stiffness: 140,
+    }).start();
+  }, [icebreakerPopup, icebreakerSlide]);
+
+  const useIcebreakerPopup = useCallback(() => {
+    if (icebreakerPopup) {
+      setMessage(icebreakerPopup);
+      setIcebreakerPopup(null);
+      setIcebreakerDismissed(true);
+      inputRef.current?.focus();
+    }
+  }, [icebreakerPopup]);
+
+  const dismissIcebreakerPopup = useCallback(() => {
+    setIcebreakerPopup(null);
+    setIcebreakerDismissed(true);
+  }, []);
 
   // Tick once a second so any active live-location countdown stays accurate
   useEffect(() => {
@@ -2378,7 +2432,46 @@ export default function ChatDetailScreen({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: Math.max(insets.bottom, 4), minHeight: 60 }]}>
+        {/* Slide-in icebreaker popup — only when the conversation is empty */}
+        {icebreakerPopup ? (
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              styles.icebreakerPopupWrap,
+              { transform: [{ translateX: icebreakerSlide }] },
+            ]}
+          >
+            <Pressable
+              onPress={useIcebreakerPopup}
+              style={[
+                styles.icebreakerPopup,
+                {
+                  backgroundColor: theme.primary,
+                  shadowColor: isDark ? "#000" : theme.primary,
+                },
+              ]}
+            >
+              <View style={styles.icebreakerHeaderRow}>
+                <View style={styles.icebreakerSparkleCircle}>
+                  <MaterialCommunityIcons name="lightbulb-on" size={14} color="#FFF" />
+                </View>
+                <ThemedText style={styles.icebreakerLabel}>Icebreaker</ThemedText>
+                <Pressable onPress={dismissIcebreakerPopup} hitSlop={10} style={styles.icebreakerClose}>
+                  <Feather name="x" size={16} color="rgba(255,255,255,0.85)" />
+                </Pressable>
+              </View>
+              <ThemedText style={styles.icebreakerText} numberOfLines={3}>
+                {icebreakerPopup}
+              </ThemedText>
+              <View style={styles.icebreakerCta}>
+                <ThemedText style={styles.icebreakerCtaText}>Tap to use</ThemedText>
+                <Feather name="arrow-right" size={13} color="#FFF" />
+              </View>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 4 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
           {recordingPreview ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={discardRecordingPreview} style={styles.cancelRecordButton}><Feather name="trash-2" size={22} color="#F44336" /></Pressable>
@@ -2974,6 +3067,41 @@ const styles = StyleSheet.create<any>({
   emptySubtitle: { fontSize: 14, textAlign: "center", marginBottom: 20 },
   aiSuggestButton: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
   aiSuggestButtonText: { color: "#FFF", fontSize: 14, fontWeight: "600", marginLeft: 8 },
+  icebreakerPopupWrap: {
+    position: "absolute",
+    right: 12,
+    bottom: 78,
+    maxWidth: 280,
+    zIndex: 50,
+  },
+  icebreakerPopup: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderBottomRightRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  icebreakerHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  icebreakerSparkleCircle: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center", justifyContent: "center",
+    marginRight: 6,
+  },
+  icebreakerLabel: { flex: 1, color: "#FFF", fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  icebreakerClose: { padding: 2 },
+  icebreakerText: { color: "#FFF", fontSize: 14, lineHeight: 19, fontWeight: "500" },
+  icebreakerCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    alignSelf: "flex-end",
+  },
+  icebreakerCtaText: { color: "#FFF", fontSize: 12, fontWeight: "700", opacity: 0.9 },
   aiSuggestionsContainer: { borderTopWidth: 1, paddingVertical: 12 },
   aiSuggestionsHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, marginBottom: 10 },
   aiSuggestionsTitle: { flex: 1, fontSize: 14, fontWeight: "600", marginLeft: 8 },
