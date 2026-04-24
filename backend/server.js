@@ -41,6 +41,7 @@ const supportRoutes = require('./routes/support');
 
 const successStoriesRoutes = require('./routes/successStories');
 const subscriptionRoutes = require('./routes/subscription');
+const gifsRoutes = require('./routes/gifs');
 const muteRoutes = require('./routes/mute');
 const sessionsRoutes = require('./routes/sessions');
 
@@ -444,6 +445,7 @@ app.use('/api/profile-completion', profileCompletionRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/success-stories', successStoriesRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/gifs', gifsRoutes);
 const engagementRoutes = require('./routes/engagement');
 app.use('/api/engagement', engagementRoutes);
 const spotifyRoutes = require('./routes/spotify');

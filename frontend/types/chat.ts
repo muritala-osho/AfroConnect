@@ -8,9 +8,14 @@ export interface Message {
   sender: string | { _id: string };
   content?: string;
   text?: string;
-  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply";
+  type: "text" | "image" | "video" | "audio" | "system" | "location" | "call" | "story_reaction" | "story_reply" | "gif";
   imageUrl?: string;
   videoUrl?: string;
+  gifUrl?: string;
+  gifPreview?: string;
+  gifWidth?: number;
+  gifHeight?: number;
+  gifSource?: "tenor" | "giphy";
   audioUrl?: string;
   latitude?: number;
   longitude?: number;

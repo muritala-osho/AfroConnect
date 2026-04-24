@@ -44,8 +44,13 @@ const resetPassword = Joi.object({
 
 const sendMessage = Joi.object({
   content: Joi.string().max(5000).when('type', { is: 'text', then: Joi.required(), otherwise: Joi.optional().allow('') }),
-  type: Joi.string().valid('text', 'image', 'video', 'audio', 'file', 'location', 'system', 'call', 'story_reaction', 'story_reply').default('text'),
+  type: Joi.string().valid('text', 'image', 'video', 'audio', 'file', 'location', 'system', 'call', 'story_reaction', 'story_reply', 'gif').default('text'),
   imageUrl: Joi.string().uri().optional().allow(''),
+  gifUrl: Joi.string().uri().optional().allow(''),
+  gifPreview: Joi.string().uri().optional().allow(''),
+  gifWidth: Joi.number().min(0).max(4000).optional(),
+  gifHeight: Joi.number().min(0).max(4000).optional(),
+  gifSource: Joi.string().valid('tenor', 'giphy').optional(),
   videoUrl: Joi.string().uri().optional().allow(''),
   audioUrl: Joi.string().uri().optional().allow(''),
   audioDuration: Joi.number().min(0).max(600).optional(),

@@ -153,10 +153,16 @@ const ChatItem = memo(
       switch (type) {
         case "image":
           return "📷 Photo";
+        case "video":
+          return "🎥 Video";
         case "audio":
           return "🎤 Voice message";
         case "file":
           return "📎 File";
+        case "gif":
+          return "🎞️ GIF";
+        case "location":
+          return "📍 Location";
         default:
           return message || "Start a conversation";
       }

@@ -239,6 +239,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       fileType,
       callStatus,
       callType,
+      gifUrl,
+      gifPreview,
+      gifWidth,
+      gifHeight,
+      gifSource,
     } = req.body;
 
     if (matchId === "direct") {
@@ -346,6 +351,16 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       messageData.fileSize = fileSize;
       messageData.fileType = fileType;
       messageData.content = `📎 ${fileName || "File"}`;
+    } else if (type === "gif") {
+      if (!gifUrl) {
+        return res.status(400).json({ success: false, message: "gifUrl is required" });
+      }
+      messageData.gifUrl = gifUrl;
+      messageData.gifPreview = gifPreview || gifUrl;
+      if (gifWidth) messageData.gifWidth = gifWidth;
+      if (gifHeight) messageData.gifHeight = gifHeight;
+      messageData.gifSource = gifSource || 'tenor';
+      messageData.content = "🎞️ GIF";
     }
 
     if (replyTo) {
@@ -399,8 +414,10 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         const senderName = req.user.name || "Someone";
         let notifBody = content || "";
         if (type === "image") notifBody = "📷 Sent a photo";
+        else if (type === "video") notifBody = "🎥 Sent a video";
         else if (type === "audio") notifBody = "🎵 Sent a voice message";
         else if (type === "location") notifBody = "📍 Shared a location";
+        else if (type === "gif") notifBody = "🎞️ Sent a GIF";
         else if (notifBody.length > 100)
           notifBody = notifBody.substring(0, 97) + "...";
 
@@ -724,8 +741,10 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
         const senderName = req.user.name || "Someone";
         let notifBody = content || "";
         if (type === "image") notifBody = "📷 Sent a photo";
+        else if (type === "video") notifBody = "🎥 Sent a video";
         else if (type === "audio") notifBody = "🎵 Sent a voice message";
         else if (type === "location") notifBody = "📍 Shared a location";
+        else if (type === "gif") notifBody = "🎞️ Sent a GIF";
         else if (notifBody.length > 100)
           notifBody = notifBody.substring(0, 97) + "...";
 

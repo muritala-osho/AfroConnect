@@ -33,7 +33,7 @@ const messageSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['text', 'image', 'video', 'audio', 'file', 'system', 'story_reaction', 'story_reply', 'call', 'location'],
+    enum: ['text', 'image', 'video', 'audio', 'file', 'system', 'story_reaction', 'story_reply', 'call', 'location', 'gif'],
     default: 'text'
   },
   callType: {
@@ -57,6 +57,23 @@ const messageSchema = new mongoose.Schema({
   editedAt: { type: Date },
   imageUrl: {
     type: String
+  },
+  gifUrl: {
+    type: String
+  },
+  gifPreview: {
+    type: String
+  },
+  gifWidth: {
+    type: Number
+  },
+  gifHeight: {
+    type: Number
+  },
+  gifSource: {
+    type: String,
+    enum: ['tenor', 'giphy'],
+    default: 'tenor'
   },
   videoUrl: {
     type: String

@@ -63,6 +63,7 @@ import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
 import logger from "@/utils/logger";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
+import GifPicker, { GifResult } from "@/components/chat/GifPicker";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -118,6 +119,19 @@ export default function ChatDetailScreen({
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+
+  const handleSendGif = useCallback((gif: GifResult) => {
+    if (sendMessageRef.current) {
+      sendMessageRef.current("🎞️ GIF", "gif", {
+        gifUrl: gif.url,
+        gifPreview: gif.preview,
+        gifWidth: gif.width,
+        gifHeight: gif.height,
+        gifSource: gif.source,
+      });
+    }
+  }, []);
   const [isSendingLocation, setIsSendingLocation] = useState(false);
   const [showLivePicker, setShowLivePicker] = useState(false);
   const [, setLiveTick] = useState(0);
@@ -1934,6 +1948,43 @@ export default function ChatDetailScreen({
                       </View>
                     )}
 
+                    {item.type === "gif" && (item.gifUrl || item.gifPreview) && (() => {
+                      const gifSrc = item.gifUrl || item.gifPreview!;
+                      const aspect = item.gifWidth && item.gifHeight ? item.gifWidth / item.gifHeight : 1;
+                      const gifW = 220;
+                      const gifH = Math.max(120, Math.min(280, gifW / aspect));
+                      const isFailed = (item as any).status === "failed";
+                      const isSending = (item as any).status === "sending";
+                      return (
+                        <Pressable
+                          onPress={() => {
+                            if (isFailed) { retryFailedMedia(item); return; }
+                            if (isSending) return;
+                            openImageViewer(gifSrc);
+                          }}
+                        >
+                          <Image
+                            source={{ uri: gifSrc }}
+                            style={[styles.messageImage, { width: gifW, height: gifH }]}
+                            contentFit="cover"
+                          />
+                          {isSending && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <ActivityIndicator color="#FFF" />
+                            </View>
+                          )}
+                          {isFailed && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="refresh-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          )}
+                          <View style={styles.gifBadge}>
+                            <ThemedText style={styles.gifBadgeText}>GIF</ThemedText>
+                          </View>
+                        </Pressable>
+                      );
+                    })()}
                     {item.type === "image" && item.imageUrl && (() => {
                       const isSender = String(typeof item.sender === 'string' ? item.sender : item.sender?._id) === String(myId);
                       const isViewedByMe = openedViewOnceIds.has(item._id) || (item.viewOnceOpenedBy || []).some((id: string) => String(id) === String(myId));
@@ -2591,6 +2642,12 @@ export default function ChatDetailScreen({
       </KAVController>
 
       {/* Attachment modal */}
+      <GifPicker
+        visible={showGifPicker}
+        onClose={() => setShowGifPicker(false)}
+        onSelect={handleSendGif}
+      />
+
       <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
         <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>
           <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
@@ -2620,6 +2677,15 @@ export default function ChatDetailScreen({
               <Pressable style={styles.attachmentOption} onPress={handlePickVideo}>
                 <View style={[styles.attachmentIcon, { backgroundColor: "#9B59B620" }]}><Feather name="video" size={24} color="#9B59B6" /></View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
+              </Pressable>
+              <Pressable
+                style={styles.attachmentOption}
+                onPress={() => { setShowAttachmentMenu(false); setShowGifPicker(true); }}
+              >
+                <View style={[styles.attachmentIcon, { backgroundColor: "#FFB30020" }]}>
+                  <MaterialCommunityIcons name="file-gif-box" size={26} color="#FFB300" />
+                </View>
+                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>GIF</ThemedText>
               </Pressable>
               <Pressable
                 style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
@@ -3182,6 +3248,8 @@ const styles = StyleSheet.create<any>({
   submitReportButton: { marginTop: 20, paddingVertical: 16, borderRadius: 12, alignItems: "center" },
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  gifBadge: { position: "absolute", top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.55)" },
+  gifBadgeText: { color: "#FFF", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
   mediaStatusOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", borderRadius: 12 },
   mediaStatusText: { color: "#FFF", fontSize: 12, fontWeight: "600", marginTop: 6 },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
