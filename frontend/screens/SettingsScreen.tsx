@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from "react";
+import logger from '@/utils/logger';
+import React, { useState, useCallback, useEffect } from "react";
 import { 
   View, 
   StyleSheet, 
@@ -45,6 +46,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [notificationsEnabled, setNotificationsEnabled] = useState((user as any)?.settings?.pushNotifications ?? true);
   const [incognitoMode, setIncognitoMode] = useState((user as any)?.privacySettings?.incognitoMode ?? false);
   const [hideAge, setHideAge] = useState((user as any)?.privacySettings?.hideAge ?? false);
+  const [autoUpdateLocation, setAutoUpdateLocation] = useState((user as any)?.autoUpdateProfileLocation ?? false);
   
   const [themeModalVisible, setThemeModalVisible] = useState(false);
   const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -64,6 +66,35 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [contactModalVisible, setContactModalVisible] = useState(false);
   const [contactMessage, setContactMessage] = useState("");
+  const [challengeQuestion, setChallengeQuestion] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const [challengeLoading, setChallengeLoading] = useState(false);
+
+  const fetchSupportChallenge = useCallback(async () => {
+    if (token) return;
+    setChallengeLoading(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/support/challenge`);
+      const data = await response.json();
+      if (data.success) {
+        setChallengeQuestion(data.question);
+        setChallengeToken(data.challengeToken);
+        setChallengeAnswer("");
+      }
+    } catch {
+      setChallengeQuestion("");
+      setChallengeToken("");
+    } finally {
+      setChallengeLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (contactModalVisible && !token) {
+      fetchSupportChallenge();
+    }
+  }, [contactModalVisible, token, fetchSupportChallenge]);
 
   const handleToggle = async (key: string, value: boolean, setter: (v: boolean) => void) => {
     setter(value);
@@ -73,6 +104,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         const response = await put('/account/settings', { pushNotifications: value }, token);
         if (response.success) {
           if (fetchUser) await fetchUser();
+        } else {
+          setter(!value);
+        }
+        return;
+      }
+
+      if (key === 'autoUpdateProfileLocation') {
+        const response = await put('/users/me', { autoUpdateProfileLocation: value }, token);
+        if (response.success) {
+          if (fetchUser) await fetchUser();
+          if (value) {
+            try {
+              const { pushLiveLocation } = await import('@/utils/liveLocation');
+              pushLiveLocation(token, { force: true }).catch(() => {});
+            } catch {}
+          }
         } else {
           setter(!value);
         }
@@ -92,7 +139,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         setter(!value);
       }
     } catch (error) {
-      console.error(`Failed to update ${key}:`, error);
+      logger.error(`Failed to update ${key}:`, error);
       setter(!value);
     }
   };
@@ -179,14 +226,22 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
       <View style={[styles.iconContainer, { backgroundColor: destructive ? 'rgba(255, 59, 48, 0.1)' : theme.primary + '15' }]}>
         <Feather name={icon as any} size={20} color={destructive ? '#FF3B30' : theme.primary} />
       </View>
-      <ThemedText style={[styles.settingLabel, { color: destructive ? '#FF3B30' : theme.text }]}>
-        {label}
-      </ThemedText>
-      {value && (
-        <ThemedText style={[styles.settingValue, { color: theme.textSecondary }]}>
-          {value}
+      <View style={styles.settingTextBlock}>
+        <ThemedText
+          style={[styles.settingLabel, { color: destructive ? '#FF3B30' : theme.text }]}
+          numberOfLines={2}
+        >
+          {label}
         </ThemedText>
-      )}
+        {value && (
+          <ThemedText
+            style={[styles.settingValue, { color: theme.textSecondary }]}
+            numberOfLines={2}
+          >
+            {value}
+          </ThemedText>
+        )}
+      </View>
       {rightElement}
       {showChevron && onPress && !rightElement && (
         <Feather name="chevron-right" size={20} color={theme.textSecondary} />
@@ -320,6 +375,33 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             }
           />
           <SettingItem 
+            icon="map-pin" 
+            label="Auto-update Profile Location" 
+            value={autoUpdateLocation ? 'On — follows your travels' : 'Off — you set it manually'}
+            showChevron={false}
+            rightElement={
+              <Switch 
+                value={autoUpdateLocation} 
+                onValueChange={(v) => {
+                  if (v) {
+                    showAlert(
+                      'Auto-update Location',
+                      'Your profile location (e.g. "Lagos, Nigeria") will automatically follow your travels. Turn this off anytime to set it yourself.',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Turn On', onPress: () => handleToggle('autoUpdateProfileLocation', true, setAutoUpdateLocation) }
+                      ],
+                      'map-pin'
+                    );
+                  } else {
+                    handleToggle('autoUpdateProfileLocation', false, setAutoUpdateLocation);
+                  }
+                }}
+                trackColor={{ false: theme.border, true: theme.primary }}
+              />
+            }
+          />
+          <SettingItem 
             icon="monitor" 
             label="Active Sessions" 
             onPress={() => navigation.navigate('DeviceManagement' as any)} 
@@ -395,6 +477,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             icon="info" 
             label="Terms of Service" 
             onPress={() => navigation.navigate('Legal', { type: 'terms' })} 
+          />
+          <SettingItem 
+            icon="users" 
+            label="Community Guidelines" 
+            onPress={() => navigation.navigate('Legal', { type: 'community' })} 
           />
         </View>
 
@@ -598,6 +685,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               value={contactMessage}
               onChangeText={setContactMessage}
             />
+            {!token && (
+              <View style={{ backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+                <ThemedText style={{ color: theme.text, fontWeight: '700', marginBottom: 10 }}>
+                  {challengeLoading ? 'Loading security challenge...' : challengeQuestion || 'Security challenge unavailable'}
+                </ThemedText>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TextInput
+                    style={{
+                      flex: 1,
+                      height: 46,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      paddingHorizontal: 14,
+                      color: theme.text,
+                      backgroundColor: theme.surface,
+                    }}
+                    placeholder="Answer"
+                    placeholderTextColor={theme.textSecondary}
+                    keyboardType="number-pad"
+                    value={challengeAnswer}
+                    onChangeText={setChallengeAnswer}
+                  />
+                  <Pressable
+                    onPress={fetchSupportChallenge}
+                    style={{ width: 46, height: 46, borderRadius: 12, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Feather name="refresh-cw" size={16} color={theme.primary} />
+                  </Pressable>
+                </View>
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <Pressable
                 style={{ flex: 1, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.background, borderWidth: 1, borderColor: theme.border }}
@@ -609,27 +728,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 style={{ flex: 2, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: contactMessage.trim() ? theme.primary : theme.border, flexDirection: 'row', gap: 8 }}
                 onPress={async () => {
                   if (contactMessage.trim()) {
+                    if (!token && (!challengeToken || !challengeAnswer.trim())) {
+                      Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
+                      return;
+                    }
                     try {
                       const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',
-                          'Accept': 'application/json'
+                          'Accept': 'application/json',
+                          ...(token ? { Authorization: `Bearer ${token}` } : {})
                         },
                         body: JSON.stringify({
                           name: user?.name || 'User',
                           email: user?.email || '',
                           message: contactMessage.trim(),
-                          userId: user?.id
+                          userId: user?.id,
+                          ...(!token ? {
+                            challengeToken,
+                            challengeAnswer: challengeAnswer.trim()
+                          } : {})
                         })
                       });
                       const data = await response.json();
                       if (data.success) {
                         Alert.alert("Message Sent", "We'll get back to you as soon as possible!");
                         setContactMessage("");
+                        setChallengeAnswer("");
                         setContactModalVisible(false);
                       } else {
                         Alert.alert("Error", data.message || "Failed to send message");
+                        if (data.requiresChallenge) fetchSupportChallenge();
                       }
                     } catch (e) {
                       Alert.alert("Error", "Network error. Please try again.");
@@ -658,8 +788,9 @@ const styles = StyleSheet.create({
   sectionCard: { borderRadius: 16, overflow: 'hidden', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2 },
   settingItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1 },
   iconContainer: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-  settingLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
-  settingValue: { fontSize: 14, marginRight: 8 },
+  settingTextBlock: { flex: 1, marginRight: 8, minWidth: 0 },
+  settingLabel: { fontSize: 16, fontWeight: '500' },
+  settingValue: { fontSize: 13, marginTop: 2 },
   footer: { marginTop: 32, alignItems: 'center' },
   version: { fontSize: 12, opacity: 0.5 },
   header: {

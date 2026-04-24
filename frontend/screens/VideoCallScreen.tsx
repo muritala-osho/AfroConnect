@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -11,6 +12,7 @@ import {
   Alert,
   Dimensions,
   BackHandler,
+  ActivityIndicator,
 } from "react-native";
 import { SafeImage } from "@/components/SafeImage";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,44 +28,57 @@ import agoraService from "@/services/agoraService";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
 
-import Constants from "expo-constants";
-
-/* react-native-agora is a native module — not available in Expo Go.
-   We lazy-require it so the screen loads normally in Expo Go (no crash),
-   and native rendering is used automatically in real dev/production builds. */
-let createAgoraRtcEngine: any = null;
-let RtcSurfaceView: any       = null;
-let VideoSourceType: any      = {};
-let ChannelProfileType: any   = {};
-let ClientRoleType: any       = {};
-let VideoMirrorModeType: any  = {};
-let RenderModeType: any       = {};
-let OrientationMode: any      = {};
-let DegradationPreference: any = {};
-
-const isExpoGo =
-  Constants.executionEnvironment === "storeClient" ||
-  Constants.appOwnership === "expo";
-
-if (!isExpoGo && Platform.OS !== "web") {
-  try {
-    const agora = require("react-native-agora");
-    createAgoraRtcEngine = agora.createAgoraRtcEngine;
-    RtcSurfaceView       = agora.RtcSurfaceView;
-    VideoSourceType      = agora.VideoSourceType;
-    ChannelProfileType   = agora.ChannelProfileType;
-    ClientRoleType       = agora.ClientRoleType;
-    VideoMirrorModeType  = agora.VideoMirrorModeType;
-    RenderModeType       = agora.RenderModeType;
-    OrientationMode      = agora.OrientationMode;
-    DegradationPreference = agora.DegradationPreference;
-  } catch (e) {
-    console.log("[VideoCall] Native Agora not available — using fallback");
-  }
-}
+/* react-native-agora is a native module — not available on web or in Expo Go.
+   The platform-specific resolver in `@/utils/agoraNative` keeps the native
+   import out of the web bundle entirely (via a `.native.ts` extension). */
+import {
+  createAgoraRtcEngine,
+  RtcSurfaceView,
+  VideoSourceType,
+  ChannelProfileType,
+  ClientRoleType,
+  VideoMirrorModeType,
+  RenderModeType,
+  OrientationMode,
+  DegradationPreference,
+} from "@/utils/agoraNative";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
+
+/* ─────────────────────────────────────────────────────────────────
+   Signal bars — reflects Agora onNetworkQuality (1=excellent…6=down)
+───────────────────────────────────────────────────────────────── */
+function qualityToBars(q: number): { bars: number; color: string; label: string } {
+  // Agora: 0=unknown, 1=excellent, 2=good, 3=poor, 4=bad, 5=very bad, 6=down
+  if (q === 0 || q === 8) return { bars: 0, color: "rgba(255,255,255,0.4)", label: "" };
+  if (q === 1) return { bars: 4, color: "#34d399", label: "Excellent" };
+  if (q === 2) return { bars: 3, color: "#34d399", label: "Good" };
+  if (q === 3) return { bars: 2, color: "#fbbf24", label: "Fair" };
+  if (q === 4) return { bars: 2, color: "#fbbf24", label: "Weak" };
+  if (q === 5) return { bars: 1, color: "#f87171", label: "Poor" };
+  return { bars: 0, color: "#f87171", label: "No signal" };
+}
+
+function SignalBars({ quality }: { quality: number }) {
+  const { bars, color } = qualityToBars(quality);
+  const heights = [4, 7, 10, 13];
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, height: 13 }}>
+      {heights.map((h, i) => (
+        <View
+          key={i}
+          style={{
+            width: 3,
+            height: h,
+            borderRadius: 1,
+            backgroundColor: i < bars ? color : "rgba(255,255,255,0.2)",
+          }}
+        />
+      ))}
+    </View>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────────
    Pulse ring
@@ -182,6 +197,7 @@ export default function VideoCallScreen() {
   const [remoteUid, setRemoteUid]         = useState<number | null>(null);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [networkQuality, setNetworkQuality] = useState(0);
+  const [isReconnecting, setIsReconnecting] = useState(false);
   const [engineReady,   setEngineReady]    = useState(false);
 
   /* ── Animated values ── */
@@ -283,7 +299,7 @@ export default function VideoCallScreen() {
       await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
-      console.error("Video ringtone error:", err);
+      logger.error("Video ringtone error:", err);
       if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
   }, [isIncoming, stopRingtone]);
@@ -330,6 +346,11 @@ export default function VideoCallScreen() {
         if (uid === 0) setNetworkQuality(Math.max(txQ, rxQ));
       });
 
+      engine.addListener("onConnectionStateChanged", (_conn: any, state: any, _reason: any) => {
+        // Agora states: 1=disconnected, 2=connecting, 3=connected, 4=reconnecting, 5=failed
+        setIsReconnecting(state === 4);
+      });
+
       engine.addListener("onRemoteVideoStateChanged", (_conn: any, _uid: any, state: any) => {
         setHasRemoteVideo(state === 2);
       });
@@ -337,7 +358,7 @@ export default function VideoCallScreen() {
       engine.startPreview();
       setEngineReady(true);
     } catch (e) {
-      console.error("[VideoCall] Engine init error:", e);
+      logger.error("[VideoCall] Engine init error:", e);
     }
   }, []);
 
@@ -378,7 +399,7 @@ export default function VideoCallScreen() {
             joinUid   = 0;
           }
         } catch {
-          console.log("Video token fallback");
+          logger.log("Video token fallback");
         }
       }
 
@@ -391,7 +412,7 @@ export default function VideoCallScreen() {
           autoSubscribeVideo:     true,
         });
       } catch (e) {
-        console.error("[VideoCall] joinChannel error:", e);
+        logger.error("[VideoCall] joinChannel error:", e);
       }
     },
     [isIncoming, authToken, get, initEngine],
@@ -847,16 +868,27 @@ export default function VideoCallScreen() {
 
               <View style={s.topInfo}>
                 <Text style={s.topName} numberOfLines={1}>{userName || "Unknown"}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, justifyContent: "center" }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center" }}>
                   <Text style={[s.topStatus, isTerminal && { color: "#f87171" }]}>
-                    {isConnected && duration > 0 ? formatDuration(duration) : statusText()}
+                    {isReconnecting
+                      ? "Reconnecting…"
+                      : isConnected && duration > 0
+                        ? formatDuration(duration)
+                        : statusText()}
                   </Text>
-                  {isConnected && networkQuality >= 4 && (
+                  {isConnected && !isReconnecting && networkQuality > 0 && (
                     <View style={s.qualityBadge}>
-                      <Ionicons name="wifi" size={10} color="#fbbf24" />
-                      <Text style={s.qualityText}>
-                        {networkQuality === 6 ? "No signal" : "Weak signal"}
-                      </Text>
+                      <SignalBars quality={networkQuality} />
+                      {networkQuality >= 3 && (
+                        <Text style={[s.qualityText, { color: qualityToBars(networkQuality).color }]}>
+                          {qualityToBars(networkQuality).label}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                  {isReconnecting && (
+                    <View style={[s.qualityBadge, { backgroundColor: "rgba(248,113,113,0.18)", borderColor: "rgba(248,113,113,0.4)" }]}>
+                      <ActivityIndicator size="small" color="#f87171" />
                     </View>
                   )}
                 </View>

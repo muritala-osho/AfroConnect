@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -220,7 +221,7 @@ function PreviewCard({
 export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const { token, updateProfile } = useAuth();
+  const { token, fetchUser } = useAuth();
   const { t } = useTranslation();
   const { showAlert, AlertComponent } = useThemedAlert();
 
@@ -289,18 +290,31 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
     opacity: interpolate(pulse2.value, [1, 1.4], [0.15, 0]),
   }));
 
+  const getLocationName = async (lat: number, lng: number) => {
+    try {
+      const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      return {
+        city: place?.city || place?.district || place?.subregion || undefined,
+        country: place?.country || undefined,
+      };
+    } catch {
+      return {};
+    }
+  };
+
   const updateServerLocation = async (lat: number, lng: number) => {
     try {
+      const locationName = await getLocationName(lat, lng);
       await fetch(`${getApiBaseUrl()}/api/radar/location`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ lat, lng }),
+        body: JSON.stringify({ lat, lng, ...locationName }),
       });
     } catch (error) {
-      console.error("Failed to update location:", error);
+      logger.error("Failed to update location:", error);
     }
   };
 
@@ -324,7 +338,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
         const data = await response.json();
         if (data.success) setNearbyUsers(data.users || []);
       } catch (error) {
-        console.error("Failed to fetch nearby users:", error);
+        logger.error("Failed to fetch nearby users:", error);
       } finally {
         setLoading(false);
       }
@@ -350,7 +364,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
       setUserLocation(coords);
       setLocationPermission(true);
       try { await updateServerLocation(coords.lat, coords.lng); } catch {}
-      try { await updateProfile({ location: coords }); } catch {}
+      try { await fetchUser(); } catch {}
       await fetchNearbyUsers(coords);
       if (!silent) {
         showAlert(t("success"), t("locationUpdated"), [{ text: t("ok") }], "check-circle");
@@ -362,7 +376,7 @@ export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
     } finally {
       setLocationLoading(false);
     }
-  }, [token, updateProfile, fetchNearbyUsers, t, showAlert]);
+  }, [token, fetchUser, fetchNearbyUsers, t, showAlert]);
 
   const toggleLocationSharing = async () => {
     try {

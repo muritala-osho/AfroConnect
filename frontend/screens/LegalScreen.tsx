@@ -132,7 +132,25 @@ export default function LegalScreen({ navigation, route }: LegalScreenProps) {
   const [lastUpdated, setLastUpdated] = useState("December 2024");
   
   const type = route.params?.type || "privacy";
-  const isTerms = type === "terms";
+
+  const SCREEN_TITLES: Record<string, string> = {
+    privacy: "Privacy Policy",
+    terms: "Terms of Service",
+    community: "Community Guidelines",
+  };
+
+  const ENDPOINTS: Record<string, string> = {
+    privacy: "privacy-policy",
+    terms: "terms-of-service",
+    community: "community-guidelines",
+  };
+
+  const FALLBACK_CONTENT: Record<string, string> = {
+    privacy: PRIVACY_POLICY_CONTENT,
+    terms: TERMS_OF_SERVICE_CONTENT,
+    community:
+      "Community Guidelines could not be loaded. Please check your internet connection and try again.\n\nFor questions, contact safety@afroconnect.com",
+  };
 
   useEffect(() => {
     loadContent();
@@ -141,20 +159,20 @@ export default function LegalScreen({ navigation, route }: LegalScreenProps) {
   const loadContent = async () => {
     setLoading(true);
     try {
-      const endpoint = isTerms ? "terms-of-service" : "privacy-policy";
+      const endpoint = ENDPOINTS[type] || ENDPOINTS.privacy;
       const response = await fetch(`${getApiBaseUrl()}/api/legal/${endpoint}`);
       const data = await response.json();
-      
+
       if (data.success && data.data && data.data.content) {
         setContent(data.data.content);
         if (data.data.lastUpdated) {
           setLastUpdated(data.data.lastUpdated);
         }
       } else {
-        setContent(isTerms ? TERMS_OF_SERVICE_CONTENT : PRIVACY_POLICY_CONTENT);
+        setContent(FALLBACK_CONTENT[type] || FALLBACK_CONTENT.privacy);
       }
     } catch {
-      setContent(isTerms ? TERMS_OF_SERVICE_CONTENT : PRIVACY_POLICY_CONTENT);
+      setContent(FALLBACK_CONTENT[type] || FALLBACK_CONTENT.privacy);
     } finally {
       setLoading(false);
     }
@@ -170,7 +188,7 @@ export default function LegalScreen({ navigation, route }: LegalScreenProps) {
           <Feather name="arrow-left" size={24} color={theme.text} />
         </Pressable>
         <ThemedText style={[styles.headerTitle, { color: theme.text }]}>
-          {isTerms ? "Terms of Service" : "Privacy Policy"}
+          {SCREEN_TITLES[type] || "Legal"}
         </ThemedText>
         <View style={styles.placeholder} />
       </View>

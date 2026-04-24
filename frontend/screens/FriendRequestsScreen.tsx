@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform, FlatList } from "react-native";
 import { Image } from "expo-image";
@@ -61,7 +62,7 @@ export default function FriendRequestsScreen({ navigation }: FriendRequestsScree
         setRequests(response.data.requests);
       }
     } catch (error) {
-      console.error("Error fetching requests:", error);
+      logger.error("Error fetching requests:", error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -103,7 +104,7 @@ export default function FriendRequestsScreen({ navigation }: FriendRequestsScree
         );
       }
     } catch (error) {
-      console.error("Error accepting request:", error);
+      logger.error("Error accepting request:", error);
       showAlert('Error', 'Failed to accept request. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
     } finally {
       setProcessingId(null);
@@ -128,7 +129,7 @@ export default function FriendRequestsScreen({ navigation }: FriendRequestsScree
         setRequests(prev => prev.filter(r => r._id !== requestId));
       }
     } catch (error) {
-      console.error("Error rejecting request:", error);
+      logger.error("Error rejecting request:", error);
       showAlert('Error', 'Failed to reject request. Please try again.', [{ text: 'OK', style: 'default' }], 'alert-circle');
     } finally {
       setProcessingId(null);

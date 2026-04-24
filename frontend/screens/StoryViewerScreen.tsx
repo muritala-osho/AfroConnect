@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, KeyboardAvoidingView, Platform, Alert, Modal, FlatList, ScrollView, Keyboard } from "react-native";
-import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
-import { useKeyboardAnimation, KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
+import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, Platform, Alert, Modal, ScrollView, Keyboard } from "react-native";
+import { KeyboardAvoidingView as KAVController, KeyboardStickyView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
 import { Video, ResizeMode } from "expo-av";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -78,7 +77,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   const [isVideoPlaying, setIsVideoPlaying] = useState(false);
   const [videoDuration, setVideoDuration] = useState(STORY_DURATION);
   const [showViewers, setShowViewers] = useState(false);
-  const { height: kbAnimHeight } = useKeyboardAnimation();
   const [showStoryMenu, setShowStoryMenu] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState('inappropriate');
@@ -130,10 +128,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
 
     fetchStories();
   }, [userId, token, user?.id]);
-
-  const bottomBarAnimStyle = useAnimatedStyle(() => ({
-    bottom: kbAnimHeight.value,
-  }));
 
   useEffect(() => {
     videoDurationSet.current = false;
@@ -445,10 +439,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {currentStory.type === "image" && (currentStory.imageUrl || currentStory.mediaUrl) ? (
@@ -572,7 +563,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           >
             <View style={styles.avatarContainer}>
               <Image
-                source={userPhoto ? getPhotoSource(userPhoto) : { uri: "https://via.placeholder.com/40" }}
+                source={userPhoto ? getPhotoSource(userPhoto) : require('../assets/icon.png')}
                 style={styles.userAvatar}
                 onLoad={() => {
                 }}
@@ -663,7 +654,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         />
       </View>
 
-      <Reanimated.View style={[styles.bottomGradientWrapper, bottomBarAnimStyle]}>
+      <KeyboardStickyView style={styles.bottomGradientWrapper}>
       <LinearGradient
         colors={["transparent", "rgba(0,0,0,0.6)"]}
         style={[
@@ -758,7 +749,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </Pressable>
         )}
       </LinearGradient>
-      </Reanimated.View>
+      </KeyboardStickyView>
 
       <Modal
         visible={showViewers}
@@ -794,7 +785,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                     }}
                   >
                     <Image
-                      source={viewer.photo ? getPhotoSource(viewer.photo) : { uri: "https://via.placeholder.com/40" }}
+                      source={viewer.photo ? getPhotoSource(viewer.photo) : require('../assets/icon.png')}
                       style={styles.viewerAvatar}
                     />
                     <View style={styles.viewerInfo}>
@@ -900,7 +891,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
           </KAVController>
         </Pressable>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1072,6 +1063,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+    bottom: 0,
     zIndex: 10,
   },
   bottomGradient: {

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState } from "react";
 import {
   View,
@@ -94,7 +95,7 @@ export default function StoryUploadScreen({
         }
       }
     } catch (error) {
-      console.error("Media picker error:", error);
+      logger.error("Media picker error:", error);
       Alert.alert("Error", `Failed to pick ${type}`);
     }
   };
@@ -118,7 +119,7 @@ export default function StoryUploadScreen({
         setStoryType("image");
       }
     } catch (error) {
-      console.error("Camera error:", error);
+      logger.error("Camera error:", error);
       Alert.alert("Error", "Failed to take photo");
     }
   };
@@ -168,7 +169,7 @@ export default function StoryUploadScreen({
 
         if (!uploadResponse.ok) {
           const errorText = await uploadResponse.text();
-          console.error("Upload error response:", errorText);
+          logger.error("Upload error response:", errorText);
           throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
         }
 
@@ -223,7 +224,7 @@ export default function StoryUploadScreen({
         throw new Error(response.message || "Failed to create story");
       }
     } catch (error) {
-      console.error("Story upload error:", error);
+      logger.error("Story upload error:", error);
       Alert.alert("Error", "Failed to post story. Please try again.");
     } finally {
       setIsUploading(false);

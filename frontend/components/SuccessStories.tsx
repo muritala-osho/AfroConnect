@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -273,7 +274,7 @@ export const SuccessStoriesList: React.FC<SuccessStoriesListProps> = ({
         setStories(res.data.stories);
       }
     } catch (error) {
-      console.error('Failed to fetch stories:', error);
+      logger.error('Failed to fetch stories:', error);
     } finally {
       setLoading(false);
     }
@@ -348,7 +349,7 @@ export const SuccessStoriesStats: React.FC<StatsDisplayProps> = ({ compact = fal
           setStats(res.data.stats);
         }
       } catch (error) {
-        console.error('Failed to fetch stats:', error);
+        logger.error('Failed to fetch stats:', error);
       }
     };
     fetchStats();

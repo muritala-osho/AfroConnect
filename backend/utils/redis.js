@@ -1,7 +1,11 @@
+const logger = require('./logger');
 const Redis = require('ioredis');
 
 let client = null;
 let isConnected = false;
+let circuitOpen = false;
+let circuitOpenedAt = null;
+const CIRCUIT_RESET_MS = 30_000;
 
 function getClient() {
   if (client) return client;
@@ -9,7 +13,7 @@ function getClient() {
   const redisUrl = process.env.REDIS_URL;
 
   if (!redisUrl) {
-    console.log('[Redis] REDIS_URL not set — caching disabled');
+    logger.log('[Redis] REDIS_URL not set — caching disabled');
     return null;
   }
 
@@ -27,12 +31,18 @@ function getClient() {
 
     client.on('connect', () => {
       isConnected = true;
-      console.log('[Redis] Connected');
+      circuitOpen = false;
+      circuitOpenedAt = null;
+      logger.log('[Redis] Connected');
     });
 
     client.on('error', (err) => {
       isConnected = false;
-      console.warn('[Redis] Error:', err.message);
+      if (!circuitOpen) {
+        circuitOpen = true;
+        circuitOpenedAt = Date.now();
+        logger.warn('[Redis] Circuit opened after error:', err.message);
+      }
     });
 
     client.on('close', () => {
@@ -41,15 +51,41 @@ function getClient() {
 
     client.connect().catch(() => {});
   } catch (err) {
-    console.warn('[Redis] Failed to initialize:', err.message);
+    logger.warn('[Redis] Failed to initialize:', err.message);
     client = null;
   }
 
   return client;
 }
 
+function isHealthy() {
+  if (!process.env.REDIS_URL) return false;
+  if (circuitOpen) {
+    if (Date.now() - circuitOpenedAt > CIRCUIT_RESET_MS) {
+      circuitOpen = false;
+      circuitOpenedAt = null;
+      logger.log('[Redis] Circuit reset — retrying');
+    } else {
+      return false;
+    }
+  }
+  return isConnected;
+}
+
+async function ping() {
+  try {
+    const c = getClient();
+    if (!c) return false;
+    const result = await c.ping();
+    return result === 'PONG';
+  } catch {
+    return false;
+  }
+}
+
 async function get(key) {
   try {
+    if (!isHealthy()) return null;
     const c = getClient();
     if (!c) return null;
     const val = await c.get(key);
@@ -61,6 +97,7 @@ async function get(key) {
 
 async function set(key, value, ttlSeconds = 60) {
   try {
+    if (!isHealthy()) return;
     const c = getClient();
     if (!c) return;
     await c.set(key, JSON.stringify(value), 'EX', ttlSeconds);
@@ -69,14 +106,36 @@ async function set(key, value, ttlSeconds = 60) {
 
 async function del(key) {
   try {
+    if (!isHealthy()) return;
     const c = getClient();
     if (!c) return;
     await c.del(key);
   } catch {}
 }
 
+async function incr(key) {
+  try {
+    if (!isHealthy()) return null;
+    const c = getClient();
+    if (!c) return null;
+    return await c.incr(key);
+  } catch {
+    return null;
+  }
+}
+
+async function expire(key, ttlSeconds) {
+  try {
+    if (!isHealthy()) return;
+    const c = getClient();
+    if (!c) return;
+    await c.expire(key, ttlSeconds);
+  } catch {}
+}
+
 async function delPattern(pattern) {
   try {
+    if (!isHealthy()) return;
     const c = getClient();
     if (!c) return;
     let cursor = '0';
@@ -91,4 +150,4 @@ async function delPattern(pattern) {
   } catch {}
 }
 
-module.exports = { getClient, get, set, del, delPattern };
+module.exports = { getClient, get, set, del, incr, expire, delPattern, isHealthy, ping };

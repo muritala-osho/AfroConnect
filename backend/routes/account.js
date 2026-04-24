@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 
 const express = require('express');
 const router = express.Router();
@@ -10,6 +11,7 @@ const CallHistory = require('../models/CallHistory');
 const FriendRequest = require('../models/FriendRequest');
 const crypto = require('crypto');
 const { sendOTP } = require('../utils/emailService');
+const { logAudit } = require('../utils/auditHelper');
 
 router.delete('/delete', protect, async (req, res) => {
   try {
@@ -32,8 +34,22 @@ router.delete('/delete', protect, async (req, res) => {
       });
     }
     
-    console.log('Account deletion - User ID:', user._id, 'Reason:', reason);
-    
+    logger.log('Account deletion - User ID:', user._id, 'Reason:', reason);
+
+    await logAudit({
+      action: 'SELF_DELETE_ACCOUNT',
+      category: 'ACCOUNT',
+      severity: 'critical',
+      adminId: user._id,
+      adminName: user.name,
+      adminEmail: user.email,
+      targetUserId: user._id,
+      targetUserName: user.name,
+      targetUserEmail: user.email,
+      details: `User self-deleted account. Reason: ${reason || 'not provided'}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
+
     await Promise.all([
       User.deleteOne({ _id: user._id }),
       
@@ -55,7 +71,7 @@ router.delete('/delete', protect, async (req, res) => {
       message: 'Your account and all associated data have been permanently deleted'
     });
   } catch (error) {
-    console.error('Account deletion error:', error);
+    logger.error('Account deletion error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete account'
@@ -66,6 +82,20 @@ router.delete('/delete', protect, async (req, res) => {
 router.post('/export-data', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+
+    await logAudit({
+      action: 'EXPORT_USER_DATA',
+      category: 'ACCOUNT',
+      severity: 'high',
+      adminId: req.user._id,
+      adminName: req.user.name,
+      adminEmail: req.user.email,
+      targetUserId: req.user._id,
+      targetUserName: req.user.name,
+      targetUserEmail: req.user.email,
+      details: 'User exported all personal data (GDPR/data portability).',
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
     const matches = await Match.find({ users: req.user._id }).populate('users', 'name email');
     const messages = await Message.find({ 
       $or: [{ sender: req.user._id }, { receiver: req.user._id }] 
@@ -102,7 +132,7 @@ router.post('/export-data', protect, async (req, res) => {
       data: exportData
     });
   } catch (error) {
-    console.error('Data export error:', error);
+    logger.error('Data export error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to export data'
@@ -129,7 +159,7 @@ router.get('/privacy-settings', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get privacy settings error:', error);
+    logger.error('Get privacy settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get privacy settings'
@@ -173,7 +203,7 @@ router.put('/privacy-settings', protect, async (req, res) => {
       privacySettings: user.privacySettings
     });
   } catch (error) {
-    console.error('Privacy settings error:', error);
+    logger.error('Privacy settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update privacy settings'
@@ -224,7 +254,7 @@ router.put('/change-password', protect, async (req, res) => {
       message: 'Password changed successfully'
     });
   } catch (error) {
-    console.error('Change password error:', error);
+    logger.error('Change password error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to change password'
@@ -260,7 +290,7 @@ router.put('/settings', protect, async (req, res) => {
       settings: user.settings
     });
   } catch (error) {
-    console.error('Settings update error:', error);
+    logger.error('Settings update error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update settings'
@@ -278,7 +308,7 @@ router.get('/settings', protect, async (req, res) => {
       privacySettings: user.privacySettings || {}
     });
   } catch (error) {
-    console.error('Get settings error:', error);
+    logger.error('Get settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get settings'
@@ -304,7 +334,7 @@ router.post('/request-deletion-otp', protect, async (req, res) => {
       message: 'Verification code sent to your email'
     });
   } catch (error) {
-    console.error('Request deletion OTP error:', error);
+    logger.error('Request deletion OTP error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send verification code'
@@ -339,8 +369,22 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
       });
     }
     
-    console.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
-    
+    logger.log('Account deletion with OTP - User ID:', user._id, 'Reason:', reason);
+
+    await logAudit({
+      action: 'SELF_DELETE_ACCOUNT_OTP',
+      category: 'ACCOUNT',
+      severity: 'critical',
+      adminId: user._id,
+      adminName: user.name,
+      adminEmail: user.email,
+      targetUserId: user._id,
+      targetUserName: user.name,
+      targetUserEmail: user.email,
+      details: `User self-deleted account via OTP. Reason: ${reason || 'not provided'}`,
+      ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
+    });
+
     await Promise.all([
       User.deleteOne({ _id: user._id }),
       Match.deleteMany({ users: user._id }),
@@ -355,7 +399,7 @@ router.delete('/delete-with-otp', protect, async (req, res) => {
       message: 'Your account and all associated data have been permanently deleted'
     });
   } catch (error) {
-    console.error('Account deletion with OTP error:', error);
+    logger.error('Account deletion with OTP error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete account'
@@ -373,7 +417,7 @@ router.get('/check-auth-method', protect, async (req, res) => {
       isOAuthUser: !!user.googleId
     });
   } catch (error) {
-    console.error('Check auth method error:', error);
+    logger.error('Check auth method error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to check authentication method'

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, TextInput, Pressable, ActivityIndicator, Alert } from "react-native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -107,7 +108,7 @@ export default function ForgotPasswordScreen({ navigation }: ForgotPasswordScree
       } else {
         const errorMsg = data.message || "Failed to reset password";
         showAlert("Error", errorMsg, [{ text: "OK", style: "default" }], "alert-circle");
-        console.log("Reset failed:", data);
+        logger.log("Reset failed:", data);
       }
     } catch (error: any) {
       showAlert("Error", "Network error. Please try again.", [{ text: "OK", style: "default" }], "alert-circle");

@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * faceVerifier.js
  * ---------------
@@ -48,7 +49,7 @@ async function loadModels() {
       await faceapi.nets.faceRecognitionNet.loadFromDisk(MODELS_PATH);
 
       modelsLoaded = true;
-      console.log('[FaceVerifier] Models loaded successfully');
+      logger.log('[FaceVerifier] Models loaded successfully');
       return true;
     } catch (err) {
       console.error('[FaceVerifier] Failed to load models:', err.message);
@@ -285,7 +286,7 @@ async function analyzePose(imageBuffer) {
 
     return { faceDetected: true, yawAngle, smileScore };
   } catch (err) {
-    console.warn('[analyzePose] Error:', err.message);
+    logger.warn('[analyzePose] Error:', err.message);
     return { faceDetected: false, yawAngle: 0, smileScore: 0 };
   } finally {
     tensor?.dispose?.();

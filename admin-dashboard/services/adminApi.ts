@@ -16,10 +16,7 @@ const authHeaders = (): Record<string, string> => {
 const handleResponse = async (res: Response) => {
   const contentType = res.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    if (res.status === 401) {
-      clearToken();
-      window.location.reload();
-    }
+    if (res.status === 401) clearToken();
     const text = await res.text();
     if (!res.ok || !contentType.includes('json')) {
       throw new Error(
@@ -32,10 +29,7 @@ const handleResponse = async (res: Response) => {
   }
   const data = await res.json();
   if (!res.ok) {
-    if (res.status === 401) {
-      clearToken();
-      window.location.reload();
-    }
+    if (res.status === 401) clearToken();
     throw new Error(data.message || `Request failed with status ${res.status}`);
   }
   return data;
@@ -138,6 +132,15 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  revokeVerification: async (userId: string, reason: string) => {
+    const res = await fetch(`${API_BASE}/admin/revoke-verification/${userId}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
   approveVerification: async (userId: string) => {
     const res = await fetch(`${API_BASE}/admin/verifications/${userId}/approve`, {
       method: 'PUT',
@@ -183,8 +186,8 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  getAnalytics: async () => {
-    const res = await fetch(`${API_BASE}/admin/analytics`, { headers: authHeaders() });
+  getAnalytics: async (period: '7d' | '30d' = '7d') => {
+    const res = await fetch(`${API_BASE}/admin/analytics?period=${encodeURIComponent(period)}`, { headers: authHeaders() });
     return handleResponse(res);
   },
 
@@ -370,6 +373,29 @@ export const adminApi = {
 
   getRecentActivity: async () => {
     const res = await fetch(`${API_BASE}/admin/recent-activity`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  listIcebreakers: async () => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+  createIcebreaker: async (payload: { category: string; question: string; relatedInterests: string[]; isActive?: boolean }) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin`, {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+  updateIcebreaker: async (id: string, payload: Partial<{ category: string; question: string; relatedInterests: string[]; isActive: boolean }>) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin/${id}`, {
+      method: 'PUT', headers: authHeaders(), body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+  deleteIcebreaker: async (id: string) => {
+    const res = await fetch(`${API_BASE}/icebreakers/admin/${id}`, {
+      method: 'DELETE', headers: authHeaders(),
+    });
     return handleResponse(res);
   },
 };

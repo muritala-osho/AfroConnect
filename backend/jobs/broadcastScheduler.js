@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const cron = require('node-cron');
 const ScheduledBroadcast = require('../models/ScheduledBroadcast');
 const User = require('../models/User');
@@ -34,13 +35,13 @@ async function fireBroadcast(broadcast) {
       reach,
     });
 
-    console.log(`[BroadcastScheduler] Fired "${broadcast.title}" to ${reach} users (${sent} push tokens).`);
+    logger.log(`[BroadcastScheduler] Fired "${broadcast.title}" to ${reach} users (${sent} push tokens).`);
   } catch (err) {
     await ScheduledBroadcast.findByIdAndUpdate(broadcast._id, {
       status: 'failed',
       errorMessage: err.message,
     });
-    console.error(`[BroadcastScheduler] Failed to fire "${broadcast.title}":`, err.message);
+    logger.error(`[BroadcastScheduler] Failed to fire "${broadcast.title}":`, err.message);
   }
 }
 
@@ -55,13 +56,13 @@ async function checkDueBroadcasts() {
     }).limit(20);
 
     if (due.length > 0) {
-      console.log(`[BroadcastScheduler] ${due.length} broadcast(s) due — firing now.`);
+      logger.log(`[BroadcastScheduler] ${due.length} broadcast(s) due — firing now.`);
       for (const broadcast of due) {
         await fireBroadcast(broadcast);
       }
     }
   } catch (err) {
-    console.error('[BroadcastScheduler] Check error:', err.message);
+    logger.error('[BroadcastScheduler] Check error:', err.message);
   } finally {
     isRunning = false;
   }
@@ -72,7 +73,7 @@ function startBroadcastScheduler() {
     name: 'broadcast-scheduler',
     timezone: 'UTC',
   });
-  console.log('[BroadcastScheduler] Started — checking every minute.');
+  logger.log('[BroadcastScheduler] Started — checking every minute.');
 }
 
 module.exports = { startBroadcastScheduler, checkDueBroadcasts };

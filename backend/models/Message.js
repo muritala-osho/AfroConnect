@@ -88,6 +88,14 @@ const messageSchema = new mongoose.Schema({
   address: {
     type: String
   },
+  liveExpiresAt: {
+    type: Date,
+    default: null
+  },
+  lastLocationUpdate: {
+    type: Date,
+    default: null
+  },
   status: {
     type: String,
     enum: ['sending', 'sent', 'delivered', 'seen'],

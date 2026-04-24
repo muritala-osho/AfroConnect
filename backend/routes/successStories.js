@@ -264,7 +264,7 @@ router.put('/:storyId', protect, async (req, res) => {
     ];
 
     allowedUpdates.forEach(field => {
-      if (req.body[field] !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(req.body, field) && req.body[field] !== undefined) {
         story[field] = req.body[field];
       }
     });

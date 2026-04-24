@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Dimensions, Platform } from "react-native";
 import { Image } from "expo-image";
@@ -78,7 +79,7 @@ export default function MatchPopupScreen({ navigation, route }: MatchPopupScreen
           }
         });
       } catch (err) {
-        console.log('Match sound error:', err);
+        logger.log('Match sound error:', err);
       }
     };
     playMatchSound();

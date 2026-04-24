@@ -12,9 +12,19 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.afroconnect.app",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "backgroundModes": ["voip", "audio", "fetch", "remote-notification"],
+      "backgroundModes": [
+        "voip",
+        "audio",
+        "fetch",
+        "remote-notification"
+      ],
       "infoPlist": {
-        "UIBackgroundModes": ["voip", "audio", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "voip",
+          "audio",
+          "fetch",
+          "remote-notification"
+        ]
       },
       "entitlements": {
         "com.apple.developer.telephony.call-capability": "com.apple.developer.telephony.call-capability"
@@ -60,7 +70,6 @@
     },
     "plugins": [
       "./plugins/withCallKeep",
-      "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       [
         "expo-splash-screen",
@@ -111,7 +120,8 @@
           ]
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@sentry/react-native"
     ],
     "experiments": {
       "reactCompiler": false

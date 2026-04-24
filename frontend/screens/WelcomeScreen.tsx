@@ -40,6 +40,10 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [challengeQuestion, setChallengeQuestion] = useState("");
+  const [challengeToken, setChallengeToken] = useState("");
+  const [challengeAnswer, setChallengeAnswer] = useState("");
+  const [challengeLoading, setChallengeLoading] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -68,23 +72,59 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (showAbout) {
+      fetchSupportChallenge();
+    }
+  }, [showAbout]);
+
+  const fetchSupportChallenge = async () => {
+    setChallengeLoading(true);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/support/challenge`);
+      const data = await response.json();
+      if (data.success) {
+        setChallengeQuestion(data.question);
+        setChallengeToken(data.challengeToken);
+        setChallengeAnswer("");
+      }
+    } catch {
+      setChallengeQuestion("");
+      setChallengeToken("");
+    } finally {
+      setChallengeLoading(false);
+    }
+  };
+
   const handleContactSubmit = async () => {
     if (!name || !email || !message) {
       Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+    if (!challengeToken || !challengeAnswer.trim()) {
+      Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
       return;
     }
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ name, email, message }),
+        body: JSON.stringify({
+          name,
+          email,
+          message,
+          challengeToken,
+          challengeAnswer: challengeAnswer.trim(),
+        }),
       });
       const data = await response.json();
       if (data.success) {
         Alert.alert("Success", "Message sent!");
-        setName(""); setEmail(""); setMessage("");
+        setName(""); setEmail(""); setMessage(""); setChallengeAnswer("");
+        fetchSupportChallenge();
       } else {
         Alert.alert("Error", data.message || "Failed to send message");
+        if (data.requiresChallenge) fetchSupportChallenge();
       }
     } catch {
       Alert.alert("Error", "Something went wrong.");
@@ -199,6 +239,24 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
                 <TextInput style={[styles.input, { borderColor: theme.border, color: theme.text }]} placeholder="Your Name" placeholderTextColor={theme.textSecondary} value={name} onChangeText={setName} />
                 <TextInput style={[styles.input, { borderColor: theme.border, color: theme.text }]} placeholder="Your Email" placeholderTextColor={theme.textSecondary} value={email} onChangeText={setEmail} />
                 <TextInput style={[styles.input, { borderColor: theme.border, color: theme.text, height: 100 }]} placeholder="Your Message" placeholderTextColor={theme.textSecondary} multiline value={message} onChangeText={setMessage} />
+                <View style={[styles.challengeBox, { borderColor: theme.border, backgroundColor: theme.primary + "10" }]}>
+                  <ThemedText style={[styles.challengeLabel, { color: theme.text }]}>
+                    {challengeLoading ? "Loading security challenge..." : challengeQuestion || "Security challenge unavailable"}
+                  </ThemedText>
+                  <View style={styles.challengeRow}>
+                    <TextInput
+                      style={[styles.challengeInput, { borderColor: theme.border, color: theme.text }]}
+                      placeholder="Answer"
+                      placeholderTextColor={theme.textSecondary}
+                      keyboardType="number-pad"
+                      value={challengeAnswer}
+                      onChangeText={setChallengeAnswer}
+                    />
+                    <Pressable style={[styles.refreshChallenge, { borderColor: theme.border }]} onPress={fetchSupportChallenge}>
+                      <Ionicons name="refresh" size={18} color={theme.primary} />
+                    </Pressable>
+                  </View>
+                </View>
                 <Pressable style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={handleContactSubmit}>
                   <ThemedText style={styles.primaryButtonText}>Send Message</ThemedText>
                 </Pressable>
@@ -237,6 +295,11 @@ const styles = StyleSheet.create({
   faqQuestion: { fontSize: 15, fontWeight: "700", marginBottom: 4 },
   faqAnswer: { fontSize: 14 },
   input: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 15 },
+  challengeBox: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 15 },
+  challengeLabel: { fontSize: 14, fontWeight: "700", marginBottom: 10 },
+  challengeRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  challengeInput: { flex: 1, borderWidth: 1, borderRadius: 10, padding: 12 },
+  refreshChallenge: { width: 46, height: 46, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   successStoryLink: { flexDirection: "row", alignItems: "center", padding: 15, borderRadius: 12, marginTop: 10, marginBottom: 10, gap: 10 },
   successStoryLinkText: { flex: 1, fontSize: 16, fontWeight: "700" },
 });

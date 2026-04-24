@@ -41,6 +41,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-g
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { FALLBACK_COUNTRIES, PASSPORT_CITIES, DiscoverUser } from "@/constants/discoveryConstants";
+import BlendPopupPage from "@/components/BlendPopupPage";
 import logger from "@/utils/logger";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -57,6 +58,57 @@ interface DiscoveryScreenProps {
 }
 
 const AfroConnectLogo = require('@/assets/afroconnect-logo.png');
+
+function haversineKm(lat1?: number, lng1?: number, lat2?: number, lng2?: number): number | null {
+  if (lat1 == null || lng1 == null || lat2 == null || lng2 == null) return null;
+  const toRad = (v: number) => (v * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+const reverseGeocodeCache = new Map<string, { city?: string; country?: string }>();
+async function cachedReverseGeocode(lat: number, lng: number): Promise<{ city?: string; country?: string }> {
+  const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
+  if (reverseGeocodeCache.has(key)) return reverseGeocodeCache.get(key)!;
+  try {
+    const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+    const result = {
+      city: place?.city || place?.district || place?.subregion || undefined,
+      country: place?.country || undefined,
+    };
+    reverseGeocodeCache.set(key, result);
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function formatDistanceAway(target: any, currentUser: any): string | null {
+  let km: number | null = typeof target?.distance === 'number' ? target.distance : null;
+  if (km == null) {
+    km = haversineKm(
+      currentUser?.location?.lat,
+      currentUser?.location?.lng,
+      target?.location?.lat,
+      target?.location?.lng,
+    );
+  }
+  if (km == null || !isFinite(km) || km < 0) return null;
+  if (km < 1) {
+    const meters = Math.max(50, Math.round((km * 1000) / 50) * 50);
+    return `${meters}m away`;
+  }
+  if (km < 10) {
+    const rounded = Math.round(km * 10) / 10;
+    return `${rounded}km away`;
+  }
+  return `${Math.round(km)}km away`;
+}
 
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const { theme, isDark } = useTheme();
@@ -87,6 +139,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [showSecondChance, setShowSecondChance] = useState(false);
   const [secondChanceProfiles, setSecondChanceProfiles] = useState<any[]>([]);
   const [secondChanceLoading, setSecondChanceLoading] = useState(false);
+  const [blendMatch, setBlendMatch] = useState<{
+    user: DiscoverUser;
+    shared: string[];
+    songMatch?: { type: 'song' | 'artist'; title?: string; artist?: string; albumArt?: string };
+  } | null>(null);
+  const blendShownIds = useRef<Set<string>>(new Set());
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
   
@@ -171,6 +229,21 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
       };
+
+      const locationName = await cachedReverseGeocode(coords.lat, coords.lng);
+
+      try {
+        await fetch(`${getApiBaseUrl()}/api/radar/location`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ...coords, ...locationName }),
+        });
+      } catch (locationUpdateError) {
+        logger.log('[DISCOVERY RADAR] Could not update live user location', locationUpdateError);
+      }
       
       const params = new URLSearchParams({
         lat: coords.lat.toString(),
@@ -205,6 +278,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             distance: u.distance,
             gender: u.gender || 'unknown',
             verified: u.verified || false,
+            favoriteSong: u.favoriteSong || undefined,
           };
         });
         
@@ -345,12 +419,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             online: u.online,
             distance: u.distance,
             similarityScore,
+            sharedInterests,
             gender: u.gender || 'male',
             verified: u.verified || false,
             location: u.location,
             isBoosted: u.isBoosted || false,
             needsVerification: u.needsVerification || false,
-            premium: u.premium || undefined
+            premium: u.premium || undefined,
+            favoriteSong: u.favoriteSong || undefined,
           };
         });
 
@@ -417,29 +493,36 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       
       const loadData = async () => {
         setLoading(true);
-        await Promise.all([
-          loadPotentialMatches(),
-          fetchRadarNearbyUsers()
-        ]);
+        // Run nearby query first; only fall back to radar if we got few results.
+        // Avoids two concurrent location lookups + duplicate API calls on every load.
+        await loadPotentialMatches();
+        if (users.length < 3) {
+          fetchRadarNearbyUsers();
+        }
       };
       loadData();
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
 
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  
+  const isAnimatingRef = useRef(false);
+  useEffect(() => {
+    isAnimatingRef.current = isAnimating;
+  }, [isAnimating]);
+
   useFocusEffect(
     useCallback(() => {
       checkLocationPermission();
       
       const initialScanTimeout = setTimeout(() => {
-        if (hasLocationPermission !== false && token) {
+        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
           fetchRadarNearbyUsers();
         }
       }, 1000);
       
       radarIntervalRef.current = setInterval(() => {
-        if (hasLocationPermission !== false && token) {
+        // Skip while a swipe animation is mid-flight to avoid jank
+        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
           fetchRadarNearbyUsers();
         }
       }, 30000);
@@ -551,6 +634,30 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         </Pressable>
       </View>
+
+      {discoveryType === 'local' && !(user?.location?.lat && user?.location?.lng) && (
+        <Pressable
+          onPress={handleShareLocation}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: theme.primary + '22',
+            borderColor: theme.primary,
+            borderWidth: 1,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: BorderRadius.md,
+            marginTop: 12,
+          }}
+        >
+          <Feather name="map-pin" size={14} color={theme.primary} />
+          <ThemedText style={{ fontSize: 12, flex: 1, color: theme.primary }}>
+            Share your location to see distance & better local matches
+          </ThemedText>
+          <Feather name="chevron-right" size={14} color={theme.primary} />
+        </Pressable>
+      )}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
         <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
@@ -906,6 +1013,47 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
     navigation.navigate("ProfileDetail", { userId: targetUser.id });
   }, [currentIndex, users, navigation]);
+
+  useEffect(() => {
+    if (loading || isAnimating) return;
+    const cur = users[currentIndex];
+    if (!cur) return;
+    if (blendShownIds.current.has(cur.id)) return;
+
+    const shared = cur.sharedInterests || [];
+    const score = cur.similarityScore || 0;
+
+    const mySong = (user as any)?.favoriteSong;
+    const theirSong = cur.favoriteSong;
+    const norm = (s?: string) => (s || '').trim().toLowerCase();
+    let songMatch: { type: 'song' | 'artist'; title?: string; artist?: string; albumArt?: string } | undefined;
+    if (mySong && theirSong) {
+      const sameTitle = !!norm(mySong.title) && norm(mySong.title) === norm(theirSong.title);
+      const sameArtist = !!norm(mySong.artist) && norm(mySong.artist) === norm(theirSong.artist);
+      if (sameTitle && sameArtist) {
+        songMatch = { type: 'song', title: theirSong.title, artist: theirSong.artist, albumArt: theirSong.albumArt };
+      } else if (sameArtist) {
+        songMatch = { type: 'artist', artist: theirSong.artist, albumArt: theirSong.albumArt };
+      }
+    }
+
+    const hasInterestBlend = shared.length >= 3 && score >= 65;
+    const hasSongBlend = !!songMatch;
+
+    if (hasInterestBlend || hasSongBlend) {
+      blendShownIds.current.add(cur.id);
+      setBlendMatch({ user: cur, shared, songMatch });
+      if (Platform.OS !== 'web') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+    }
+  }, [currentIndex, users, loading, isAnimating, user]);
+
+  const handleBlendLike = useCallback(() => {
+    if (!blendMatch) return;
+    setBlendMatch(null);
+    setTimeout(() => handleLike(), 50);
+  }, [blendMatch]);
 
   const handleRewind = useCallback(async () => {
     if (userHistory.current.length === 0) {
@@ -1510,6 +1658,19 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                   </View>
                 )}
 
+                {(() => {
+                  const distanceLabel = formatDistanceAway(currentUser, user);
+                  if (!distanceLabel) return null;
+                  return (
+                    <View style={styles.locationRow}>
+                      <Feather name="navigation" size={13} color="rgba(255,255,255,0.7)" />
+                      <ThemedText style={styles.locationText} numberOfLines={1}>
+                        {distanceLabel}
+                      </ThemedText>
+                    </View>
+                  );
+                })()}
+
                 <View style={styles.lifestyleRow}>
                   {currentUser.religion && (
                     <View style={styles.lifestyleBadge}>
@@ -1632,6 +1793,22 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         )}
         <AlertComponent />
+
+        <Modal
+          visible={!!blendMatch}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setBlendMatch(null)}
+          statusBarTranslucent
+        >
+          <BlendPopupPage
+            blendMatch={blendMatch}
+            currentUser={user}
+            theme={theme}
+            onClose={() => setBlendMatch(null)}
+            onLike={handleBlendLike}
+          />
+        </Modal>
 
         <Modal
           visible={showSecondChance}

@@ -69,6 +69,37 @@ router.get('/', protect, async (req, res) => {
       sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
     }
 
+    // Self-heal stale device info and missing location for the current session
+    const currentSession = sessions.find(s => s.sessionId === currentSessionId);
+    if (currentSession) {
+      const freshName = req.headers['x-device-name'] || null;
+      const freshPlatform = req.headers['x-platform'] || null;
+      const needsDeviceHeal = (currentSession.deviceName === 'Unknown Device' || currentSession.platform === 'unknown') && (freshName || freshPlatform);
+      const needsLocationHeal = !currentSession.city && !currentSession.country;
+
+      const updateFields = { lastActive: new Date() };
+      if (needsDeviceHeal) {
+        if (freshName) updateFields.deviceName = freshName;
+        if (freshPlatform) updateFields.platform = freshPlatform;
+      }
+
+      if (needsLocationHeal) {
+        const rawIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || null;
+        const cleanIp = rawIp && rawIp.startsWith('::ffff:') ? rawIp.slice(7) : rawIp;
+        const { city, country } = await lookupGeo(cleanIp);
+        if (city || country) {
+          updateFields.city = city;
+          updateFields.country = country;
+          if (cleanIp) updateFields.ipAddress = cleanIp;
+        }
+      }
+
+      if (needsDeviceHeal || needsLocationHeal) {
+        await Session.updateOne({ sessionId: currentSessionId }, { $set: updateFields });
+        sessions = await Session.find({ userId: req.user._id }).sort({ lastActive: -1 });
+      }
+    }
+
     const sessionData = sessions.map((s) => ({
       _id: s._id,
       sessionId: s.sessionId,
@@ -92,6 +123,7 @@ router.get('/', protect, async (req, res) => {
 router.delete('/others', protect, async (req, res) => {
   try {
     const currentSessionId = req.sessionId;
+    const userId = req.user._id.toString();
 
     const otherSessions = await Session.find({
       userId: req.user._id,
@@ -113,6 +145,14 @@ router.delete('/others', protect, async (req, res) => {
       sessionId: { $ne: currentSessionId },
     });
 
+    // Force-logout all other devices via socket immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.to(userId).emit('session:revoked', {
+        reason: 'You were logged out from another device.',
+      });
+    }
+
     res.json({
       success: true,
       message: `${otherSessions.length} other device(s) logged out`,
@@ -126,6 +166,7 @@ router.delete('/others', protect, async (req, res) => {
 router.delete('/:sessionId', protect, async (req, res) => {
   try {
     const { sessionId } = req.params;
+    const userId = req.user._id.toString();
 
     if (sessionId === req.sessionId) {
       return res.status(400).json({
@@ -141,6 +182,14 @@ router.delete('/:sessionId', protect, async (req, res) => {
 
     await redis.set(`revoked:${sessionId}`, '1', 7 * 24 * 60 * 60);
     await Session.deleteOne({ sessionId });
+
+    // Force-logout the removed device via socket immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.to(userId).emit('session:revoked', {
+        reason: 'This device was removed from your account.',
+      });
+    }
 
     res.json({ success: true, message: 'Device logged out successfully' });
   } catch (error) {

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, {
   useState,
   useCallback,
@@ -576,7 +577,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       if (pinned) setPinnedChats(new Set(JSON.parse(pinned)));
       if (viewedStories) setViewedStoryUsers(new Set(JSON.parse(viewedStories)));
     } catch (e) {
-      console.log("Settings load error:", e);
+      logger.log("Settings load error:", e);
     }
   }, []);
 
@@ -594,7 +595,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       try {
         await AsyncStorage.setItem(key, JSON.stringify(Array.from(data)));
       } catch (e) {
-        console.log("Settings save error:", e);
+        logger.log("Settings save error:", e);
       }
     },
     [],
@@ -614,7 +615,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         return isValid;
       }
     } catch (e) {
-      console.log("Cache load error:", e);
+      logger.log("Cache load error:", e);
     }
     if (showImmediately) {
       setLoading(false);
@@ -638,7 +639,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         return true;
       }
     } catch (error) {
-      console.log("My stories fetch error:", error);
+      logger.log("My stories fetch error:", error);
     }
     setUserHasStory(false);
     return false;
@@ -661,7 +662,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         return unique;
       }
     } catch (error) {
-      console.log("Stories fetch error:", error);
+      logger.log("Stories fetch error:", error);
     }
     return [];
   }, [token, get, user?.id]);
@@ -677,7 +678,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         setCallHistory(response.data.calls);
       }
     } catch (error) {
-      console.log("Call history fetch error:", error);
+      logger.log("Call history fetch error:", error);
     }
   }, [token, get]);
 
@@ -754,7 +755,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                   );
                 }
               } catch (e) {
-                console.log("Pre-fetch error for", conv.user.name, e);
+                logger.log("Pre-fetch error for conversation", e);
               }
             });
           }
@@ -782,7 +783,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         }
       }
     } catch (error) {
-      console.error("Error fetching conversations:", error);
+      logger.error("Error fetching conversations:", error);
     } finally {
       if (!isBackground) {
         setLoading(false);
@@ -841,7 +842,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
           fetchMyStories();
         }
       };
-      checkAndLoad().catch(console.log);
+      checkAndLoad().catch((e) => logger.error(e));
     }, [
       fetchConversations,
       loadLocalSettings,
@@ -967,7 +968,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       setConversations((prev) => prev.map((c) => ({ ...c, unreadCount: 0 })));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      console.error("Error marking all read:", error);
+      logger.error("Error marking all read:", error);
     }
   };
 
@@ -1021,7 +1022,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 Haptics.NotificationFeedbackType.Success,
               );
             } catch (error) {
-              console.error("Error deleting chats:", error);
+              logger.error("Error deleting chats:", error);
               Alert.alert("Error", "Failed to delete chats. Please try again.");
             }
           },
@@ -1086,7 +1087,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
         await del(`/mute/user/${userId}`, token ?? undefined);
       }
     } catch (e) {
-      console.log("Mute sync error (non-critical):", e);
+      logger.log("Mute sync error (non-critical):", e);
     }
 
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1152,7 +1153,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                 );
               }
             } catch (error) {
-              console.error("Error deleting chat:", error);
+              logger.error("Error deleting chat:", error);
               Alert.alert("Error", "Failed to delete chat. Please try again.");
             }
           },

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { WebView } from "react-native-webview";
@@ -14,6 +15,7 @@ import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { getPhotoSource } from "@/utils/photos";
 import * as Location from 'expo-location';
+import { pushLiveLocation } from '@/utils/liveLocation';
 
 type MapViewScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "MapView">;
 
@@ -102,10 +104,11 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
       const lng = location.coords.longitude;
       setCurrentLocation({ lat, lng });
 
+      pushLiveLocation(token ?? undefined, { force: true }).catch(() => {});
       fetchWeather(lat, lng);
       await loadNearbyUsers(lat, lng);
     } catch (error) {
-      console.error("Error initializing map:", error);
+      logger.error("Error initializing map:", error);
     } finally {
       setLoading(false);
     }
@@ -127,7 +130,7 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
         });
       }
     } catch (error) {
-      console.error('Error fetching weather:', error);
+      logger.error('Error fetching weather:', error);
     }
   };
 
@@ -171,7 +174,7 @@ export default function MapViewScreen({ navigation }: MapViewScreenProps) {
         setUsers(usersWithDistance);
       }
     } catch (error) {
-      console.error("Error loading users:", error);
+      logger.error("Error loading users:", error);
     }
   };
 

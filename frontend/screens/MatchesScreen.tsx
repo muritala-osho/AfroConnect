@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Dimensions, RefreshControl, Modal } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -321,7 +322,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         setWhoLikesMe(likesRes.data.users);
       }
     } catch (error) {
-      console.error("Error loading matches:", error);
+      logger.error("Error loading matches:", error);
     } finally {
       setLoading(false);
     }
@@ -375,7 +376,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         loadMatches();
       }
     } catch (error) {
-      console.error('Error liking back:', error);
+      logger.error('Error liking back:', error);
     }
   };
 
@@ -385,7 +386,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
     try {
       await api.post('/match/swipe', { targetUserId, action: 'pass' }, token);
     } catch (error) {
-      console.error("Error recording pass:", error);
+      logger.error("Error recording pass:", error);
     }
   }, [token, api]);
 

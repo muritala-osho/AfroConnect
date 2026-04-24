@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 
 import { io, Socket } from 'socket.io-client';
 import { getSocketUrl } from '@/constants/config';
@@ -16,7 +17,7 @@ class SocketService {
 
     this.isManualDisconnect = false;
     const socketUrl = getSocketUrl();
-    console.log('📡 Connecting to socket:', socketUrl);
+    logger.log('📡 Connecting to socket:', socketUrl);
     
     this.socket = io(socketUrl, {
       path: '/socket.io',
@@ -28,7 +29,6 @@ class SocketService {
       reconnectionAttempts: Infinity,
       timeout: 10000,
       autoConnect: true,
-      rejectUnauthorized: false,
       forceNew: true,
       query: {
         token
@@ -36,7 +36,7 @@ class SocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('✅ Socket connected successfully');
+      logger.log('✅ Socket connected successfully');
       this.reconnectAttempts = 0;
       
       this.reattachListeners();
@@ -45,7 +45,7 @@ class SocketService {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason);
+      logger.log('Socket disconnected:', reason);
       
       if (this.isManualDisconnect) {
         return;
@@ -59,28 +59,28 @@ class SocketService {
     this.socket.on('connect_error', (error) => {
       this.reconnectAttempts++;
       if (this.reconnectAttempts <= 3) {
-        console.warn(`Socket connection error (attempt ${this.reconnectAttempts}):`, error.message || (error as any).type || error);
+        logger.warn(`Socket connection error (attempt ${this.reconnectAttempts}):`, error.message || (error as any).type || error);
       }
       
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {
         if (this.reconnectAttempts === this.maxReconnectAttempts) {
-          console.log('Socket: Running in offline mode (real-time features unavailable)');
+          logger.log('Socket: Running in offline mode (real-time features unavailable)');
         }
         this.scheduleReconnect();
       }
     });
 
     this.socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`Reconnecting... attempt ${attemptNumber}`);
+      logger.log(`Reconnecting... attempt ${attemptNumber}`);
     });
 
     this.socket.on('reconnect', (attemptNumber) => {
-      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+      logger.log(`✅ Reconnected after ${attemptNumber} attempts`);
       this.reconnectAttempts = 0;
     });
 
     this.socket.on('reconnect_failed', () => {
-      console.error('Socket reconnection failed after all attempts');
+      logger.error('Socket reconnection failed after all attempts');
       this.scheduleReconnect();
     });
   }
@@ -94,7 +94,7 @@ class SocketService {
 
     this.reconnectTimer = setTimeout(() => {
       if (!this.socket?.connected && !this.isManualDisconnect) {
-        console.log('Attempting manual reconnection...');
+        logger.log('Attempting manual reconnection...');
         this.socket?.connect();
       }
     }, delay);
@@ -152,12 +152,12 @@ class SocketService {
       return;
     }
     
-    console.log(`Socket not connected, attempting to reconnect for ${event}...`);
+    logger.log(`Socket not connected, attempting to reconnect for ${event}...`);
     
     const connected = await this.ensureConnected();
     if (connected && this.socket?.connected) {
       this.socket.emit(event, data);
-      console.log(`Successfully emitted ${event} after reconnection`);
+      logger.log(`Successfully emitted ${event} after reconnection`);
       return;
     }
     
@@ -171,10 +171,10 @@ class SocketService {
       if (this.socket?.connected) {
         clearInterval(retryInterval);
         this.socket.emit(event, data);
-        console.log(`Successfully emitted ${event} after ${attempts} retry attempts`);
+        logger.log(`Successfully emitted ${event} after ${attempts} retry attempts`);
       } else if (attempts >= retries) {
         clearInterval(retryInterval);
-        console.error(`Failed to emit ${event} after ${retries} attempts`);
+        logger.error(`Failed to emit ${event} after ${retries} attempts`);
       } else {
         this.socket?.connect();
       }

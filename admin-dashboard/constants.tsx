@@ -15,13 +15,16 @@ import {
   TrendingDown,
   Headphones,
   ScrollText,
+  ShieldOff,
+  MessageCircleQuestion,
 } from 'lucide-react';
 import { AdminRole, PushTemplate } from './types';
 
 export const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard',          icon: <LayoutDashboard size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
   { id: 'users',        label: 'Citizens',            icon: <Users size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
-  { id: 'verification', label: 'Verification Requests', icon: <UserCheck size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'verification',        label: 'Verification Requests', icon: <UserCheck size={20} />,  roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'revoke-verification', label: 'Revoke Badge',          icon: <ShieldOff size={20} />, roles: [AdminRole.SUPER_ADMIN] },
   { id: 'reports',      label: 'Safety Hub',          icon: <ShieldAlert size={20} />,     roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'appeals',      label: 'Appeals Queue',       icon: <Gavel size={20} />,           roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'churn',        label: 'Churn Intelligence',  icon: <TrendingDown size={20} />,    roles: [AdminRole.SUPER_ADMIN] },
@@ -31,6 +34,7 @@ export const NAV_ITEMS = [
   { id: 'payments',     label: 'Finances',            icon: <CreditCard size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'analytics',    label: 'Intelligence',        icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
   { id: 'broadcasts',   label: 'Broadcasts',          icon: <Megaphone size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
+  { id: 'icebreakers',  label: 'Icebreakers',         icon: <MessageCircleQuestion size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'profile',      label: 'My Profile',          icon: <UserCircle size={20} />,      roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },
   { id: 'audit',        label: 'Audit Log',           icon: <ScrollText size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'settings',     label: 'System Core',         icon: <Settings size={20} />,        roles: [AdminRole.SUPER_ADMIN] },

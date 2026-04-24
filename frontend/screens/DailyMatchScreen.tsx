@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -150,7 +151,7 @@ export default function DailyMatchScreen() {
         }
       }
     } catch (e) {
-      console.error("Daily match error:", e);
+      logger.error("Daily match error:", e);
       setHasError(true);
     } finally {
       setLoading(false);
@@ -180,7 +181,7 @@ export default function DailyMatchScreen() {
         }
       }
     } catch (e) {
-      console.error("Like error:", e);
+      logger.error("Like error:", e);
     } finally {
       setActionLoading(false);
     }
@@ -193,7 +194,7 @@ export default function DailyMatchScreen() {
       await post("/match/swipe", { targetUserId: match._id, action: "pass" }, token);
       setPassed(true);
     } catch (e) {
-      console.error("Pass error:", e);
+      logger.error("Pass error:", e);
     } finally {
       setActionLoading(false);
     }

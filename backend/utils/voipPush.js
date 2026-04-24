@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * VoIP Push Notification Sender
  *
@@ -51,13 +52,13 @@ function getProvider() {
  */
 async function sendVoipPush(voipToken, { callerId, callerName, callType, callData } = {}) {
   if (!voipToken) {
-    console.warn('[VoIP Push] No VoIP token provided — skipping.');
+    logger.warn('[VoIP Push] No VoIP token provided — skipping.');
     return;
   }
 
   const provider = getProvider();
   if (!provider) {
-    console.warn(
+    logger.warn(
       '[VoIP Push] APNs credentials not configured (APNS_KEY_ID / APNS_TEAM_ID / APNS_KEY missing). ' +
       'Set these env vars to enable iOS VoIP push for killed-app call ringing.',
     );
@@ -77,13 +78,13 @@ async function sendVoipPush(voipToken, { callerId, callerName, callType, callDat
   try {
     const result = await provider.send(notification, voipToken);
     if (result.failed?.length) {
-      console.error('[VoIP Push] Failed to deliver to some devices:', result.failed);
+      logger.error('[VoIP Push] Failed to deliver to some devices:', result.failed);
     } else {
-      console.log(`[VoIP Push] ✅ Sent to ${voipToken.slice(0, 20)}…`);
+      logger.log(`[VoIP Push] ✅ Sent to ${voipToken.slice(0, 20)}…`);
     }
     return result;
   } catch (err) {
-    console.error('[VoIP Push] Error sending push:', err);
+    logger.error('[VoIP Push] Error sending push:', err);
   }
 }
 

@@ -152,7 +152,33 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  liveLocation: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number],
+      default: undefined
+    },
+    city: String,
+    country: String,
+    accuracy: Number
+  },
+  liveLocationUpdatedAt: {
+    type: Date,
+    default: null
+  },
+  autoUpdateProfileLocation: {
+    type: Boolean,
+    default: false
+  },
   verified: {
+    type: Boolean,
+    default: false
+  },
+  isVerified: {
     type: Boolean,
     default: false
   },
@@ -169,9 +195,24 @@ const userSchema = new mongoose.Schema({
   },
   verificationStatus: {
     type: String,
-    enum: ['not_requested', 'pending', 'approved', 'rejected'],
+    enum: ['none', 'not_requested', 'pending', 'approved', 'rejected'],
     default: 'not_requested'
   },
+  verificationHistory: [{
+    action: {
+      type: String,
+      enum: ['approved', 'rejected', 'revoked']
+    },
+    reason: String,
+    adminId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   verificationPhoto: {
     type: String,
     default: null
@@ -414,6 +455,10 @@ const userSchema = new mongoose.Schema({
     default: null,
   },
   fcmToken: {
+    type: String,
+    default: null,
+  },
+  timezone: {
     type: String,
     default: null,
   },
@@ -676,6 +721,15 @@ userSchema.index({ 'premium.isActive': 1 });
 userSchema.index({ verified: 1 });
 userSchema.index({ isActive: 1, createdAt: -1 });
 userSchema.index({ name: 'text', bio: 'text' });
+userSchema.index({ blockedUsers: 1 });
+userSchema.index({ lookingFor: 1 });
+userSchema.index({ banned: 1, suspended: 1 });
+userSchema.index({ 'lifestyle.religion': 1 });
+userSchema.index({ 'lifestyle.smoking': 1 });
+userSchema.index({ 'lifestyle.drinking': 1 });
+userSchema.index({ 'lifestyle.wantsKids': 1 });
+userSchema.index({ 'lifestyle.exercise': 1 });
+userSchema.index({ gender: 1, age: 1, isActive: 1, banned: 1 });
 
 
 userSchema.pre('save', async function() {

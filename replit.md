@@ -1,6 +1,68 @@
 # AfroConnect — Project Structure
 
 ## Recent Changes
+- **Icebreakers: full feature integration (no logic disturbed)**:
+  - `backend/routes/icebreakers.js` (new): adds three endpoints — `GET /api/icebreakers/suggest/:userId` (returns 5 personalized prompts for the chat partner), `GET/POST/PUT/DELETE /api/icebreakers/admin` (admin CRUD). Auto-seeds ~70 default questions across 9 categories on first call so the feature works on day one with no migration step. Scoring boosts shared interests (+3), partner-only interests (+2), my-only interests (+1); falls back to `general` then random to always return a full set; filters out questions whose text already appears in the conversation.
+  - `backend/server.js`: registered the route alongside `/api/prompts`. Reuses the existing `IceBreaker` model that previously had no consumers.
+  - `frontend/screens/ChatDetailScreen.tsx`: `fetchAISuggestions` now calls the new endpoint with the chat partner's userId. The hard-coded `AI_SUGGESTIONS` array is set immediately as a fallback so the chip row never appears empty (offline / network failure / unauth = local list, online = personalized list). All other behavior — opening the chip row, tap-to-send, the robot button placement — is unchanged.
+  - `admin-dashboard/views/IceBreakers.tsx` (new) + `admin-dashboard/App.tsx` + `admin-dashboard/constants.tsx` + `admin-dashboard/services/adminApi.ts`: added a full management page (table with category filter chips, search, status toggle, edit/delete) and a create/edit modal that lets admins enter a question, pick a category, and tag related interests as a comma-separated list. Visible to SUPER_ADMIN and MODERATOR roles.
+
+- **Chat: voice-note reactions + swipeable image gallery**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Added `onLongPress={handleMessageLongPress}` to the voice-note bubble so the existing reaction picker now opens for audio messages just like text/image. No new server changes — reuses the same reactions array on the Message model.
+  - `frontend/screens/ChatDetailScreen.tsx`: The image viewer is now a swipeable gallery. Tapping any photo collects every image URL in the chat (`messagesRef.current.filter(m=>m.type==='image')`), opens the modal at that index, and renders a horizontal `FlatList` with `pagingEnabled`. A "n / total" counter appears in the header. The download button always saves the currently visible photo.
+  - `frontend/components/ZoomablePhoto.tsx`: Added optional `onZoomChange(zoomed)` callback that fires when the user pinches in / out or double-taps. The gallery uses this to set `scrollEnabled={!imageViewerZoomed}` on the horizontal `FlatList`, so swiping between images is disabled while zoomed (preventing the pinch/pan gesture from fighting the pager swipe). When the user swipes to a new photo, the zoom flag is reset.
+
+- **Voice notes: major UX overhaul**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Recording is now a two-step flow — stop produces a *preview* bubble (play / scrub / discard / send) instead of auto-uploading, so users can review before sending. Added pause/resume buttons during recording (uses `Recording.pauseAsync()` / `startAsync()`). Sending is now optimistic with the same tap-to-retry pattern as photos/videos: failed voice notes show a refresh icon and "Tap to retry" caption.
+  - `frontend/screens/ChatDetailScreen.tsx`: Playback gains variable speed (1x / 1.5x / 2x pill that appears next to the active bubble, persisted in AsyncStorage), continuous auto-play (when a received voice note finishes, the next unplayed received voice note in the chat starts after 250ms), and waveform scrubbing (tap anywhere on the bars during playback to seek). Background playback is enabled via `staysActiveInBackground: true` and `shouldDuckAndroid: true` so it keeps playing when the user leaves the chat.
+  - `frontend/screens/ChatDetailScreen.tsx`: Played/unplayed indicator — received voice notes show a small primary-colored dot next to the waveform until the user listens through to the end. The set of played message ids is persisted per user in AsyncStorage (`played_audio_<userId>`).
+  - `frontend/components/chat/WavyWaveform.tsx`: Added optional `onSeek(fraction)` prop. The bars are now wrapped in a `Pressable` that measures its width via `onLayout` and computes the seek fraction from `e.nativeEvent.locationX`, so taps along the waveform jump playback to that position.
+  - Not built (would need a paid third-party API or new native module): tap-to-read transcription (no free key-less Whisper option), proximity-sensor earpiece switching, Opus re-encoding.
+
+- **Chat: tap-to-retry failed media sends**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Failed image/video bubbles now show a refresh icon and "Tap to retry" overlay; tapping re-runs the upload and message POST using the original local file URI without re-picking. Sending bubbles show a spinner overlay so users see the in-flight state.
+
+- **Chat: instant media send + single Location button**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Image and video sends are now optimistic — the message bubble appears immediately using the local file URI with a "sending" status, then swaps to the cloud URL and the server message id once the upload + POST completes. Failures mark the bubble `failed` and show an alert.
+  - `frontend/screens/ChatDetailScreen.tsx`: Removed the duplicate "Live" attachment button. The single "Location" button now opens a unified picker with "Send current location" plus the three live-share durations (15 min / 1 hour / 8 hours).
+
+- **Device timezone sync for accurate local time**:
+  - `backend/models/User.js`: Added `timezone` (IANA name) field on the User schema.
+  - `backend/routes/notifications.js`: New `POST /api/notifications/register-timezone` protected endpoint that stores the caller's IANA timezone string.
+  - `frontend/App.tsx`: After login (alongside FCM/VoIP token registration), the app now sends `Intl.DateTimeFormat().resolvedOptions().timeZone` to the backend so other users see truly accurate "local time" on profiles even when the user has no shared GPS coordinates.
+
+- **Chat zoomable images, smoother keyboard, accurate local time**:
+  - `frontend/screens/ChatDetailScreen.tsx`: Full-screen image viewer now uses the existing `ZoomablePhoto` component so chat photos pinch-to-zoom, double-tap-zoom, and pan. Removed the conflicting `paddingBottom` toggle on the input bar that animated against the keyboard-controller `KeyboardAvoidingView`, eliminating the visible glitch when the keyboard opens/closes.
+  - `frontend/screens/ProfileDetailScreen.tsx`: `getUserLocalTime` now resolves a timezone via `user.timezone` → country map → GeoJSON longitude offset (Etc/GMT±N), with a 30-second ticker so the displayed local time stays accurate while the screen is open. Time row also shows when only coordinates are known.
+  - `frontend/screens/MyProfileScreen.tsx`: Own profile local time updates every 30 seconds via state instead of being captured at render time.
+
+- **Reports queue and verification revoke backend**:
+  - `backend/routes/admin.js`: Reports Queue `all` status now returns all report statuses instead of filtering for a non-existent `all` status.
+  - `backend/controllers/verificationController.js` and `backend/services/verificationService.js`: Added admin-only `POST /api/admin/revoke-verification/:userId` to remove a verified badge with required reason, history logging, profile cache invalidation, and user notification.
+  - `backend/services/notificationService.js`: Added reusable `sendNotification(userId, message)` helper for persisted verification notifications plus push delivery when available.
+  - `backend/models/User.js`: Added verification revoke history storage and compatibility field for verified badge state.
+- **Live location and admin stability fixes**:
+  - `backend/routes/users.js`: Normalizes profile location updates so `{ lat, lng }`, GeoJSON coordinates, and user-entered `livingIn` text are stored consistently as GeoJSON with city/country where available.
+  - `backend/routes/radar.js`: Clears the cached `/users/me` profile after live GPS updates so admin/mobile views see fresh location data.
+  - `frontend/screens/DiscoveryScreen.tsx` and `frontend/screens/LoveRadarScreen.tsx`: Live GPS refresh now reverse-geocodes city/country when possible and updates the backend location endpoint.
+  - `frontend/screens/ProfileSetupScreen.tsx`: Stores city/country from the user's entered location and removed Lagos-specific placeholder examples.
+  - `admin-dashboard/views/UserManagement.tsx`: Admin user list/detail now displays `livingIn`, city/country, or valid GPS coordinates with last-updated time instead of showing unknown/not set for valid live locations.
+  - `admin-dashboard/views/DashboardHome.tsx` and `admin-dashboard/services/adminApi.ts`: Reduced false backend-configuration errors and removed forced page reloads on auth/API errors that could make the dashboard appear to glitch.
+- **Code quality / production cleanup pass**:
+  - Replaced all `console.log/warn/info/error` calls with the `logger` utility across **60+ files**: all 11 backend route files, `server.js`, `broadcastScheduler.js`, and 6 backend utils; all frontend services, hooks, components, and 32 screens. Logger is gated on `NODE_ENV !== production` for `.log/.warn/.info` and always-on for `.error`.
+  - Fixed 2 empty `catch {}` blocks in `admin.js` kill-switch routes — now log a non-critical warning via `logger.warn`.
+  - Verified central error middleware already in place at `server.js` line 1008 — already using `logger.error`.
+  - Removed all `via.placeholder.com` fallback URLs from `ChatDetailScreen`, `BlockedUsersScreen`, and `StoryViewerScreen` — replaced with `require('../assets/icon.png')`.
+  - Removed all Unsplash photo URLs from `DUMMY_SUCCESS_STORIES` in `SuccessStoriesScreen` — set `photos: []` to avoid external dependencies and copyright exposure in mock data.
+- **Support flow, admin status controls, profile parity**:
+  - `frontend/screens/WelcomeScreen.tsx`: Public contact form now fetches `/api/support/challenge`, displays the math security challenge, and submits `challengeToken`/`challengeAnswer` with unauthenticated support requests.
+  - `backend/routes/support.js`: Challenge tokens now use JWT when `JWT_SECRET` exists and a short-lived in-memory local token in development when it does not, preventing the challenge endpoint from crashing in local setup.
+  - `frontend/screens/PremiumScreen.tsx`: Premium plan cards and bottom subscribe CTA now separate price, interval, and savings labels for better alignment on narrow Android screens, with safer bottom spacing.
+  - `backend/routes/users.js` and `backend/routes/chat.js`: Server-side premium checks now cap free discovery distance, prevent non-premium verified-only discovery, and reject over-30-second voice notes before message creation.
+  - `frontend/screens/SettingsScreen.tsx`: Contact Support now sends auth headers for signed-in users and only shows the security challenge when no auth token is available.
+  - `admin-dashboard/views/SupportDesk.tsx` and `admin-dashboard/views/AgentDashboard.tsx`: Replaced hover-only support status menus with click-controlled dropdowns so `open`, `pending`, `in-progress`, and `closed` are explicit selectable statuses.
+  - `admin-dashboard/views/UserManagement.tsx`: User detail modal now surfaces passport/additional love locations.
+  - `frontend/screens/ProfileDetailScreen.tsx`: Public profile details now include height, school, country of origin, tribe/ethnicity, languages, and diaspora generation to match the owner profile fields.
 - **CallKit (iOS) / ConnectionService (Android) — native call UI when app is killed**:
   - Installed `react-native-callkeep` (wraps CallKit on iOS and ConnectionService on Android) and `react-native-voip-push-notification` (PushKit VoIP token for iOS).
   - `frontend/services/callkeep.ts` (NEW): Wrapper service — `initCallKeep()`, `displayIncomingCall()`, `endCallKeepCall()`, `reportCallEnded()`, `setCallActive()`, `setupCallKeepListeners()`, `removeCallKeepListeners()`. Calls `RNCallKeep.displayIncomingCall()` so the OS-level native incoming call screen appears regardless of app state.
@@ -33,6 +95,9 @@
   - `admin-dashboard/views/IDVerification.tsx`: The review panel now shows the submitted verification video beside the profile photo instead of the old submitted selfie image.
   - `frontend/screens/VerificationScreen.tsx`: Added premium Lottie-powered prompt animation, SVG step icons, and MediaPipe-style landmark gating for centered face, usable landmarks, distance guidance, blink readiness, and opposite-direction head turns.
   - `frontend/package.json`: Added `lottie-react-native` for animated guided verification prompts.
+- **Admin Analytics gender split fix**:
+  - `backend/routes/admin.js`: Normalizes stored gender variants (`man`/`male`, `woman`/`female`) before returning demographics.
+  - `admin-dashboard/views/Analytics.tsx`: Defensively groups legacy/cached gender labels into `Male`, `Female`, `Non-binary`, and `Other`.
 - **Admin Dashboard — full interactivity upgrade**:
   - `UserManagement.tsx`: Removed all mock data. Added server-driven pagination (25/page, prev/next + page buttons), suspend user (with duration selector), delete user (with confirmation modal), CSV export, refresh button, detailed error states, and correct `active` status filter mapping.
   - `ReportsQueue.tsx`: Removed all mock data. Added refresh button, proper error state with retry, inline ban button on each row, toast notifications on resolve/ban actions.

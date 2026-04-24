@@ -62,9 +62,11 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const [agents, setAgents] = useState<SupportAgent[]>([]);
   const [assigningTicket, setAssigningTicket] = useState(false);
   const [showAssignDropdown, setShowAssignDropdown] = useState(false);
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const assignDropdownRef = useRef<HTMLDivElement>(null);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
 
 
   const fetchTickets = useCallback(async (silent = false) => {
@@ -115,6 +117,9 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
       if (assignDropdownRef.current && !assignDropdownRef.current.contains(e.target as Node)) {
         setShowAssignDropdown(false);
       }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setShowStatusDropdown(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -125,6 +130,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
     setSelectedTicket(ticket);
     setReplyText('');
     setShowAssignDropdown(false);
+    setShowStatusDropdown(false);
     adminApi.getSupportTicket(ticket._id).then(data => {
       if (data.success) setSelectedTicket(data.ticket);
     }).catch(() => {});
@@ -168,14 +174,15 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
   const handleStatusChange = async (newStatus: TicketStatus) => {
     if (!selectedTicket || statusUpdating) return;
     setStatusUpdating(true);
+    setShowStatusDropdown(false);
     try {
       const data = await adminApi.updateSupportStatus(selectedTicket._id, newStatus);
       const updated = data.ticket || { ...selectedTicket, status: newStatus };
       setSelectedTicket(updated);
       setTickets(prev => prev.map(t => t._id === selectedTicket._id ? updated : t));
       showToast?.(`Ticket marked as ${newStatus}`, 'success');
-    } catch {
-      showToast?.('Status update failed', 'error');
+    } catch (err: any) {
+      showToast?.(err?.message || 'Status update failed', 'error');
     } finally {
       setStatusUpdating(false);
     }
@@ -193,8 +200,8 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
         const agentName = agentId ? agents.find(a => a._id === agentId)?.name || 'agent' : 'unassigned';
         showToast?.(agentId ? `Ticket assigned to ${agentName}` : 'Ticket unassigned', 'success');
       }
-    } catch {
-      showToast?.('Failed to assign ticket', 'error');
+    } catch (err: any) {
+      showToast?.(err?.message || 'Failed to assign ticket', 'error');
     } finally {
       setAssigningTicket(false);
     }
@@ -363,7 +370,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
         </div>
 
         {/* Message thread */}
-        <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 flex flex-col overflow-hidden shadow-sm">
+        <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-[2.5rem] border border-gray-100 dark:border-slate-800 flex flex-col shadow-sm" style={{ overflow: 'visible' }}>
           {!selectedTicket ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center opacity-40">
               <div className="p-8 bg-gray-50 dark:bg-slate-800 rounded-full mb-6">
@@ -440,22 +447,28 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                   </div>
 
                   {/* Status dropdown */}
-                  <div className="relative group">
-                    <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:border-teal-300 transition-all">
+                  <div className="relative" ref={statusDropdownRef}>
+                    <button
+                      onClick={() => setShowStatusDropdown(v => !v)}
+                      disabled={statusUpdating}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase text-slate-500 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:border-teal-300 transition-all disabled:opacity-50"
+                    >
                       {selectedTicket.status} <ChevronDown size={12} />
                     </button>
-                    <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl shadow-xl z-20 opacity-0 group-hover:opacity-100 transition-all pointer-events-none group-hover:pointer-events-auto overflow-hidden">
-                      {ALL_STATUSES.map(s => (
-                        <button
-                          key={s}
-                          onClick={() => handleStatusChange(s)}
-                          disabled={statusUpdating || selectedTicket.status === s}
-                          className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 transition-all disabled:opacity-40"
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+                    {showStatusDropdown && (
+                      <div className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl shadow-xl z-30 overflow-hidden">
+                        {ALL_STATUSES.map(s => (
+                          <button
+                            key={s}
+                            onClick={() => handleStatusChange(s)}
+                            disabled={statusUpdating || selectedTicket.status === s}
+                            className="w-full text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:bg-teal-50 dark:hover:bg-teal-500/10 hover:text-teal-600 transition-all disabled:opacity-40"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -486,6 +499,7 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                 )}
                 {selectedTicket.messages?.map((msg, i) => {
                   const isStaff = msg.role === 'admin' || msg.role === 'agent';
+                  const isBot = isStaff && (msg.senderName === 'AfroConnect Support Bot' || msg.adminName === 'AfroConnect Support Bot');
                   return (
                     <div key={i} className={`flex ${isStaff ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
                       <div className={`max-w-[75%] flex flex-col ${isStaff ? 'items-end' : 'items-start'}`}>
@@ -502,19 +516,21 @@ const SupportDesk: React.FC<SupportDeskProps> = ({ showToast }) => {
                         )}
                         {isStaff && (
                           <div className="flex items-center gap-2 mb-1 mr-1">
-                            <span className="text-[9px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-widest">
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${isBot ? 'text-violet-500 dark:text-violet-400' : 'text-teal-600 dark:text-teal-400'}`}>
                               {msg.senderName || msg.adminName || (msg.role === 'agent' ? 'Agent' : 'Admin')}
                             </span>
-                            <div className="h-5 w-5 rounded-lg bg-teal-100 dark:bg-teal-500/20 flex items-center justify-center text-[9px] font-black text-teal-700 dark:text-teal-400">
-                              {msg.role === 'agent' ? 'AG' : 'AD'}
+                            <div className={`h-5 w-5 rounded-lg flex items-center justify-center text-[9px] font-black ${isBot ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-400' : 'bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-400'}`}>
+                              {isBot ? '🤖' : msg.role === 'agent' ? 'AG' : 'AD'}
                             </div>
                           </div>
                         )}
                         {/* Bubble */}
                         <div className={`px-5 py-4 rounded-[1.5rem] text-sm font-medium leading-relaxed shadow-sm ${
-                          isStaff
-                            ? 'bg-teal-600 text-white rounded-tr-md'
-                            : 'bg-gray-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-gray-100 dark:border-slate-700 rounded-tl-md'
+                          isBot
+                            ? 'bg-violet-600 text-white rounded-tr-md'
+                            : isStaff
+                              ? 'bg-teal-600 text-white rounded-tr-md'
+                              : 'bg-gray-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-gray-100 dark:border-slate-700 rounded-tl-md'
                         }`}>
                           {msg.content}
                         </div>

@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -7,6 +8,47 @@ const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
 const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
+const { discoveryLimiter } = require('../middleware/rateLimiter');
+
+function parseLivingIn(livingIn) {
+  if (!livingIn || typeof livingIn !== 'string') return {};
+  const parts = livingIn.split(',').map(part => part.trim()).filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return { city: parts[0] };
+  return { city: parts.slice(0, -1).join(', '), country: parts[parts.length - 1] };
+}
+
+function normaliseLocationUpdate(location, livingIn) {
+  if (!location || typeof location !== 'object') return location;
+
+  const parsedLivingIn = parseLivingIn(livingIn);
+  const coords = Array.isArray(location.coordinates) && location.coordinates.length >= 2
+    ? [Number(location.coordinates[0]), Number(location.coordinates[1])]
+    : null;
+  const lng = location.lng ?? location.longitude ?? (coords ? coords[0] : undefined);
+  const lat = location.lat ?? location.latitude ?? (coords ? coords[1] : undefined);
+  const numericLat = Number(lat);
+  const numericLng = Number(lng);
+
+  const nextLocation = {
+    type: 'Point',
+    city: location.city || parsedLivingIn.city,
+    country: location.country || parsedLivingIn.country
+  };
+
+  if (
+    Number.isFinite(numericLat) &&
+    Number.isFinite(numericLng) &&
+    numericLat >= -90 &&
+    numericLat <= 90 &&
+    numericLng >= -180 &&
+    numericLng <= 180
+  ) {
+    nextLocation.coordinates = [numericLng, numericLat];
+  }
+
+  return nextLocation;
+}
 
 
 router.get('/me', protect, async (req, res) => {
@@ -45,9 +87,11 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
       'communicationStyle', 'loveStyle', 'personalityType', 'privacySettings',
       'pets', 'relationshipStatus',
       'height', 'countryOfOrigin', 'tribe', 'languages', 'diasporaGeneration', 'language',
+      'autoUpdateProfileLocation', 'locationSharingEnabled',
     ];
 
     const user = await User.findById(req.user._id);
+    const isPremium = user.premium?.isActive;
 
     allowedUpdates.forEach(field => {
       if (updates[field] !== undefined) {
@@ -62,12 +106,17 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
         else if (field === 'preferences') {
           const allowedPrefKeys = ['ageRange', 'genderPreference', 'maxDistance', 'showOnlineOnly', 'showVerifiedOnly', 'dealBreakers', 'language', 'smoking', 'drinking', 'wantsKids', 'onlineNow', 'interests'];
           allowedPrefKeys.forEach(prefKey => {
-            if (updates.preferences[prefKey] === undefined) return;
+            if (!Object.prototype.hasOwnProperty.call(updates.preferences, prefKey) || updates.preferences[prefKey] === undefined) return;
             if (prefKey === 'ageRange' && updates.preferences.ageRange) {
               user.preferences.ageRange = {
                 ...(user.preferences.ageRange || {}),
                 ...updates.preferences.ageRange
               };
+            } else if (prefKey === 'maxDistance') {
+              const maxDistance = normaliseMaxDistanceKm(updates.preferences.maxDistance, 50);
+              user.preferences.maxDistance = isPremium ? maxDistance : Math.min(maxDistance, 50);
+            } else if (prefKey === 'showVerifiedOnly') {
+              user.preferences.showVerifiedOnly = isPremium ? updates.preferences.showVerifiedOnly : false;
             } else {
               user.preferences[prefKey] = updates.preferences[prefKey];
             }
@@ -86,6 +135,9 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ...lifestyleUpdate
           };
         } else if (field === 'privacySettings' && updates.privacySettings) {
+          if (updates.privacySettings.incognitoMode === true && !user.premium?.isActive) {
+            return res.status(403).json({ success: false, message: 'Incognito mode is a premium feature' });
+          }
           user.privacySettings = {
             ...(user.privacySettings || {}),
             ...updates.privacySettings
@@ -95,7 +147,10 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
             ? user.lifestyle.toObject()
             : (user.lifestyle || {});
           user.lifestyle = { ...currentLifestyle, [field]: updates[field] };
-        } else {
+        } else if (field === 'location') {
+          user.location = normaliseLocationUpdate(updates.location, updates.livingIn ?? user.livingIn);
+          user.locationUpdatedAt = new Date();
+        } else if (Object.prototype.hasOwnProperty.call(updates, field)) {
           user[field] = updates[field];
         }
       }
@@ -111,7 +166,7 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
       profileIncomplete: !user.photos || user.photos.length === 0
     });
   } catch (error) {
-    console.error('Profile update error:', error);
+    logger.error('Profile update error:', error);
     let message = 'Server error';
     if (error.name === 'ValidationError') {
       message = Object.values(error.errors).map(e => e.message).join(', ');
@@ -152,7 +207,7 @@ router.get('/search', protect, async (req, res) => {
       users
     });
   } catch (error) {
-    console.error('Search error:', error);
+    logger.error('Search error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -175,13 +230,16 @@ router.get('/countries', protect, async (req, res) => {
       countries: filtered
     });
   } catch (error) {
-    console.error('Countries list error:', error);
+    logger.error('Countries list error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
 
-router.get('/nearby', protect, async (req, res) => {
+router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
+  let inflightCacheKey = null;
+  let resolveInflight = null;
+  let rejectInflight = null;
   try {
     const {
       lat, lng, maxDistance, minAge, maxAge, genders,
@@ -195,15 +253,46 @@ router.get('/nearby', protect, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${Math.round((parseFloat(lat) || 0) * 10)}:${Math.round((parseFloat(lng) || 0) * 10)}:${maxDistance || ''}:${minAge || ''}:${maxAge || ''}:${genders || ''}`;
+    const cursor = req.query.cursor ? String(req.query.cursor) : null;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 60);
+
+    const normLat  = Math.round((parseFloat(lat)  || 0) * 10);
+    const normLng  = Math.round((parseFloat(lng)  || 0) * 10);
+    const normDist = parseInt(maxDistance) || '';
+    const normMin  = parseInt(minAge)      || '';
+    const normMax  = parseInt(maxAge)      || '';
+    const normGen  = (genders || '').split(',').sort().join(',');
+    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}:${cursor || ''}:${limit}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
-      return res.json({ success: true, users: cached, fromCache: true });
+      return res.json({ success: true, users: cached.users || cached, nextCursor: cached.nextCursor || null, fromCache: true });
     }
+
+    // In-process stampede lock: if another request for the same key is already
+    // computing, wait briefly for it to populate the cache instead of running
+    // the same expensive query in parallel.
+    const inflight = req.app.get('discoveryInflight') || new Map();
+    if (!req.app.get('discoveryInflight')) req.app.set('discoveryInflight', inflight);
+    if (inflight.has(cacheKey)) {
+      try {
+        const result = await inflight.get(cacheKey);
+        return res.json({ success: true, users: result.users, nextCursor: result.nextCursor, fromCache: true });
+      } catch (_) {
+        // fall through and recompute
+      }
+    }
+    const inflightPromise = new Promise((resolve, reject) => {
+      resolveInflight = resolve;
+      rejectInflight = reject;
+    });
+    inflight.set(cacheKey, inflightPromise);
+    inflightCacheKey = cacheKey;
 
     const currentUser = await User.findById(req.user.id);
 
     if (isGlobal && !currentUser.premium?.isActive) {
+      if (rejectInflight) rejectInflight(new Error('forbidden'));
+      if (inflightCacheKey) inflight.delete(inflightCacheKey);
       return res.status(403).json({ success: false, message: 'Global discovery is a Premium feature' });
     }
 
@@ -221,7 +310,7 @@ router.get('/nearby', protect, async (req, res) => {
       if (activeLoc?.lat && activeLoc?.lng) {
         searchLat = activeLoc.lat;
         searchLng = activeLoc.lng;
-        console.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
+        logger.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
       }
     }
 
@@ -268,7 +357,7 @@ router.get('/nearby', protect, async (req, res) => {
     };
 
     const wantVerifiedOnly =
-      verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true;
+      currentUser.premium?.isActive && (verifiedOnly === 'true' || currentUser.preferences?.showVerifiedOnly === true);
     if (wantVerifiedOnly) query.verified = true;
 
     const wantOnlineOnly =
@@ -324,30 +413,40 @@ router.get('/nearby', protect, async (req, res) => {
     );
     const maxDist = isPremium ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
+    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
+    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+    const hasOrigin = effectiveLat != null && effectiveLng != null;
+
     if (isGlobal) {
       if (countryFilter) {
         query['location.country'] = { $regex: new RegExp(countryFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
       }
-    } else {
-      const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
-      const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
-
-      if (effectiveLat || effectiveLng) {
-        query.$or = [
-          { 'location.coordinates': { $exists: true } },
-          { 'location.lat': { $exists: true } }
-        ];
-      }
+    } else if (hasOrigin) {
+      // Use the 2dsphere index when origin coordinates are available.
+      // $geoWithin / $centerSphere uses the index and only returns docs
+      // with valid GeoJSON Point coordinates within the search radius.
+      // Legacy users with only flat lat/lng are matched via the second
+      // branch of $or so they aren't dropped.
+      const radiusKm = Math.max(1, Math.min(maxDist * 2, 20000));
+      const radiusInRadians = radiusKm / 6371;
+      query.$or = [
+        {
+          'location.coordinates': {
+            $geoWithin: { $centerSphere: [[effectiveLng, effectiveLat], radiusInRadians] }
+          }
+        },
+        {
+          'location.lat': { $exists: true },
+          'location.coordinates': { $exists: false }
+        }
+      ];
     }
 
-    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
-    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
-
+    const queryStart = Date.now();
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
-
-    const hasOrigin = effectiveLat != null && effectiveLng != null;
+    const queryMs = Date.now() - queryStart;
 
     users = users.map(user => {
       const userObj = user.toObject();
@@ -370,12 +469,15 @@ router.get('/nearby', protect, async (req, res) => {
 
     users.sort((a, b) => b.score - a.score);
 
-    users = users.slice(0, 40);
+    const offset = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
+    const totalAvailable = users.length;
+    users = users.slice(offset, offset + limit);
+    const nextCursor = offset + limit < totalAvailable ? String(offset + limit) : null;
 
     users = users.map(user => {
       const privacy = user.privacySettings || {};
       const isOnline = user.onlineStatus === 'online' || user.online;
-      const distanceVisible = isPremium || privacy.showDistance !== false;
+      const distanceVisible = true;
 
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
@@ -393,16 +495,30 @@ router.get('/nearby', protect, async (req, res) => {
       };
     });
 
-    console.log(`[DISCOVERY] Returning ${users.length} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium})`);
+    const totalMs = Date.now() - queryStart;
+    logger.log(`[DISCOVERY] Returning ${users.length}/${totalAvailable} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium}, queryMs=${queryMs}, totalMs=${totalMs}, offset=${offset})`);
 
-    await redis.set(cacheKey, users, 120);
+    const payload = { users, nextCursor };
+    await redis.set(cacheKey, payload, 120);
+
+    if (resolveInflight) resolveInflight(payload);
+    if (inflightCacheKey) {
+      const inflight = req.app.get('discoveryInflight');
+      if (inflight) inflight.delete(inflightCacheKey);
+    }
 
     res.json({
       success: true,
-      users
+      users,
+      nextCursor
     });
   } catch (error) {
-    console.error('Nearby users error:', error);
+    logger.error('Nearby users error:', error);
+    if (rejectInflight) rejectInflight(error);
+    if (inflightCacheKey) {
+      const inflight = req.app.get('discoveryInflight');
+      if (inflight) inflight.delete(inflightCacheKey);
+    }
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -512,7 +628,7 @@ router.get('/who-viewed-me', protect, async (req, res) => {
     await redis.set(cacheKey, wvmPayload, 60);
     res.json({ success: true, ...wvmPayload });
   } catch (error) {
-    console.error('Who viewed me error:', error);
+    logger.error('Who viewed me error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -552,14 +668,17 @@ router.get('/:id', protect, async (req, res) => {
     }
 
     if (req.user._id.toString() !== req.params.id) {
-      await User.findByIdAndUpdate(req.params.id, {
-        $push: {
-          profileViews: {
-            user: req.user._id,
-            viewedAt: new Date()
+      const viewerIncognito = req.user.privacySettings?.incognitoMode === true;
+      if (!viewerIncognito) {
+        await User.findByIdAndUpdate(req.params.id, {
+          $push: {
+            profileViews: {
+              user: req.user._id,
+              viewedAt: new Date()
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     const isPremium = req.user.premium?.isActive;
@@ -632,7 +751,7 @@ router.delete('/photos/:photoIndex', protect, async (req, res) => {
     
     res.json({ success: true, message: 'Photo deleted successfully', photos: user.photos });
   } catch (error) {
-    console.error('Delete photo error:', error);
+    logger.error('Delete photo error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -642,6 +761,72 @@ router.delete('/me', protect, async (req, res) => {
     await User.findByIdAndDelete(req.user._id);
     res.json({ success: true, message: 'Account deleted successfully' });
   } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.put('/me/live-location', protect, async (req, res) => {
+  try {
+    const { lat, latitude, lng, longitude, accuracy, city, country } = req.body || {};
+    const numericLat = Number(lat ?? latitude);
+    const numericLng = Number(lng ?? longitude);
+
+    if (
+      !Number.isFinite(numericLat) || !Number.isFinite(numericLng) ||
+      numericLat < -90 || numericLat > 90 ||
+      numericLng < -180 || numericLng > 180
+    ) {
+      return res.status(400).json({ success: false, message: 'Invalid coordinates' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.locationSharingEnabled === false) {
+      return res.status(403).json({ success: false, message: 'Location sharing is disabled' });
+    }
+
+    const resolvedCity = city || user.liveLocation?.city;
+    const resolvedCountry = country || user.liveLocation?.country;
+
+    user.liveLocation = {
+      type: 'Point',
+      coordinates: [numericLng, numericLat],
+      city: resolvedCity,
+      country: resolvedCountry,
+      accuracy: Number.isFinite(Number(accuracy)) ? Number(accuracy) : undefined
+    };
+    user.liveLocationUpdatedAt = new Date();
+
+    let profileLocationUpdated = false;
+    if (user.autoUpdateProfileLocation) {
+      user.location = {
+        type: 'Point',
+        coordinates: [numericLng, numericLat],
+        city: resolvedCity || user.location?.city,
+        country: resolvedCountry || user.location?.country
+      };
+      user.locationUpdatedAt = new Date();
+      if (resolvedCity || resolvedCountry) {
+        user.livingIn = [resolvedCity, resolvedCountry].filter(Boolean).join(', ');
+      }
+      profileLocationUpdated = true;
+    }
+
+    await user.save();
+
+    try { await redis.del(`profile:me:${user._id}`); } catch (_) {}
+
+    res.json({
+      success: true,
+      liveLocation: user.liveLocation,
+      liveLocationUpdatedAt: user.liveLocationUpdatedAt,
+      profileLocationUpdated,
+      livingIn: user.livingIn,
+      location: user.location
+    });
+  } catch (error) {
+    logger.error('Update live location error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -675,7 +860,7 @@ router.post('/me/locations', protect, async (req, res) => {
         country = display[display.length - 1]?.trim() || '';
       }
     } catch (geoErr) {
-      console.warn('Geocoding failed for location:', name, geoErr.message);
+      logger.warn('Geocoding failed for location:', name, geoErr.message);
     }
 
     user.additionalLocations.push({ name: name.trim(), lat, lng, city, country });
@@ -738,7 +923,7 @@ router.post('/passport-location', protect, async (req, res) => {
     await user.save();
     res.json({ success: true, message: `Passport set to ${city || 'selected location'}`, passportLocation: user.passportLocation });
   } catch (error) {
-    console.error('Passport location error:', error);
+    logger.error('Passport location error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

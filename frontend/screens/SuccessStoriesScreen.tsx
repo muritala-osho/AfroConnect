@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -90,11 +91,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'We met on AfroConnect and instantly clicked over our shared love for West African cuisine and music. After months of late-night video calls, we finally met in person, and it felt like we had known each other forever.',
       howWeMet: 'Matched on AfroConnect',
       couple: [
-        { _id: 'p1', name: 'Kofi', photos: ['https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p2', name: 'Amara', photos: ['https://images.unsplash.com/photo-1523824921871-d6f1a15151f1?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p1', name: 'Kofi', photos: [] },
+        { _id: 'p2', name: 'Amara', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1516589174184-e6bc1923b7a0?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 154,
       viewCount: 1240,
       createdAt: '2025-01-01T10:00:00Z'
@@ -105,11 +106,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'AfroConnect made it so easy to find someone who shares my values and cultural background. We are now happily married and owe it all to this amazing platform!',
       howWeMet: 'First date at a local coffee shop',
       couple: [
-        { _id: 'p3', name: 'Tunde', photos: ['https://images.unsplash.com/photo-1506277886164-e25aa3f4ef7f?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p4', name: 'Zainab', photos: ['https://images.unsplash.com/photo-1509460913899-515f1df34fea?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p3', name: 'Tunde', photos: [] },
+        { _id: 'p4', name: 'Zainab', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 289,
       viewCount: 3500,
       createdAt: '2025-01-02T10:00:00Z'
@@ -120,11 +121,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'We were in different cities but AfroConnect brought us together. The distance was hard, but our connection was stronger. We just celebrated our first anniversary!',
       howWeMet: 'Matched while traveling',
       couple: [
-        { _id: 'p5', name: 'Chidi', photos: ['https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p6', name: 'Nia', photos: ['https://images.unsplash.com/photo-1531123414780-f74242c2b052?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p5', name: 'Chidi', photos: [] },
+        { _id: 'p6', name: 'Nia', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1475721027187-402ad75d162d?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 420,
       viewCount: 5100,
       createdAt: '2025-01-03T10:00:00Z'
@@ -135,11 +136,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'I never thought I would find my soulmate on an app, but here we are. We share the same passions and dreams. Thank you AfroConnect!',
       howWeMet: 'Matched through mutual interests',
       couple: [
-        { _id: 'p7', name: 'Kwame', photos: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p8', name: 'Adwoa', photos: ['https://images.unsplash.com/photo-1531384441138-2736e62e0919?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p7', name: 'Kwame', photos: [] },
+        { _id: 'p8', name: 'Adwoa', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1511285560929-80b456fea0bc?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 560,
       viewCount: 8200,
       createdAt: '2025-01-04T10:00:00Z'
@@ -150,11 +151,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'Our love for music brought us together. We now spend our weekends attending concerts and exploring new sounds. Life is better with you.',
       howWeMet: 'Matched on a jazz night',
       couple: [
-        { _id: 'p9', name: 'Olumide', photos: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p10', name: 'Folake', photos: ['https://images.unsplash.com/photo-1523824921871-d6f1a15151f1?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p9', name: 'Olumide', photos: [] },
+        { _id: 'p10', name: 'Folake', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 310,
       viewCount: 4300,
       createdAt: '2025-01-05T10:00:00Z'
@@ -165,11 +166,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'After moving to a new city, AfroConnect helped me find my best friend and partner. We are exploring the city together and building a life.',
       howWeMet: 'Matched after my big move',
       couple: [
-        { _id: 'p11', name: 'Moussa', photos: ['https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p12', name: 'Fatou', photos: ['https://images.unsplash.com/photo-1509460913899-515f1df34fea?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p11', name: 'Moussa', photos: [] },
+        { _id: 'p12', name: 'Fatou', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 225,
       viewCount: 2900,
       createdAt: '2025-01-06T10:00:00Z'
@@ -180,11 +181,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'We both wanted to find someone who values family and heritage as much as we do. We found that in each other on AfroConnect.',
       howWeMet: 'Matched during a cultural festival',
       couple: [
-        { _id: 'p13', name: 'Babajide', photos: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p14', name: 'Eniola', photos: ['https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p13', name: 'Babajide', photos: [] },
+        { _id: 'p14', name: 'Eniola', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1544161442-e3db36c4f67c?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 680,
       viewCount: 9500,
       createdAt: '2025-01-07T10:00:00Z'
@@ -195,11 +196,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'From our first message, we knew we had something special. We share the same career goals and support each other every step of the way.',
       howWeMet: 'Matched while studying for exams',
       couple: [
-        { _id: 'p15', name: 'Tariq', photos: ['https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p16', name: 'Layla', photos: ['https://images.unsplash.com/photo-1523824921871-d6f1a15151f1?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p15', name: 'Tariq', photos: [] },
+        { _id: 'p16', name: 'Layla', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1529636798458-92182e662485?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 440,
       viewCount: 6200,
       createdAt: '2025-01-08T10:00:00Z'
@@ -210,11 +211,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'I was just about to delete the app when I saw her profile. One "Hi" changed everything. Don\'t give up on love!',
       howWeMet: 'A last-minute match',
       couple: [
-        { _id: 'p17', name: 'Emanuel', photos: ['https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p18', name: 'Grace', photos: ['https://images.unsplash.com/photo-1531123414780-f74242c2b052?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p17', name: 'Emanuel', photos: [] },
+        { _id: 'p18', name: 'Grace', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 395,
       viewCount: 4800,
       createdAt: '2025-01-09T10:00:00Z'
@@ -225,11 +226,11 @@ const DUMMY_SUCCESS_STORIES: SuccessStory[] = [
       story: 'We compliment each other in every way. Thank you AfroConnect for matching us and helping us find our forever.',
       howWeMet: 'Matched on a sunny afternoon',
       couple: [
-        { _id: 'p19', name: 'Jide', photos: ['https://images.unsplash.com/photo-1522529599102-193c0d76b5b6?q=80&w=200&h=200&fit=crop'] },
-        { _id: 'p20', name: 'Zari', photos: ['https://images.unsplash.com/photo-1523824921871-d6f1a15151f1?q=80&w=200&h=200&fit=crop'] }
+        { _id: 'p19', name: 'Jide', photos: [] },
+        { _id: 'p20', name: 'Zari', photos: [] }
       ],
       relationship: 'partners',
-      photos: ['https://images.unsplash.com/photo-1583939003579-730e3918a45a?q=80&w=600&h=400&fit=crop'],
+      photos: [],
       likeCount: 720,
       viewCount: 11000,
       createdAt: '2025-01-10T10:00:00Z'
@@ -289,7 +290,7 @@ export default function SuccessStoriesScreen() {
         setStats(statsRes.data as Stats);
       }
     } catch (error) {
-      console.error('Error fetching data:', error);
+      logger.error('Error fetching data:', error);
       setStories(DUMMY_SUCCESS_STORIES);
     } finally {
       setLoading(false);
@@ -311,7 +312,7 @@ export default function SuccessStoriesScreen() {
         setMyStory(null);
       }
     } catch (error) {
-      console.error('Error fetching my story:', error);
+      logger.error('Error fetching my story:', error);
       setMyStory(null);
     } finally {
       setLoadingMyStory(false);
@@ -379,7 +380,7 @@ export default function SuccessStoriesScreen() {
         );
       }
     } catch (error) {
-      console.error('Error liking story:', error);
+      logger.error('Error liking story:', error);
     }
   };
 
@@ -405,7 +406,7 @@ export default function SuccessStoriesScreen() {
                 Alert.alert(t('error') || 'Error', response.message || t('failedToDeleteStory') || 'Failed to delete story');
               }
             } catch (error) {
-              console.error('Error deleting story:', error);
+              logger.error('Error deleting story:', error);
               Alert.alert(t('error') || 'Error', t('failedToDeleteStory') || 'Failed to delete story');
             }
           },
@@ -524,7 +525,7 @@ export default function SuccessStoriesScreen() {
               uploadFailed = true;
             }
           } catch (uploadError) {
-            console.error('Photo upload error:', uploadError);
+            logger.error('Photo upload error:', uploadError);
             uploadFailed = true;
           }
         }
@@ -565,7 +566,7 @@ export default function SuccessStoriesScreen() {
         Alert.alert(t('error'), response.message || t('failedToShareStory'));
       }
     } catch (error) {
-      console.error('Error sharing story:', error);
+      logger.error('Error sharing story:', error);
       Alert.alert(t('error'), t('failedToShareStory'));
     } finally {
       setCreating(false);

@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
@@ -15,9 +16,11 @@ router.get('/who-likes-me', protect, async (req, res) => {
   try {
     const FriendRequest = require('../models/FriendRequest');
     const isPremium = req.user.premium?.isActive;
-    const cacheKey = `wholikesme:${req.user._id}:${isPremium ? 'premium' : 'free'}`;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const cacheKey = `wholikesme:${req.user._id}:${isPremium ? 'premium' : 'free'}:p${page}:l${limit}`;
     const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, users: cached, fromCache: true });
+    if (cached) return res.json({ success: true, ...cached, fromCache: true });
 
     const pendingRequests = await FriendRequest.find({
       receiver: req.user._id,
@@ -70,10 +73,16 @@ router.get('/who-likes-me', protect, async (req, res) => {
       });
     }
 
-    await redis.set(cacheKey, processedUsers, 60);
-    res.json({ success: true, users: processedUsers });
+    const total   = processedUsers.length;
+    const skip    = (page - 1) * limit;
+    const paged   = processedUsers.slice(skip, skip + limit);
+    const hasMore = skip + paged.length < total;
+
+    const payload = { users: paged, total, page, limit, hasMore };
+    await redis.set(cacheKey, payload, 60);
+    res.json({ success: true, ...payload });
   } catch (error) {
-    console.error('Who likes me error:', error);
+    logger.error('Who likes me error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -83,20 +92,36 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     const { targetUserId, action } = req.body;
 
     if (!req.user.premium?.isActive) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const lastReset = new Date(req.user.dailySwipes.lastReset);
-      lastReset.setHours(0, 0, 0, 0);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const swipeKey = `swipecount:${req.user._id}:${todayStr}`;
+      const redisCount = await redis.incr(swipeKey);
 
-      if (lastReset < today) {
-        req.user.dailySwipes.count = 0;
-        req.user.dailySwipes.lastReset = new Date();
-      }
+      if (redisCount !== null) {
+        if (redisCount === 1) {
+          const secondsUntilMidnight = Math.floor(
+            (new Date().setUTCHours(24, 0, 0, 0) - Date.now()) / 1000
+          );
+          await redis.expire(swipeKey, secondsUntilMidnight);
+        }
+        if (redisCount > 10) {
+          return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        }
+      } else {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const lastReset = new Date(req.user.dailySwipes.lastReset);
+        lastReset.setHours(0, 0, 0, 0);
 
-      if (req.user.dailySwipes.count >= 10) {
-        return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        if (lastReset < today) {
+          req.user.dailySwipes.count = 0;
+          req.user.dailySwipes.lastReset = new Date();
+        }
+
+        if (req.user.dailySwipes.count >= 10) {
+          return res.status(403).json({ success: false, message: 'Daily swipe limit reached (10/day). Upgrade to Premium!' });
+        }
+        req.user.dailySwipes.count += 1;
       }
-      req.user.dailySwipes.count += 1;
     }
 
     const targetUser = await User.findById(targetUserId);
@@ -159,7 +184,7 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
             }, 'match').catch(() => {});
           }
         } catch (pushErr) {
-          console.error('Match push notification error (non-critical):', pushErr.message);
+          logger.error('Match push notification error (non-critical):', pushErr.message);
         }
 
         try {
@@ -171,7 +196,7 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
             sendNewMatchEmail(targetUser.email,  targetUser.name,  currentUser.name, currentUserPhoto),
           ]);
         } catch (emailErr) {
-          console.error('Match email error (non-critical):', emailErr.message);
+          logger.error('Match email error (non-critical):', emailErr.message);
         }
 
         return res.json({ success: true, isMatch: true, match });
@@ -209,10 +234,10 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
             },
             'like',
           ).catch(() => {});
-          console.log(`[Push] Like notification queued → user ${targetUserId} (${isSuper ? 'superlike' : 'like'})`);
+          logger.log(`[Push] Like notification queued → user ${targetUserId} (${isSuper ? 'superlike' : 'like'})`);
         }
       } catch (likeNotifErr) {
-        console.error('[Push] Like notification error (non-critical):', likeNotifErr.message);
+        logger.error('[Push] Like notification error (non-critical):', likeNotifErr.message);
       }
     }
 
@@ -225,16 +250,18 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     ]);
     res.json({ success: true, isMatch: false, message: 'Swipe recorded' });
   } catch (error) {
-    console.error('Swipe error:', error);
+    logger.error('Swipe error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
 router.get('/my-matches', protect, async (req, res) => {
   try {
-    const cacheKey = `matches:${req.user._id}`;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const cacheKey = `matches:${req.user._id}:p${page}:l${limit}`;
     const cached = await redis.get(cacheKey);
-    if (cached) return res.json({ success: true, matches: cached, fromCache: true });
+    if (cached) return res.json({ success: true, ...cached, fromCache: true });
 
     const currentUser = await User.findById(req.user._id);
     const matches = await Match.find({ users: req.user._id, status: 'active' })
@@ -271,8 +298,14 @@ router.get('/my-matches', protect, async (req, res) => {
       };
     });
 
-    await redis.set(cacheKey, enriched, 45);
-    res.json({ success: true, matches: enriched });
+    const total   = enriched.length;
+    const skip    = (page - 1) * limit;
+    const paged   = enriched.slice(skip, skip + limit);
+    const hasMore = skip + paged.length < total;
+
+    const payload = { matches: paged, total, page, limit, hasMore };
+    await redis.set(cacheKey, payload, 45);
+    res.json({ success: true, ...payload });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -307,7 +340,7 @@ router.get('/second-chance', protect, async (req, res) => {
     await redis.set(cacheKey, processedProfiles, 120);
     res.json({ success: true, profiles: processedProfiles });
   } catch (error) {
-    console.error('Second chance error:', error);
+    logger.error('Second chance error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -382,7 +415,7 @@ router.get('/cultural-score/:userId', protect, async (req, res) => {
     await redis.set(cacheKey, breakdown, 300);
     res.json({ success: true, ...breakdown });
   } catch (error) {
-    console.error('Cultural score error:', error);
+    logger.error('Cultural score error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -405,7 +438,7 @@ router.get('/daily-match', protect, async (req, res) => {
           return res.json({ success: true, match: { ...cached.toObject(), culturalScore: score.totalScore, culturalBreakdown: score.breakdown } });
         }
       } catch (cacheErr) {
-        console.error('Daily match cache lookup failed:', cacheErr.message);
+        logger.error('Daily match cache lookup failed:', cacheErr.message);
       }
     }
 
@@ -462,7 +495,7 @@ router.get('/daily-match', protect, async (req, res) => {
       me.dailyMatch = { userId: best.user._id, date: today };
       await me.save();
     } catch (saveErr) {
-      console.error('Failed to cache daily match:', saveErr.message);
+      logger.error('Failed to cache daily match:', saveErr.message);
     }
 
     return res.json({
@@ -475,7 +508,7 @@ router.get('/daily-match', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Daily match error:', error);
+    logger.error('Daily match error:', error);
     return res.status(500).json({ success: false, message: 'Could not load match. Please try again.' });
   }
 });

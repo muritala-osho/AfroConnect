@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Platform, Dimensions } from "react-native";
 import { Image } from "expo-image";
@@ -105,10 +106,10 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
 
       const response = await api.get<{ success: boolean; users: any[] }>('/users/nearby', params, token);
 
-      console.log("Nearby Users Response:", response);
+      logger.log("Nearby Users Response:", response);
       const usersData = response.data as any;
       const users = usersData?.users || [];
-      console.log("Extracted Users:", users.length);
+      logger.log("Extracted Users:", users.length);
 
       if (response.success && users.length > 0) {
         const mappedUsers = users.map((u: any) => ({
@@ -133,7 +134,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
         setPotentialMatches([]);
       }
     } catch (error) {
-      console.error("Error loading potential matches:", error);
+      logger.error("Error loading potential matches:", error);
       setPotentialMatches([]);
     } finally {
       setLoading(false);
@@ -164,7 +165,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       try {
         await api.post('/match/swipe', { targetUserId: currentProfile.id, action: 'pass' }, token);
       } catch (error) {
-        console.error("Error recording pass:", error);
+        logger.error("Error recording pass:", error);
       }
     }
 
@@ -197,7 +198,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
         });
       }
     } catch (error: any) {
-      console.error("Error recording like:", error);
+      logger.error("Error recording like:", error);
       const errMsg = error?.message || error?.response?.data?.message || '';
       if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
         Alert.alert(
@@ -261,7 +262,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
         Alert.alert("Error", response.message || "Failed to send Super Like");
       }
     } catch (error: any) {
-      console.error("Error sending super like:", error);
+      logger.error("Error sending super like:", error);
       const errMsg = error?.message || error?.response?.data?.message || '';
       if (errMsg.includes('Daily swipe limit') || errMsg.includes('swipe limit')) {
         Alert.alert(

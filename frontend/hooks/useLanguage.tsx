@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { translations, LanguageCode, TranslationKeys } from "@/constants/translations";
@@ -56,7 +57,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         setLanguageState(stored as LanguageCode);
       }
     } catch (error) {
-      console.error("Error loading language preference:", error);
+      logger.error("Error loading language preference:", error);
     } finally {
       setIsLoaded(true);
     }
@@ -67,7 +68,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
       await AsyncStorage.setItem(LANGUAGE_STORAGE_KEY, code);
       setLanguageState(code);
     } catch (error) {
-      console.error("Error saving language preference:", error);
+      logger.error("Error saving language preference:", error);
     }
   };
 
@@ -88,7 +89,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         setLanguageState(profileLanguage as LanguageCode);
       }
     } catch (error) {
-      console.error("Error syncing language from profile:", error);
+      logger.error("Error syncing language from profile:", error);
     }
   }, []);
 
@@ -98,7 +99,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
         await AsyncStorage.removeItem(`${LANGUAGE_SYNCED_KEY}_${userId}`);
       }
     } catch (error) {
-      console.error("Error clearing language sync flag:", error);
+      logger.error("Error clearing language sync flag:", error);
     }
   }, []);
 

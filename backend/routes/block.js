@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 
 const express = require('express');
 const router = express.Router();
@@ -78,14 +79,14 @@ router.post('/:userId', protect, async (req, res) => {
       ]
     });
 
-    console.log(`[BLOCK] User ${req.user._id} blocked ${userToBlock} - removed match, messages, friend requests, swipe history`);
+    logger.log(`[BLOCK] User ${req.user._id} blocked ${userToBlock} - removed match, messages, friend requests, swipe history`);
 
     res.json({
       success: true,
       message: 'User blocked successfully'
     });
   } catch (error) {
-    console.error('Block user error:', error);
+    logger.error('Block user error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to block user'
@@ -115,14 +116,14 @@ router.delete('/:userId', protect, async (req, res) => {
     );
     await user.save();
 
-    console.log(`[UNBLOCK] User ${req.user._id} unblocked ${userToUnblock} - user is now discoverable again (no auto-restore match)`);
+    logger.log(`[UNBLOCK] User ${req.user._id} unblocked ${userToUnblock} - user is now discoverable again (no auto-restore match)`);
     
     res.json({
       success: true,
       message: 'User unblocked successfully. They will appear in discovery again but previous match is not restored.'
     });
   } catch (error) {
-    console.error('Unblock user error:', error);
+    logger.error('Unblock user error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to unblock user'
@@ -140,7 +141,7 @@ router.get('/list', protect, async (req, res) => {
       blockedUsers: user.blockedUsers
     });
   } catch (error) {
-    console.error('Get blocked users error:', error);
+    logger.error('Get blocked users error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch blocked users'

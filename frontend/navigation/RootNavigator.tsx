@@ -56,7 +56,7 @@ export type RootStackParamList = {
   SignUp: undefined;
   ForgotPassword: undefined;
   OTPVerification: { userId: string; email: string };
-  Legal: { type: "privacy" | "terms" };
+  Legal: { type: "privacy" | "terms" | "community" };
   ProfileSetup: undefined;
   MainTabs: undefined;
   Swipe: undefined;

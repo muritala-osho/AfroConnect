@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
@@ -27,9 +28,10 @@ import ProfilePrompts from "@/components/ProfilePrompts";
 import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";
-import CompatibilityQuiz, { CompatibilityScore } from "@/components/CompatibilityQuiz";
+import CompatibilityQuiz from "@/components/CompatibilityQuiz";
 import VoiceBio from "@/components/VoiceBio";
 import { ScreenScrollView } from "@/components/ScreenScrollView";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PHOTO_HEIGHT = SCREEN_WIDTH * 1.25;
@@ -138,11 +140,38 @@ function getTimezoneFromCountry(country: string): string {
   return map[country] || 'UTC';
 }
 
-function getUserLocalTime(user: any): string {
+function getTimezoneFromLongitude(lng: number): string {
+  // Etc/GMT signs are inverted vs UTC offsets: GMT-5 == UTC+5
+  const offset = Math.round(lng / 15);
+  const clamped = Math.max(-12, Math.min(14, offset));
+  if (clamped === 0) return 'Etc/GMT';
+  return clamped > 0 ? `Etc/GMT-${clamped}` : `Etc/GMT+${Math.abs(clamped)}`;
+}
+
+function getUserTimezone(user: any): string | null {
+  if (user?.timezone) return user.timezone;
+  const country = user?.location?.country;
+  if (country) {
+    const fromCountry = getTimezoneFromCountry(country);
+    if (fromCountry && fromCountry !== 'UTC') return fromCountry;
+  }
+  // GeoJSON coordinates are [lng, lat]
+  const coords = user?.location?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2 && typeof coords[0] === 'number') {
+    return getTimezoneFromLongitude(coords[0]);
+  }
+  if (typeof user?.location?.lng === 'number') {
+    return getTimezoneFromLongitude(user.location.lng);
+  }
+  return null;
+}
+
+function getUserLocalTime(user: any, _tick?: number): string {
   try {
-    const tz =
-      user?.timezone ||
-      getTimezoneFromCountry(user?.location?.country || '');
+    const tz = getUserTimezone(user);
+    if (!tz) {
+      return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
     return new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
       minute: '2-digit',
@@ -170,6 +199,12 @@ export default function ProfileDetailScreen() {
   const [actionLoading, setActionLoading] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomPhotoIndex, setZoomPhotoIndex] = useState(0);
+  const [timeTick, setTimeTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTimeTick((t) => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
   const zoomScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -192,7 +227,7 @@ export default function ProfileDetailScreen() {
         setUser(response.data.user);
       }
     } catch (error) {
-      console.error("Error loading user:", error);
+      logger.error("Error loading user:", error);
     } finally {
       setLoading(false);
     }
@@ -219,7 +254,7 @@ export default function ProfileDetailScreen() {
         }
       }
     } catch (error) {
-      console.error('Like error:', error);
+      logger.error('Like error:', error);
     } finally {
       setActionLoading(false);
     }
@@ -232,7 +267,7 @@ export default function ProfileDetailScreen() {
       await post('/match/swipe', { targetUserId: userId, action: 'pass' }, token);
       navigation.goBack();
     } catch (error) {
-      console.error('Pass error:', error);
+      logger.error('Pass error:', error);
     } finally {
       setActionLoading(false);
     }
@@ -259,31 +294,35 @@ export default function ProfileDetailScreen() {
         }
       }
     } catch (error) {
-      console.error('Super like error:', error);
+      logger.error('Super like error:', error);
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleTap = (evt: any) => {
-    if (!user || !user.photos || user.photos.length <= 1) return;
+    if (!user || !user.photos || user.photos.length === 0) return;
 
-    const tapX = evt.nativeEvent.locationX;
     const { width } = Dimensions.get('window');
+    const tapX = evt.nativeEvent.locationX;
+    const edgeZone = width * 0.25;
 
-    if (tapX > width / 2) {
-      if (currentPhotoIndex < user.photos.length - 1) {
-        setCurrentPhotoIndex(currentPhotoIndex + 1);
-      } else {
-        setCurrentPhotoIndex(0);
-      }
-    } else {
-      if (currentPhotoIndex > 0) {
-        setCurrentPhotoIndex(currentPhotoIndex - 1);
-      } else {
-        setCurrentPhotoIndex(user.photos.length - 1);
-      }
+    if (user.photos.length > 1 && tapX < edgeZone) {
+      setCurrentPhotoIndex(
+        currentPhotoIndex > 0 ? currentPhotoIndex - 1 : user.photos.length - 1
+      );
+      return;
     }
+
+    if (user.photos.length > 1 && tapX > width - edgeZone) {
+      setCurrentPhotoIndex(
+        currentPhotoIndex < user.photos.length - 1 ? currentPhotoIndex + 1 : 0
+      );
+      return;
+    }
+
+    setZoomPhotoIndex(currentPhotoIndex);
+    setZoomVisible(true);
   };
 
   const handleReport = () => {
@@ -310,7 +349,7 @@ export default function ProfileDetailScreen() {
               }
               Alert.alert('Reported', 'Thank you for your report. We will review it shortly.');
             } catch (error) {
-              console.error('Report error:', error);
+              logger.error('Report error:', error);
             }
           },
         },
@@ -455,11 +494,11 @@ export default function ProfileDetailScreen() {
                 </ThemedText>
               </View>
             )}
-            {(user.location?.country || user.timezone) && (
+            {(user.location?.country || user.timezone || user.location?.coordinates) && (
               <View style={styles.locationRow}>
                 <Ionicons name="time-outline" size={14} color="rgba(255,255,255,0.9)" />
                 <ThemedText style={styles.locationText}>
-                  {getUserLocalTime(user)} local time
+                  {getUserLocalTime(user, timeTick)} local time
                 </ThemedText>
               </View>
             )}
@@ -565,8 +604,13 @@ export default function ProfileDetailScreen() {
                 {user.relationshipGoal && <DetailItem icon="ribbon-outline" label="Relationship Goal" value={user.relationshipGoal} />}
                 {user.zodiacSign && <DetailItem icon="star-outline" label="Zodiac" value={user.zodiacSign} />}
                 {user.jobTitle && <DetailItem icon="briefcase-outline" label="Job" value={user.jobTitle} />}
+                {(user as any)?.height && <DetailItem icon="resize-outline" label="Height" value={`${(user as any).height} cm`} />}
                 {(user as any)?.school && <DetailItem icon="school-outline" label="School" value={(user as any).school} />}
                 {user.education && <DetailItem icon="ribbon-outline" label="Education" value={user.education} />}
+                {(user as any)?.countryOfOrigin && <DetailItem icon="map-outline" label="Country of Origin" value={(user as any).countryOfOrigin} />}
+                {(user as any)?.tribe && <DetailItem icon="people-circle-outline" label="Tribe / Ethnicity" value={(user as any).tribe} />}
+                {(user as any)?.languages?.length > 0 && <DetailItem icon="chatbubble-ellipses-outline" label="Languages" value={Array.isArray((user as any).languages) ? (user as any).languages.join(', ') : (user as any).languages} />}
+                {(user as any)?.diasporaGeneration && <DetailItem icon="git-branch-outline" label="Diaspora Generation" value={(user as any).diasporaGeneration} />}
                 {user.lifestyle?.personalityType && <DetailItem icon="bulb-outline" label="Personality" value={user.lifestyle.personalityType} />}
                 {user.lifestyle?.communicationStyle && <DetailItem icon="chatbubbles-outline" label="Communication" value={user.lifestyle.communicationStyle} />}
                 {user.lifestyle?.loveStyle && <DetailItem icon="heart-circle-outline" label="Love Style" value={user.lifestyle.loveStyle} />}
@@ -675,7 +719,10 @@ export default function ProfileDetailScreen() {
                       key={index}
                       onPress={() => {
                         const realIndex = user.photos.indexOf(photo);
-                        if (realIndex >= 0) setCurrentPhotoIndex(realIndex);
+                        const targetIndex = realIndex >= 0 ? realIndex : 0;
+                        setCurrentPhotoIndex(targetIndex);
+                        setZoomPhotoIndex(targetIndex);
+                        setZoomVisible(true);
                       }}
                       style={[styles.galleryImageWrap, { borderColor: theme.border }]}
                     >
@@ -736,8 +783,6 @@ export default function ProfileDetailScreen() {
 
             <ProfilePrompts userId={user._id} isOwnProfile={false} />
 
-            <CompatibilityScore userId={user._id} />
-
             <Pressable
               style={[styles.quizCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
               onPress={() => navigation.navigate('CompatibilityQuiz' as any)}
@@ -763,23 +808,36 @@ export default function ProfileDetailScreen() {
               </LinearGradient>
             </Pressable>
 
-            <Pressable
-              style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => navigation.navigate('UserDistanceMap' as any, { otherUser: user })}
-            >
-              <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
-                <Ionicons name="map" size={20} color="#00B2FF" />
-              </View>
-              <View style={styles.distanceTextContent}>
-                <ThemedText style={[styles.distanceTitle, { color: theme.text }]}>
-                  View on Map
-                </ThemedText>
-                <ThemedText style={[styles.distanceSubtitle, { color: theme.textSecondary }]}>
-                  See their location on the map
-                </ThemedText>
-              </View>
-              <Feather name="chevron-right" size={18} color={theme.textSecondary} />
-            </Pressable>
+            {(() => {
+              const realCity = user.location?.city || user.location?.address || user.livingIn || '';
+              const realCountry = user.location?.country || '';
+              const realPlace = realCity
+                ? (realCountry ? `${realCity}, ${realCountry}` : realCity)
+                : (realCountry || 'Location not shared');
+              const distanceKm = typeof (user as any).distance === 'number' ? (user as any).distance : null;
+              const distanceText = distanceKm != null
+                ? (distanceKm < 1 ? 'Less than 1 km away' : `${Math.round(distanceKm)} km away`)
+                : null;
+              return (
+                <Pressable
+                  style={[styles.distanceCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => navigation.navigate('UserDistanceMap' as any, { otherUser: user })}
+                >
+                  <View style={[styles.distanceIconWrap, { backgroundColor: '#00B2FF15' }]}>
+                    <Ionicons name="map" size={20} color="#00B2FF" />
+                  </View>
+                  <View style={styles.distanceTextContent}>
+                    <ThemedText style={[styles.distanceTitle, { color: theme.text }]}>
+                      {realPlace}
+                    </ThemedText>
+                    <ThemedText style={[styles.distanceSubtitle, { color: theme.textSecondary }]}>
+                      {distanceText ? `${distanceText} • Tap to view on map` : 'Tap to view on map'}
+                    </ThemedText>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={theme.textSecondary} />
+                </Pressable>
+              );
+            })()}
 
             <Pressable onPress={handleReport} style={styles.reportContainer}>
               <Ionicons name="flag-outline" size={14} color={theme.textSecondary} />
@@ -819,10 +877,11 @@ export default function ProfileDetailScreen() {
                 const source = getPhotoSource(photo) || require('@/assets/images/placeholder-1.jpg');
                 return (
                   <View key={index} style={styles.zoomPhotoPage}>
-                    <Image
+                    <ZoomablePhoto
                       source={source}
-                      style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT }}
-                      resizeMode="contain"
+                      width={SCREEN_WIDTH}
+                      height={SCREEN_HEIGHT}
+                      onSingleTap={() => setZoomVisible(false)}
                     />
                   </View>
                 );

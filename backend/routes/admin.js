@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 
 const express = require('express');
 const router = express.Router();
@@ -9,6 +10,7 @@ const Message = require('../models/Message');
 const Story = require('../models/Story');
 const AuditLog = require('../models/AuditLog');
 const redis = require('../utils/redis');
+const verificationController = require('../controllers/verificationController');
 
 const logAudit = async (req, action, category, severity, targetUser, details, metadata) => {
   try {
@@ -27,7 +29,7 @@ const logAudit = async (req, action, category, severity, targetUser, details, me
       ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
     });
   } catch (e) {
-    console.error('[AuditLog] Failed to write audit entry:', e.message);
+    logger.error('[AuditLog] Failed to write audit entry:', e.message);
   }
 };
 
@@ -44,8 +46,9 @@ const isAdmin = async (req, res, next) => {
 router.get('/reports', protect, isAdmin, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
+    const query = status === 'all' ? {} : { status };
     
-    const reports = await Report.find({ status })
+    const reports = await Report.find(query)
       .populate('reporter', 'name email')
       .populate('reportedUser', 'name email photos')
       .sort({ createdAt: -1 })
@@ -56,7 +59,7 @@ router.get('/reports', protect, isAdmin, async (req, res) => {
       reports
     });
   } catch (error) {
-    console.error('Get reports error:', error);
+    logger.error('Get reports error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -91,7 +94,7 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
         try {
           const { sendWarningEmail } = require('../utils/emailService');
           await sendWarningEmail(reportedUser.email, reportedUser.name, notes || 'Violation of community guidelines');
-        } catch (e) { console.error('Warning email failed:', e.message); }
+        } catch (e) { logger.error('Warning email failed:', e.message); }
       } else if (action === 'suspend') {
         reportedUser.suspended = true;
         reportedUser.suspendedUntil = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -99,7 +102,7 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
         try {
           const { sendSuspensionEmail } = require('../utils/emailService');
           await sendSuspensionEmail(reportedUser.email, reportedUser.name, notes || 'Repeated violation of community guidelines', 7);
-        } catch (e) { console.error('Suspension email failed:', e.message); }
+        } catch (e) { logger.error('Suspension email failed:', e.message); }
       } else if (action === 'ban') {
         reportedUser.banned = true;
         reportedUser.bannedAt = Date.now();
@@ -108,7 +111,7 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
         try {
           const { sendBanNotificationEmail } = require('../utils/emailService');
           await sendBanNotificationEmail(reportedUser.email, reportedUser.name, notes || 'Violation of community guidelines');
-        } catch (e) { console.error('Ban email failed:', e.message); }
+        } catch (e) { logger.error('Ban email failed:', e.message); }
       }
 
       try {
@@ -130,7 +133,7 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
           }
         }
       } catch (socketErr) {
-        console.error('Failed to emit moderation socket event:', socketErr.message);
+        logger.error('Failed to emit moderation socket event:', socketErr.message);
       }
     }
 
@@ -145,7 +148,7 @@ router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
       report
     });
   } catch (error) {
-    console.error('Resolve report error:', error);
+    logger.error('Resolve report error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -197,7 +200,7 @@ router.get('/users', protect, isAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get users error:', error);
+    logger.error('Get users error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -240,7 +243,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
         }
       }
     } catch (socketError) {
-      console.error('Failed to emit ban socket event:', socketError);
+      logger.error('Failed to emit ban socket event:', socketError);
     }
 
     try {
@@ -252,7 +255,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
         await sendUnbanNotificationEmail(user.email, user.name);
       }
     } catch (emailError) {
-      console.error('Failed to send ban/unban notification email:', emailError);
+      logger.error('Failed to send ban/unban notification email:', emailError);
     }
 
     await logAudit(req, banned ? 'BAN_USER' : 'UNBAN_USER', 'USER_MANAGEMENT', banned ? 'critical' : 'medium', user,
@@ -264,7 +267,7 @@ router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
       user
     });
   } catch (error) {
-    console.error('Ban user error:', error);
+    logger.error('Ban user error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -294,7 +297,7 @@ router.put('/verifications/:userId', protect, isAdmin, async (req, res) => {
     await redis.del(`profile:me:${user._id}`);
     res.json({ success: true, message: `Verification ${action}d`, user });
   } catch (error) {
-    console.error('Update verification error:', error);
+    logger.error('Update verification error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -342,7 +345,7 @@ router.post('/appeals', protect, async (req, res) => {
 
     res.json({ success: true, message: 'Appeal submitted successfully. Admins will review it soon.' });
   } catch (error) {
-    console.error('Appeal submission error:', error);
+    logger.error('Appeal submission error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -356,7 +359,7 @@ router.get('/appeals', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, appeals });
   } catch (error) {
-    console.error('Get appeals error:', error);
+    logger.error('Get appeals error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -408,7 +411,7 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
       const approved = action === 'approve';
       await sendAppealDecisionEmail(user.email, user.name, approved, adminResponse);
     } catch (emailError) {
-      console.error('Failed to send appeal decision email:', emailError);
+      logger.error('Failed to send appeal decision email:', emailError);
     }
 
     await logAudit(req, action === 'approve' ? 'APPROVE_APPEAL' : 'REJECT_APPEAL', 'APPEAL',
@@ -421,7 +424,7 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
       user 
     });
   } catch (error) {
-    console.error('Review appeal error:', error);
+    logger.error('Review appeal error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -437,10 +440,12 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
       verifications
     });
   } catch (error) {
-    console.error('Get verifications error:', error);
+    logger.error('Get verifications error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
+router.post('/revoke-verification/:userId', protect, isAdmin, verificationController.revokeVerification);
 
 router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) => {
   try {
@@ -464,7 +469,7 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
       user: { _id: user._id, name: user.name, email: user.email, verified: true }
     });
   } catch (error) {
-    console.error('Approval error:', error);
+    logger.error('Approval error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -490,7 +495,7 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
       message: 'Verification rejected'
     });
   } catch (error) {
-    console.error('Rejection error:', error);
+    logger.error('Rejection error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -516,7 +521,7 @@ router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Subscription error:', error);
+    logger.error('Subscription error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -536,7 +541,7 @@ router.get('/stories-moderation', protect, isAdmin, async (req, res) => {
       totalFlagged: flaggedStories?.length || 0
     });
   } catch (error) {
-    console.error('Stories moderation error:', error);
+    logger.error('Stories moderation error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -563,7 +568,7 @@ router.get('/boosts-revenue', protect, isAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Boosts error:', error);
+    logger.error('Boosts error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -593,7 +598,7 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    logger.error('Get stats error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -619,7 +624,7 @@ router.get('/users/:userId', protect, isAdmin, async (req, res) => {
     }
     res.json({ success: true, user });
   } catch (error) {
-    console.error('Get user detail error:', error);
+    logger.error('Get user detail error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -634,7 +639,7 @@ router.delete('/stories/:storyId', protect, isAdmin, async (req, res) => {
     await Story.findByIdAndDelete(req.params.storyId);
     res.json({ success: true, message: 'Story removed successfully' });
   } catch (error) {
-    console.error('Delete story error:', error);
+    logger.error('Delete story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -667,7 +672,7 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
         }
       }
     } catch (socketError) {
-      console.error('Failed to emit suspend socket event:', socketError);
+      logger.error('Failed to emit suspend socket event:', socketError);
     }
 
     await logAudit(req, suspended ? 'SUSPEND_USER' : 'UNSUSPEND_USER', 'USER_MANAGEMENT', 'high', user,
@@ -679,7 +684,7 @@ router.put('/users/:userId/suspend', protect, isAdmin, async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error('Suspend user error:', error);
+    logger.error('Suspend user error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -693,7 +698,7 @@ router.delete('/users/:userId', protect, isAdmin, async (req, res) => {
     await User.findByIdAndDelete(req.params.userId);
     res.json({ success: true, message: 'User account permanently deleted' });
   } catch (error) {
-    console.error('Delete user error:', error);
+    logger.error('Delete user error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -702,26 +707,30 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
   try {
     const { status } = req.query;
 
-    const reports = await Report.find({ status: 'pending', contentType: { $in: ['profile_photo', 'story', 'message_image'] } })
+    const FLAGGABLE_TYPES = [
+      'profile_photo', 'story', 'message_image', 'message_text', 'message_audio',
+      'message_video', 'voice_bio', 'success_story', 'bio', 'comment'
+    ];
+    const reports = await Report.find({ status: 'pending', contentType: { $in: FLAGGABLE_TYPES } })
       .populate('reportedBy', 'name email photos')
       .populate('reporter', 'name email photos')
       .populate('reportedUser', 'name email photos')
       .sort({ createdAt: -1 })
       .limit(100);
 
+    const VISUAL_TYPES = ['profile_photo', 'story', 'message_image', 'success_story'];
     const content = reports
       .map(report => {
         const reportedUser = report.reportedUser;
         const reporter = report.reportedBy || report.reporter;
         if (!reportedUser) return null;
-        const userAvatar = reportedUser.photos?.[0]?.url || reportedUser.photos?.[0] || report.contentUrl;
-        let imageUrl = report.contentUrl || userAvatar;
+        const userAvatar = reportedUser.photos?.[0]?.url || reportedUser.photos?.[0];
+        let imageUrl = report.contentUrl || (VISUAL_TYPES.includes(report.contentType) ? userAvatar : null);
         if (report.contentType === 'profile_photo' && !imageUrl) {
           const photoIndex = Number.parseInt(report.contentId || '0', 10);
           const photo = reportedUser.photos?.[photoIndex] || reportedUser.photos?.[0];
           imageUrl = photo?.url || photo;
         }
-        if (!imageUrl) return null;
 
         return {
           id: `report-${report._id}`,
@@ -731,6 +740,9 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
           userAvatar,
           type: report.contentType,
           imageUrl,
+          contentUrl: report.contentUrl,
+          contentPreview: report.contentPreview,
+          contentMeta: report.contentMeta,
           reason: `${report.reason || 'Reported content'}${report.description ? `: ${report.description}` : ''}${reporter?.name ? ` • reported by ${reporter.name}` : ''}`,
           flaggedAt: report.createdAt || new Date(),
           status: 'pending',
@@ -743,7 +755,7 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, content: filtered, total: filtered.length });
   } catch (error) {
-    console.error('Flagged content error:', error);
+    logger.error('Flagged content error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -805,6 +817,27 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
               });
             }
           }
+        } else if (report.contentType === 'voice_bio' && user) {
+          if (user.voiceBio?.url) {
+            user.voiceBio = { url: null, publicId: null };
+            await user.save();
+            await redis.del(`profile:me:${user._id}`);
+          }
+        } else if (report.contentType === 'bio' && user) {
+          if (user.bio) {
+            user.bio = '';
+            await user.save();
+            await redis.del(`profile:me:${user._id}`);
+          }
+        } else if (report.contentType === 'success_story' && report.contentId) {
+          const SuccessStory = require('../models/SuccessStory');
+          const story = await SuccessStory.findById(report.contentId);
+          if (story) {
+            story.status = 'rejected';
+            story.rejectionReason = 'Removed by moderation following community report';
+            story.featured = false;
+            await story.save();
+          }
         }
       }
 
@@ -826,7 +859,7 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
       action,
     });
   } catch (error) {
-    console.error('Moderate content error:', error);
+    logger.error('Moderate content error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -901,15 +934,15 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
             );
             if (ok) sent++;
           } catch (e) {
-            console.error('[Broadcast] Push error for user', user._id, e.message);
+            logger.error('[Broadcast] Push error for user', user._id, e.message);
           }
         }
         campaign.actualSent = sent;
-        console.log(`[Broadcast] "${title}" — sent ${sent}/${reach} notifications`);
+        logger.log(`[Broadcast] "${title}" — sent ${sent}/${reach} notifications`);
       });
     }
   } catch (error) {
-    console.error('Send broadcast error:', error);
+    logger.error('Send broadcast error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -947,9 +980,11 @@ router.put('/settings', protect, isAdmin, (req, res) => {
 router.get('/analytics', protect, isAdmin, async (req, res) => {
   try {
     const now = new Date();
+    const period = req.query.period === '30d' ? '30d' : '7d';
+    const dayCount = period === '30d' ? 30 : 7;
 
     const days = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = dayCount - 1; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       const start = new Date(d); start.setHours(0, 0, 0, 0);
@@ -961,7 +996,9 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
       ]);
 
       days.push({
-        name: start.toLocaleDateString('en-US', { weekday: 'short' }),
+        name: period === '30d'
+          ? start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+          : start.toLocaleDateString('en-US', { weekday: 'short' }),
         newUsers,
         active:   activeUsers,
         matches:  Math.floor(activeUsers * 0.25),
@@ -996,7 +1033,7 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Analytics error:', error);
+    logger.error('Analytics error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1020,7 +1057,7 @@ router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
       activity: { active24h, active7d, onlineNow, messages24h },
     });
   } catch (error) {
-    console.error('Activity monitoring error:', error);
+    logger.error('Activity monitoring error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1030,9 +1067,16 @@ router.get('/user-demographics', protect, isAdmin, async (req, res) => {
     const users = await User.find({}, 'gender age');
     const genderMap = {};
     const ageBuckets = { '18-24': 0, '25-34': 0, '35-44': 0, '45+': 0 };
+    const normalizeGender = (gender) => {
+      const value = String(gender || 'other').trim().toLowerCase();
+      if (['male', 'man', 'men', 'm'].includes(value)) return 'male';
+      if (['female', 'woman', 'women', 'f'].includes(value)) return 'female';
+      if (['non-binary', 'nonbinary', 'non binary', 'nb'].includes(value)) return 'non-binary';
+      return 'other';
+    };
 
     users.forEach(u => {
-      const g = (u.gender || 'other').toLowerCase();
+      const g = normalizeGender(u.gender);
       genderMap[g] = (genderMap[g] || 0) + 1;
       const a = u.age || 0;
       if (a >= 18 && a <= 24) ageBuckets['18-24']++;
@@ -1041,12 +1085,13 @@ router.get('/user-demographics', protect, isAdmin, async (req, res) => {
       else if (a >= 45) ageBuckets['45+']++;
     });
 
-    const genderData = Object.entries(genderMap).map(([name, value]) => ({ name, value }));
+    const genderLabels = { male: 'Male', female: 'Female', 'non-binary': 'Non-binary', other: 'Other' };
+    const genderData = Object.entries(genderMap).map(([name, value]) => ({ name: genderLabels[name] || name, value }));
     const ageData = Object.entries(ageBuckets).map(([name, value]) => ({ name, value }));
 
     res.json({ success: true, demographics: { genderData, ageData, total: users.length } });
   } catch (error) {
-    console.error('Demographics error:', error);
+    logger.error('Demographics error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1077,7 +1122,7 @@ router.get('/revenue-history', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, revenueHistory: days });
   } catch (error) {
-    console.error('Revenue history error:', error);
+    logger.error('Revenue history error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1095,7 +1140,7 @@ router.get('/support-tickets', protect, isAdmin, async (req, res) => {
       .limit(200);
     res.json({ success: true, tickets });
   } catch (error) {
-    console.error('Get support tickets error:', error);
+    logger.error('Get support tickets error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1136,7 +1181,7 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
           }, 'support');
         }
       } catch (pushErr) {
-        console.error('Push notification failed (non-critical):', pushErr.message);
+        logger.error('Push notification failed (non-critical):', pushErr.message);
       }
     }
 
@@ -1153,13 +1198,13 @@ router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, re
           );
         }
       } catch (emailErr) {
-        console.error('Support reply email error (non-critical):', emailErr.message);
+        logger.error('Support reply email error (non-critical):', emailErr.message);
       }
     }
 
     res.json({ success: true, message: 'Reply sent', ticket });
   } catch (error) {
-    console.error('Support reply error:', error);
+    logger.error('Support reply error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1184,7 +1229,7 @@ router.put('/support-tickets/:ticketId/status', protect, isAdmin, async (req, re
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
     res.json({ success: true, ticket });
   } catch (error) {
-    console.error('Update ticket status error:', error);
+    logger.error('Update ticket status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1200,9 +1245,9 @@ router.post('/kill-switch', protect, isAdmin, async (req, res) => {
         performedBy: req.user._id,
         details: { activatedAt: new Date().toISOString(), ip: req.ip },
       });
-    } catch (_) {}
+    } catch (auditErr) { logger.warn('[kill-switch] Audit log failed (non-critical):', auditErr.message); }
 
-    console.warn(`[KILL-SWITCH] Activated by admin ${req.user.email} at ${new Date().toISOString()}`);
+    logger.warn(`[KILL-SWITCH] Activated by admin ${req.user._id} at ${new Date().toISOString()}`);
 
     return res.json({
       success: true,
@@ -1210,7 +1255,7 @@ router.post('/kill-switch', protect, isAdmin, async (req, res) => {
       maintenanceMode: true,
     });
   } catch (error) {
-    console.error('[kill-switch] Error:', error.message);
+    logger.error('[kill-switch] Error:', error.message);
     return res.status(500).json({ success: false, message: 'Failed to activate kill switch' });
   }
 });
@@ -1226,9 +1271,9 @@ router.post('/kill-switch/deactivate', protect, isAdmin, async (req, res) => {
         performedBy: req.user._id,
         details: { deactivatedAt: new Date().toISOString() },
       });
-    } catch (_) {}
+    } catch (auditErr) { logger.warn('[kill-switch] Audit log failed (non-critical):', auditErr.message); }
 
-    console.log(`[KILL-SWITCH] Deactivated by admin ${req.user.email}`);
+    logger.log(`[KILL-SWITCH] Deactivated by admin ${req.user._id}`);
 
     return res.json({
       success: true,

@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
@@ -11,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
@@ -65,12 +67,13 @@ export default function PremiumScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { token, user } = useAuth();
   const { get, post } = useApi();
+  const insets = useSafeAreaInsets();
   
   const [selectedTier, setSelectedTier] = useState<PriceTier>(PRICING_TIERS[2]);
   const [processing, setProcessing] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [iapReady, setIapReady] = useState(false);
-  const [storePrices, setStorePrices] = useState<Record<string, string>>({});
+  const [storePrices, setStorePrices] = useState<Record<string, { localizedPrice: string; currency: string }>>({});
   const [pricesLoading, setPricesLoading] = useState(false);
 
   const cardScale = useSharedValue(1);
@@ -108,22 +111,19 @@ export default function PremiumScreen({ navigation }: any) {
         setPricesLoading(true);
         const subs = await iapService.getSubscriptions();
         if (subs && subs.length > 0) {
-          const priceMap: Record<string, string> = {};
-          subs.forEach((sub: any) => {
-            const productId = sub.productId;
-            const localizedPrice =
-              sub.localizedPrice ||
-              sub.price ||
-              null;
-            if (productId && localizedPrice) {
-              priceMap[productId] = localizedPrice;
-            }
+          const priceMap: Record<string, { localizedPrice: string; currency: string }> = {};
+          subs.forEach((sub) => {
+            priceMap[sub.productId] = {
+              localizedPrice: sub.localizedPrice,
+              currency: sub.currency,
+            };
           });
           if (Object.keys(priceMap).length > 0) {
             setStorePrices(priceMap);
           }
         }
       } catch (e) {
+        logger.log('Failed to load store prices:', e);
       } finally {
         setPricesLoading(false);
       }
@@ -149,7 +149,7 @@ export default function PremiumScreen({ navigation }: any) {
               Alert.alert('Welcome to Premium!', 'Your subscription is now active. Enjoy all the premium features!');
             }
           } catch (error) {
-            console.log('Receipt validation failed:', error);
+            logger.log('Receipt validation failed:', error);
           }
         }
         setProcessing(false);
@@ -189,7 +189,8 @@ export default function PremiumScreen({ navigation }: any) {
   };
 
   const getDisplayPrice = (tier: PriceTier): string => {
-    if (storePrices[tier.id]) return storePrices[tier.id];
+    const stored = storePrices[tier.id];
+    if (stored?.localizedPrice) return stored.localizedPrice;
     return formatPrice(tier.amount, tier.currency);
   };
 
@@ -310,10 +311,17 @@ export default function PremiumScreen({ navigation }: any) {
                       <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                         {isSelected && <View style={styles.radioInner} />}
                       </View>
-                      <View>
-                        <Text style={[styles.tierLabel, isSelected && styles.tierLabelSelected]}>
-                          {tier.label}
-                        </Text>
+                      <View style={styles.tierLabelBlock}>
+                        <View style={styles.tierTitleRow}>
+                          <Text style={[styles.tierLabel, isSelected && styles.tierLabelSelected]} numberOfLines={1}>
+                            {tier.label}
+                          </Text>
+                          {tier.savings && (
+                            <View style={styles.savingsBadge}>
+                              <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={styles.tierInterval}>
                           Billed {tier.interval === 'day' ? 'daily' : tier.interval === 'year' ? 'annually' : tier.interval + 'ly'}
                         </Text>
@@ -321,16 +329,9 @@ export default function PremiumScreen({ navigation }: any) {
                     </View>
                     
                     <View style={styles.tierRight}>
-                      <View style={styles.priceRow}>
-                        <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]}>
-                          {pricesLoading ? '...' : getDisplayPrice(tier)}
-                        </Text>
-                        {tier.savings && (
-                          <View style={styles.savingsBadge}>
-                            <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
-                          </View>
-                        )}
-                      </View>
+                      <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]} numberOfLines={1} adjustsFontSizeToFit>
+                        {pricesLoading ? '...' : getDisplayPrice(tier)}
+                      </Text>
                       <Text style={styles.tierPer}>/{tier.interval}</Text>
                     </View>
                   </View>
@@ -358,7 +359,7 @@ export default function PremiumScreen({ navigation }: any) {
           <View style={{ height: 120 }} />
         </ScrollView>
 
-        <View style={styles.bottomCta}>
+        <View style={[styles.bottomCta, { paddingBottom: Math.max(insets.bottom - 4, 0) }]}>
           <LinearGradient
             colors={['transparent', 'rgba(26, 26, 46, 0.95)', '#1a1a2e']}
             style={styles.bottomGradient}
@@ -379,10 +380,17 @@ export default function PremiumScreen({ navigation }: any) {
                   <ActivityIndicator color="#FFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.subscribeText}>
-                      {isActive ? 'Already Premium' : `Get Premium - ${pricesLoading ? '...' : getDisplayPrice(selectedTier)}/${selectedTier.interval}`}
-                    </Text>
-                    {!isActive && <Feather name="arrow-right" size={20} color="#FFF" style={{ marginLeft: 8 }} />}
+                    <View style={styles.subscribeCopy}>
+                      <Text style={styles.subscribeText}>
+                        {isActive ? 'Already Premium' : 'Get Premium'}
+                      </Text>
+                      {!isActive && (
+                        <Text style={styles.subscribePrice} numberOfLines={1} adjustsFontSizeToFit>
+                          {pricesLoading ? '...' : `${getDisplayPrice(selectedTier)}/${selectedTier.interval}`}
+                        </Text>
+                      )}
+                    </View>
+                    {!isActive && <Feather name="arrow-right" size={20} color="#FFF" />}
                   </>
                 )}
               </LinearGradient>
@@ -525,16 +533,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
   savingsBadge: {
     backgroundColor: 'rgba(76, 175, 80, 0.25)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    marginLeft: 8,
   },
   savingsBadgeText: {
     color: '#4CAF50',
@@ -545,10 +548,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
   tierLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+  },
+  tierLabelBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  tierTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
   },
   radioOuter: {
     width: 24,
@@ -584,12 +600,14 @@ const styles = StyleSheet.create({
   },
   tierRight: {
     alignItems: 'flex-end',
-    flexShrink: 0,
+    minWidth: 82,
+    maxWidth: 130,
   },
   tierPrice: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFF',
+    textAlign: 'right',
   },
   tierPriceSelected: {
     color: '#FF6B6B',
@@ -639,7 +657,7 @@ const styles = StyleSheet.create({
   },
   bottomGradient: {
     paddingTop: 30,
-    paddingBottom: 20,
+    paddingBottom: 24,
     paddingHorizontal: 20,
   },
   subscribeButton: {
@@ -650,13 +668,29 @@ const styles = StyleSheet.create({
   subscribeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingVertical: 18,
+    paddingHorizontal: 22,
+  },
+  subscribeCopy: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginRight: 10,
   },
   subscribeText: {
     color: '#FFF',
     fontSize: 17,
     fontWeight: '700',
+  },
+  subscribePrice: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '800',
+    opacity: 0.95,
   },
   termsText: {
     textAlign: 'center',

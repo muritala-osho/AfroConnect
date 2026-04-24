@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { View, Animated } from "react-native";
+import { View, Animated, Pressable, LayoutChangeEvent, GestureResponderEvent } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { WAVEFORM_HEIGHTS } from "@/constants/chatConstants";
 
@@ -9,6 +9,7 @@ interface WavyWaveformProps {
   isMe: boolean;
   theme: any;
   duration?: number;
+  onSeek?: (fraction: number) => void;
 }
 
 const formatDuration = (secs?: number) => {
@@ -18,8 +19,16 @@ const formatDuration = (secs?: number) => {
   return `${m}:${s.toString().padStart(2, "0")}`;
 };
 
-const WavyWaveform = ({ isPlaying, progress, isMe, theme, duration }: WavyWaveformProps) => {
+const WavyWaveform = ({ isPlaying, progress, isMe, theme, duration, onSeek }: WavyWaveformProps) => {
   const BAR_COUNT = 30;
+  const widthRef = useRef(0);
+  const onLayout = (e: LayoutChangeEvent) => { widthRef.current = e.nativeEvent.layout.width; };
+  const handleSeekTouch = (e: GestureResponderEvent) => {
+    if (!onSeek || !widthRef.current) return;
+    const x = e.nativeEvent.locationX;
+    const f = Math.max(0, Math.min(1, x / widthRef.current));
+    onSeek(f);
+  };
   const [animations] = useState(() =>
     WAVEFORM_HEIGHTS.slice(0, BAR_COUNT).map((h) => new Animated.Value(h)),
   );
@@ -67,7 +76,9 @@ const WavyWaveform = ({ isPlaying, progress, isMe, theme, duration }: WavyWavefo
 
   return (
     <View style={{ flex: 1 }}>
-      <View
+      <Pressable
+        onLayout={onLayout}
+        onPress={onSeek ? handleSeekTouch : undefined}
         style={{
           flexDirection: "row",
           alignItems: "center",
@@ -98,7 +109,7 @@ const WavyWaveform = ({ isPlaying, progress, isMe, theme, duration }: WavyWavefo
             />
           );
         })}
-      </View>
+      </Pressable>
       {duration !== undefined && duration > 0 && (
         <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 2 }}>
           <ThemedText style={{ fontSize: 10, color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>

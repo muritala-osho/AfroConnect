@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * Firebase Cloud Messaging (FCM) — direct push via Firebase Admin SDK
  *
@@ -30,7 +31,7 @@ function getAdmin() {
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (!serviceAccountJson) {
-    console.warn(
+    logger.warn(
       '[FCM] FIREBASE_SERVICE_ACCOUNT env var not set. ' +
       'Direct FCM data messages (Android killed-app CallKeep) will be skipped. ' +
       'Download your service account key from Firebase Console → Project Settings → Service Accounts.',
@@ -47,9 +48,9 @@ function getAdmin() {
       });
     }
     admin = firebaseAdmin;
-    console.log('[FCM] Firebase Admin initialized.');
+    logger.log('[FCM] Firebase Admin initialized.');
   } catch (err) {
-    console.error('[FCM] Failed to initialize Firebase Admin:', err.message);
+    logger.error('[FCM] Failed to initialize Firebase Admin:', err.message);
     admin = null;
   }
 
@@ -82,10 +83,10 @@ async function sendFcmDataMessage(fcmToken, data) {
         ttl: 30000,
       },
     });
-    console.log('[FCM] ✅ Data message sent:', result);
+    logger.log('[FCM] ✅ Data message sent:', result);
     return result;
   } catch (err) {
-    console.error('[FCM] Failed to send data message:', err.message);
+    logger.error('[FCM] Failed to send data message:', err.message);
   }
 }
 

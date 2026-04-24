@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -277,7 +278,7 @@ export default function VoiceCallScreen() {
       await sound.playAsync().catch(() => {});
       if (isIncoming) Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
-      console.error("Ringtone error:", err);
+      logger.error("Ringtone error:", err);
       if (isIncoming && shouldRingRef.current) Vibration.vibrate([500, 1000, 500], true);
     }
   }, [isIncoming, stopRingtone]);
@@ -327,7 +328,7 @@ export default function VoiceCallScreen() {
             joinUid = 0;
           }
         } catch {
-          console.log("Token fallback — using shared token");
+          logger.log("Token fallback — using shared token");
         }
       }
 
@@ -456,7 +457,7 @@ export default function VoiceCallScreen() {
         playThroughEarpieceAndroid: !next,
       });
     } catch (e) {
-      console.log("Speaker error:", e);
+      logger.log("Speaker error:", e);
     }
     if (Platform.OS !== "web") sendToWebView({ action: "speaker", on: next });
   }, [isSpeakerOn, sendToWebView]);
@@ -725,12 +726,12 @@ export default function VoiceCallScreen() {
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "sdk-ready") console.log("Voice: Agora SDK ready");
-              if (d.type === "joined") console.log("Voice joined:", d.uid);
+              if (d.type === "sdk-ready") logger.log("Voice: Agora SDK ready");
+              if (d.type === "joined") logger.log("Voice joined:", d.uid);
               if (d.type === "remote-user-left") {
                 if (callStatusRef.current === "connected") handleEndCall();
               }
-              if (d.type === "error") console.warn("Voice WebView error:", d.message);
+              if (d.type === "error") logger.warn("Voice WebView error:", d.message);
             } catch {}
           }}
         />

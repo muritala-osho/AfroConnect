@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useEffect, useCallback, useState } from "react";
 import { View, StyleSheet, Pressable } from "react-native";
 import Animated, {
@@ -83,7 +84,7 @@ export default function MiniRadar({ onPress, userCount = 0 }: MiniRadarProps) {
         setNearbyUsers(data.users?.slice(0, 5) || []);
       }
     } catch (error) {
-      console.error("MiniRadar fetch error:", error);
+      logger.error("MiniRadar fetch error:", error);
     } finally {
       setLoading(false);
     }

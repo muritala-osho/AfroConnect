@@ -100,13 +100,22 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
   };
 
   const CONTENT_TYPE_META: Record<string, { label: string; icon: React.ReactNode }> = {
-    story:         { label: 'Story',         icon: <FileImage size={14} /> },
-    message_image: { label: 'Image Message', icon: <FileImage size={14} /> },
-    message_text:  { label: 'Text Message',  icon: <FileText  size={14} /> },
-    message_audio: { label: 'Voice Message', icon: <Mic       size={14} /> },
-    message_video: { label: 'Video Message', icon: <Video     size={14} /> },
-    profile_photo: { label: 'Profile Photo', icon: <FileImage size={14} /> },
+    story:         { label: 'Story',           icon: <FileImage size={14} /> },
+    message_image: { label: 'Image Message',   icon: <FileImage size={14} /> },
+    message_text:  { label: 'Text Message',    icon: <FileText  size={14} /> },
+    message_audio: { label: 'Voice Message',   icon: <Mic       size={14} /> },
+    message_video: { label: 'Video Message',   icon: <Video     size={14} /> },
+    profile_photo: { label: 'Profile Photo',   icon: <FileImage size={14} /> },
+    voice_bio:     { label: 'Voice Bio',       icon: <Mic       size={14} /> },
+    bio:           { label: 'Profile Bio',     icon: <FileText  size={14} /> },
+    success_story: { label: 'Success Story',   icon: <FileText  size={14} /> },
+    comment:       { label: 'Comment',         icon: <MessageCircle size={14} /> },
   };
+
+  const isImageType = (t?: string) => t === 'story' || t === 'message_image' || t === 'profile_photo' || t === 'success_story';
+  const isAudioType = (t?: string) => t === 'voice_bio' || t === 'message_audio';
+  const isVideoType = (t?: string) => t === 'message_video';
+  const isTextType  = (t?: string) => t === 'message_text' || t === 'bio' || t === 'comment';
 
   const stats = [
     { label: 'Reports Loaded', value: reports.length, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/5', border: 'border-rose-100 dark:border-rose-500/20', icon: <ShieldAlert size={20} /> },
@@ -293,7 +302,7 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                       Reported {CONTENT_TYPE_META[selectedReport.contentType]?.label ?? selectedReport.contentType}
                     </p>
                   </div>
-                  {selectedReport.contentUrl && (selectedReport.contentType === 'story' || selectedReport.contentType === 'message_image' || selectedReport.contentType === 'profile_photo') && (
+                  {selectedReport.contentUrl && isImageType(selectedReport.contentType) && (
                     <img
                       src={selectedReport.contentUrl}
                       alt="Reported content"
@@ -301,10 +310,24 @@ const ReportsQueue: React.FC<ReportsQueueProps> = ({ showToast }) => {
                       onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
                   )}
+                  {selectedReport.contentUrl && isAudioType(selectedReport.contentType) && (
+                    <div className="mb-3 p-3 bg-slate-100 dark:bg-slate-900 rounded-xl">
+                      <audio controls preload="metadata" className="w-full" src={selectedReport.contentUrl}>
+                        Your browser does not support audio playback.
+                      </audio>
+                    </div>
+                  )}
+                  {selectedReport.contentUrl && isVideoType(selectedReport.contentType) && (
+                    <video controls preload="metadata" className="w-full max-h-64 rounded-xl mb-3 bg-black" src={selectedReport.contentUrl}>
+                      Your browser does not support video playback.
+                    </video>
+                  )}
                   {selectedReport.contentPreview && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 italic">
-                      "{selectedReport.contentPreview}"
-                    </p>
+                    <div className={`${isTextType(selectedReport.contentType) ? 'p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700' : ''}`}>
+                      <p className={`text-sm leading-relaxed whitespace-pre-wrap ${isTextType(selectedReport.contentType) ? 'text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400 italic'}`}>
+                        {isTextType(selectedReport.contentType) ? selectedReport.contentPreview : `"${selectedReport.contentPreview}"`}
+                      </p>
+                    </div>
                   )}
                   {selectedReport.status === 'pending' && (
                     <button

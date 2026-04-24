@@ -76,6 +76,71 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
     return 'active';
   };
 
+  const formatLocationName = (location: any) => {
+    if (!location) return '';
+    if (typeof location === 'string') return location;
+    const coords = Array.isArray(location.coordinates) && location.coordinates.length >= 2
+      && !(Number(location.coordinates[0]) === 0 && Number(location.coordinates[1]) === 0)
+      ? `${Number(location.coordinates[1]).toFixed(4)}, ${Number(location.coordinates[0]).toFixed(4)}`
+      : '';
+    return location.name || [location.city, location.country].filter(Boolean).join(', ') || location.address || coords || '';
+  };
+
+  const getUserLocationLabel = (user: any) => {
+    return user?.livingIn || formatLocationName(user?.location) || 'Not set';
+  };
+
+  const getLocationUpdatedLabel = (user: any) => {
+    if (!user?.locationUpdatedAt) return '';
+    return `Updated ${new Date(user.locationUpdatedAt).toLocaleString()}`;
+  };
+
+  const formatRelativeTime = (date: string | Date) => {
+    const ms = Date.now() - new Date(date).getTime();
+    if (ms < 0) return 'just now';
+    const sec = Math.floor(ms / 1000);
+    if (sec < 60) return `${sec}s ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h ago`;
+    const days = Math.floor(hr / 24);
+    return `${days}d ago`;
+  };
+
+  const getLiveLocationInfo = (user: any) => {
+    const live = user?.liveLocation;
+    if (!live || !Array.isArray(live.coordinates) || live.coordinates.length < 2) return null;
+    const [lng, lat] = live.coordinates;
+    if (Number(lat) === 0 && Number(lng) === 0) return null;
+    const updatedAt = user?.liveLocationUpdatedAt ? new Date(user.liveLocationUpdatedAt) : null;
+    const ageMs = updatedAt ? Date.now() - updatedAt.getTime() : Infinity;
+    const isLive = ageMs < 10 * 60 * 1000;
+    const isRecent = ageMs < 60 * 60 * 1000;
+    const cityCountry = [live.city, live.country].filter(Boolean).join(', ');
+    return {
+      lat: Number(lat),
+      lng: Number(lng),
+      label: cityCountry || `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`,
+      coords: `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`,
+      updatedAt,
+      relative: updatedAt ? formatRelativeTime(updatedAt) : 'unknown',
+      isLive,
+      isRecent,
+    };
+  };
+
+  const getLoveLocations = (user: any) => {
+    const locations: string[] = [];
+    const passport = formatLocationName(user.passportLocation);
+    if (passport) locations.push(`Passport: ${passport}`);
+    (user.additionalLocations || []).forEach((location: any) => {
+      const name = formatLocationName(location);
+      if (name) locations.push(name);
+    });
+    return locations;
+  };
+
   const handleUserClick = (user: any) => {
     setSelectedUser(user);
     setIsModalOpen(true);
@@ -153,7 +218,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
       u.email || '',
       mapUserStatus(u),
       u.verified ? 'Yes' : 'No',
-      u.location?.city || u.location?.country || '',
+      getUserLocationLabel(u),
       u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '',
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -291,7 +356,50 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">
-                          {user.location?.city || user.location?.country || '—'}
+                          <div className="flex flex-col gap-1">
+                            <span>{getUserLocationLabel(user)}</span>
+                            {(() => {
+                              const live = getLiveLocationInfo(user);
+                              if (!live) {
+                                return (
+                                  <span className="text-[10px] text-gray-400 dark:text-slate-500">
+                                    No live location yet
+                                  </span>
+                                );
+                              }
+                              const dotColor = live.isLive
+                                ? 'bg-emerald-500'
+                                : live.isRecent
+                                ? 'bg-amber-500'
+                                : 'bg-gray-400';
+                              const labelColor = live.isLive
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-gray-500 dark:text-slate-400';
+                              const mapsUrl = `https://www.google.com/maps?q=${live.lat},${live.lng}`;
+                              return (
+                                <a
+                                  href={mapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 text-[11px] hover:underline"
+                                  title={`Live location · ${live.coords}`}
+                                >
+                                  <span className={`relative flex h-2 w-2`}>
+                                    {live.isLive && (
+                                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-60`} />
+                                    )}
+                                    <span className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`} />
+                                  </span>
+                                  <span className={`font-semibold ${labelColor}`}>
+                                    {live.isLive ? 'LIVE' : 'Last seen'}
+                                  </span>
+                                  <span className="text-gray-500 dark:text-slate-400">
+                                    {live.label} · {live.relative}
+                                  </span>
+                                </a>
+                              );
+                            })()}
+                          </div>
                         </td>
                         <td className="px-6 py-4">
                           <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${statusBadge(status)}`}>
@@ -465,11 +573,43 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-4 text-gray-500 dark:text-slate-400 text-sm">
-                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {selectedUser.location?.city || selectedUser.location?.country || 'Unknown'}</span>
+                    <span className="flex items-center gap-1.5"><MapPin size={14} className="text-teal-500" /> {getUserLocationLabel(selectedUser)}{getLocationUpdatedLabel(selectedUser) ? ` · ${getLocationUpdatedLabel(selectedUser)}` : ''}</span>
                     <span className="flex items-center gap-1.5"><Calendar size={14} className="text-teal-500" /> {selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : 'Unknown'}</span>
                     {selectedUser.age && <span className="flex items-center gap-1.5"><span className="text-teal-500 text-xs font-bold">Age</span> {selectedUser.age}</span>}
                     {selectedUser.email && <span className="text-xs text-gray-400">{selectedUser.email}</span>}
                   </div>
+                  {(() => {
+                    const live = getLiveLocationInfo(selectedUser);
+                    if (!live) {
+                      return (
+                        <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-800 text-[11px] font-semibold text-gray-500 dark:text-slate-400 w-fit">
+                          <span className="h-2 w-2 rounded-full bg-gray-400" />
+                          No live location reported yet
+                        </div>
+                      );
+                    }
+                    const dotColor = live.isLive ? 'bg-emerald-500' : live.isRecent ? 'bg-amber-500' : 'bg-gray-400';
+                    const wrapColor = live.isLive
+                      ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
+                    return (
+                      <a
+                        href={`https://www.google.com/maps?q=${live.lat},${live.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-semibold w-fit hover:opacity-90 ${wrapColor}`}
+                        title={live.coords}
+                      >
+                        <span className="relative flex h-2 w-2">
+                          {live.isLive && (
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-60`} />
+                          )}
+                          <span className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`} />
+                        </span>
+                        {live.isLive ? 'LIVE NOW' : 'Last seen'} · {live.label} · {live.relative}
+                      </a>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2 pb-2 flex-wrap">
                   {selectedUser.suspended ? (
@@ -585,6 +725,21 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                         </div>
                       ) : null)}
                     </div>
+
+                    {getLoveLocations(selectedUser).length > 0 && (
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Heart size={12} /> Love Locations</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {getLoveLocations(selectedUser).map((location, i) => (
+                            <div key={i} className="p-4 bg-rose-50 dark:bg-rose-500/10 rounded-xl border border-rose-100 dark:border-rose-500/20">
+                              <p className="text-sm font-bold text-rose-700 dark:text-rose-300 flex items-center gap-2">
+                                <MapPin size={13} /> {location}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Interests */}
                     {selectedUser.interests?.length > 0 && (

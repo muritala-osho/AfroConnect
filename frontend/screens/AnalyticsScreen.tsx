@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useCallback } from "react";
 import { 
   View, 
@@ -47,7 +48,7 @@ export default function AnalyticsScreen() {
         setTotalLikes(rateRes.totalLikes);
       }
     } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+      logger.error('Failed to fetch analytics:', error);
     } finally {
       setLoading(false);
     }

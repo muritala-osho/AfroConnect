@@ -38,7 +38,11 @@ router.get('/', protect, isAdmin, async (req, res) => {
     }
 
     if (search) {
-      const re = new RegExp(search, 'i');
+      if (search.length > 200) {
+        return res.status(400).json({ success: false, message: 'Search term too long' });
+      }
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
       query.$or = [
         { adminName: re },
         { targetUserName: re },

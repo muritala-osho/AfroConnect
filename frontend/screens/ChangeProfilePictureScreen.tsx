@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState } from "react";
 import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Dimensions, Platform, ScrollView, Modal } from "react-native";
 
@@ -124,7 +125,7 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
       }
       return null;
     } catch (error) {
-      console.error('Upload error:', error);
+      logger.error('Upload error:', error);
       return null;
     }
   };
@@ -218,7 +219,7 @@ export default function ChangeProfilePictureScreen({ navigation }: ChangeProfile
               await del(`/upload/photo?publicId=${encodeURIComponent(photo.publicId || photo._id || '')}`, token ?? undefined);
               await fetchUser();
             } catch (error) {
-              console.error('Delete photo error:', error);
+              logger.error('Delete photo error:', error);
               Alert.alert('Error', 'Failed to delete photo');
             }
             setDeletingIndex(null);

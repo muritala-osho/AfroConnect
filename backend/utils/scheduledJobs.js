@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const User = require('../models/User');
 const { sendRenewalReminderEmail, sendInactivityEmail } = require('./emailService');
 const { runChurnPrediction } = require('./churnEngine');
@@ -47,15 +48,15 @@ const runRenewalReminders = async () => {
         user.renewalReminderSentAt = now;
         await user.save();
       } catch (err) {
-        console.error(`Renewal reminder failed for user ID ${user._id}:`, err.message);
+        logger.error(`Renewal reminder failed for user ID ${user._id}:`, err.message);
       }
     }
 
     if (users.length > 0) {
-      console.log(`[ScheduledJobs] Renewal reminders processed for ${users.length} user(s).`);
+      logger.log(`[ScheduledJobs] Renewal reminders processed for ${users.length} user(s).`);
     }
   } catch (err) {
-    console.error('[ScheduledJobs] Renewal reminder job error:', err.message);
+    logger.error('[ScheduledJobs] Renewal reminder job error:', err.message);
   }
 };
 
@@ -77,15 +78,15 @@ const runInactivityEmails = async () => {
         user.inactivityEmailSentAt = new Date();
         await user.save();
       } catch (err) {
-        console.error(`Inactivity email failed for user ID ${user._id}:`, err.message);
+        logger.error(`Inactivity email failed for user ID ${user._id}:`, err.message);
       }
     }
 
     if (users.length > 0) {
-      console.log(`[ScheduledJobs] Inactivity emails sent to ${users.length} user(s).`);
+      logger.log(`[ScheduledJobs] Inactivity emails sent to ${users.length} user(s).`);
     }
   } catch (err) {
-    console.error('[ScheduledJobs] Inactivity email job error:', err.message);
+    logger.error('[ScheduledJobs] Inactivity email job error:', err.message);
   }
 };
 
@@ -99,15 +100,15 @@ const runPremiumExpiry = async () => {
       { $set: { 'premium.isActive': false } }
     );
     if (result.modifiedCount > 0) {
-      console.log(`[ScheduledJobs] Expired premium for ${result.modifiedCount} user(s).`);
+      logger.log(`[ScheduledJobs] Expired premium for ${result.modifiedCount} user(s).`);
     }
   } catch (err) {
-    console.error('[ScheduledJobs] Premium expiry sweep error:', err.message);
+    logger.error('[ScheduledJobs] Premium expiry sweep error:', err.message);
   }
 };
 
 const startScheduledJobs = () => {
-  console.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
+  logger.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
 
   runRenewalReminders();
   runInactivityEmails();
@@ -123,7 +124,7 @@ const startScheduledJobs = () => {
     setInterval(runChurnPrediction, SIX_HOURS);
   }, 2 * 60 * 1000);
 
-  console.log('[ScheduledJobs] Churn prediction engine scheduled (every 6 hours).');
+  logger.log('[ScheduledJobs] Churn prediction engine scheduled (every 6 hours).');
 };
 
 module.exports = { startScheduledJobs };

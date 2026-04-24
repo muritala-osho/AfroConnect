@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useCallback } from "react";
 import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, FlatList, Platform, Modal, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -54,7 +55,7 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         setWeeklyInsights(response.data.weeklyInsights);
       }
     } catch (error) {
-      console.error('Failed to fetch visitors:', error);
+      logger.error('Failed to fetch visitors:', error);
     } finally {
       setLoading(false);
     }
@@ -180,23 +181,35 @@ export default function VisitorsScreen({ navigation }: { navigation: NativeStack
         data={visitors}
         renderItem={renderVisitor}
         keyExtractor={(item, index) => item._id || index.toString()}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: !isPremium && visitors.length > 0 ? 96 + insets.bottom : insets.bottom + Spacing.md },
+        ]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Feather name="users" size={50} color={theme.textSecondary} />
             <ThemedText style={styles.emptyText}>No visitors yet</ThemedText>
+            <ThemedText style={[styles.emptySubtext, { color: theme.textSecondary }]}>
+              When someone views your profile, they’ll appear here.
+            </ThemedText>
           </View>
         }
       />
 
-      {!isPremium && (
-        <Pressable 
-          style={[styles.premiumBanner, { backgroundColor: theme.primary }]}
-          onPress={() => navigation.navigate("Premium")}
-        >
-          <Feather name="star" size={20} color="#FFF" />
-          <ThemedText style={styles.premiumText}>Upgrade to view full profiles</ThemedText>
-        </Pressable>
+      {!isPremium && visitors.length > 0 && (
+        <View style={[styles.premiumBannerWrap, { paddingBottom: insets.bottom + 12, backgroundColor: theme.background }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.premiumBanner,
+              { backgroundColor: theme.primary, opacity: pressed ? 0.9 : 1 },
+            ]}
+            onPress={() => navigation.navigate("Premium")}
+          >
+            <Feather name="star" size={18} color="#FFF" />
+            <ThemedText style={styles.premiumText}>Upgrade to view full profiles</ThemedText>
+            <Feather name="chevron-right" size={18} color="#FFF" />
+          </Pressable>
+        </View>
       )}
 
       <Modal
@@ -367,18 +380,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  premiumBannerWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   premiumBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    margin: 16,
-    borderRadius: 12,
-    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: 28,
+    gap: 10,
+    ...Shadow.small,
   },
   premiumText: {
     color: '#FFF',
     fontWeight: '700',
+    fontSize: 15,
+    flexShrink: 1,
+  },
+  emptySubtext: {
+    marginTop: 6,
+    fontSize: 13,
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
   modalOverlay: {
     flex: 1,

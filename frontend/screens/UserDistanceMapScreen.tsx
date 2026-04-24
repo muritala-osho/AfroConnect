@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, Dimensions, ActivityIndicator, ScrollView } from "react-native";
 import { Image } from "expo-image";
@@ -121,7 +122,7 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
         });
       }
     } catch (error) {
-      console.error('Error fetching weather:', error);
+      logger.error('Error fetching weather:', error);
     } finally {
       setWeatherLoading(false);
     }
@@ -188,11 +189,11 @@ export default function UserDistanceMapScreen({ navigation, route }: UserDistanc
             }),
           });
         } catch (updateError) {
-          console.log('Could not update location on server:', updateError);
+          logger.log('Could not update location on server:', updateError);
         }
       }
     } catch (error) {
-      console.error('Error getting location:', error);
+      logger.error('Error getting location:', error);
       setLocationError('Could not get your current location. Please try again.');
     } finally {
       setLoading(false);

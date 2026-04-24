@@ -549,11 +549,17 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
         : [finalGender === "man" ? "female" : "male"];
 
       let locationData: any = undefined;
+      const locationParts = livingIn.split(',').map(part => part.trim()).filter(Boolean);
+      const locationName = locationParts.length > 1
+        ? { city: locationParts.slice(0, -1).join(', '), country: locationParts[locationParts.length - 1] }
+        : locationParts.length === 1
+          ? { city: locationParts[0] }
+          : {};
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status === "granted") {
           const coords = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-          locationData = { type: "Point", coordinates: [coords.coords.longitude, coords.coords.latitude] };
+          locationData = { type: "Point", coordinates: [coords.coords.longitude, coords.coords.latitude], ...locationName };
         }
       } catch {}
 
@@ -985,7 +991,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>Living In *</ThemedText>
                   <TextInput
                     style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. Lagos, Nigeria"
+                    placeholder="City, Country"
                     placeholderTextColor={theme.textSecondary}
                     value={livingIn}
                     onChangeText={setLivingIn}
@@ -1045,7 +1051,7 @@ export default function ProfileSetupScreen({ navigation }: ProfileSetupScreenPro
                   <ThemedText style={[styles.label, { color: theme.textSecondary }]}>School / University</ThemedText>
                   <TextInput
                     style={[styles.input, { backgroundColor: theme.background, color: theme.text, borderColor: theme.border }]}
-                    placeholder="e.g. University of Lagos"
+                    placeholder="Your school or university"
                     placeholderTextColor={theme.textSecondary}
                     value={education}
                     onChangeText={setEducation}

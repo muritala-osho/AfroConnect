@@ -1,9 +1,11 @@
+const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const { sendPremiumConfirmationEmail } = require('../utils/emailService');
 
 const PREMIUM_INFO = {
   name: 'AfroConnect Premium',
@@ -31,7 +33,7 @@ const DEFAULT_PRICES = [
 async function validateAppleReceipt(receiptData) {
   const sharedSecret = process.env.APPLE_IAP_SHARED_SECRET;
   if (!sharedSecret) {
-    console.warn('[Apple IAP] APPLE_IAP_SHARED_SECRET not set — skipping server-side validation');
+    logger.warn('[Apple IAP] APPLE_IAP_SHARED_SECRET not set — skipping server-side validation');
     return { valid: true, skipped: true };
   }
 
@@ -55,7 +57,7 @@ async function validateAppleReceipt(receiptData) {
     }
     return { valid: true, data: prodRes.data };
   } catch (err) {
-    console.error('[Apple IAP] Validation request failed:', err.message);
+    logger.error('[Apple IAP] Validation request failed:', err.message);
     return { valid: false, error: err.message };
   }
 }
@@ -65,7 +67,7 @@ async function validateGoogleReceipt(purchaseToken, productId) {
   const packageName = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.afroconnect.app';
 
   if (!serviceAccountJson) {
-    console.warn('[Google IAP] GOOGLE_SERVICE_ACCOUNT_JSON not set — skipping server-side validation');
+    logger.warn('[Google IAP] GOOGLE_SERVICE_ACCOUNT_JSON not set — skipping server-side validation');
     return { valid: true, skipped: true };
   }
 
@@ -73,7 +75,7 @@ async function validateGoogleReceipt(purchaseToken, productId) {
   try {
     serviceAccount = JSON.parse(serviceAccountJson);
   } catch {
-    console.error('[Google IAP] Could not parse GOOGLE_SERVICE_ACCOUNT_JSON');
+    logger.error('[Google IAP] Could not parse GOOGLE_SERVICE_ACCOUNT_JSON');
     return { valid: false, error: 'Invalid service account JSON' };
   }
 
@@ -108,7 +110,7 @@ async function validateGoogleReceipt(purchaseToken, productId) {
     return { valid: true, data: purchase };
   } catch (err) {
     const errMsg = err.response?.data?.error?.message || err.message;
-    console.error('[Google IAP] Validation request failed:', errMsg);
+    logger.error('[Google IAP] Validation request failed:', errMsg);
     return { valid: false, error: errMsg };
   }
 }
@@ -116,6 +118,7 @@ async function validateGoogleReceipt(purchaseToken, productId) {
 
 router.get('/plans', async (req, res) => {
   try {
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=1200');
     const plans = [
       {
         id: 'premium_plan',
@@ -128,7 +131,7 @@ router.get('/plans', async (req, res) => {
     ];
     res.json({ success: true, plans });
   } catch (error) {
-    console.error('Error fetching plans:', error);
+    logger.error('Error fetching plans:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -205,14 +208,14 @@ router.post('/validate-receipt', protect, async (req, res) => {
     }
 
     if (!validationResult.valid) {
-      console.warn(`[IAP] Receipt rejected for user ${user._id} (${platform}): ${validationResult.error}`);
+      logger.warn(`[IAP] Receipt rejected for user ${user._id} (${platform}): ${validationResult.error}`);
       return res.status(402).json({ success: false, message: 'Purchase could not be verified. Please try again.' });
     }
 
     if (validationResult.skipped) {
-      console.warn(`[IAP] Server-side validation skipped for ${platform} — credentials not configured. Trusting client.`);
+      logger.warn(`[IAP] Server-side validation skipped for ${platform} — credentials not configured. Trusting client.`);
     } else {
-      console.log(`[IAP] Server-side receipt verified for user ${user._id} via ${platform}`);
+      logger.log(`[IAP] Server-side receipt verified for user ${user._id} via ${platform}`);
     }
 
     const intervalMap = {
@@ -251,7 +254,10 @@ router.post('/validate-receipt', protect, async (req, res) => {
       }
     });
 
-    console.log(`Premium activated for user ${user._id} via ${platform} in-app purchase`);
+    logger.log(`Premium activated for user ${user._id} via ${platform} in-app purchase`);
+
+    const expiresAt = new Date(Date.now() + durationMs[interval]);
+    sendPremiumConfirmationEmail(user.email, user.firstName || user.name || 'there', interval, expiresAt).catch(() => {});
 
     res.json({
       success: true,
@@ -264,7 +270,7 @@ router.post('/validate-receipt', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Receipt validation error:', error);
+    logger.error('Receipt validation error:', error);
     res.status(500).json({ success: false, message: 'Failed to validate receipt' });
   }
 });

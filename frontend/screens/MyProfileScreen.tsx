@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useRef, useEffect } from "react";
 import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
@@ -169,6 +170,17 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
   const [selectedPhoto, setSelectedPhoto] = useState<number>(0);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [currentHeroPhoto, setCurrentHeroPhoto] = useState(0);
+  const [localTime, setLocalTime] = useState<string>(() =>
+    new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
+
+  useEffect(() => {
+    const update = () =>
+      setLocalTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    update();
+    const id = setInterval(update, 30000);
+    return () => clearInterval(id);
+  }, []);
   const flatListRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -229,7 +241,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               }
             } catch (error) {
-              console.error('Delete photo error:', error);
+              logger.error('Delete photo error:', error);
               showAlert(t('error'), 'Failed to delete photo', [{ text: t('ok'), style: 'default' }], 'alert-circle');
             }
           },
@@ -515,7 +527,7 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             )}
             <View style={styles.locationRow}>
               <Feather name="clock" size={14} color="rgba(255,255,255,0.8)" />
-              <ThemedText style={styles.heroLocation} numberOfLines={1}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} local time</ThemedText>
+              <ThemedText style={styles.heroLocation} numberOfLines={1}>{localTime} local time</ThemedText>
             </View>
           </View>
 

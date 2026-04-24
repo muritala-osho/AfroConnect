@@ -40,6 +40,8 @@ import { Feather, Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { reverseGeocode } from "@/utils/geocode";
+import { startLiveLocationShare, stopLiveLocationShare, isSharingLive } from "@/utils/liveLocationShare";
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
@@ -59,8 +61,9 @@ import WavyWaveform from "@/components/chat/WavyWaveform";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
 import logger from "@/utils/logger";
+import ZoomablePhoto from "@/components/ZoomablePhoto";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 type ChatDetailScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -96,6 +99,8 @@ export default function ChatDetailScreen({
 
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
@@ -112,10 +117,16 @@ export default function ChatDetailScreen({
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [isSendingLocation, setIsSendingLocation] = useState(false);
+  const [showLivePicker, setShowLivePicker] = useState(false);
+  const [, setLiveTick] = useState(0);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [icebreakerPopup, setIcebreakerPopup] = useState<string | null>(null);
+  const [icebreakerDismissed, setIcebreakerDismissed] = useState<boolean | null>(null);
+  const icebreakerSlide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -128,7 +139,19 @@ export default function ChatDetailScreen({
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const playingAudioIdRef = useRef<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<number>(0);
+  const [playbackRate, setPlaybackRate] = useState<number>(1);
+  const playbackRateRef = useRef<number>(1);
+  const [playedAudioIds, setPlayedAudioIds] = useState<Set<string>>(new Set());
+  const [recordingPaused, setRecordingPaused] = useState(false);
+  const [recordingPreview, setRecordingPreview] = useState<{ uri: string; duration: number } | null>(null);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewPlaying, setPreviewPlaying] = useState(false);
+  const previewSoundRef = useRef<Audio.Sound | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageGallery, setImageGallery] = useState<string[]>([]);
+  const [imageViewerIndex, setImageViewerIndex] = useState(0);
+  const [imageViewerZoomed, setImageViewerZoomed] = useState(false);
+  const imageViewerListRef = useRef<FlatList>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
 
@@ -174,18 +197,90 @@ export default function ChatDetailScreen({
     const loadDraft = async () => {
       if (!userId) return;
       try {
-        const [savedDraft, savedLang] = await Promise.all([
+        const [savedDraft, savedLang, savedPlayed, savedRate] = await Promise.all([
           AsyncStorage.getItem(`chat_draft_${userId}`),
           AsyncStorage.getItem("@afroconnect_translate_lang"),
+          AsyncStorage.getItem(`played_audio_${userId}`),
+          AsyncStorage.getItem("@afroconnect_audio_rate"),
         ]);
         if (savedDraft) setMessage(savedDraft);
         if (savedLang) setSavedTranslateLang(savedLang);
+        if (savedPlayed) {
+          try { setPlayedAudioIds(new Set(JSON.parse(savedPlayed))); } catch (_) {}
+        }
+        if (savedRate) {
+          const r = parseFloat(savedRate);
+          if (!isNaN(r) && [1, 1.5, 2].includes(r)) {
+            setPlaybackRate(r);
+            playbackRateRef.current = r;
+          }
+        }
       } catch (error) {
         logger.error("Failed to load draft:", error);
       }
     };
     loadDraft();
   }, [userId]);
+
+  const markAudioPlayed = (messageId: string) => {
+    setPlayedAudioIds((prev) => {
+      if (prev.has(messageId)) return prev;
+      const next = new Set(prev);
+      next.add(messageId);
+      if (userId) AsyncStorage.setItem(`played_audio_${userId}`, JSON.stringify(Array.from(next))).catch(() => {});
+      return next;
+    });
+  };
+
+  const togglePlaybackSpeed = async () => {
+    const order = [1, 1.5, 2];
+    const idx = order.indexOf(playbackRateRef.current);
+    const next = order[(idx + 1) % order.length];
+    playbackRateRef.current = next;
+    setPlaybackRate(next);
+    AsyncStorage.setItem("@afroconnect_audio_rate", String(next)).catch(() => {});
+    try {
+      if (soundRef.current) {
+        await soundRef.current.setRateAsync(next, true);
+      }
+      if (htmlAudioRef.current) {
+        htmlAudioRef.current.playbackRate = next;
+      }
+    } catch (e) { logger.log("setRate error", e); }
+  };
+
+  const openImageViewer = (url: string) => {
+    const list = (messagesRef.current || [])
+      .filter((m: any) => m.type === "image" && m.imageUrl)
+      .map((m: any) => m.imageUrl as string);
+    const idx = Math.max(0, list.findIndex((u) => u === url));
+    setImageGallery(list.length ? list : [url]);
+    setImageViewerIndex(idx);
+    setImageViewerZoomed(false);
+    setViewingImage(url);
+  };
+
+  const closeImageViewer = () => {
+    setViewingImage(null);
+    setImageGallery([]);
+    setImageViewerIndex(0);
+    setImageViewerZoomed(false);
+  };
+
+  const seekAudio = async (fraction: number) => {
+    try {
+      if (soundRef.current) {
+        const status: any = await soundRef.current.getStatusAsync();
+        if (status.isLoaded && status.durationMillis) {
+          await soundRef.current.setPositionAsync(Math.floor(status.durationMillis * fraction));
+          setAudioProgress(fraction);
+        }
+      } else if (htmlAudioRef.current && htmlAudioRef.current.duration) {
+        htmlAudioRef.current.currentTime = htmlAudioRef.current.duration * fraction;
+        setAudioProgress(fraction);
+      }
+    } catch (e) { logger.log("seek error", e); }
+  };
 
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlatList>(null);
@@ -583,6 +678,22 @@ export default function ChatDetailScreen({
     socketService.on("chat:read", handleMessagesRead);
     socketService.on("chat:message-updated", handleMessageUpdated);
     socketService.on("chat:message-deleted", handleMessageDeleted);
+    socketService.on("chat:live-location-update", (data: any) => {
+      if (!data?.messageId) return;
+      setMessages((prev) =>
+        prev.map((m: any) =>
+          String(m._id) === String(data.messageId)
+            ? {
+                ...m,
+                ...(typeof data.latitude === "number" ? { latitude: data.latitude } : {}),
+                ...(typeof data.longitude === "number" ? { longitude: data.longitude } : {}),
+                ...(data.lastLocationUpdate ? { lastLocationUpdate: data.lastLocationUpdate } : {}),
+                ...(data.liveExpiresAt ? { liveExpiresAt: data.liveExpiresAt } : {}),
+              }
+            : m
+        )
+      );
+    });
     socketService.on("chat:message-edited", (data: any) => {
       if (data.messageId) {
         setMessages((prev) =>
@@ -613,6 +724,7 @@ export default function ChatDetailScreen({
       socketService.off("message:reaction");
       socketService.off("chat:user-typing");
       socketService.off("chat:recording-voice");
+      socketService.off("chat:live-location-update");
     };
   }, [matchId, userId, myId, token, put]);
 
@@ -670,6 +782,7 @@ export default function ChatDetailScreen({
               : m,
           ),
         );
+        return response.data.message;
       }
     } catch (error) {
       logger.error("Send error:", error);
@@ -678,9 +791,120 @@ export default function ChatDetailScreen({
     } finally {
       setSending(false);
     }
+    return undefined;
   };
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
+
+  // Load the per-chat "dismissed" flag from device storage so the popup
+  // doesn't reappear after closing and reopening this conversation.
+  useEffect(() => {
+    if (!userId) return;
+    AsyncStorage.getItem(`icebreaker_dismissed_${userId}`)
+      .then((v) => setIcebreakerDismissed(v === "1"))
+      .catch(() => setIcebreakerDismissed(false));
+  }, [userId]);
+
+  // Show a slide-in icebreaker suggestion when the conversation is brand new.
+  // Auto-fetches a single tailored question on first load. The popup hides
+  // itself the moment any message exists in the thread, or when dismissed.
+  useEffect(() => {
+    if (icebreakerDismissed === null) return; // wait for storage to load
+    if (icebreakerDismissed) return;
+    if (messages.length > 0) {
+      if (icebreakerPopup) setIcebreakerPopup(null);
+      return;
+    }
+    if (icebreakerPopup || !userId || !token) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/icebreakers/suggest/${userId}?limit=1`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        const tailored = data?.suggestions?.[0]?.question;
+        const fallback = AI_SUGGESTIONS[Math.floor(Math.random() * AI_SUGGESTIONS.length)];
+        if (!cancelled) setIcebreakerPopup(tailored || fallback);
+      } catch {
+        if (!cancelled) setIcebreakerPopup(AI_SUGGESTIONS[Math.floor(Math.random() * AI_SUGGESTIONS.length)]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [messages.length, userId, token, icebreakerDismissed, icebreakerPopup]);
+
+  // Slide the popup in from the right when it appears, slide it out when it's gone.
+  useEffect(() => {
+    Animated.spring(icebreakerSlide, {
+      toValue: icebreakerPopup ? 0 : SCREEN_WIDTH,
+      useNativeDriver: true,
+      damping: 18,
+      stiffness: 140,
+    }).start();
+  }, [icebreakerPopup, icebreakerSlide]);
+
+  const persistIcebreakerDismissed = useCallback(() => {
+    if (userId) {
+      AsyncStorage.setItem(`icebreaker_dismissed_${userId}`, "1").catch(() => {});
+    }
+  }, [userId]);
+
+  const useIcebreakerPopup = useCallback(() => {
+    if (icebreakerPopup) {
+      setMessage(icebreakerPopup);
+      setIcebreakerPopup(null);
+      setIcebreakerDismissed(true);
+      persistIcebreakerDismissed();
+      inputRef.current?.focus();
+    }
+  }, [icebreakerPopup, persistIcebreakerDismissed]);
+
+  const dismissIcebreakerPopup = useCallback(() => {
+    setIcebreakerPopup(null);
+    setIcebreakerDismissed(true);
+    persistIcebreakerDismissed();
+  }, [persistIcebreakerDismissed]);
+
+  // Tick once a second so any active live-location countdown stays accurate
+  useEffect(() => {
+    const hasLive = messages.some(
+      (m: any) => m.type === "location" && m.liveExpiresAt && new Date(m.liveExpiresAt) > new Date()
+    );
+    if (!hasLive) return;
+    const id = setInterval(() => setLiveTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [messages]);
+
+  const handleStopLiveShare = useCallback((messageId: string) => {
+    Alert.alert("Stop sharing live location?", "Your live location will no longer update.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Stop",
+        style: "destructive",
+        onPress: () => {
+          stopLiveLocationShare(messageId);
+          setMessages((prev) =>
+            prev.map((m: any) =>
+              String(m._id) === String(messageId) ? { ...m, liveExpiresAt: new Date().toISOString() } : m
+            )
+          );
+          setLiveTick((t) => t + 1);
+        },
+      },
+    ]);
+  }, []);
+
+  const formatLiveRemaining = useCallback((expiresAt: string | Date) => {
+    const ms = new Date(expiresAt).getTime() - Date.now();
+    if (ms <= 0) return "Ended";
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}h ${m}m left`;
+    if (m > 0) return `${m}m ${s}s left`;
+    return `${s}s left`;
+  }, []);
 
   const handleMarkViewOnce = (messageId: string) => {
     if (!token || openedViewOnceIds.has(messageId)) return;
@@ -733,33 +957,159 @@ export default function ChatDetailScreen({
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
 
+  const uploadChatImageAsset = async (uri: string) => {
+    const filename = uri.split("/").pop() || "chat_image.jpg";
+    const extMatch = /\.([a-zA-Z0-9]+)$/.exec(filename);
+    const ext = (extMatch?.[1] || "jpg").toLowerCase();
+    const mime =
+      ext === "png" ? "image/png" :
+      ext === "webp" ? "image/webp" :
+      ext === "heic" || ext === "heif" ? "image/heic" :
+      "image/jpeg";
+
+    const formData = new FormData();
+    formData.append("image", { uri, type: mime, name: filename } as any);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    try {
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: formData,
+        signal: controller.signal,
+      });
+      const contentType = uploadResponse.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await uploadResponse.text().catch(() => "");
+        throw new Error(`Upload failed (${uploadResponse.status}). ${text.slice(0, 120)}`);
+      }
+      return await uploadResponse.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  // Optimistically insert a media message using the local URI, upload in the
+  // background, then post the chat message and replace the temp with the
+  // server response. Makes image/video sends feel instant.
+  const sendMediaOptimistic = async (
+    kind: "image" | "video",
+    localUri: string,
+    uploadFn: () => Promise<{ success?: boolean; url?: string; message?: string }>,
+  ) => {
+    if (!matchId || !token) return;
+    const isVO = viewOnceModeRef.current;
+    if (isVO) {
+      setViewOnceModeSync(false);
+      setViewOnceSent(true);
+      setTimeout(() => setViewOnceSent(false), 2500);
+    }
+
+    const tempId = `temp_${Date.now()}_${kind}`;
+    const labelContent = kind === "image" ? "📷 Photo" : "🎬 Video";
+    const urlField = kind === "image" ? "imageUrl" : "videoUrl";
+
+    const tempMsg: any = {
+      _id: tempId,
+      sender: myId,
+      content: labelContent,
+      type: kind,
+      [urlField]: localUri,
+      createdAt: new Date().toISOString(),
+      status: "sending",
+      ...(isVO ? { viewOnce: true } : {}),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+
+    try {
+      const uploadData = await uploadFn();
+      if (!uploadData?.success || !uploadData.url) {
+        throw new Error(uploadData?.message || "Upload failed");
+      }
+      // Swap to the cloud URL so we don't re-fetch a local thumbnail later.
+      setMessages((prev) =>
+        prev.map((m) => (m._id === tempId ? { ...m, [urlField]: uploadData.url } : m)),
+      );
+
+      const response = await post<{ message: Message }>(
+        `/chat/${matchId}/message`,
+        { content: labelContent, type: kind, [urlField]: uploadData.url, ...(isVO ? { viewOnce: true } : {}) },
+        token,
+      );
+      if (response.success && response.data?.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === tempId
+              ? { ...response.data!.message, status: "sent", ...(isVO ? { viewOnce: true } : {}) }
+              : m,
+          ),
+        );
+      }
+    } catch (error: any) {
+      logger.error(`${kind} send error:`, error);
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? ({ ...m, status: "failed" } as any) : m)));
+      const msg = error?.name === "AbortError"
+        ? "Upload timed out. Try a smaller file or a stronger connection."
+        : `Failed to send ${kind}. Check your connection and try again.`;
+      Alert.alert("Send Failed", msg);
+    }
+  };
+
+  const retryFailedMedia = (item: any) => {
+    if (!item || item.status !== "failed") return;
+    if (item.type === "audio") {
+      const localUri = item.audioUrl;
+      if (!localUri) return;
+      const duration = item.audioDuration || 1;
+      setMessages((prev) => prev.filter((m) => m._id !== item._id));
+      sendVoiceOptimistic(localUri, duration);
+      return;
+    }
+    const localUri = item.imageUrl || item.videoUrl;
+    if (!localUri) return;
+    const kind: "image" | "video" = item.type === "video" ? "video" : "image";
+    setMessages((prev) => prev.filter((m) => m._id !== item._id));
+    const uploadFn = kind === "video"
+      ? () => uploadChatVideoAsset(localUri)
+      : () => uploadChatImageAsset(localUri);
+    sendMediaOptimistic(kind, localUri, uploadFn);
+  };
+
+  const uploadChatVideoAsset = async (uri: string) => {
+    const formData = new FormData();
+    formData.append("video", { uri, type: "video/mp4", name: "chat_video.mp4" } as any);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+    try {
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-video`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        body: formData,
+        signal: controller.signal,
+      });
+      const contentType = uploadResponse.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await uploadResponse.text().catch(() => "");
+        throw new Error(`Upload failed (${uploadResponse.status}). ${text.slice(0, 120)}`);
+      }
+      return await uploadResponse.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
   const handlePickImage = async () => {
     setShowAttachmentMenu(false);
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"] as ImagePicker.MediaType[],
-      quality: 0.8,
+      quality: 0.7,
       allowsEditing: true,
-      base64: true,
     });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const formData = new FormData();
-        formData.append("image", { uri: result.assets[0].uri, type: "image/jpeg", name: "chat_image.jpg" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
-          const isVOImg = viewOnceModeRef.current;
-          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload image. Please try again.");
-      } catch (error) {
-        logger.error("Image upload error:", error);
-        Alert.alert("Error", "Failed to upload image. Check your connection.");
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("image", uri, () => uploadChatImageAsset(uri));
     }
   };
 
@@ -771,24 +1121,8 @@ export default function ChatDetailScreen({
       allowsEditing: true,
     });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const formData = new FormData();
-        formData.append("video", { uri: result.assets[0].uri, type: "video/mp4", name: "chat_video.mp4" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-video`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
-          const isVOVid = viewOnceModeRef.current;
-          await sendMessage("🎬 Video", "video", { videoUrl: uploadData.url, ...(isVOVid ? { viewOnce: true } : {}) });
-          if (isVOVid) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        } else Alert.alert("Upload Failed", uploadData.message || "Could not upload video. Please try again.");
-      } catch (error) {
-        logger.error("Video upload error:", error);
-        Alert.alert("Error", "Failed to upload video. Check your connection.");
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("video", uri, () => uploadChatVideoAsset(uri));
     }
   };
 
@@ -796,43 +1130,111 @@ export default function ChatDetailScreen({
     setShowAttachmentMenu(false);
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) { Alert.alert("Permission Needed", "Camera permission is required to take photos"); return; }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, base64: true });
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: true, base64: false });
     if (!result.canceled && result.assets[0]) {
-      try {
-        const formData = new FormData();
-        formData.append("image", { uri: result.assets[0].uri, type: "image/jpeg", name: "chat_photo.jpg" } as any);
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/chat-image`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        });
-        const uploadData = await uploadResponse.json();
-        if (uploadData.success && uploadData.url) {
-          const isVOImg = viewOnceModeRef.current;
-          await sendMessage("📷 Photo", "image", { imageUrl: uploadData.url, ...(isVOImg ? { viewOnce: true } : {}) });
-          if (isVOImg) { setViewOnceModeSync(false); setViewOnceSent(true); setTimeout(() => setViewOnceSent(false), 2500); }
-        }
-      } catch (error) {
-        Alert.alert("Error", "Failed to upload photo");
-      }
+      const uri = result.assets[0].uri;
+      sendMediaOptimistic("image", uri, () => uploadChatImageAsset(uri));
     }
   };
 
-  const handleShareLocation = async () => {
+  const handleShareLocation = async (liveDurationMin?: number) => {
+    if (isSendingLocation) return;
     setShowAttachmentMenu(false);
+    setShowLivePicker(false);
+    setIsSendingLocation(true);
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { Alert.alert("Permission Denied", "Location permission is required to share your location"); return; }
-      const location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      let address = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-      try {
-        const [geocode] = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (geocode) address = [geocode.street, geocode.city, geocode.country].filter(Boolean).join(", ");
-      } catch (e) {}
-      await sendMessage(`📍 ${address}`, "location", { latitude, longitude, address });
-    } catch (error) {
-      Alert.alert("Error", "Could not get your location");
+      // 1. Make sure GPS itself is on (separate from app permission)
+      const servicesOn = await Location.hasServicesEnabledAsync();
+      if (!servicesOn) {
+        Alert.alert(
+          "Location is off",
+          "Turn on location services in your device settings to share your location.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      // 2. App-level permission (with a path back to settings if denied)
+      const { status, canAskAgain } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Location permission needed",
+          canAskAgain
+            ? "Please allow location access to share where you are."
+            : "Location access was previously denied. You can enable it in Settings.",
+          canAskAgain
+            ? [{ text: "OK" }]
+            : [
+                { text: "Cancel", style: "cancel" },
+                { text: "Open Settings", onPress: () => Linking.openSettings() },
+              ]
+        );
+        return;
+      }
+
+      // 3. Get coordinates fast: use last-known instantly if recent (<2 min),
+      //    otherwise race a fresh fix against an 8s timeout so we never hang.
+      let coords: { latitude: number; longitude: number } | null = null;
+      const lastKnown = await Location.getLastKnownPositionAsync({ maxAge: 120_000 }).catch(() => null);
+      if (lastKnown?.coords) {
+        coords = { latitude: lastKnown.coords.latitude, longitude: lastKnown.coords.longitude };
+      } else {
+        try {
+          const fresh = await Promise.race<Location.LocationObject>([
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+            new Promise<Location.LocationObject>((_, reject) =>
+              setTimeout(() => reject(new Error("location_timeout")), 8000)
+            ),
+          ]);
+          coords = { latitude: fresh.coords.latitude, longitude: fresh.coords.longitude };
+        } catch {
+          Alert.alert(
+            "Couldn't get your location",
+            "We couldn't find your location in time. Please check your signal and try again."
+          );
+          return;
+        }
+      }
+
+      const { latitude, longitude } = coords;
+
+      // 4. Send the message immediately with coords (no text — the bubble already
+      //    renders the address). Reverse-geocoding happens in the background and
+      //    the bubble updates the moment we know the address.
+      const sentMsg: any = await sendMessage("", "location", {
+        latitude,
+        longitude,
+        ...(liveDurationMin ? { liveDurationMin } : {}),
+      });
+
+      reverseGeocode(latitude, longitude).then((g) => {
+        if (g.address) {
+          setMessages((prev) =>
+            prev.map((m: any) =>
+              m.type === "location" &&
+              m.latitude === latitude &&
+              m.longitude === longitude &&
+              !m.address
+                ? { ...m, address: g.address }
+                : m
+            )
+          );
+        }
+      });
+
+      // 5. If this is a live share, kick off the periodic GPS pusher
+      if (liveDurationMin && sentMsg?._id) {
+        startLiveLocationShare(String(sentMsg._id), String(matchId || ""), liveDurationMin);
+        setLiveTick((t) => t + 1);
+      }
+    } catch {
+      Alert.alert("Error", "Could not share your location. Please try again.");
+    } finally {
+      setIsSendingLocation(false);
     }
   };
 
@@ -869,38 +1271,47 @@ export default function ChatDetailScreen({
     }
   };
 
+  const pauseRecording = async () => {
+    if (!recordingRef.current || recordingPaused) return;
+    try {
+      await recordingRef.current.pauseAsync();
+      if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
+      setRecordingPaused(true);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) { logger.log("Pause recording error:", e); }
+  };
+
+  const resumeRecording = async () => {
+    if (!recordingRef.current || !recordingPaused) return;
+    try {
+      await recordingRef.current.startAsync();
+      setRecordingPaused(false);
+      recordingIntervalRef.current = setInterval(() => {
+        recordingDurationRef.current += 1;
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) { logger.log("Resume recording error:", e); }
+  };
+
   const stopRecording = async () => {
-    if (!recordingRef.current) { setIsRecording(false); return; }
+    if (!recordingRef.current) { setIsRecording(false); setRecordingPaused(false); return; }
     try {
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       const recording = recordingRef.current;
       const duration = recordingDurationRef.current;
       recordingRef.current = null;
       setIsRecording(false);
+      setRecordingPaused(false);
       if (matchId) socketService.emit("chat:recording-voice", { chatId: matchId, userId: myId, isRecording: false });
       await recording.stopAndUnloadAsync();
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
       const uri = recording.getURI();
       if (uri && duration >= 1) {
-        try {
-          const ext = uri.split(".").pop()?.toLowerCase() || "m4a";
-          const mimeMap: Record<string, string> = { m4a: "audio/m4a", mp4: "audio/mp4", caf: "audio/x-caf", wav: "audio/wav", "3gp": "audio/3gpp", aac: "audio/aac", webm: "audio/webm" };
-          const mimeType = mimeMap[ext] || (Platform.OS === "android" ? "application/octet-stream" : "audio/m4a");
-          const formData = new FormData();
-          formData.append("audio", { uri, type: mimeType, name: `voice_message.${ext}` } as any);
-          formData.append("duration", duration.toString());
-          const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
-          });
-          const uploadData = await uploadResponse.json();
-          if (uploadData.success && uploadData.url) await sendMessage(`🎤 Voice message (${duration}s)`, "audio", { audioUrl: uploadData.url, audioDuration: duration });
-          else Alert.alert("Upload Failed", uploadData.message || "Could not upload voice message");
-        } catch (error) {
-          logger.error("Voice upload error:", error);
-          Alert.alert("Error", "Failed to upload voice message");
-        }
+        // Show preview UI instead of auto-sending so user can review/discard.
+        setRecordingPreview({ uri, duration });
+        setPreviewProgress(0);
+        setPreviewPlaying(false);
       } else if (uri && duration < 1) {
         Alert.alert("Too Short", "Voice message must be at least 1 second long");
       }
@@ -910,10 +1321,106 @@ export default function ChatDetailScreen({
     } catch (error) {
       logger.error("Stop recording error:", error);
       setIsRecording(false);
+      setRecordingPaused(false);
       setRecordingDuration(0);
       recordingDurationRef.current = 0;
       await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true }).catch(() => {});
     }
+  };
+
+  const togglePreviewPlay = async () => {
+    if (!recordingPreview) return;
+    try {
+      if (previewSoundRef.current) {
+        const status: any = await previewSoundRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          if (status.isPlaying) { await previewSoundRef.current.pauseAsync(); setPreviewPlaying(false); return; }
+          await previewSoundRef.current.playAsync(); setPreviewPlaying(true); return;
+        }
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: recordingPreview.uri },
+        { shouldPlay: true, progressUpdateIntervalMillis: 100 },
+        (status: any) => {
+          if (status.isLoaded) {
+            if (status.durationMillis > 0) setPreviewProgress(status.positionMillis / status.durationMillis);
+            if (status.didJustFinish) {
+              setPreviewPlaying(false); setPreviewProgress(0);
+              if (previewSoundRef.current) { previewSoundRef.current.unloadAsync().catch(() => {}); previewSoundRef.current = null; }
+            }
+          }
+        },
+      );
+      previewSoundRef.current = sound;
+      setPreviewPlaying(true);
+    } catch (e) { logger.error("Preview play error:", e); }
+  };
+
+  const discardRecordingPreview = async () => {
+    if (previewSoundRef.current) {
+      try { await previewSoundRef.current.unloadAsync(); } catch (_) {}
+      previewSoundRef.current = null;
+    }
+    setRecordingPreview(null);
+    setPreviewProgress(0);
+    setPreviewPlaying(false);
+  };
+
+  const sendVoiceOptimistic = async (uri: string, duration: number) => {
+    if (!matchId || !token) return;
+    const tempId = `temp_${Date.now()}_audio`;
+    const labelContent = `🎤 Voice message (${duration}s)`;
+    const tempMsg: any = {
+      _id: tempId,
+      sender: myId,
+      content: labelContent,
+      type: "audio",
+      audioUrl: uri,
+      audioDuration: duration,
+      createdAt: new Date().toISOString(),
+      status: "sending",
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+    try {
+      const ext = uri.split(".").pop()?.toLowerCase() || "m4a";
+      const mimeMap: Record<string, string> = { m4a: "audio/m4a", mp4: "audio/mp4", caf: "audio/x-caf", wav: "audio/wav", "3gp": "audio/3gpp", aac: "audio/aac", webm: "audio/webm" };
+      const mimeType = mimeMap[ext] || (Platform.OS === "android" ? "application/octet-stream" : "audio/m4a");
+      const formData = new FormData();
+      formData.append("audio", { uri, type: mimeType, name: `voice_message.${ext}` } as any);
+      formData.append("duration", duration.toString());
+      const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/audio`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const uploadData = await uploadResponse.json();
+      if (!uploadData.success || !uploadData.url) throw new Error(uploadData.message || "Upload failed");
+      // Swap to cloud URL so future plays don't depend on local file.
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? { ...m, audioUrl: uploadData.url } : m)));
+      const response = await post<{ message: Message }>(
+        `/chat/${matchId}/message`,
+        { content: labelContent, type: "audio", audioUrl: uploadData.url, audioDuration: duration },
+        token,
+      );
+      if (response.success && response.data?.message) {
+        setMessages((prev) =>
+          prev.map((m) => (m._id === tempId ? { ...response.data!.message, status: "sent" } : m)),
+        );
+      }
+    } catch (error: any) {
+      logger.error("Voice send error:", error);
+      setMessages((prev) => prev.map((m) => (m._id === tempId ? ({ ...m, status: "failed" } as any) : m)));
+      Alert.alert("Send Failed", "Failed to send voice message. Tap the bubble to retry.");
+    }
+  };
+
+  const sendRecordingPreview = async () => {
+    if (!recordingPreview) return;
+    const { uri, duration } = recordingPreview;
+    await discardRecordingPreview();
+    sendVoiceOptimistic(uri, duration);
   };
 
   const cancelRecording = async () => {
@@ -966,12 +1473,33 @@ export default function ChatDetailScreen({
       updatePlayingId(null);
       setAudioProgress(0);
 
+      const playNextUnplayed = (afterId: string) => {
+        try {
+          const list = messagesRef.current || [];
+          const idx = list.findIndex((m: any) => m._id === afterId);
+          if (idx < 0) return;
+          for (let i = idx + 1; i < list.length; i++) {
+            const m: any = list[i];
+            if (m.type !== "audio" || !m.audioUrl) continue;
+            const senderId = String(typeof m.sender === "string" ? m.sender : m.sender?._id);
+            const isMine = senderId === String(myId);
+            if (isMine) continue;
+            if (playedAudioIds.has(m._id)) continue;
+            // Defer slightly so the previous sound finishes unloading.
+            setTimeout(() => playAudio(m.audioUrl, m._id), 250);
+            return;
+          }
+        } catch (e) { logger.log("auto-next error", e); }
+      };
+
       const onStatus = (status: any) => {
         if (status.isLoaded) {
           if (status.durationMillis > 0) setAudioProgress(status.positionMillis / status.durationMillis);
           if (status.didJustFinish) {
+            markAudioPlayed(messageId);
             updatePlayingId(null); setAudioProgress(0);
             if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
+            playNextUnplayed(messageId);
           }
         }
       };
@@ -979,14 +1507,15 @@ export default function ChatDetailScreen({
       if (Platform.OS === "web") {
         try {
           await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-          const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
+          const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100, rate: playbackRateRef.current, shouldCorrectPitch: true }, onStatus);
           soundRef.current = sound; updatePlayingId(messageId);
         } catch (expoError) {
           logger.log("expo-av failed on web, trying HTML5 Audio fallback:", expoError);
           try {
             const htmlAudio = new window.Audio(audioUrl);
             htmlAudioRef.current = htmlAudio;
-            htmlAudio.onended = () => { updatePlayingId(null); setAudioProgress(0); };
+            htmlAudio.playbackRate = playbackRateRef.current;
+            htmlAudio.onended = () => { markAudioPlayed(messageId); updatePlayingId(null); setAudioProgress(0); playNextUnplayed(messageId); };
             htmlAudio.ontimeupdate = () => { if (htmlAudio.duration > 0) setAudioProgress(htmlAudio.currentTime / htmlAudio.duration); };
             htmlAudio.onerror = () => { updatePlayingId(null); setAudioProgress(0); Alert.alert("Playback Error", "Could not play this voice message. The audio format may not be supported."); };
             await htmlAudio.play(); updatePlayingId(messageId);
@@ -998,8 +1527,8 @@ export default function ChatDetailScreen({
         return;
       }
 
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100 }, onStatus);
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false, playsInSilentModeIOS: true, staysActiveInBackground: true, shouldDuckAndroid: true, playThroughEarpieceAndroid: false });
+      const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, progressUpdateIntervalMillis: 100, rate: playbackRateRef.current, shouldCorrectPitch: true }, onStatus);
       soundRef.current = sound; updatePlayingId(messageId);
     } catch (error: any) {
       logger.error("Audio playback error for URL:", audioUrl, error);
@@ -1017,6 +1546,7 @@ export default function ChatDetailScreen({
       }
       if (recordingIntervalRef.current) { clearInterval(recordingIntervalRef.current); recordingIntervalRef.current = null; }
       recordingDurationRef.current = 0;
+      if (previewSoundRef.current) { previewSoundRef.current.unloadAsync().catch(() => {}); previewSoundRef.current = null; }
     };
   }, []);
 
@@ -1044,11 +1574,23 @@ export default function ChatDetailScreen({
     } catch (error) { logger.error("Save video error:", error); Alert.alert("Error", "Failed to save video"); }
   };
 
-  const fetchAISuggestions = useCallback(() => {
+  const fetchAISuggestions = useCallback(async () => {
     setShowAISuggestions(true);
-    const shuffled = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
-    setAiSuggestions(shuffled);
-  }, []);
+    const fallback = [...AI_SUGGESTIONS].sort(() => Math.random() - 0.5).slice(0, 5);
+    setAiSuggestions(fallback);
+    if (!userId || !token) return;
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/icebreakers/suggest/${userId}?limit=5`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+        setAiSuggestions(data.suggestions.map((s: any) => s.question));
+      }
+    } catch (e) {
+      logger.log("icebreaker fetch failed, using fallback", e);
+    }
+  }, [userId, token]);
 
   const handleBlockUser = async () => {
     setShowOptionsMenu(false);
@@ -1420,12 +1962,35 @@ export default function ChatDetailScreen({
                           </Pressable>
                         );
                       }
+                      const isFailed = (item as any).status === "failed";
+                      const isSending = (item as any).status === "sending";
                       return (
-                        <Pressable onPress={() => { setViewOnceViewerActive(false); setViewingImage(item.imageUrl!); }} onLongPress={() => saveImage(item.imageUrl!)}>
+                        <Pressable
+                          onPress={() => {
+                            if (isFailed) { retryFailedMedia(item); return; }
+                            if (isSending) return;
+                            setViewOnceViewerActive(false);
+                            openImageViewer(item.imageUrl!);
+                          }}
+                          onLongPress={() => !isFailed && !isSending && saveImage(item.imageUrl!)}
+                        >
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
-                          <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
-                            <Ionicons name="download-outline" size={16} color="#FFF" />
-                          </Pressable>
+                          {isSending && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <ActivityIndicator color="#FFF" />
+                            </View>
+                          )}
+                          {isFailed && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="refresh-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          )}
+                          {!isSending && !isFailed && (
+                            <Pressable style={styles.imageSaveButton} onPress={() => saveImage(item.imageUrl!)}>
+                              <Ionicons name="download-outline" size={16} color="#FFF" />
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -1468,8 +2033,18 @@ export default function ChatDetailScreen({
                           </Pressable>
                         );
                       }
+                      const isFailedVid = (item as any).status === "failed";
+                      const isSendingVid = (item as any).status === "sending";
                       return (
-                        <Pressable onPress={() => { const url = item.videoUrl || item.imageUrl; if (url) { setViewOnceViewerActive(false); setViewingVideo(url); } }} style={styles.videoContainer}>
+                        <Pressable
+                          onPress={() => {
+                            if (isFailedVid) { retryFailedMedia(item); return; }
+                            if (isSendingVid) return;
+                            const url = item.videoUrl || item.imageUrl;
+                            if (url) { setViewOnceViewerActive(false); setViewingVideo(url); }
+                          }}
+                          style={styles.videoContainer}
+                        >
                           {failedThumbnails.has(item._id) ? (
                             <View style={[styles.videoThumbnail, { backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "center", alignItems: "center" }]}>
                               <Ionicons name="videocam" size={48} color="rgba(255,255,255,0.7)" />
@@ -1482,12 +2057,23 @@ export default function ChatDetailScreen({
                               onError={() => setFailedThumbnails((prev) => new Set(prev).add(item._id))}
                             />
                           )}
-                          <View style={styles.videoOverlay}>
-                            <View style={styles.videoPlayButton}>
-                              <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                          {isSendingVid ? (
+                            <View style={styles.mediaStatusOverlay}>
+                              <ActivityIndicator color="#FFF" />
                             </View>
-                          </View>
-                          {!item.viewOnce && (
+                          ) : isFailedVid ? (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="refresh-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          ) : (
+                            <View style={styles.videoOverlay}>
+                              <View style={styles.videoPlayButton}>
+                                <Ionicons name="play-circle" size={48} color="rgba(255,255,255,0.9)" />
+                              </View>
+                            </View>
+                          )}
+                          {!item.viewOnce && !isSendingVid && !isFailedVid && (
                             <Pressable style={styles.imageSaveButton} onPress={(e: any) => { e.stopPropagation(); saveVideo(item.videoUrl || item.imageUrl!); }}>
                               <Ionicons name="download-outline" size={16} color="#FFF" />
                             </Pressable>
@@ -1496,35 +2082,68 @@ export default function ChatDetailScreen({
                       );
                     })()}
 
-                    {item.type === "audio" && item.audioUrl && (
-                      <Pressable
-                        style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)" }]}
-                        onPress={() => playAudio(item.audioUrl!, item._id)}
-                      >
-                        <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
-                          <Ionicons
-                            name={
-                              playingAudioId === item._id
-                                ? "pause"
-                                : playingAudioId === "paused:" + item._id
-                                ? "play"
-                                : "play"
-                            }
-                            size={18}
-                            color={isMe ? "#FFF" : theme.primary}
-                          />
+                    {item.type === "audio" && item.audioUrl && (() => {
+                      const isFailedAud = (item as any).status === "failed";
+                      const isSendingAud = (item as any).status === "sending";
+                      const isActiveBubble = playingAudioId === item._id || playingAudioId === "paused:" + item._id;
+                      const isUnplayed = !isMe && !isSendingAud && !isFailedAud && !playedAudioIds.has(item._id);
+                      return (
+                        <View>
+                          <Pressable
+                            style={[styles.audioPlayer, { backgroundColor: isMe ? "rgba(255,255,255,0.15)" : isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", opacity: isSendingAud ? 0.7 : 1 }]}
+                            onPress={() => {
+                              if (isFailedAud) { retryFailedMedia(item); return; }
+                              if (isSendingAud) return;
+                              playAudio(item.audioUrl!, item._id);
+                            }}
+                            onLongPress={() => !isSendingAud && handleMessageLongPress(item)}
+                            delayLongPress={400}
+                          >
+                            <View style={[styles.audioPlayBtn, { backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }]}>
+                              {isSendingAud ? (
+                                <ActivityIndicator size="small" color={isMe ? "#FFF" : theme.primary} />
+                              ) : isFailedAud ? (
+                                <Ionicons name="refresh" size={18} color={isMe ? "#FFF" : theme.primary} />
+                              ) : (
+                                <Ionicons
+                                  name={playingAudioId === item._id ? "pause" : "play"}
+                                  size={18}
+                                  color={isMe ? "#FFF" : theme.primary}
+                                />
+                              )}
+                            </View>
+                            <View style={styles.audioWaveform}>
+                              <WavyWaveform
+                                isPlaying={playingAudioId === item._id}
+                                progress={isActiveBubble ? audioProgress : 0}
+                                isMe={isMe}
+                                theme={theme}
+                                duration={(item as any).audioDuration}
+                                onSeek={isActiveBubble ? seekAudio : undefined}
+                              />
+                            </View>
+                            {isActiveBubble && (
+                              <Pressable
+                                onPress={(e: any) => { e.stopPropagation?.(); togglePlaybackSpeed(); }}
+                                style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: isMe ? "rgba(255,255,255,0.25)" : theme.primary + "22" }}
+                              >
+                                <ThemedText style={{ fontSize: 11, fontWeight: "700", color: isMe ? "#FFF" : theme.primary }}>
+                                  {playbackRate}x
+                                </ThemedText>
+                              </Pressable>
+                            )}
+                            {isUnplayed && (
+                              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary, marginLeft: 2 }} />
+                            )}
+                          </Pressable>
+                          {isFailedAud && (
+                            <ThemedText style={{ fontSize: 10, color: "#dc2626", marginTop: 4, marginLeft: 4 }}>
+                              Tap to retry
+                            </ThemedText>
+                          )}
                         </View>
-                        <View style={styles.audioWaveform}>
-                          <WavyWaveform
-                            isPlaying={playingAudioId === item._id}
-                            progress={playingAudioId === item._id || playingAudioId === "paused:" + item._id ? audioProgress : 0}
-                            isMe={isMe}
-                            theme={theme}
-                            duration={(item as any).audioDuration}
-                          />
-                        </View>
-                      </Pressable>
-                    )}
+                      );
+                    })()}
 
                     {item.type === "location" && item.latitude != null && item.longitude != null && (() => {
                       const lat = item.latitude!;
@@ -1577,12 +2196,38 @@ export default function ChatDetailScreen({
                             </View>
                             <View style={{ flex: 1 }}>
                               <ThemedText style={[styles.locationAddress, { color: isMe ? "#FFF" : theme.text }]} numberOfLines={2}>{item.address || `${lat.toFixed(4)}, ${lng.toFixed(4)}`}</ThemedText>
-                              <View style={styles.locationTapHint}>
-                                <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }]}>Tap to open in maps</ThemedText>
-                                <Feather name="external-link" size={10} color={isMe ? "rgba(255,255,255,0.5)" : theme.textSecondary} />
-                              </View>
+                              {(() => {
+                                const isLive = item.liveExpiresAt && new Date(item.liveExpiresAt) > new Date();
+                                if (isLive) {
+                                  return (
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                                      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#dc2626", paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                                        <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#fff" }} />
+                                        <ThemedText style={{ fontSize: 9, color: "#fff", fontWeight: "700", letterSpacing: 0.5 }}>LIVE</ThemedText>
+                                      </View>
+                                      <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>
+                                        {formatLiveRemaining(item.liveExpiresAt)}
+                                      </ThemedText>
+                                    </View>
+                                  );
+                                }
+                                return (
+                                  <View style={styles.locationTapHint}>
+                                    <ThemedText style={[styles.locationTapText, { color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }]}>Tap to open in maps</ThemedText>
+                                    <Feather name="external-link" size={10} color={isMe ? "rgba(255,255,255,0.5)" : theme.textSecondary} />
+                                  </View>
+                                );
+                              })()}
                             </View>
                           </View>
+                          {isMe && item.liveExpiresAt && new Date(item.liveExpiresAt) > new Date() && (
+                            <Pressable
+                              onPress={(e) => { e.stopPropagation(); handleStopLiveShare(String(item._id)); }}
+                              style={{ paddingVertical: 8, paddingHorizontal: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.2)", alignItems: "center" }}
+                            >
+                              <ThemedText style={{ color: "#fecaca", fontSize: 12, fontWeight: "600" }}>Stop sharing</ThemedText>
+                            </Pressable>
+                          )}
                         </Pressable>
                       );
                     })()}
@@ -1732,7 +2377,7 @@ export default function ChatDetailScreen({
 
         <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
           <View style={styles.avatarContainer}>
-            <Image source={photoSource || { uri: "https://via.placeholder.com/50" }} style={styles.headerAvatar} contentFit="cover" />
+            <Image source={photoSource || require('../assets/icon.png')} style={styles.headerAvatar} contentFit="cover" />
             {isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <View style={styles.headerInfo}>
@@ -1805,16 +2450,79 @@ export default function ChatDetailScreen({
           </View>
         )}
 
-        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 0 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
-          {isRecording ? (
+        {/* Slide-in icebreaker popup — only when the conversation is empty */}
+        {icebreakerPopup ? (
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              styles.icebreakerPopupWrap,
+              { transform: [{ translateX: icebreakerSlide }] },
+            ]}
+          >
+            <Pressable
+              onPress={useIcebreakerPopup}
+              style={[
+                styles.icebreakerPopup,
+                {
+                  backgroundColor: theme.primary,
+                  shadowColor: isDark ? "#000" : theme.primary,
+                },
+              ]}
+            >
+              <View style={styles.icebreakerHeaderRow}>
+                <View style={styles.icebreakerSparkleCircle}>
+                  <MaterialCommunityIcons name="lightbulb-on" size={14} color="#FFF" />
+                </View>
+                <ThemedText style={styles.icebreakerLabel}>Icebreaker</ThemedText>
+                <Pressable onPress={dismissIcebreakerPopup} hitSlop={10} style={styles.icebreakerClose}>
+                  <Feather name="x" size={16} color="rgba(255,255,255,0.85)" />
+                </Pressable>
+              </View>
+              <ThemedText style={styles.icebreakerText} numberOfLines={3}>
+                {icebreakerPopup}
+              </ThemedText>
+              <View style={styles.icebreakerCta}>
+                <ThemedText style={styles.icebreakerCtaText}>Tap to use</ThemedText>
+                <Feather name="arrow-right" size={13} color="#FFF" />
+              </View>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderTopColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", paddingBottom: isKeyboardVisible ? 4 : Math.max(insets.bottom, 4), minHeight: 60 }]}>
+          {recordingPreview ? (
+            <View style={styles.recordingContainer}>
+              <Pressable onPress={discardRecordingPreview} style={styles.cancelRecordButton}><Feather name="trash-2" size={22} color="#F44336" /></Pressable>
+              <Pressable onPress={togglePreviewPlay} style={[styles.audioPlayBtn, { backgroundColor: theme.primary + "22", marginLeft: 8 }]}>
+                <Ionicons name={previewPlaying ? "pause" : "play"} size={18} color={theme.primary} />
+              </Pressable>
+              <View style={[styles.recordingInfo, { flex: 1 }]}>
+                <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.border + "55", overflow: "hidden" }}>
+                  <View style={{ width: `${Math.min(100, previewProgress * 100)}%`, height: "100%", backgroundColor: theme.primary }} />
+                </View>
+                <ThemedText style={[styles.recordingTime, { color: theme.text, marginLeft: 10 }]}>
+                  {formatRecordingTime(recordingPreview.duration)}
+                </ThemedText>
+              </View>
+              <Pressable onPress={sendRecordingPreview} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}>
+                <Feather name="send" size={20} color="#FFF" />
+              </Pressable>
+            </View>
+          ) : isRecording ? (
             <View style={styles.recordingContainer}>
               <Pressable onPress={cancelRecording} style={styles.cancelRecordButton}><Feather name="x" size={24} color="#F44336" /></Pressable>
               <View style={styles.recordingInfo}>
-                <Animated.View style={[styles.recordingDot, { transform: [{ scale: recordingPulse }] }]} />
+                <Animated.View style={[styles.recordingDot, { transform: [{ scale: recordingPulse }], opacity: recordingPaused ? 0.3 : 1 }]} />
                 <ThemedText style={[styles.recordingTime, { color: theme.text }]}>{formatRecordingTime(recordingDuration)}</ThemedText>
-                <ThemedText style={[styles.recordingLabel, { color: theme.textSecondary }]}>Recording</ThemedText>
+                <ThemedText style={[styles.recordingLabel, { color: theme.textSecondary }]}>{recordingPaused ? "Paused" : "Recording"}</ThemedText>
               </View>
-              <Pressable onPress={stopRecording} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}><Feather name="send" size={20} color="#FFF" /></Pressable>
+              <Pressable
+                onPress={recordingPaused ? resumeRecording : pauseRecording}
+                style={[styles.audioPlayBtn, { backgroundColor: theme.primary + "22", marginRight: 8 }]}
+              >
+                <Ionicons name={recordingPaused ? "play" : "pause"} size={18} color={theme.primary} />
+              </Pressable>
+              <Pressable onPress={stopRecording} style={[styles.sendRecordButton, { backgroundColor: theme.primary }]}><Feather name="check" size={20} color="#FFF" /></Pressable>
             </View>
           ) : (
             <>
@@ -1908,12 +2616,67 @@ export default function ChatDetailScreen({
                 <View style={[styles.attachmentIcon, { backgroundColor: "#9B59B620" }]}><Feather name="video" size={24} color="#9B59B6" /></View>
                 <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
               </Pressable>
-              <Pressable style={styles.attachmentOption} onPress={handleShareLocation}>
-                <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}><Feather name="map-pin" size={24} color="#45B7D1" /></View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Location</ThemedText>
+              <Pressable
+                style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
+                onPress={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
+                disabled={isSendingLocation}
+              >
+                <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}>
+                  {isSendingLocation ? (
+                    <ActivityIndicator size="small" color="#45B7D1" />
+                  ) : (
+                    <Feather name="map-pin" size={24} color="#45B7D1" />
+                  )}
+                </View>
+                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>
+                  {isSendingLocation ? "Getting…" : "Location"}
+                </ThemedText>
               </Pressable>
             </View>
             <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
+              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Live location duration picker */}
+      <Modal visible={showLivePicker} transparent animationType="fade" onRequestClose={() => setShowLivePicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowLivePicker(false)}>
+          <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
+            <View style={{ alignItems: "center", marginBottom: 8 }}>
+              <ThemedText style={[styles.optionsTitle, { color: theme.text, marginBottom: 0 }]}>Share Location</ThemedText>
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, textAlign: "center", marginTop: 6, paddingHorizontal: 8 }}>
+                Send your current spot, or share live for a set time.
+              </ThemedText>
+            </View>
+            <Pressable
+              style={styles.optionItem}
+              onPress={() => { setShowLivePicker(false); handleShareLocation(); }}
+            >
+              <Feather name="map-pin" size={22} color="#45B7D1" />
+              <ThemedText style={[styles.optionText, { color: theme.text }]}>Send current location</ThemedText>
+            </Pressable>
+            <View style={{ height: 1, backgroundColor: theme.textSecondary + "20", marginVertical: 6 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, marginBottom: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
+              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, fontWeight: "600" }}>LIVE — updates in real time</ThemedText>
+            </View>
+            {[
+              { mins: 15, label: "Live · 15 minutes" },
+              { mins: 60, label: "Live · 1 hour" },
+              { mins: 480, label: "Live · 8 hours" },
+            ].map((opt) => (
+              <Pressable
+                key={opt.mins}
+                style={styles.optionItem}
+                onPress={() => handleShareLocation(opt.mins)}
+              >
+                <Feather name="radio" size={22} color="#dc2626" />
+                <ThemedText style={[styles.optionText, { color: theme.text }]}>{opt.label}</ThemedText>
+              </Pressable>
+            ))}
+            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 8 }]} onPress={() => setShowLivePicker(false)}>
               <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
             </Pressable>
           </View>
@@ -2006,10 +2769,10 @@ export default function ChatDetailScreen({
         </View>
       </Modal>
 
-      {/* Image viewer */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { setViewingImage(null); stopViewOnceCountdown(); }}>
+      {/* Image viewer (swipeable gallery) */}
+      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { closeImageViewer(); stopViewOnceCountdown(); }}>
         <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingImage(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
+          <Pressable style={styles.imageViewerClose} onPress={() => { closeImageViewer(); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
               <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
@@ -2019,10 +2782,55 @@ export default function ChatDetailScreen({
             </View>
           ) : (
             <View style={styles.imageViewerActions}>
-              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingImage && saveImage(viewingImage)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
+              {imageGallery.length > 1 && (
+                <View style={[styles.imageViewerActionBtn, { paddingHorizontal: 12 }]}>
+                  <ThemedText style={{ color: "#FFF", fontSize: 13, fontWeight: "700" }}>
+                    {imageViewerIndex + 1} / {imageGallery.length}
+                  </ThemedText>
+                </View>
+              )}
+              <Pressable style={styles.imageViewerActionBtn} onPress={() => {
+                const url = imageGallery[imageViewerIndex] || viewingImage;
+                if (url) saveImage(url);
+              }}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
             </View>
           )}
-          {viewingImage && <Image source={{ uri: viewingImage }} style={styles.imageViewerImage} contentFit="contain" />}
+          {viewingImage && (viewOnceViewerActive || imageGallery.length <= 1 ? (
+            <ZoomablePhoto
+              source={{ uri: viewingImage }}
+              width={SCREEN_WIDTH}
+              height={SCREEN_HEIGHT * 0.8}
+            />
+          ) : (
+            <FlatList
+              ref={imageViewerListRef}
+              data={imageGallery}
+              keyExtractor={(u, i) => `${i}_${u}`}
+              horizontal
+              pagingEnabled
+              scrollEnabled={!imageViewerZoomed}
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={imageViewerIndex}
+              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+              onMomentumScrollEnd={(e) => {
+                const newIdx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                if (newIdx !== imageViewerIndex) {
+                  setImageViewerIndex(newIdx);
+                  setImageViewerZoomed(false);
+                }
+              }}
+              renderItem={({ item: url }) => (
+                <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8, justifyContent: "center" }}>
+                  <ZoomablePhoto
+                    source={{ uri: url }}
+                    width={SCREEN_WIDTH}
+                    height={SCREEN_HEIGHT * 0.8}
+                    onZoomChange={setImageViewerZoomed}
+                  />
+                </View>
+              )}
+            />
+          ))}
         </View>
       </Modal>
 
@@ -2277,6 +3085,41 @@ const styles = StyleSheet.create<any>({
   emptySubtitle: { fontSize: 14, textAlign: "center", marginBottom: 20 },
   aiSuggestButton: { flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25 },
   aiSuggestButtonText: { color: "#FFF", fontSize: 14, fontWeight: "600", marginLeft: 8 },
+  icebreakerPopupWrap: {
+    position: "absolute",
+    right: 12,
+    bottom: 78,
+    maxWidth: 280,
+    zIndex: 50,
+  },
+  icebreakerPopup: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 22,
+    borderBottomRightRadius: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  icebreakerHeaderRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  icebreakerSparkleCircle: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.22)",
+    alignItems: "center", justifyContent: "center",
+    marginRight: 6,
+  },
+  icebreakerLabel: { flex: 1, color: "#FFF", fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  icebreakerClose: { padding: 2 },
+  icebreakerText: { color: "#FFF", fontSize: 14, lineHeight: 19, fontWeight: "500" },
+  icebreakerCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    alignSelf: "flex-end",
+  },
+  icebreakerCtaText: { color: "#FFF", fontSize: 12, fontWeight: "700", opacity: 0.9 },
   aiSuggestionsContainer: { borderTopWidth: 1, paddingVertical: 12 },
   aiSuggestionsHeader: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, marginBottom: 10 },
   aiSuggestionsTitle: { flex: 1, fontSize: 14, fontWeight: "600", marginLeft: 8 },
@@ -2334,6 +3177,8 @@ const styles = StyleSheet.create<any>({
   submitReportButton: { marginTop: 20, paddingVertical: 16, borderRadius: 12, alignItems: "center" },
   submitReportText: { color: "#FFF", fontSize: 16, fontWeight: "600" },
   imageSaveButton: { position: "absolute", bottom: 12, right: 8, width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  mediaStatusOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", borderRadius: 12 },
+  mediaStatusText: { color: "#FFF", fontSize: 12, fontWeight: "600", marginTop: 6 },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
   audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   reactionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: -8, marginBottom: 4, zIndex: 2, paddingHorizontal: 4 },

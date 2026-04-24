@@ -17,6 +17,8 @@ import AgentDashboard from './views/AgentDashboard';
 import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
 import AuditLog from './views/AuditLog';
+import RevokeVerification from './views/RevokeVerification';
+import IceBreakers from './views/IceBreakers';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search } from 'lucide-react';
@@ -24,7 +26,7 @@ import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'profile', 'broadcasts', 'support', 'agent', 'appeals', 'churn', 'audit'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'audit'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -35,7 +37,8 @@ const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard', users: 'User Management', analytics: 'Analytics',
   payments: 'Finances & Revenue', reports: 'Safety Reports', content: 'Content Moderation',
   support: 'Support Desk', agent: 'My Tickets', settings: 'System Settings',
-  verification: 'Verification Requests', broadcasts: 'Broadcasts', appeals: 'Appeals',
+  verification: 'Verification Requests', 'revoke-verification': 'Revoke Verified Badge',
+  broadcasts: 'Broadcasts', appeals: 'Appeals',
   churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
 };
 
@@ -432,11 +435,13 @@ const App: React.FC = () => {
                 {activeTab === 'support'      && canAccessTab('support')      && <SupportDesk showToast={showToast} />}
                 {activeTab === 'agent'        && canAccessTab('agent')        && <AgentDashboard showToast={showToast} />}
                 {activeTab === 'settings'     && canAccessTab('settings')     && <SystemSettings showToast={showToast} />}
-                {activeTab === 'verification' && canAccessTab('verification') && <IDVerification showToast={showToast} />}
+                {activeTab === 'verification'        && canAccessTab('verification')        && <IDVerification showToast={showToast} />}
+                {activeTab === 'revoke-verification' && canAccessTab('revoke-verification') && <RevokeVerification showToast={showToast} />}
                 {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}
                 {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
                 {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
                 {activeTab === 'audit'        && canAccessTab('audit')        && <AuditLog />}
+                {activeTab === 'icebreakers'  && canAccessTab('icebreakers')  && <IceBreakers showToast={showToast} />}
                 {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 
                 {ALL_TABS.includes(activeTab) && !canAccessTab(activeTab) && (

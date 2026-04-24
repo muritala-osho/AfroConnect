@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
@@ -115,7 +116,7 @@ export default function IncomingCallHandler() {
       ringtoneRef.current = sound;
       Vibration.vibrate([500, 1000, 500], true);
     } catch (err) {
-      console.log('Ringtone error:', err);
+      logger.log('Ringtone error:', err);
       Vibration.vibrate([500, 1000, 500], true);
     }
   }, []);
@@ -177,7 +178,7 @@ export default function IncomingCallHandler() {
 
     setupCallKeepListeners({
       onAnswer: (callerId) => {
-        console.log('[CallKeep] Native answer pressed — callerId:', callerId);
+        logger.log('[CallKeep] Native answer pressed — callerId:', callerId);
         const call = incomingCallRef.current;
         if (!call) return;
 
@@ -211,7 +212,7 @@ export default function IncomingCallHandler() {
         });
       },
       onEnd: (callerId) => {
-        console.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
+        logger.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
         const call = incomingCallRef.current;
         if (!call) return;
         stopRingtone();
@@ -231,7 +232,7 @@ export default function IncomingCallHandler() {
     if (!myUserId || !token) return;
 
     const handleIncomingCall = async (data: IncomingCallData) => {
-      console.log('Incoming call:', data);
+      logger.log('Incoming call:', data);
 
       const currentActiveCall = activeCallRef.current;
       const currentlyVisible = isVisibleRef.current;
@@ -253,17 +254,39 @@ export default function IncomingCallHandler() {
       await showCallUI(data);
     };
 
-    const handleCallEnded = async () => {
+    const dismissCallNotifications = async (callerId?: string) => {
+      try {
+        const presented = await Notifications.getPresentedNotificationsAsync();
+        await Promise.all(
+          presented
+            .filter((n) => {
+              const d: any = n.request?.content?.data || {};
+              if (d.type !== 'call') return false;
+              if (callerId && d.callerId && d.callerId !== callerId) return false;
+              return true;
+            })
+            .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+        );
+      } catch (err) {
+        logger.warn('[Notifications] dismiss call notifications failed:', err);
+      }
+    };
+
+    const handleCallEnded = async (data?: any) => {
       await stopRingtone();
       const call = incomingCallRef.current;
+      const cId = call?.callerId || data?.endedBy || data?.callerId;
       if (call) reportCallEnded(call.callerId);
+      await dismissCallNotifications(cId);
       dismissModal();
     };
 
-    const handleCallDeclined = async () => {
+    const handleCallDeclined = async (data?: any) => {
       await stopRingtone();
       const call = incomingCallRef.current;
+      const cId = call?.callerId || data?.callerId;
       if (call) reportCallEnded(call.callerId);
+      await dismissCallNotifications(cId);
       dismissModal();
     };
 
@@ -310,10 +333,14 @@ export default function IncomingCallHandler() {
         callAccepted: true,
       });
     } else if (data?.type === 'message') {
+      const senderId = data.senderId || data.userId;
+      if (!senderId) return;
       navigation.navigate('ChatDetail', {
-        userId:   data.senderId,
-        userName: data.senderName,
-      });
+        userId:    senderId,
+        userName:  data.senderName || 'Chat',
+        userPhoto: data.senderPhoto || data.userPhoto || '',
+        matchId:   data.matchId,
+      } as any);
     } else if (data?.type === 'match') {
       navigation.navigate('Discovery');
     }

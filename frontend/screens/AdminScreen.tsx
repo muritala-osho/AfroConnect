@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -106,7 +107,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/stats');
       if (data.success) setStats(data.stats);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      logger.error('Error fetching stats:', error);
     }
   }, [authFetch]);
 
@@ -116,7 +117,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch(`/api/admin/users${query}`);
       if (data.success) setUsers(data.users);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      logger.error('Error fetching users:', error);
     }
   }, [authFetch, searchQuery]);
 
@@ -125,7 +126,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/reports?status=pending');
       if (data.success) setReports(data.reports);
     } catch (error) {
-      console.error('Error fetching reports:', error);
+      logger.error('Error fetching reports:', error);
     }
   }, [authFetch]);
 
@@ -134,7 +135,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/verifications');
       if (data.success) setVerifications(data.verifications || []);
     } catch (error) {
-      console.error('Error fetching verifications:', error);
+      logger.error('Error fetching verifications:', error);
     }
   }, [authFetch]);
 
@@ -143,7 +144,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/appeals');
       if (data.success) setAppeals(data.appeals || []);
     } catch (error) {
-      console.error('Error fetching appeals:', error);
+      logger.error('Error fetching appeals:', error);
     }
   }, [authFetch]);
 
@@ -152,7 +153,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/analytics');
       if (data.success) setAnalytics(data.analytics);
     } catch (error) {
-      console.error('Error fetching analytics:', error);
+      logger.error('Error fetching analytics:', error);
     }
   }, [authFetch]);
 
@@ -161,7 +162,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/subscriptions-revenue');
       if (data.success) setSubscriptions(data.subscriptions);
     } catch (error) {
-      console.error('Error fetching subscriptions:', error);
+      logger.error('Error fetching subscriptions:', error);
     }
   }, [authFetch]);
 
@@ -170,7 +171,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/activity-monitoring');
       if (data.success) setActivity(data.activity);
     } catch (error) {
-      console.error('Error fetching activity:', error);
+      logger.error('Error fetching activity:', error);
     }
   }, [authFetch]);
 
@@ -179,7 +180,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/stories-moderation');
       if (data.success) setStories(data.flaggedStories || []);
     } catch (error) {
-      console.error('Error fetching stories:', error);
+      logger.error('Error fetching stories:', error);
     }
   }, [authFetch]);
 
@@ -188,7 +189,7 @@ export default function AdminScreen({ navigation }: any) {
       const data = await authFetch('/api/admin/boosts-revenue');
       if (data.success) setBoosts(data.boosts);
     } catch (error) {
-      console.error('Error fetching boosts:', error);
+      logger.error('Error fetching boosts:', error);
     }
   }, [authFetch]);
 

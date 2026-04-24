@@ -1,3 +1,4 @@
+import logger from '@/utils/logger';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -66,7 +67,7 @@ export default function BoostCenterScreen({ navigation }: any) {
         setPackages(packagesRes.data.packages);
       }
     } catch (error) {
-      console.error('Error fetching boost data:', error);
+      logger.error('Error fetching boost data:', error);
     } finally {
       setLoading(false);
     }
@@ -106,7 +107,7 @@ export default function BoostCenterScreen({ navigation }: any) {
         Alert.alert('Failed', response.message || 'Could not activate boost.');
       }
     } catch (error) {
-      console.error('Activate boost error:', error);
+      logger.error('Activate boost error:', error);
       Alert.alert('Error', 'Something went wrong.');
     } finally {
       setActivating(null);

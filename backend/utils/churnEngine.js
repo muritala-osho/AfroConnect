@@ -1,3 +1,4 @@
+const logger = require('./logger');
 /**
  * AfroConnect Churn Prediction Engine
  *
@@ -136,7 +137,7 @@ const executeIntervention = async (user, score) => {
 };
 
 const runChurnPrediction = async () => {
-  console.log('[ChurnEngine] Starting churn prediction run...');
+  logger.log('[ChurnEngine] Starting churn prediction run...');
   const now = Date.now();
   let processed = 0, intervened = 0;
 
@@ -199,13 +200,13 @@ const runChurnPrediction = async () => {
         }
 
       } catch (userErr) {
-        console.error(`[ChurnEngine] Error processing user ${user._id}:`, userErr.message);
+        logger.error(`[ChurnEngine] Error processing user ${user._id}:`, userErr.message);
       }
     }
 
-    console.log(`[ChurnEngine] Run complete. Processed: ${processed}, Intervened: ${intervened}`);
+    logger.log(`[ChurnEngine] Run complete. Processed: ${processed}, Intervened: ${intervened}`);
   } catch (err) {
-    console.error('[ChurnEngine] Fatal error:', err.message);
+    logger.error('[ChurnEngine] Fatal error:', err.message);
   }
 };
 
