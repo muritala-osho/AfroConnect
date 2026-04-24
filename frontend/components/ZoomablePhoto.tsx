@@ -44,6 +44,11 @@ export default function ZoomablePhoto({ source, width, height, onSingleTap, onZo
   };
 
   const pinch = Gesture.Pinch()
+    .onStart(() => {
+      // Tell the parent (e.g. swipeable gallery) to lock its horizontal scroll
+      // the moment a pinch begins, so it doesn't steal the gesture mid-zoom.
+      runOnJS(notifyZoom)(true);
+    })
     .onUpdate((e) => {
       const next = savedScale.value * e.scale;
       scale.value = Math.min(Math.max(next, MIN_SCALE * 0.8), MAX_SCALE);
