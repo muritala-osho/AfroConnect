@@ -16,6 +16,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useApi } from "@/hooks/useApi";
 import { useAuth } from "@/hooks/useAuth";
 import logger from "@/utils/logger";
+import { addRecentGif, clearRecentGifs, getRecentGifs, RecentGif } from "@/utils/recentGifs";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const GAP = 6;
@@ -50,9 +51,17 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
   const [error, setError] = useState<string | null>(null);
   const [notConfigured, setNotConfigured] = useState(false);
   const [nextPos, setNextPos] = useState<string | null>(null);
+  const [tab, setTab] = useState<"recent" | "trending">("trending");
+  const [recents, setRecents] = useState<RecentGif[]>([]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+
+  const loadRecents = useCallback(async () => {
+    const list = await getRecentGifs();
+    setRecents(list);
+    return list;
+  }, []);
 
   const load = useCallback(async (q: string, append = false) => {
     if (!token) return;
@@ -96,9 +105,25 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
     }
   }, [get, token, nextPos]);
 
-  // Initial + debounced search
+  // On open: load recents and pick the best default tab
   useEffect(() => {
     if (!visible) return;
+    loadRecents().then((list) => {
+      setTab(list.length > 0 ? "recent" : "trending");
+    });
+  }, [visible, loadRecents]);
+
+  // Initial + debounced search/trending fetch
+  useEffect(() => {
+    if (!visible) return;
+    // Recent tab is local-only — no network
+    if (tab === "recent" && !query.trim()) {
+      setItems([]);
+      setLoading(false);
+      setError(null);
+      setNotConfigured(false);
+      return;
+    }
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       setNextPos(null);
@@ -108,7 +133,7 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, visible]);
+  }, [query, visible, tab]);
 
   // Reset on close
   useEffect(() => {
@@ -124,10 +149,42 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
   const handleSelect = useCallback((gif: GifResult) => {
     onSelect(gif);
     onClose();
+    addRecentGif({
+      id: gif.id,
+      url: gif.url,
+      preview: gif.preview,
+      width: gif.width,
+      height: gif.height,
+      title: gif.title,
+      source: gif.source,
+    }).catch(() => {});
     if (token) {
       post("/gifs/registershare", { id: gif.id, q: query.trim() }, token).catch(() => {});
     }
   }, [onSelect, onClose, post, token, query]);
+
+  const handleClearRecents = useCallback(async () => {
+    await clearRecentGifs();
+    setRecents([]);
+    setTab("trending");
+  }, []);
+
+  // What we render in the grid: search results > recents (if recent tab + no query) > trending
+  const gridData: GifResult[] = useMemo(() => {
+    if (query.trim()) return items;
+    if (tab === "recent") {
+      return recents.map((r) => ({
+        id: r.id,
+        url: r.url,
+        preview: r.preview,
+        width: r.width,
+        height: r.height,
+        title: r.title,
+        source: r.source,
+      }));
+    }
+    return items;
+  }, [query, tab, items, recents]);
 
   const renderItem = useCallback(({ item }: { item: GifResult }) => {
     const aspect = item.width && item.height ? item.width / item.height : 1;
@@ -157,7 +214,7 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
           <Feather name="alert-circle" size={36} color={theme.textSecondary} />
           <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>GIFs aren't configured yet</ThemedText>
           <ThemedText style={[styles.emptySub, { color: theme.textSecondary }]}>
-            The team needs to add a Tenor API key to enable the GIF picker.
+            Add a Giphy or Tenor API key on the server to enable the GIF picker.
           </ThemedText>
         </View>
       );
@@ -176,7 +233,18 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
         </View>
       );
     }
-    if (!items.length) {
+    if (!query.trim() && tab === "recent" && recents.length === 0) {
+      return (
+        <View style={styles.empty}>
+          <Feather name="clock" size={36} color={theme.textSecondary} />
+          <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>No recent GIFs yet</ThemedText>
+          <ThemedText style={[styles.emptySub, { color: theme.textSecondary }]}>
+            GIFs you send will appear here for quick reuse.
+          </ThemedText>
+        </View>
+      );
+    }
+    if (!gridData.length) {
       return (
         <View style={styles.empty}>
           <Feather name="search" size={36} color={theme.textSecondary} />
@@ -186,7 +254,7 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
       );
     }
     return null;
-  }, [loading, notConfigured, error, items.length, theme, load, query]);
+  }, [loading, notConfigured, error, gridData.length, theme, load, query, tab, recents.length]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -219,13 +287,54 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
             )}
           </View>
 
-          {loading && items.length === 0 ? (
+          {/* Tab toggle (hidden when searching) */}
+          {!query.trim() && (
+            <View style={styles.tabsRow}>
+              {(["recent", "trending"] as const).map((t) => {
+                const isActive = tab === t;
+                return (
+                  <Pressable
+                    key={t}
+                    onPress={() => setTab(t)}
+                    style={[
+                      styles.tabPill,
+                      {
+                        backgroundColor: isActive ? theme.primary : theme.border + "40",
+                        borderColor: isActive ? theme.primary : "transparent",
+                      },
+                    ]}
+                  >
+                    <Feather
+                      name={t === "recent" ? "clock" : "trending-up"}
+                      size={12}
+                      color={isActive ? "#FFF" : theme.textSecondary}
+                    />
+                    <ThemedText
+                      style={[
+                        styles.tabPillText,
+                        { color: isActive ? "#FFF" : theme.textSecondary },
+                      ]}
+                    >
+                      {t === "recent" ? "Recent" : "Trending"}
+                    </ThemedText>
+                  </Pressable>
+                );
+              })}
+              {tab === "recent" && recents.length > 0 && (
+                <Pressable onPress={handleClearRecents} hitSlop={10} style={{ marginLeft: "auto" }}>
+                  <ThemedText style={[styles.clearText, { color: theme.textSecondary }]}>Clear</ThemedText>
+                </Pressable>
+              )}
+            </View>
+          )}
+
+          {loading && gridData.length === 0 ? (
             <View style={styles.empty}>
               <ActivityIndicator color={theme.primary} />
             </View>
           ) : (
             <FlatList
-              data={items}
+              data={gridData}
               keyExtractor={keyExtractor}
               renderItem={renderItem}
               numColumns={COLUMNS}
@@ -235,7 +344,9 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
               ListEmptyComponent={emptyContent}
               onEndReachedThreshold={0.4}
               onEndReached={() => {
-                if (!loadingMore && nextPos && items.length > 0) {
+                // Only paginate for network-backed lists (search or trending)
+                const isNetworkList = !!query.trim() || tab === "trending";
+                if (isNetworkList && !loadingMore && nextPos && gridData.length > 0) {
                   load(query, true);
                 }
               }}
@@ -287,6 +398,24 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  tabsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  tabPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  tabPillText: { fontSize: 11, fontWeight: "700" },
+  clearText: { fontSize: 11, fontWeight: "600" },
   tile: { borderRadius: 10, overflow: "hidden" },
   empty: { paddingVertical: 60, alignItems: "center", justifyContent: "center", gap: 10, paddingHorizontal: 32 },
   emptyTitle: { fontSize: 14, fontWeight: "600", textAlign: "center" },
