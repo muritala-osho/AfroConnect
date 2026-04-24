@@ -28,6 +28,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { getApiBaseUrl } from "@/constants/config";
 import { LinearGradient } from "expo-linear-gradient";
+import { tokenManager } from "@/utils/tokenManager";
 
 type StoryUploadScreenNavigationProp = NativeStackNavigationProp<
   RootStackParamList,
@@ -160,6 +161,75 @@ export default function StoryUploadScreen({
 
     // Background uploader (no awaits in the click handler past this point).
     (async () => {
+      // Build the multipart body (only needed for image/video stories).
+      const buildFormData = async () => {
+        const formData = new FormData();
+        const uri =
+          snapshot.storyType === "image" ? snapshot.selectedImage : snapshot.selectedVideo;
+        const fieldName = "file";
+        if (Platform.OS === "web") {
+          const response = await fetch(uri!);
+          const blob = await response.blob();
+          formData.append(
+            fieldName,
+            blob,
+            `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
+          );
+        } else {
+          formData.append(fieldName, {
+            uri: uri,
+            type: snapshot.storyType === "image" ? "image/jpeg" : "video/mp4",
+            name: `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
+          } as any);
+        }
+        return formData;
+      };
+
+      // Performs the file upload with one automatic token refresh on 401.
+      const uploadWithAuth = async (): Promise<{ url: string }> => {
+        const uploadPath = snapshot.storyType === "image" ? "photo" : "video";
+        let activeToken = snapshot.authToken;
+
+        const doFetch = async (tk: string) => {
+          const formData = await buildFormData();
+          return fetch(`${getApiBaseUrl()}/api/upload/${uploadPath}`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${tk}`, Accept: "application/json" },
+            body: formData,
+          });
+        };
+
+        let resp = await doFetch(activeToken);
+
+        // If the access token was revoked/expired, try a silent refresh once.
+        if (resp.status === 401) {
+          const refreshed = await tokenManager.refresh().catch(() => null);
+          if (refreshed) {
+            activeToken = refreshed;
+            resp = await doFetch(activeToken);
+          }
+        }
+
+        if (resp.status === 401) {
+          const err: any = new Error("Session expired. Please log in again.");
+          err.code = "AUTH_EXPIRED";
+          throw err;
+        }
+
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => "");
+          logger.error("Upload error response:", errorText);
+          throw new Error(`Upload failed: ${resp.status} ${resp.statusText}`);
+        }
+
+        const data = await resp.json();
+        if (!data.success) throw new Error(data.message || "Upload failed");
+
+        // Persist the (possibly refreshed) token so the follow-up POST uses it.
+        snapshot.authToken = activeToken;
+        return { url: data.url };
+      };
+
       try {
         let mediaUrl: string | null = null;
 
@@ -167,47 +237,8 @@ export default function StoryUploadScreen({
           (snapshot.storyType === "image" && snapshot.selectedImage) ||
           (snapshot.storyType === "video" && snapshot.selectedVideo)
         ) {
-          const formData = new FormData();
-          const uri = snapshot.storyType === "image" ? snapshot.selectedImage : snapshot.selectedVideo;
-          const uploadPath = snapshot.storyType === "image" ? "photo" : "video";
-          const fieldName = "file";
-
-          if (Platform.OS === "web") {
-            const response = await fetch(uri!);
-            const blob = await response.blob();
-            formData.append(
-              fieldName,
-              blob,
-              `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
-            );
-          } else {
-            formData.append(fieldName, {
-              uri: uri,
-              type: snapshot.storyType === "image" ? "image/jpeg" : "video/mp4",
-              name: `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
-            } as any);
-          }
-
-          const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/${uploadPath}`, {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${snapshot.authToken}`,
-              Accept: "application/json",
-            },
-            body: formData,
-          });
-
-          if (!uploadResponse.ok) {
-            const errorText = await uploadResponse.text();
-            logger.error("Upload error response:", errorText);
-            throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
-          }
-
-          const uploadData = await uploadResponse.json();
-          if (!uploadData.success) {
-            throw new Error(uploadData.message || "Upload failed");
-          }
-          mediaUrl = uploadData.url;
+          const uploaded = await uploadWithAuth();
+          mediaUrl = uploaded.url;
         }
 
         const storyData: Record<string, any> = {
@@ -230,19 +261,30 @@ export default function StoryUploadScreen({
           storyData.mediaUrl = mediaUrl;
         }
 
+        // useApi.post() already auto-refreshes on 401, so no extra plumbing here.
         const response = await post<{ story: any }>("/stories", storyData, snapshot.authToken);
 
         if (response.success) {
           // Marker that other screens (e.g. Chats) poll to refresh stories.
           AsyncStorage.setItem("@story_posted", Date.now().toString()).catch(() => {});
+        } else if ((response as any).error === "TOKEN_EXPIRED") {
+          const err: any = new Error("Session expired. Please log in again.");
+          err.code = "AUTH_EXPIRED";
+          throw err;
         } else {
           throw new Error(response.message || "Failed to create story");
         }
-      } catch (error) {
+      } catch (error: any) {
         logger.error("Story upload error:", error);
-        // Surface a non-blocking failure alert; works even after navigation.
         try {
-          Alert.alert("Story upload failed", "We couldn't post your story. Please try again.");
+          if (error?.code === "AUTH_EXPIRED") {
+            Alert.alert(
+              "Session expired",
+              "You've been signed out. Please log in again to post your story.",
+            );
+          } else {
+            Alert.alert("Story upload failed", "We couldn't post your story. Please try again.");
+          }
         } catch {}
       }
     })();
