@@ -139,87 +139,113 @@ export default function StoryUploadScreen({
       return;
     }
 
-    setIsUploading(true);
+    // Snapshot all the inputs we need so the upload can keep running
+    // after the user navigates away from this screen.
+    const snapshot = {
+      storyType,
+      selectedImage,
+      selectedVideo,
+      textContent,
+      durationInt: parseInt(duration.toString()),
+      bgColor: Array.isArray(BACKGROUND_COLORS[selectedBgIndex])
+        ? (BACKGROUND_COLORS[selectedBgIndex] as any)[0]
+        : (BACKGROUND_COLORS[selectedBgIndex] as any),
+      authToken: token || "",
+    };
 
-    try {
-      let mediaUrl = null;
+    // Give immediate feedback and pop the screen — the upload runs
+    // invisibly in the background so the user can keep using the app.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    navigation.goBack();
 
-      if ((storyType === "image" && selectedImage) || (storyType === "video" && selectedVideo)) {
-        const formData = new FormData();
-        const uri = storyType === "image" ? selectedImage : selectedVideo;
-        const uploadPath = storyType === "image" ? "photo" : "video";
-        const fieldName = "file";
-        
-        if (Platform.OS === 'web') {
-          const response = await fetch(uri!);
-          const blob = await response.blob();
-          formData.append(fieldName, blob, `story_${Date.now()}.${storyType === "image" ? "jpg" : "mp4"}`);
+    // Background uploader (no awaits in the click handler past this point).
+    (async () => {
+      try {
+        let mediaUrl: string | null = null;
+
+        if (
+          (snapshot.storyType === "image" && snapshot.selectedImage) ||
+          (snapshot.storyType === "video" && snapshot.selectedVideo)
+        ) {
+          const formData = new FormData();
+          const uri = snapshot.storyType === "image" ? snapshot.selectedImage : snapshot.selectedVideo;
+          const uploadPath = snapshot.storyType === "image" ? "photo" : "video";
+          const fieldName = "file";
+
+          if (Platform.OS === "web") {
+            const response = await fetch(uri!);
+            const blob = await response.blob();
+            formData.append(
+              fieldName,
+              blob,
+              `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
+            );
+          } else {
+            formData.append(fieldName, {
+              uri: uri,
+              type: snapshot.storyType === "image" ? "image/jpeg" : "video/mp4",
+              name: `story_${Date.now()}.${snapshot.storyType === "image" ? "jpg" : "mp4"}`,
+            } as any);
+          }
+
+          const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/${uploadPath}`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${snapshot.authToken}`,
+              Accept: "application/json",
+            },
+            body: formData,
+          });
+
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text();
+            logger.error("Upload error response:", errorText);
+            throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
+          }
+
+          const uploadData = await uploadResponse.json();
+          if (!uploadData.success) {
+            throw new Error(uploadData.message || "Upload failed");
+          }
+          mediaUrl = uploadData.url;
+        }
+
+        const storyData: Record<string, any> = {
+          type: snapshot.storyType,
+          content:
+            snapshot.storyType === "text"
+              ? snapshot.textContent
+              : snapshot.storyType === "image"
+              ? "Photo story"
+              : "Video story",
+          durationHours: snapshot.durationInt,
+        };
+
+        if (snapshot.storyType === "text") {
+          storyData.textContent = snapshot.textContent;
+          storyData.backgroundColor = snapshot.bgColor;
+        }
+
+        if (mediaUrl) {
+          storyData.mediaUrl = mediaUrl;
+        }
+
+        const response = await post<{ story: any }>("/stories", storyData, snapshot.authToken);
+
+        if (response.success) {
+          // Marker that other screens (e.g. Chats) poll to refresh stories.
+          AsyncStorage.setItem("@story_posted", Date.now().toString()).catch(() => {});
         } else {
-          formData.append(fieldName, {
-            uri: uri,
-            type: storyType === "image" ? "image/jpeg" : "video/mp4",
-            name: `story_${Date.now()}.${storyType === "image" ? "jpg" : "mp4"}`,
-          } as any);
+          throw new Error(response.message || "Failed to create story");
         }
-
-        const uploadResponse = await fetch(`${getApiBaseUrl()}/api/upload/${uploadPath}`, {
-          method: "POST",
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Accept': 'application/json',
-          },
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          const errorText = await uploadResponse.text();
-          logger.error("Upload error response:", errorText);
-          throw new Error(`Upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`);
-        }
-
-        const uploadData = await uploadResponse.json();
-        if (!uploadData.success) {
-          throw new Error(uploadData.message || "Upload failed");
-        }
-        mediaUrl = uploadData.url;
+      } catch (error) {
+        logger.error("Story upload error:", error);
+        // Surface a non-blocking failure alert; works even after navigation.
+        try {
+          Alert.alert("Story upload failed", "We couldn't post your story. Please try again.");
+        } catch {}
       }
-
-      const durationInt = parseInt(duration.toString());
-
-      const storyData: Record<string, any> = {
-        type: storyType,
-        content: storyType === "text" ? textContent : (storyType === "image" ? "Photo story" : "Video story"),
-        durationHours: durationInt,
-      };
-
-      if (storyType === "text") {
-        storyData.textContent = textContent;
-        storyData.backgroundColor = Array.isArray(BACKGROUND_COLORS[selectedBgIndex])
-          ? BACKGROUND_COLORS[selectedBgIndex][0]
-          : BACKGROUND_COLORS[selectedBgIndex];
-      }
-
-      if (mediaUrl) {
-        storyData.mediaUrl = mediaUrl;
-      }
-
-      const response = await post<{ story: any }>("/stories", storyData, token || "");
-
-      if (response.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Fire-and-forget the marker write so we don't block navigation.
-        AsyncStorage.setItem('@story_posted', Date.now().toString()).catch(() => {});
-        // Close immediately for a snappy feel — no blocking modal.
-        navigation.goBack();
-      } else {
-        throw new Error(response.message || "Failed to create story");
-      }
-    } catch (error) {
-      logger.error("Story upload error:", error);
-      Alert.alert("Error", "Failed to post story. Please try again.");
-    } finally {
-      setIsUploading(false);
-    }
+    })();
   };
 
   return (
