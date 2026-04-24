@@ -265,7 +265,7 @@ router.get('/my-matches', protect, async (req, res) => {
 
     const currentUser = await User.findById(req.user._id);
     const matches = await Match.find({ users: req.user._id, status: 'active' })
-      .populate('users', 'name age bio photos location onlineStatus lastActive interests lookingFor gender lifestyle verified')
+      .populate('users', 'name age bio photos location onlineStatus lastActive interests lookingFor gender lifestyle verified privacySettings')
       .sort({ matchedAt: -1 });
 
     const seenUserIds = new Set();
@@ -288,6 +288,20 @@ router.get('/my-matches', protect, async (req, res) => {
       const theirInterests = (otherUser && otherUser.interests) ? otherUser.interests : [];
       const sharedCount = myInterests.filter(i => theirInterests.includes(i)).length;
       const computedScore = Math.min(100, 60 + sharedCount * 8);
+
+      // Honor each user's "hide online status" privacy setting before
+      // exposing presence info to the requester.
+      if (Array.isArray(matchObj.users)) {
+        matchObj.users = matchObj.users.map((u) => {
+          const showOnline = u && u.privacySettings && u.privacySettings.showOnlineStatus !== false;
+          if (!showOnline) {
+            return { ...u, onlineStatus: null, lastActive: null };
+          }
+          // Don't leak the privacy block to the client.
+          const { privacySettings, ...rest } = u;
+          return rest;
+        });
+      }
 
       return {
         ...matchObj,

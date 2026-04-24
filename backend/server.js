@@ -498,6 +498,22 @@ const updateUserOnlineStatus = async (userId, status) => {
   }
 };
 
+// Emit a `user:status` presence event only when the user has not hidden
+// their online status via privacy settings. We never broadcast presence
+// for users who have opted out — they remain invisible to everyone.
+const emitUserStatusIfAllowed = async (userId, isOnline) => {
+  try {
+    const u = await User.findById(userId).select('privacySettings').lean();
+    const showOnline =
+      !u || !u.privacySettings || u.privacySettings.showOnlineStatus !== false;
+    if (showOnline) {
+      io.emit('user:status', { userId: userId.toString(), isOnline });
+    }
+  } catch (error) {
+    logger.error('Presence privacy check failed:', error);
+  }
+};
+
 io.on('connection', (socket) => {
   // Extract and verify userId ONLY from the JWT — never trust client-provided user IDs
   const token = socket.handshake.auth?.token || socket.handshake.query?.token;
@@ -510,7 +526,7 @@ io.on('connection', (socket) => {
         onlineUsers.set(socket.userId, socket.id);
         socket.join(socket.userId);
         updateUserOnlineStatus(socket.userId, 'online');
-        io.emit('user:status', { userId: socket.userId, isOnline: true });
+        emitUserStatusIfAllowed(socket.userId, true);
       }
     } catch (err) {
       // Token invalid — socket connects but is not authenticated
@@ -521,7 +537,7 @@ io.on('connection', (socket) => {
   socket.on('user:online', () => {
     if (socket.userId) {
       onlineUsers.set(socket.userId, socket.id);
-      io.emit('user:status', { userId: socket.userId, isOnline: true });
+      emitUserStatusIfAllowed(socket.userId, true);
       updateUserOnlineStatus(socket.userId, 'online');
     }
   });
@@ -1048,13 +1064,13 @@ io.on('connection', (socket) => {
     }
     if (socket.userId) {
       onlineUsers.delete(socket.userId);
-      io.emit('user:status', { userId: socket.userId, isOnline: false });
+      emitUserStatusIfAllowed(socket.userId, false);
       updateUserOnlineStatus(socket.userId, 'offline');
     } else {
       for (let [userId, socketId] of onlineUsers.entries()) {
         if (socketId === socket.id) {
           onlineUsers.delete(userId);
-          io.emit('user:status', { userId, isOnline: false });
+          emitUserStatusIfAllowed(userId, false);
           updateUserOnlineStatus(userId, 'offline');
           break;
         }

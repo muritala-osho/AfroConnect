@@ -34,7 +34,7 @@ router.get("/conversations", protect, async (req, res) => {
     const matches = await Match.find({ users: req.user._id, status: { $in: ['active', 'unmatched'] } })
       .populate(
         "users",
-        "name photos onlineStatus lastActive blockedUsers verified",
+        "name photos onlineStatus lastActive blockedUsers verified privacySettings",
       )
       .sort({ lastMessageAt: -1, updatedAt: -1, matchedAt: -1 })
       .skip((pageNum - 1) * limitNum)
@@ -100,6 +100,16 @@ router.get("/conversations", protect, async (req, res) => {
       const lastMessage = lastMessagesMap.get(matchIdStr);
       const unreadCount = unreadCountsMap.get(matchIdStr) || 0;
 
+      // Honor "hide online status" privacy: never reveal real-time presence
+      // for the other user when they have the setting disabled.
+      const otherShowsOnline =
+        !otherUser.privacySettings ||
+        otherUser.privacySettings.showOnlineStatus !== false;
+      const computedOnline = otherShowsOnline
+        ? (onlineUsers && onlineUsers.has(otherUser._id.toString())) ||
+          otherUser.onlineStatus === "online"
+        : false;
+
       return {
         id: match._id,
         matchId: match._id,
@@ -107,9 +117,7 @@ router.get("/conversations", protect, async (req, res) => {
           id: otherUser._id,
           name: otherUser.name,
           photo: otherUser.photos?.[0]?.url || otherUser.photos?.[0],
-          online:
-            (onlineUsers && onlineUsers.has(otherUser._id.toString())) ||
-            otherUser.onlineStatus === "online",
+          online: computedOnline,
           verified: otherUser.verified || false,
         },
         lastMessage: lastMessage?.content || "",
