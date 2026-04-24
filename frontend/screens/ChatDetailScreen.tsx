@@ -125,7 +125,7 @@ export default function ChatDetailScreen({
   const [showThemeModal, setShowThemeModal] = useState(false);
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [icebreakerPopup, setIcebreakerPopup] = useState<string | null>(null);
-  const [icebreakerDismissed, setIcebreakerDismissed] = useState(false);
+  const [icebreakerDismissed, setIcebreakerDismissed] = useState<boolean | null>(null);
   const icebreakerSlide = useRef(new Animated.Value(SCREEN_WIDTH)).current;
   const [selectedReportReason, setSelectedReportReason] = useState<string | null>(null);
   const [reportDetails, setReportDetails] = useState("");
@@ -796,10 +796,20 @@ export default function ChatDetailScreen({
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
+  // Load the per-chat "dismissed" flag from device storage so the popup
+  // doesn't reappear after closing and reopening this conversation.
+  useEffect(() => {
+    if (!userId) return;
+    AsyncStorage.getItem(`icebreaker_dismissed_${userId}`)
+      .then((v) => setIcebreakerDismissed(v === "1"))
+      .catch(() => setIcebreakerDismissed(false));
+  }, [userId]);
+
   // Show a slide-in icebreaker suggestion when the conversation is brand new.
   // Auto-fetches a single tailored question on first load. The popup hides
   // itself the moment any message exists in the thread, or when dismissed.
   useEffect(() => {
+    if (icebreakerDismissed === null) return; // wait for storage to load
     if (icebreakerDismissed) return;
     if (messages.length > 0) {
       if (icebreakerPopup) setIcebreakerPopup(null);
@@ -833,19 +843,27 @@ export default function ChatDetailScreen({
     }).start();
   }, [icebreakerPopup, icebreakerSlide]);
 
+  const persistIcebreakerDismissed = useCallback(() => {
+    if (userId) {
+      AsyncStorage.setItem(`icebreaker_dismissed_${userId}`, "1").catch(() => {});
+    }
+  }, [userId]);
+
   const useIcebreakerPopup = useCallback(() => {
     if (icebreakerPopup) {
       setMessage(icebreakerPopup);
       setIcebreakerPopup(null);
       setIcebreakerDismissed(true);
+      persistIcebreakerDismissed();
       inputRef.current?.focus();
     }
-  }, [icebreakerPopup]);
+  }, [icebreakerPopup, persistIcebreakerDismissed]);
 
   const dismissIcebreakerPopup = useCallback(() => {
     setIcebreakerPopup(null);
     setIcebreakerDismissed(true);
-  }, []);
+    persistIcebreakerDismissed();
+  }, [persistIcebreakerDismissed]);
 
   // Tick once a second so any active live-location countdown stays accurate
   useEffect(() => {
