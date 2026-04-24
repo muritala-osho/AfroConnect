@@ -169,6 +169,8 @@ export default function ChatDetailScreen({
   const imageViewerListRef = useRef<FlatList<string>>(null);
   const [viewingVideo, setViewingVideo] = useState<string | null>(null);
   const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
+  const [failedGifLoads, setFailedGifLoads] = useState<Set<string>>(new Set());
+  const [gifReloadKey, setGifReloadKey] = useState<Record<string, number>>({});
 
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showMessageMenu, setShowMessageMenu] = useState(false);
@@ -1988,6 +1990,8 @@ export default function ChatDetailScreen({
                       const gifH = Math.max(120, Math.min(280, gifW / aspect));
                       const isFailed = (item as any).status === "failed";
                       const isSending = (item as any).status === "sending";
+                      const loadFailed = failedGifLoads.has(item._id);
+                      const reloadKey = gifReloadKey[item._id] || 0;
                       if (!gifSrc) {
                         return (
                           <View style={[styles.messageImage, { width: gifW, height: 140, alignItems: "center", justifyContent: "center", backgroundColor: isMe ? "rgba(255,255,255,0.12)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }]}>
@@ -2006,13 +2010,32 @@ export default function ChatDetailScreen({
                           onPress={() => {
                             if (isFailed) { retryFailedMedia(item); return; }
                             if (isSending) return;
+                            if (loadFailed) {
+                              setFailedGifLoads((prev) => {
+                                const next = new Set(prev);
+                                next.delete(item._id);
+                                return next;
+                              });
+                              setGifReloadKey((prev) => ({ ...prev, [item._id]: (prev[item._id] || 0) + 1 }));
+                              return;
+                            }
                             openImageViewer(gifSrc);
                           }}
                         >
                           <Image
+                            key={`gif-${item._id}-${reloadKey}`}
                             source={{ uri: gifSrc }}
                             style={[styles.messageImage, { width: gifW, height: gifH }]}
                             contentFit="cover"
+                            onError={() => {
+                              logger.error(`[GIF] Failed to load gif image: id=${item._id} url=${gifSrc}`);
+                              setFailedGifLoads((prev) => {
+                                if (prev.has(item._id)) return prev;
+                                const next = new Set(prev);
+                                next.add(item._id);
+                                return next;
+                              });
+                            }}
                           />
                           {isSending && (
                             <View style={styles.mediaStatusOverlay}>
@@ -2023,6 +2046,12 @@ export default function ChatDetailScreen({
                             <View style={styles.mediaStatusOverlay}>
                               <Ionicons name="refresh-circle" size={36} color="#FFF" />
                               <ThemedText style={styles.mediaStatusText}>Tap to retry</ThemedText>
+                            </View>
+                          )}
+                          {!isFailed && !isSending && loadFailed && (
+                            <View style={styles.mediaStatusOverlay}>
+                              <Ionicons name="reload-circle" size={36} color="#FFF" />
+                              <ThemedText style={styles.mediaStatusText}>Tap to reload</ThemedText>
                             </View>
                           )}
                           <View style={styles.gifBadge}>
@@ -2386,7 +2415,7 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, failedGifLoads, gifReloadKey, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds],
   );
 
   const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);

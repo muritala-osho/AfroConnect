@@ -56,6 +56,10 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestIdRef = useRef(0);
+  // In-memory cache: key = `${q}|${pos || ""}` -> { items, next }
+  const cacheRef = useRef<Map<string, { items: GifResult[]; next: string | null; ts: number }>>(new Map());
+  const CACHE_TTL_MS = 5 * 60 * 1000;
+  const PAGE_LIMIT = 18;
 
   const loadRecents = useCallback(async () => {
     const list = await getRecentGifs();
@@ -66,19 +70,37 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
   const load = useCallback(async (q: string, append = false) => {
     if (!token) return;
     const reqId = ++requestIdRef.current;
+    const cacheKey = `${q.trim()}|${append ? (nextPos || "") : ""}`;
+    const cached = cacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      setItems((prev) => (append ? [...prev, ...cached.items] : cached.items));
+      setNextPos(cached.next);
+      setNotConfigured(false);
+      setLoading(false);
+      setLoadingMore(false);
+      setError(null);
+      return;
+    }
     if (append) setLoadingMore(true);
     else setLoading(true);
     setError(null);
     try {
       const path = q.trim()
-        ? `/gifs/search?q=${encodeURIComponent(q.trim())}&limit=24${append && nextPos ? `&pos=${encodeURIComponent(nextPos)}` : ""}`
-        : `/gifs/trending?limit=24${append && nextPos ? `&pos=${encodeURIComponent(nextPos)}` : ""}`;
+        ? `/gifs/search?q=${encodeURIComponent(q.trim())}&limit=${PAGE_LIMIT}${append && nextPos ? `&pos=${encodeURIComponent(nextPos)}` : ""}`
+        : `/gifs/trending?limit=${PAGE_LIMIT}${append && nextPos ? `&pos=${encodeURIComponent(nextPos)}` : ""}`;
       const res = await get<{ items: GifResult[]; next: string | null; code?: string; message?: string }>(path, token);
       if (reqId !== requestIdRef.current) return;
       if (res.success && res.data) {
-        setItems((prev) => (append ? [...prev, ...(res.data!.items || [])] : res.data!.items || []));
-        setNextPos(res.data.next || null);
+        const newItems = res.data.items || [];
+        const newNext = res.data.next || null;
+        setItems((prev) => (append ? [...prev, ...newItems] : newItems));
+        setNextPos(newNext);
         setNotConfigured(false);
+        cacheRef.current.set(cacheKey, { items: newItems, next: newNext, ts: Date.now() });
+        if (cacheRef.current.size > 40) {
+          const oldestKey = cacheRef.current.keys().next().value;
+          if (oldestKey) cacheRef.current.delete(oldestKey);
+        }
       } else {
         if ((res as any)?.data?.code === "NO_KEY" || (res as any)?.code === "NO_KEY") {
           setNotConfigured(true);
@@ -128,7 +150,7 @@ export default function GifPicker({ visible, onClose, onSelect }: GifPickerProps
     debounceRef.current = setTimeout(() => {
       setNextPos(null);
       load(query, false);
-    }, query.trim() ? 350 : 0);
+    }, query.trim() ? 450 : 0);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };

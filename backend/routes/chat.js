@@ -355,12 +355,23 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       if (!gifUrl) {
         return res.status(400).json({ success: false, message: "gifUrl is required" });
       }
+      const isValidGifUrl = (u) => {
+        if (typeof u !== "string") return false;
+        if (!/^https:\/\//i.test(u)) return false;
+        if (/^blob:|^data:|^file:/i.test(u)) return false;
+        return true;
+      };
+      if (!isValidGifUrl(gifUrl)) {
+        return res.status(400).json({ success: false, message: "Invalid gifUrl: must be a permanent https URL from a GIF provider" });
+      }
+      const safePreview = isValidGifUrl(gifPreview) ? gifPreview : gifUrl;
       messageData.gifUrl = gifUrl;
-      messageData.gifPreview = gifPreview || gifUrl;
+      messageData.gifPreview = safePreview;
       if (gifWidth) messageData.gifWidth = gifWidth;
       if (gifHeight) messageData.gifHeight = gifHeight;
       messageData.gifSource = gifSource || 'tenor';
       messageData.content = "🎞️ GIF";
+      console.log(`[GIF] Saving message with gifUrl=${gifUrl} preview=${safePreview} source=${messageData.gifSource}`);
     }
 
     if (replyTo) {
