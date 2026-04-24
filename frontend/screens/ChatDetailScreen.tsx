@@ -818,8 +818,16 @@ export default function ChatDetailScreen({
       }
     } catch (error) {
       logger.error("Send error:", error);
-      setMessages((prev) => prev.filter((m) => m._id !== tempMessage._id));
-      Alert.alert("Error", "Failed to send message");
+      if (type === "gif") {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m._id === tempMessage._id ? ({ ...m, status: "failed" } as any) : m,
+          ),
+        );
+      } else {
+        setMessages((prev) => prev.filter((m) => m._id !== tempMessage._id));
+        Alert.alert("Error", "Failed to send message");
+      }
     } finally {
       setSending(false);
     }
@@ -1097,6 +1105,21 @@ export default function ChatDetailScreen({
       const duration = item.audioDuration || 1;
       setMessages((prev) => prev.filter((m) => m._id !== item._id));
       sendVoiceOptimistic(localUri, duration);
+      return;
+    }
+    if (item.type === "gif") {
+      const url = item.gifUrl || item.gifPreview;
+      if (!url) return;
+      setMessages((prev) => prev.filter((m) => m._id !== item._id));
+      if (sendMessageRef.current) {
+        sendMessageRef.current("🎞️ GIF", "gif", {
+          gifUrl: item.gifUrl,
+          gifPreview: item.gifPreview,
+          gifWidth: item.gifWidth,
+          gifHeight: item.gifHeight,
+          gifSource: item.gifSource,
+        });
+      }
       return;
     }
     const localUri = item.imageUrl || item.videoUrl;
