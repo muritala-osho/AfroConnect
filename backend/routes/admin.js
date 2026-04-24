@@ -501,6 +501,84 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
 });
 
 
+router.get('/premium-members', protect, isAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 25, search, source, plan, status, autoRenew } = req.query;
+    const query = { 'premium.isActive': true };
+
+    if (status === 'expired') {
+      query['premium.isActive'] = false;
+      query['premium.cancelledAt'] = { $ne: null };
+    } else if (status === 'expiring_soon') {
+      const sevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      query['premium.expiresAt'] = { $lte: sevenDays, $gt: new Date() };
+    } else if (status === 'cancelled_active') {
+      query['premium.cancelledAt'] = { $ne: null };
+      query['premium.isActive'] = true;
+    }
+
+    if (source) query['premium.source'] = source;
+    if (plan) query['premium.plan'] = plan;
+    if (autoRenew === 'true') query['premium.autoRenewing'] = true;
+    if (autoRenew === 'false') query['premium.autoRenewing'] = false;
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { 'premium.originalTransactionId': search },
+        { 'premium.purchaseToken': search }
+      ];
+    }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit)));
+
+    const [members, total, summaryAgg] = await Promise.all([
+      User.find(query)
+        .select('name email avatar premium createdAt')
+        .sort({ 'premium.expiresAt': 1 })
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum)
+        .lean(),
+      User.countDocuments(query),
+      User.aggregate([
+        { $match: { 'premium.isActive': true } },
+        {
+          $group: {
+            _id: null,
+            totalActive: { $sum: 1 },
+            ios: { $sum: { $cond: [{ $eq: ['$premium.source', 'ios'] }, 1, 0] } },
+            android: { $sum: { $cond: [{ $eq: ['$premium.source', 'android'] }, 1, 0] } },
+            web: { $sum: { $cond: [{ $eq: ['$premium.source', 'web'] }, 1, 0] } },
+            cancelledButActive: { $sum: { $cond: [{ $ne: ['$premium.cancelledAt', null] }, 1, 0] } },
+            autoRenewOff: { $sum: { $cond: [{ $eq: ['$premium.autoRenewing', false] }, 1, 0] } }
+          }
+        }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      members,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      },
+      summary: summaryAgg[0] || {
+        totalActive: 0, ios: 0, android: 0, web: 0,
+        cancelledButActive: 0, autoRenewOff: 0
+      }
+    });
+  } catch (error) {
+    logger.error('Premium members error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
 router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
   try {
     const activeSubscriptions = await User.countDocuments({ 'premium.isActive': true });

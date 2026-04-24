@@ -127,6 +127,22 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  getPremiumMembers: async (params?: {
+    page?: number; limit?: number; search?: string;
+    source?: string; plan?: string; status?: string; autoRenew?: string;
+  }) => {
+    const query = new URLSearchParams();
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.search) query.set('search', params.search);
+    if (params?.source) query.set('source', params.source);
+    if (params?.plan) query.set('plan', params.plan);
+    if (params?.status) query.set('status', params.status);
+    if (params?.autoRenew) query.set('autoRenew', params.autoRenew);
+    const res = await fetch(`${API_BASE}/admin/premium-members?${query}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
   getVerifications: async () => {
     const res = await fetch(`${API_BASE}/admin/verifications`, { headers: authHeaders() });
     return handleResponse(res);
