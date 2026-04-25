@@ -58,6 +58,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/contexts/UnreadContext";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
+import ChatHeader from "@/components/chat/ChatHeader";
+import AttachmentMenu from "@/components/chat/AttachmentMenu";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { scanForSensitiveInfo, showPersonalInfoWarning } from "@/utils/securityWarnings";
 import WavyWaveform from "@/components/chat/WavyWaveform";
@@ -2601,33 +2603,22 @@ export default function ChatDetailScreen({
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
       {/* HEADER */}
-      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={28} color={theme.text} />
-        </Pressable>
-
-        <Pressable style={styles.headerProfile} onPress={() => navigation.navigate("ProfileDetail" as any, { userId })}>
-          <View style={styles.avatarContainer}>
-            <Image source={photoSource || require('../assets/icon.png')} style={styles.headerAvatar} contentFit="cover" />
-            {isOnline && <View style={styles.onlineIndicator} />}
-          </View>
-          <View style={styles.headerInfo}>
-            <View style={styles.nameRow}>
-              <ThemedText style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>{userName}</ThemedText>
-              {otherUserVerified && <VerificationBadge size={14} />}
-            </View>
-            <ThemedText style={[styles.headerStatus, { color: isOtherRecording ? "#F44336" : isTyping ? theme.primary : isOnline ? "#4CAF50" : theme.textSecondary }]}>
-              {getStatusText()}
-            </ThemedText>
-          </View>
-        </Pressable>
-
-        <View style={styles.headerActions}>
-          <Pressable onPress={handleVoiceCall} style={styles.headerActionButton}><Feather name="phone" size={22} color={theme.primary} /></Pressable>
-          <Pressable onPress={handleVideoCall} style={styles.headerActionButton}><Feather name="video" size={22} color={theme.primary} /></Pressable>
-          <Pressable onPress={() => setShowOptionsMenu(true)} style={styles.headerActionButton}><Feather name="more-vertical" size={22} color={theme.text} /></Pressable>
-        </View>
-      </View>
+      <ChatHeader
+        theme={theme}
+        isDark={isDark}
+        photoSource={photoSource}
+        userName={userName}
+        otherUserVerified={otherUserVerified}
+        isOnline={isOnline}
+        isTyping={isTyping}
+        isOtherRecording={isOtherRecording}
+        statusText={getStatusText()}
+        onBack={() => navigation.goBack()}
+        onProfilePress={() => navigation.navigate("ProfileDetail" as any, { userId })}
+        onVoiceCall={handleVoiceCall}
+        onVideoCall={handleVideoCall}
+        onOpenOptions={() => setShowOptionsMenu(true)}
+      />
 
       {/* BODY */}
       <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
@@ -2823,68 +2814,19 @@ export default function ChatDetailScreen({
         onSelect={handleSendGif}
       />
 
-      <Modal visible={showAttachmentMenu} transparent animationType="fade" onRequestClose={() => setShowAttachmentMenu(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowAttachmentMenu(false)}>
-          <View style={[styles.attachmentMenu, { backgroundColor: theme.background }]}>
-            <ThemedText style={[styles.attachmentTitle, { color: theme.text }]}>Send Attachment</ThemedText>
-            <Pressable style={[styles.viewOnceToggleRow, viewOnceMode && { backgroundColor: '#FF6B6B12', borderColor: '#FF6B6B40' }]}
-              onPress={() => setViewOnceModeSync(v => !v)}>
-              <View style={styles.viewOnceToggleLeft}>
-                <Ionicons name="eye-outline" size={18} color={viewOnceMode ? '#FF6B6B' : theme.textSecondary} />
-                <View>
-                  <ThemedText style={[styles.viewOnceToggleTitle, { color: viewOnceMode ? '#FF6B6B' : theme.text }]}>View Once</ThemedText>
-                  <ThemedText style={[styles.viewOnceToggleDesc, { color: theme.textSecondary }]}>Photo/video disappears after being opened</ThemedText>
-                </View>
-              </View>
-              <View style={[styles.viewOnceTogglePill, { backgroundColor: viewOnceMode ? '#FF6B6B' : theme.border }]}>
-                <ThemedText style={styles.viewOnceTogglePillText}>{viewOnceMode ? 'ON' : 'OFF'}</ThemedText>
-              </View>
-            </Pressable>
-            <View style={styles.attachmentOptions}>
-              <Pressable style={styles.attachmentOption} onPress={handleTakePhoto}>
-                <View style={[styles.attachmentIcon, { backgroundColor: "#FF6B6B20" }]}><Feather name="camera" size={24} color="#FF6B6B" /></View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Camera</ThemedText>
-              </Pressable>
-              <Pressable style={styles.attachmentOption} onPress={handlePickImage}>
-                <View style={[styles.attachmentIcon, { backgroundColor: "#4ECDC420" }]}><Feather name="image" size={24} color="#4ECDC4" /></View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Gallery</ThemedText>
-              </Pressable>
-              <Pressable style={styles.attachmentOption} onPress={handlePickVideo}>
-                <View style={[styles.attachmentIcon, { backgroundColor: "#9B59B620" }]}><Feather name="video" size={24} color="#9B59B6" /></View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>Video</ThemedText>
-              </Pressable>
-              <Pressable
-                style={styles.attachmentOption}
-                onPress={() => { setShowAttachmentMenu(false); setShowGifPicker(true); }}
-              >
-                <View style={[styles.attachmentIcon, { backgroundColor: "#FFB30020" }]}>
-                  <MaterialCommunityIcons name="file-gif-box" size={26} color="#FFB300" />
-                </View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>GIF</ThemedText>
-              </Pressable>
-              <Pressable
-                style={[styles.attachmentOption, isSendingLocation && { opacity: 0.5 }]}
-                onPress={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
-                disabled={isSendingLocation}
-              >
-                <View style={[styles.attachmentIcon, { backgroundColor: "#45B7D120" }]}>
-                  {isSendingLocation ? (
-                    <ActivityIndicator size="small" color="#45B7D1" />
-                  ) : (
-                    <Feather name="map-pin" size={24} color="#45B7D1" />
-                  )}
-                </View>
-                <ThemedText style={[styles.attachmentLabel, { color: theme.text }]}>
-                  {isSendingLocation ? "Getting…" : "Location"}
-                </ThemedText>
-              </Pressable>
-            </View>
-            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary }]} onPress={() => setShowAttachmentMenu(false)}>
-              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      <AttachmentMenu
+        visible={showAttachmentMenu}
+        theme={theme}
+        viewOnceMode={viewOnceMode}
+        isSendingLocation={isSendingLocation}
+        onClose={() => setShowAttachmentMenu(false)}
+        onToggleViewOnce={() => setViewOnceModeSync(v => !v)}
+        onTakePhoto={handleTakePhoto}
+        onPickImage={handlePickImage}
+        onPickVideo={handlePickVideo}
+        onOpenGifPicker={() => { setShowAttachmentMenu(false); setShowGifPicker(true); }}
+        onOpenLivePicker={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
+      />
 
       {/* Live location duration picker */}
       <Modal visible={showLivePicker} transparent animationType="fade" onRequestClose={() => setShowLivePicker(false)}>

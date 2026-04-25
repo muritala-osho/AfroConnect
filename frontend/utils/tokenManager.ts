@@ -54,6 +54,7 @@ export const tokenManager = {
     try {
       const refreshToken = await this.getRefreshToken();
       if (!refreshToken) {
+        // No refresh token at all = definitive logout state.
         await this.clearTokens();
         drainQueue(null);
         onSessionExpiredCallback?.();
@@ -61,18 +62,39 @@ export const tokenManager = {
       }
 
       const baseUrl = getApiBaseUrl();
-      const response = await fetch(`${baseUrl}/api/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+      } catch {
+        // Transient network failure (no internet, DNS, server cold start).
+        // Do NOT clear tokens — let the next request try again.
+        drainQueue(null);
+        return null;
+      }
 
       const data = await response.json().catch(() => ({}));
 
-      if (!response.ok || !data.success || !data.token) {
+      // Only treat 401/403 as a real auth failure that invalidates the session.
+      const isAuthFailure =
+        response.status === 401 ||
+        response.status === 403 ||
+        data?.tokenRevoked === true;
+
+      if (isAuthFailure) {
         await this.clearTokens();
         drainQueue(null);
         onSessionExpiredCallback?.();
+        return null;
+      }
+
+      // Server error, rate limit, or any other non-OK response: keep tokens,
+      // let the caller retry later instead of forcing logout.
+      if (!response.ok || !data.success || !data.token) {
+        drainQueue(null);
         return null;
       }
 
@@ -82,11 +104,6 @@ export const tokenManager = {
       }
       drainQueue(data.token);
       return data.token;
-    } catch {
-      await this.clearTokens();
-      drainQueue(null);
-      onSessionExpiredCallback?.();
-      return null;
     } finally {
       isRefreshing = false;
     }
