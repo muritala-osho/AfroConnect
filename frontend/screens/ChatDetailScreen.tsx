@@ -55,7 +55,7 @@ import { getApiBaseUrl } from "@/constants/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
-import { setChatScreenOpen } from "@/context/UnreadContext";
+import { setChatScreenOpen } from "@/contexts/UnreadContext";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";

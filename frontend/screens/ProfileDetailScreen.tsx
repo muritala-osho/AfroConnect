@@ -24,7 +24,7 @@ import { Spacing, BorderRadius, Typography } from "@/constants/theme";
 import { LinearGradient } from "expo-linear-gradient";
 import { getPhotoSource } from "@/utils/photos";
 import ActivityStatus from "@/components/ActivityStatus";
-import ProfilePrompts from "@/components/ProfilePrompts";
+import ProfilePrompts from "@/components/profile/ProfilePrompts";
 import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import { PremiumBadge } from "@/components/PremiumBadge";

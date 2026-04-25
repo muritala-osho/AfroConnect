@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { getApiBaseUrl } from '@/constants/config';
-import { useMaintenance } from '@/context/MaintenanceContext';
+import { useMaintenance } from '@/contexts/MaintenanceContext';
 import { tokenManager } from '@/utils/tokenManager';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;

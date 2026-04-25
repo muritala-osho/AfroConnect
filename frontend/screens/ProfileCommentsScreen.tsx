@@ -15,7 +15,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Spacing } from "@/constants/theme";
-import ProfileComments from "@/components/ProfileComments";
+import ProfileComments from "@/components/profile/ProfileComments";
 
 export default function ProfileCommentsScreen() {
   const { theme } = useTheme();

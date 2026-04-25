@@ -19,12 +19,12 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider, useTheme } from "@/hooks/useTheme";
 import { LanguageProvider, useLanguage } from "@/hooks/useLanguage";
-import { UnreadProvider } from "@/context/UnreadContext";
+import { UnreadProvider } from "@/contexts/UnreadContext";
 import { CallProvider } from "@/contexts/CallContext";
-import { MaintenanceProvider } from "@/context/MaintenanceContext";
+import { MaintenanceProvider } from "@/contexts/MaintenanceContext";
 import MaintenanceOverlay from "@/components/MaintenanceOverlay";
-import IncomingCallHandler from "@/components/IncomingCallHandler";
-import FloatingCallBar from "@/components/FloatingCallBar";
+import IncomingCallHandler from "@/components/calls/IncomingCallHandler";
+import FloatingCallBar from "@/components/calls/FloatingCallBar";
 import UpdateBanner from "@/components/UpdateBanner";
 import {
   registerForPushNotificationsAsync,

@@ -3,7 +3,7 @@ import { StyleSheet, Animated, Pressable, Dimensions, View } from 'react-native'
 import { ThemedText } from '@/components/ThemedText';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useMaintenance } from '@/context/MaintenanceContext';
+import { useMaintenance } from '@/contexts/MaintenanceContext';
 import { BlurView } from 'expo-blur';
 
 const { width: SW } = Dimensions.get('window');

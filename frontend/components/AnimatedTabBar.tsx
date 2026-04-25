@@ -11,7 +11,7 @@ import Animated, {
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import * as Haptics from 'expo-haptics';
-import { useUnread } from '@/context/UnreadContext';
+import { useUnread } from '@/contexts/UnreadContext';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 

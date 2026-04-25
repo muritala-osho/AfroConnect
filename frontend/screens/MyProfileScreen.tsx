@@ -22,12 +22,12 @@ import { Feather } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
 import { Platform } from "react-native";
-import ProfilePrompts from "@/components/ProfilePrompts";
+import ProfilePrompts from "@/components/profile/ProfilePrompts";
 import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import VoiceBio from "@/components/VoiceBio";
-import { ProfileCompletionBanner } from "@/components/ProfileCompletion";
+import { ProfileCompletionBanner } from "@/components/profile/ProfileCompletion";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MyProfileScreenNavigationProp = CompositeNavigationProp<

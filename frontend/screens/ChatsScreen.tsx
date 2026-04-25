@@ -30,7 +30,7 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useUnread } from "@/context/UnreadContext";
+import { useUnread } from "@/contexts/UnreadContext";
 import { MainTabParamList } from "@/navigation/MainTabNavigator";
 import { RootStackParamList } from "@/navigation/RootNavigator";
 import { ThemedText } from "@/components/ThemedText";

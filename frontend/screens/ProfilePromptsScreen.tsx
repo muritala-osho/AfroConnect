@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { ThemedText } from '@/components/ThemedText';
-import ProfilePrompts from '@/components/ProfilePrompts';
+import ProfilePrompts from '@/components/profile/ProfilePrompts';
 import { ScreenScrollView } from '@/components/ScreenScrollView';
 
 export default function ProfilePromptsScreen({ navigation }: any) {
