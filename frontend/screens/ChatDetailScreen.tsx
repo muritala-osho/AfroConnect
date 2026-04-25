@@ -2086,8 +2086,8 @@ export default function ChatDetailScreen({
                             }}
                           />
                           {isSending && (
-                            <View style={styles.mediaStatusOverlay}>
-                              <ActivityIndicator color="#FFF" />
+                            <View style={styles.mediaStatusBadge}>
+                              <ActivityIndicator color="#FFF" size="small" />
                             </View>
                           )}
                           {isFailed && (
@@ -2158,8 +2158,8 @@ export default function ChatDetailScreen({
                         >
                           <Image source={{ uri: item.imageUrl }} style={styles.messageImage} contentFit="cover" />
                           {isSending && (
-                            <View style={styles.mediaStatusOverlay}>
-                              <ActivityIndicator color="#FFF" />
+                            <View style={styles.mediaStatusBadge}>
+                              <ActivityIndicator color="#FFF" size="small" />
                             </View>
                           )}
                           {isFailed && (
@@ -2240,8 +2240,8 @@ export default function ChatDetailScreen({
                             />
                           )}
                           {isSendingVid ? (
-                            <View style={styles.mediaStatusOverlay}>
-                              <ActivityIndicator color="#FFF" />
+                            <View style={styles.mediaStatusBadge}>
+                              <ActivityIndicator color="#FFF" size="small" />
                             </View>
                           ) : isFailedVid ? (
                             <View style={styles.mediaStatusOverlay}>
@@ -3374,6 +3374,7 @@ const styles = StyleSheet.create<any>({
   gifBadge: { position: "absolute", top: 6, left: 6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: "rgba(0,0,0,0.55)" },
   gifBadgeText: { color: "#FFF", fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
   mediaStatusOverlay: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "center", alignItems: "center", borderRadius: 12 },
+  mediaStatusBadge: { position: "absolute", top: 6, right: 6, backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12, paddingHorizontal: 6, paddingVertical: 4, justifyContent: "center", alignItems: "center" },
   mediaStatusText: { color: "#FFF", fontSize: 12, fontWeight: "600", marginTop: 6 },
   audioPlayer: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, minWidth: 180, gap: 8 },
   audioPlayBtn: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", flexShrink: 0 },
