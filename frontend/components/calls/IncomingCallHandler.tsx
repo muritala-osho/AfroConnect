@@ -110,7 +110,7 @@ export default function IncomingCallHandler() {
         playThroughEarpieceAndroid: false,
       });
       const { sound } = await Audio.Sound.createAsync(
-        require('../assets/sounds/mixkit-waiting-ringtone-1354.wav'),
+        require('../../assets/sounds/mixkit-waiting-ringtone-1354.wav'),
         { shouldPlay: true, isLooping: true, volume: 1.0 }
       );
       ringtoneRef.current = sound;

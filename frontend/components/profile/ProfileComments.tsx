@@ -127,7 +127,7 @@ export default function ProfileComments({ userId }: ProfileCommentsProps) {
       <View style={[styles.commentCard, { backgroundColor: theme.surface }]}>
         <View style={styles.commentHeader}>
           <Image 
-            source={photoSource || require('../assets/images/placeholder-1.jpg')} 
+            source={photoSource || require('../../assets/images/placeholder-1.jpg')} 
             style={styles.authorPhoto} 
           />
           <View style={styles.authorInfo}>
