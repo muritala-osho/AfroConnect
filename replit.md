@@ -24,12 +24,16 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   In-app purchase (IAP) endpoints: `POST /subscription/validate-receipt` and `POST /subscription/restore-purchases` for Google Play / Apple IAP receipt validation. Server-side validation uses `GOOGLE_SERVICE_ACCOUNT_JSON` (Android) and `APPLE_IAP_SHARED_SECRET` (iOS); falls back to trusting client if credentials are absent. Both endpoints persist `premium.originalTransactionId` (iOS) and `premium.purchaseToken` (Android) so subscription lifecycle webhooks can locate the user.
     *   Subscription lifecycle webhooks: `POST /subscription/webhook/apple` accepts Apple App Store Server Notifications V2 (`{ signedPayload }` JWS, ES256 leaf-cert verified by default; disable with `APPLE_WEBHOOK_VERIFY_SIGNATURE=false`). `POST /subscription/webhook/google` accepts Google Play Real-Time Developer Notifications via Pub/Sub push (`{ message: { data: base64-json } }`); optionally protected by `GOOGLE_RTDN_TOKEN` query/header. Handlers map renew/cancel/expire/refund/grace events to `User.premium` state via `services/iapWebhookService.js`.
     *   Translation caching (in-memory, 24h TTL, 500-entry LRU) with graceful MYMEMORY WARNING detection returning user-friendly 429 responses.
+    *   All chat socket emissions (`chat:new-message`) call `message.toJSON()` before emitting, ensuring all schema fields (including GIF fields) are properly serialized for all receivers.
+    *   GIF messages persist `gifUrl`, `gifPreview`, `gifWidth`, `gifHeight`, `gifSource` in the Message schema and include them in all socket payloads and REST history responses.
 
 **2. Frontend (Expo / React Native):**
 *   **Stack**: Expo, React Native, TypeScript.
 *   **UI/UX**: Features a flat conversation row style (Tinder/Bumble-like), gradient hero cards, and 2x2 benefits grids for specific screens. Uses colored icon bubbles for profile sections, matching the edit profile color scheme. Voice note UX includes preview, pause/resume, variable speed playback, continuous auto-play, and waveform scrubbing. Image viewer supports pinch-to-zoom, double-tap-zoom, and a swipeable gallery.
 *   **Technical Implementations**:
     *   Optimistic UI updates for media sends and chat messages.
+    *   Real-time chat: `handleNewMessage` uses `String()` comparison for matchId to handle ObjectId/string type differences. Uses `isNearBottomRef` to only auto-scroll when user is near the latest message, preventing scroll hijacking when reading history.
+    *   Keyboard: on Android (edge-to-edge enabled), `KAVController` uses `keyboardVerticalOffset={insets.bottom}` to account for the navigation bar. `inputPaddingAnim` smoothly animates between `insets.bottom` (keyboard hidden) and `4` (keyboard visible).
     *   Integration with `react-native-callkeep` and `react-native-voip-push-notification` for native call UI (CallKit/ConnectionService) even when the app is killed.
     *   Firebase Messaging for background message handling and push notifications.
     *   Video verification flow with liveness detection (blink, head turns) using MediaPipe-style landmark gating and Lottie animations for guided prompts.

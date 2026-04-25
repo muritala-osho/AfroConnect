@@ -304,6 +304,7 @@ export default function ChatDetailScreen({
 
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlashList<any>>(null);
+  const isNearBottomRef = useRef(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
@@ -648,7 +649,10 @@ export default function ChatDetailScreen({
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
       const msgMatchId = data.matchId || msg.matchId;
-      if (msgMatchId !== matchId && msg.matchId !== matchId) return;
+      if (
+        String(msgMatchId) !== String(matchId) &&
+        String(msg.matchId) !== String(matchId)
+      ) return;
 
       const senderId = typeof msg.sender === "string" ? msg.sender : msg.sender?._id;
       if (String(senderId) === String(myId)) return; // ignore own echo
@@ -657,7 +661,11 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+      // Only auto-scroll to newest message if user is already near the bottom.
+      // This prevents hijacking scroll position when reading older messages.
+      if (isNearBottomRef.current) {
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
+      }
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
@@ -2533,6 +2541,10 @@ export default function ChatDetailScreen({
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 300);
           }}
+          onScroll={(e) => {
+            isNearBottomRef.current = e.nativeEvent.contentOffset.y < 120;
+          }}
+          scrollEventThrottle={100}
           onEndReached={loadMoreMessages}
           onEndReachedThreshold={0.1}
           ListFooterComponent={
@@ -2618,7 +2630,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : 0}>
+      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : insets.bottom}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (

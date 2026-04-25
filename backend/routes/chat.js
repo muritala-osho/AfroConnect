@@ -297,7 +297,8 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       await redis.del(`conversations:${receiver.toString()}`);
       const io = req.app.get("io");
       if (io) {
-        const msgPayload = { message, matchId: matchId.toString() };
+        const msgJson = message.toJSON ? message.toJSON() : message;
+        const msgPayload = { message: msgJson, matchId: matchId.toString() };
         io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       }
       return res.status(201).json({ success: true, message });
@@ -404,7 +405,8 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
     const io = req.app.get("io");
     if (io) {
-      const msgPayload = { message, matchId: matchId.toString() };
+      const msgJson = message.toJSON ? message.toJSON() : message;
+      const msgPayload = { message: msgJson, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
 
@@ -752,7 +754,8 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
 
     const io = req.app.get("io");
     if (io) {
-      const msgPayload = { message, matchId: matchId.toString() };
+      const msgJson = message.toJSON ? message.toJSON() : message;
+      const msgPayload = { message: msgJson, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:message-delivered", {
@@ -848,7 +851,8 @@ router.post("/:matchId/location", protect, async (req, res) => {
 
     const io = req.app.get("io");
     if (io) {
-      const msgPayload = { message, matchId: matchId.toString() };
+      const msgJson = message.toJSON ? message.toJSON() : message;
+      const msgPayload = { message: msgJson, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
     }
