@@ -10,8 +10,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../hooks/useTheme';
-import { useApi } from '../hooks/useApi';
+import { useTheme } from '../../hooks/useTheme';
+import { useApi } from '../../hooks/useApi';
 import * as Haptics from 'expo-haptics';
 
 const { width } = Dimensions.get('window');
