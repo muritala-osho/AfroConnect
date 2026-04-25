@@ -54,8 +54,11 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
     }
 
     if (!appealToken) {
-      Alert.alert('Session Expired', 'Please try logging in again to submit an appeal.');
-      navigation.goBack();
+      Alert.alert(
+        'No Appeal Token',
+        'Please sign in again to get a fresh appeal link and try again.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 

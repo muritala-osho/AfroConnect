@@ -124,10 +124,12 @@ export interface FlaggedContent {
   userId: string;
   userName: string;
   userAvatar: string;
-  type: 'profile_photo' | 'story' | 'message_image';
-  imageUrl: string;
+  type: 'profile_photo' | 'story' | 'message_image' | 'safety_bypass';
+  imageUrl: string | null;
   reason: string;
   flaggedAt: string;
   status: 'pending' | 'approved' | 'rejected';
   aiConfidence?: number;
+  severity?: string;
+  contentPreview?: string;
 }

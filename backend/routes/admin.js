@@ -829,15 +829,21 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
       'profile_photo', 'story', 'message_image', 'message_text', 'message_audio',
       'message_video', 'voice_bio', 'success_story', 'bio', 'comment'
     ];
-    const reports = await Report.find({ status: 'pending', contentType: { $in: FLAGGABLE_TYPES } })
-      .populate('reportedBy', 'name email photos')
-      .populate('reporter', 'name email photos')
-      .populate('reportedUser', 'name email photos')
-      .sort({ createdAt: -1 })
-      .limit(100);
+    const [reports, safetyAudits] = await Promise.all([
+      Report.find({ status: 'pending', contentType: { $in: FLAGGABLE_TYPES } })
+        .populate('reportedBy', 'name email photos')
+        .populate('reporter', 'name email photos')
+        .populate('reportedUser', 'name email photos')
+        .sort({ createdAt: -1 })
+        .limit(100),
+      AuditLog.find({ action: 'SAFETY_WARNING_BYPASSED' })
+        .populate('adminId', 'name email photos')
+        .sort({ createdAt: -1 })
+        .limit(50),
+    ]);
 
     const VISUAL_TYPES = ['profile_photo', 'story', 'message_image', 'success_story'];
-    const content = reports
+    const reportContent = reports
       .map(report => {
         const reportedUser = report.reportedUser;
         const reporter = report.reportedBy || report.reporter;
@@ -869,6 +875,31 @@ router.get('/flagged-content', protect, isAdmin, async (req, res) => {
       })
       .filter(Boolean);
 
+    const safetyContent = safetyAudits.map(audit => {
+      const sender = audit.adminId;
+      const reasons = audit.metadata?.reasons || [];
+      const userAvatar = sender?.photos?.[0]?.url || sender?.photos?.[0] || null;
+      return {
+        id: `safety-${audit._id}`,
+        auditId: audit._id,
+        userId: sender?._id || audit.adminId,
+        userName: audit.adminName || sender?.name || 'Unknown user',
+        userAvatar,
+        type: 'safety_bypass',
+        imageUrl: null,
+        contentPreview: audit.details || '',
+        reason: `Safety warning bypassed: ${reasons.join(', ') || 'unknown reasons'}`,
+        flaggedAt: audit.createdAt || new Date(),
+        status: 'pending',
+        severity: audit.severity,
+        aiConfidence: audit.severity === 'high' ? 85 : 50,
+      };
+    });
+
+    const content = [...reportContent, ...safetyContent].sort(
+      (a, b) => new Date(b.flaggedAt).getTime() - new Date(a.flaggedAt).getTime()
+    );
+
     const filtered = status ? content.filter(c => c.status === status) : content;
 
     res.json({ success: true, content: filtered, total: filtered.length });
@@ -884,6 +915,37 @@ router.put('/flagged-content/:contentId', protect, isAdmin, async (req, res) => 
 
     if (!['approve', 'reject'].includes(action)) {
       return res.status(400).json({ success: false, message: 'Invalid action' });
+    }
+
+    if (req.params.contentId.startsWith('safety-')) {
+      const auditId = req.params.contentId.replace('safety-', '');
+      const audit = await AuditLog.findById(auditId);
+      if (!audit) {
+        return res.status(404).json({ success: false, message: 'Safety audit record not found' });
+      }
+      if (action === 'reject') {
+        const targetUser = await User.findById(audit.adminId);
+        if (targetUser) {
+          const suspendUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          targetUser.isBanned = true;
+          targetUser.bannedAt = new Date();
+          targetUser.banReason = 'Suspended by moderation after safety warning bypass review';
+          targetUser.suspendedUntil = suspendUntil;
+          await targetUser.save();
+          const io = req.app.get('io');
+          if (io) {
+            io.to(String(targetUser._id)).emit('user:suspended', {
+              days: 7,
+              reason: 'Your account has been suspended after a safety review.',
+              suspendedUntil: suspendUntil,
+            });
+          }
+        }
+      }
+      await logAudit(req, action === 'reject' ? 'SAFETY_ACTION_TAKEN' : 'SAFETY_DISMISSED', 'USER_SAFETY',
+        action === 'reject' ? 'high' : 'low', null,
+        `Safety bypass ${action}d. Audit ID: ${auditId}`);
+      return res.json({ success: true, message: action === 'approve' ? 'Safety event dismissed' : 'User suspended for safety violation', contentId: req.params.contentId, action });
     }
 
     if (req.params.contentId.startsWith('report-')) {

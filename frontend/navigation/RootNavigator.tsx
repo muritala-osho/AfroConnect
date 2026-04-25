@@ -96,7 +96,7 @@ export type RootStackParamList = {
     isSuperLike?: boolean;
   };
   AppealBanned: { 
-    appealToken: string; 
+    appealToken?: string | null; 
     email: string; 
     banReason?: string; 
     bannedAt?: string;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   CheckCircle, XCircle, Eye, Loader2, AlertTriangle,
-  RefreshCw, Shield, AlertCircle,
+  RefreshCw, Shield, AlertCircle, ShieldAlert,
 } from 'lucide-react';
 import { FlaggedContent } from '../types';
 import { adminApi } from '../services/adminApi';
@@ -14,6 +14,7 @@ const typeLabel: Record<FlaggedContent['type'], string> = {
   profile_photo: 'Profile Photo',
   story: 'Story',
   message_image: 'Message Image',
+  safety_bypass: 'Safety Warning Bypassed',
 };
 
 const statusColors: Record<FlaggedContent['status'], string> = {
@@ -141,42 +142,62 @@ const ContentModeration: React.FC<Props> = ({ showToast }) => {
               key={item.id}
               className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-md transition-all group"
             >
-              <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-slate-800">
-                <img
-                  src={item.imageUrl}
-                  alt="flagged"
-                  className={`w-full h-full object-cover transition-all duration-300 ${item.status === 'pending' ? 'blur-sm group-hover:blur-0' : ''}`}
-                />
-                {item.status === 'pending' && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:opacity-0 transition-opacity pointer-events-none">
-                    <div className="text-white text-center">
-                      <Eye size={22} className="mx-auto mb-1" />
-                      <span className="text-xs font-bold">Hover to preview</span>
-                    </div>
+              {item.type === 'safety_bypass' ? (
+                <div className="p-4 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-100 dark:border-amber-500/20 flex items-center gap-3">
+                  <ShieldAlert size={28} className="text-amber-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase tracking-widest text-amber-600 dark:text-amber-400">Safety Alert</p>
+                    <p className="text-[10px] text-amber-500 dark:text-amber-400/70 mt-0.5">
+                      {item.severity === 'high' ? 'High risk' : 'Medium risk'} bypass detected
+                    </p>
                   </div>
-                )}
-                <div className="absolute top-3 right-3">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[item.status]}`}>
-                    {item.status}
-                  </span>
+                  <div className="ml-auto">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[item.status]}`}>
+                      {item.status}
+                    </span>
+                  </div>
                 </div>
-                {item.aiConfidence !== undefined && (
-                  <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm rounded-xl px-3 py-1.5 flex items-center gap-1.5">
-                    <AlertTriangle size={11} className="text-amber-400" />
-                    <span className="text-[10px] font-black text-white">AI: {item.aiConfidence}%</span>
+              ) : (
+                <div className="relative aspect-square overflow-hidden bg-gray-100 dark:bg-slate-800">
+                  <img
+                    src={item.imageUrl || ''}
+                    alt="flagged"
+                    className={`w-full h-full object-cover transition-all duration-300 ${item.status === 'pending' ? 'blur-sm group-hover:blur-0' : ''}`}
+                  />
+                  {item.status === 'pending' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:opacity-0 transition-opacity pointer-events-none">
+                      <div className="text-white text-center">
+                        <Eye size={22} className="mx-auto mb-1" />
+                        <span className="text-xs font-bold">Hover to preview</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="absolute top-3 right-3">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${statusColors[item.status]}`}>
+                      {item.status}
+                    </span>
                   </div>
-                )}
-              </div>
+                  {item.aiConfidence !== undefined && (
+                    <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm rounded-xl px-3 py-1.5 flex items-center gap-1.5">
+                      <AlertTriangle size={11} className="text-amber-400" />
+                      <span className="text-[10px] font-black text-white">AI: {item.aiConfidence}%</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="p-4">
                 <div className="flex items-center gap-2.5 mb-2">
-                  <img src={item.userAvatar} alt={item.userName} className="h-8 w-8 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${item.userName}&background=14b8a6&color=fff`; }} />
+                  <img src={item.userAvatar || ''} alt={item.userName} className="h-8 w-8 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(item.userName)}&background=14b8a6&color=fff`; }} />
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{item.userName}</p>
-                    <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider">{typeLabel[item.type]}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-500 uppercase tracking-wider">{typeLabel[item.type] || item.type}</p>
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 dark:text-slate-400 mb-3 font-medium">{item.reason}</p>
+                {item.type === 'safety_bypass' && item.contentPreview && (
+                  <p className="text-[11px] text-gray-400 dark:text-slate-500 mb-3 italic bg-gray-50 dark:bg-slate-800 rounded-lg px-3 py-2 line-clamp-2">{item.contentPreview}</p>
+                )}
 
                 {item.status === 'pending' && (
                   <div className="flex gap-2">
@@ -186,7 +207,7 @@ const ContentModeration: React.FC<Props> = ({ showToast }) => {
                       className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-emerald-500 text-white rounded-xl text-xs font-bold hover:bg-emerald-600 transition-all disabled:opacity-50"
                     >
                       {actionLoading === item.id + 'approve' ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                      Approve
+                      {item.type === 'safety_bypass' ? 'Dismiss' : 'Approve'}
                     </button>
                     <button
                       onClick={() => handleAction(item.id, 'reject')}
@@ -194,13 +215,13 @@ const ContentModeration: React.FC<Props> = ({ showToast }) => {
                       className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-rose-500 text-white rounded-xl text-xs font-bold hover:bg-rose-600 transition-all disabled:opacity-50"
                     >
                       {actionLoading === item.id + 'reject' ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
-                      Remove
+                      {item.type === 'safety_bypass' ? 'Suspend User' : 'Remove'}
                     </button>
                   </div>
                 )}
                 {item.status !== 'pending' && (
                   <div className={`text-center py-2.5 rounded-xl text-xs font-bold ${statusColors[item.status]}`}>
-                    {item.status === 'approved' ? '✓ Content Kept' : '✗ Content Removed'}
+                    {item.status === 'approved' ? '✓ Dismissed' : '✗ Action Taken'}
                   </div>
                 )}
               </div>

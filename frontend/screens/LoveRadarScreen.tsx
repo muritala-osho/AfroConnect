@@ -46,6 +46,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "@/navigation/RootNavigator";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import { getApiBaseUrl } from "@/constants/config";
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
@@ -111,7 +112,7 @@ function avatarPosition(angleDeg: number, distance: number, maxRadius: number) {
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
-function PulseRing({ delay = 0 }: { delay?: number }) {
+function PulseRing({ delay = 0, accentColor }: { delay?: number; accentColor: string }) {
   const progress = useSharedValue(0);
   useEffect(() => {
     progress.value = withDelay(
@@ -141,8 +142,8 @@ function PulseRing({ delay = 0 }: { delay?: number }) {
           height: RADAR_SIZE,
           borderRadius: RADAR_RADIUS,
           borderWidth: 1.5,
-          borderColor: COLORS.accent,
-          shadowColor: COLORS.accent,
+          borderColor: accentColor,
+          shadowColor: accentColor,
           shadowOpacity: 0.6,
           shadowRadius: 12,
         }}
@@ -151,7 +152,7 @@ function PulseRing({ delay = 0 }: { delay?: number }) {
   );
 }
 
-function SweepLine() {
+function SweepLine({ accentColor }: { accentColor: string }) {
   const rotation = useSharedValue(0);
   useEffect(() => {
     rotation.value = withRepeat(
@@ -180,9 +181,9 @@ function SweepLine() {
       <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
         <Defs>
           <SvgLinearGradient id="sweep" x1="0%" y1="0%" x2="100%" y2="0%">
-            <Stop offset="0%" stopColor={COLORS.accent} stopOpacity={0} />
-            <Stop offset="60%" stopColor={COLORS.accent} stopOpacity={0.3} />
-            <Stop offset="100%" stopColor={COLORS.accent} stopOpacity={0.85} />
+            <Stop offset="0%" stopColor={accentColor} stopOpacity={0} />
+            <Stop offset="60%" stopColor={accentColor} stopOpacity={0.3} />
+            <Stop offset="100%" stopColor={accentColor} stopOpacity={0.85} />
           </SvgLinearGradient>
         </Defs>
         {/* Cone-like sweep using a path */}
@@ -201,7 +202,7 @@ function SweepLine() {
           y1={RADAR_RADIUS}
           x2={RADAR_RADIUS + Math.sin(Math.PI / 4) * RADAR_RADIUS}
           y2={RADAR_RADIUS - Math.cos(Math.PI / 4) * RADAR_RADIUS}
-          stroke={COLORS.accent}
+          stroke={accentColor}
           strokeWidth={1.5}
           strokeOpacity={0.9}
         />
@@ -210,7 +211,8 @@ function SweepLine() {
   );
 }
 
-function RadarRings() {
+function RadarRings({ accentColor }: { accentColor: string }) {
+  const ringColor = `${accentColor}38`;
   return (
     <Svg
       width={RADAR_SIZE}
@@ -220,9 +222,9 @@ function RadarRings() {
     >
       <Defs>
         <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.07} />
-          <Stop offset="60%" stopColor={COLORS.accent} stopOpacity={0.02} />
-          <Stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
+          <Stop offset="0%" stopColor={accentColor} stopOpacity={0.07} />
+          <Stop offset="60%" stopColor={accentColor} stopOpacity={0.02} />
+          <Stop offset="100%" stopColor={accentColor} stopOpacity={0} />
         </RadialGradient>
       </Defs>
       <Circle cx={RADAR_RADIUS} cy={RADAR_RADIUS} r={RADAR_RADIUS} fill="url(#bg)" />
@@ -232,7 +234,7 @@ function RadarRings() {
           cx={RADAR_RADIUS}
           cy={RADAR_RADIUS}
           r={RADAR_RADIUS * p - 1}
-          stroke={idx === 3 ? COLORS.ring : COLORS.ringFaint}
+          stroke={idx === 3 ? ringColor : COLORS.ringFaint}
           strokeWidth={idx === 3 ? 1.2 : 1}
           fill="none"
         />
@@ -258,7 +260,7 @@ function RadarRings() {
   );
 }
 
-function CenterDot() {
+function CenterDot({ accentColor }: { accentColor: string }) {
   const pulse = useSharedValue(1);
   useEffect(() => {
     pulse.value = withRepeat(withTiming(1.18, { duration: 1400, easing: Easing.inOut(Easing.ease) }), -1, true);
@@ -276,7 +278,7 @@ function CenterDot() {
           height: 16,
           borderRadius: 8,
           backgroundColor: "#fff",
-          shadowColor: COLORS.accent,
+          shadowColor: accentColor,
           shadowOpacity: 0.9,
           shadowRadius: 12,
           elevation: 6,
@@ -382,10 +384,12 @@ function PreviewCard({
   user,
   onClose,
   onView,
+  accentColor,
 }: {
   user: NearbyUser;
   onClose: () => void;
   onView: () => void;
+  accentColor: string;
 }) {
   return (
     <Animated.View
@@ -394,7 +398,7 @@ function PreviewCard({
       style={styles.previewCard}
     >
       <View style={{ flexDirection: "row" }}>
-        <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: "#1a1a2a", borderWidth: 2, borderColor: COLORS.accent }}>
+        <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: "#1a1a2a", borderWidth: 2, borderColor: accentColor }}>
           {user.profilePhoto ? (
             <Image source={{ uri: user.profilePhoto }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
           ) : (
@@ -412,7 +416,7 @@ function PreviewCard({
             {user.verified ? <Feather name="check-circle" size={14} color="#3b82f6" /> : null}
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6 }}>
-            <Feather name="map-pin" size={12} color={COLORS.accent} />
+            <Feather name="map-pin" size={12} color={accentColor} />
             <Text style={styles.previewMeta}>{formatDistance(user.distance)}</Text>
             {user.online ? (
               <>
@@ -430,7 +434,7 @@ function PreviewCard({
 
       <Pressable onPress={onView} style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.85 }]}>
         <LinearGradient
-          colors={["#FF4D8B", "#FF8A4D"]}
+          colors={[accentColor, accentColor + "CC"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
@@ -448,13 +452,31 @@ function FiltersSheet({
   filters,
   onChange,
   onApply,
+  accentColor,
+  isPremium,
+  onUpgrade,
 }: {
   visible: boolean;
   onClose: () => void;
   filters: { radius: number; ageMin: number; ageMax: number; gender: "any" | "male" | "female" };
   onChange: (next: any) => void;
   onApply: () => void;
+  accentColor: string;
+  isPremium: boolean;
+  onUpgrade: () => void;
 }) {
+  const FREE_MAX_RADIUS = 50;
+  const maxRadius = isPremium ? 100 : FREE_MAX_RADIUS;
+
+  const handleRadiusChange = (v: number) => {
+    const rounded = Math.round(v);
+    if (!isPremium && rounded > FREE_MAX_RADIUS) {
+      onUpgrade();
+      return;
+    }
+    onChange({ ...filters, radius: rounded });
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.sheetBackdrop} onPress={onClose}>
@@ -465,19 +487,30 @@ function FiltersSheet({
           <View style={{ marginTop: 16 }}>
             <View style={styles.sliderRow}>
               <Text style={styles.sliderLabel}>Search radius</Text>
-              <Text style={styles.sliderValue}>{filters.radius} km</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Text style={styles.sliderValue}>{filters.radius} km</Text>
+                {!isPremium && (
+                  <Text style={{ color: accentColor, fontSize: 10, fontWeight: "700" }}>FREE MAX 50km</Text>
+                )}
+              </View>
             </View>
             <Slider
               style={{ width: "100%", height: 36 }}
               minimumValue={1}
-              maximumValue={100}
+              maximumValue={maxRadius}
               step={1}
-              value={filters.radius}
-              minimumTrackTintColor={COLORS.accent}
+              value={Math.min(filters.radius, maxRadius)}
+              minimumTrackTintColor={accentColor}
               maximumTrackTintColor="rgba(255,255,255,0.18)"
-              thumbTintColor={COLORS.accent}
-              onValueChange={(v) => onChange({ ...filters, radius: Math.round(v) })}
+              thumbTintColor={accentColor}
+              onValueChange={handleRadiusChange}
             />
+            {!isPremium && (
+              <Pressable onPress={onUpgrade} style={{ marginTop: 4, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="star" size={13} color={accentColor} />
+                <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>Upgrade to Premium for up to 100km</Text>
+              </Pressable>
+            )}
           </View>
 
           <View style={{ marginTop: 18 }}>
@@ -491,9 +524,9 @@ function FiltersSheet({
               maximumValue={80}
               step={1}
               value={filters.ageMin}
-              minimumTrackTintColor={COLORS.accent}
+              minimumTrackTintColor={accentColor}
               maximumTrackTintColor="rgba(255,255,255,0.18)"
-              thumbTintColor={COLORS.accent}
+              thumbTintColor={accentColor}
               onValueChange={(v) => onChange({ ...filters, ageMin: Math.min(Math.round(v), filters.ageMax - 1) })}
             />
             <Slider
@@ -502,9 +535,9 @@ function FiltersSheet({
               maximumValue={80}
               step={1}
               value={filters.ageMax}
-              minimumTrackTintColor={COLORS.accent}
+              minimumTrackTintColor={accentColor}
               maximumTrackTintColor="rgba(255,255,255,0.18)"
-              thumbTintColor={COLORS.accent}
+              thumbTintColor={accentColor}
               onValueChange={(v) => onChange({ ...filters, ageMax: Math.max(Math.round(v), filters.ageMin + 1) })}
             />
           </View>
@@ -516,7 +549,7 @@ function FiltersSheet({
                 <Pressable
                   key={g}
                   onPress={() => onChange({ ...filters, gender: g })}
-                  style={[styles.chip, filters.gender === g && styles.chipActive]}
+                  style={[styles.chip, filters.gender === g && { backgroundColor: accentColor, borderColor: accentColor }]}
                 >
                   <Text style={[styles.chipText, filters.gender === g && { color: "#fff" }]}>
                     {g === "any" ? "Everyone" : g === "female" ? "Women" : "Men"}
@@ -534,7 +567,7 @@ function FiltersSheet({
             style={[styles.viewBtn, { marginTop: 24 }]}
           >
             <LinearGradient
-              colors={["#FF4D8B", "#FF8A4D"]}
+              colors={[accentColor, accentColor + "CC"]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={StyleSheet.absoluteFill}
@@ -549,7 +582,12 @@ function FiltersSheet({
 
 // ─── Main screen ────────────────────────────────────────────────────────────
 export default function LoveRadarScreen({ navigation }: Props) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
+  const { theme } = useTheme();
+  const accentColor = theme.primary || COLORS.accent;
+  const isPremium = !!(user as any)?.premium?.isActive;
+  const FREE_MAX_RADIUS = 50;
+
   const [loading, setLoading] = useState(true);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -557,7 +595,7 @@ export default function LoveRadarScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<NearbyUser | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
-    radius: 25,
+    radius: isPremium ? 25 : Math.min(25, FREE_MAX_RADIUS),
     ageMin: 18,
     ageMax: 60,
     gender: "any" as "any" | "female" | "male",
@@ -626,6 +664,11 @@ export default function LoveRadarScreen({ navigation }: Props) {
     navigation.navigate("ProfileDetail" as any, { userId: user.id });
   };
 
+  const handleUpgrade = () => {
+    setFiltersOpen(false);
+    navigation.navigate("Premium" as any);
+  };
+
   const ringLabels = useMemo(() => {
     const r = filters.radius;
     return [
@@ -660,12 +703,12 @@ export default function LoveRadarScreen({ navigation }: Props) {
         {/* Radar */}
         <View style={styles.radarWrap}>
           <View style={styles.radar}>
-            <RadarRings />
-            <PulseRing delay={0} />
-            <PulseRing delay={900} />
-            <PulseRing delay={1800} />
-            <SweepLine />
-            <CenterDot />
+            <RadarRings accentColor={accentColor} />
+            <PulseRing delay={0} accentColor={accentColor} />
+            <PulseRing delay={900} accentColor={accentColor} />
+            <PulseRing delay={1800} accentColor={accentColor} />
+            <SweepLine accentColor={accentColor} />
+            <CenterDot accentColor={accentColor} />
 
             {/* avatars */}
             {users.map((u, i) => (
@@ -729,12 +772,12 @@ export default function LoveRadarScreen({ navigation }: Props) {
         {permissionDenied ? (
           <View style={styles.permission}>
             <Animated.View entering={FadeIn.duration(220)} style={styles.permissionCard}>
-              <Feather name="map-pin" size={28} color={COLORS.accent} />
+              <Feather name="map-pin" size={28} color={accentColor} />
               <Text style={styles.permTitle}>Location needed</Text>
               <Text style={styles.permBody}>
                 Love Radar needs your location to show people nearby. Enable location access in your settings to use the radar.
               </Text>
-              <Pressable onPress={() => navigation.goBack()} style={styles.permBtn}>
+              <Pressable onPress={() => navigation.goBack()} style={[styles.permBtn, { backgroundColor: accentColor }]}>
                 <Text style={styles.permBtnText}>Go Back</Text>
               </Pressable>
             </Animated.View>
@@ -747,6 +790,7 @@ export default function LoveRadarScreen({ navigation }: Props) {
             user={selected}
             onClose={() => setSelected(null)}
             onView={() => goToProfile(selected)}
+            accentColor={accentColor}
           />
         ) : null}
       </SafeAreaView>
@@ -757,6 +801,9 @@ export default function LoveRadarScreen({ navigation }: Props) {
         filters={filters}
         onChange={setFilters}
         onApply={fetchNearby}
+        accentColor={accentColor}
+        isPremium={isPremium}
+        onUpgrade={handleUpgrade}
       />
     </View>
   );

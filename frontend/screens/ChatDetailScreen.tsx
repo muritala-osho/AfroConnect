@@ -312,7 +312,6 @@ export default function ChatDetailScreen({
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
-  const securityWarningSuppressedRef = useRef<boolean>(false);
   const recentlyWarnedTextRef = useRef<string>("");
   const matchIdRef = useRef<string | null>(null);
 
@@ -798,7 +797,6 @@ export default function ChatDetailScreen({
     // Safety scan: warn before sending text that contains personal/contact info
     if (
       type === "text" &&
-      !securityWarningSuppressedRef.current &&
       recentlyWarnedTextRef.current !== textToSend
     ) {
       const scan = scanForSensitiveInfo(textToSend);
@@ -807,7 +805,6 @@ export default function ChatDetailScreen({
         showPersonalInfoWarning(
           scan.reasons,
           () => {
-            securityWarningSuppressedRef.current = true;
             // Fire-and-forget audit log so admins can spot risky patterns
             post("/safety/warning-bypassed", {
               matchId,
@@ -825,6 +822,7 @@ export default function ChatDetailScreen({
     }
 
     setMessage("");
+    recentlyWarnedTextRef.current = "";
     setSending(true);
     if (userId) AsyncStorage.removeItem(`chat_draft_${userId}`).catch(() => {});
     setShowEmojiPicker(false);
