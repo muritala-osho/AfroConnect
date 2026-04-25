@@ -293,12 +293,33 @@ router.post(
         return res.status(403).json({
           success: false,
           message:
-            "Your account has been suspended. Please appeal in the app for more information.",
+            "Your account has been banned. Please appeal in the app for more information.",
           isBanned: true,
           appealToken,
           email: user.email,
           banReason: user.banReason || "Violation of community guidelines",
           bannedAt: user.bannedAt,
+          appeal: user.appeal || null,
+        });
+      }
+
+      if (user.suspended && user.suspendedUntil && user.suspendedUntil > Date.now()) {
+        const appealToken = jwt.sign(
+          { id: user._id, purpose: "appeal", email: user.email },
+          process.env.JWT_SECRET,
+          { expiresIn: "15m" },
+        );
+
+        return res.status(403).json({
+          success: false,
+          message:
+            "Your account is temporarily suspended. You can appeal from this screen.",
+          isSuspended: true,
+          appealToken,
+          email: user.email,
+          banReason: user.banReason || "Violation of community guidelines",
+          bannedAt: user.bannedAt,
+          suspendedUntil: user.suspendedUntil,
           appeal: user.appeal || null,
         });
       }

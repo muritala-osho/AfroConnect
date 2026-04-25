@@ -392,6 +392,13 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
       user.banReason = null;
       user.suspended = false;
       user.suspendedUntil = null;
+      user.messagingPaused = {
+        isPaused: false,
+        until: null,
+        reason: null,
+        autoTriggeredAt: null,
+        bypassCount: 0,
+      };
       user.appeal = {
         status: 'none',
         message: null,
@@ -425,6 +432,39 @@ router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
     });
   } catch (error) {
     logger.error('Review appeal error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Lift an auto-triggered messaging pause after admin review
+router.post('/users/:userId/lift-messaging-pause', protect, isAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.messagingPaused = {
+      isPaused: false,
+      until: null,
+      reason: null,
+      autoTriggeredAt: null,
+      bypassCount: 0,
+    };
+    await user.save();
+
+    try {
+      const ioInstance = req.app.get('io');
+      if (ioInstance) {
+        ioInstance.to(String(user._id)).emit('user:messaging-resumed', {});
+      }
+    } catch (_e) { /* non-fatal */ }
+
+    await logAudit(req, 'LIFT_MESSAGING_PAUSE', 'USER_SAFETY', 'medium', user,
+      'Admin lifted auto-triggered messaging pause');
+
+    res.json({ success: true, message: 'Messaging pause lifted' });
+  } catch (error) {
+    logger.error('Lift messaging pause error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

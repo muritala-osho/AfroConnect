@@ -4,7 +4,12 @@ const crypto = require('crypto');
 const { protect } = require('../middleware/auth');
 const Match = require('../models/Match');
 const User = require('../models/User');
+const AuditLog = require('../models/AuditLog');
 const { logAudit } = require('../utils/auditHelper');
+
+const HIGH_SEVERITY_THRESHOLD = 5;
+const LOOKBACK_HOURS = 24;
+const AUTO_PAUSE_HOURS = 24;
 
 const ALLOWED_REASONS = new Set([
   'Phone number',
@@ -92,6 +97,65 @@ router.post('/warning-bypassed', protect, async (req, res) => {
       },
       ipAddress,
     });
+
+    // Auto-pause check: if this user has crossed the high-severity threshold
+    // in the last 24 hours, pause their messaging and let admins review.
+    if (severity === 'high') {
+      try {
+        const since = new Date(Date.now() - LOOKBACK_HOURS * 60 * 60 * 1000);
+        const recentHighCount = await AuditLog.countDocuments({
+          adminId:  sender._id,
+          action:   'SAFETY_WARNING_BYPASSED',
+          severity: 'high',
+          createdAt: { $gte: since },
+        });
+
+        const freshUser = await User.findById(sender._id).select('messagingPaused name email');
+        const alreadyPaused = freshUser?.messagingPaused?.isPaused &&
+          freshUser?.messagingPaused?.until &&
+          new Date(freshUser.messagingPaused.until) > new Date();
+
+        if (recentHighCount >= HIGH_SEVERITY_THRESHOLD && !alreadyPaused && freshUser) {
+          const pauseUntil = new Date(Date.now() + AUTO_PAUSE_HOURS * 60 * 60 * 1000);
+          freshUser.messagingPaused = {
+            isPaused: true,
+            until: pauseUntil,
+            reason: `Auto-paused: ${recentHighCount} high-risk safety warnings bypassed in ${LOOKBACK_HOURS}h. Pending admin review.`,
+            autoTriggeredAt: new Date(),
+            bypassCount: recentHighCount,
+          };
+          await freshUser.save();
+
+          await logAudit({
+            action: 'SAFETY_WARNING_BYPASSED',
+            category: 'USER_SAFETY',
+            severity: 'critical',
+            adminId: freshUser._id,
+            adminName: freshUser.name || 'Unknown',
+            adminEmail: freshUser.email,
+            details: `AUTO-PAUSE: Messaging suspended for ${AUTO_PAUSE_HOURS}h after ${recentHighCount} high-risk bypasses in ${LOOKBACK_HOURS}h. Admin review required.`,
+            metadata: {
+              autoPause: true,
+              bypassCount: recentHighCount,
+              pausedUntil: pauseUntil,
+            },
+          });
+
+          // Best-effort socket notification to the user's app
+          try {
+            const ioInstance = req.app.get('io');
+            if (ioInstance) {
+              ioInstance.to(String(freshUser._id)).emit('user:messaging-paused', {
+                until: pauseUntil,
+                reason: 'For your safety and others, messaging has been paused while our team reviews your recent activity.',
+              });
+            }
+          } catch (_socketErr) { /* non-fatal */ }
+        }
+      } catch (autoPauseErr) {
+        console.error('[safetyAudit] auto-pause check failed:', autoPauseErr);
+      }
+    }
 
     res.json({ success: true });
   } catch (error) {

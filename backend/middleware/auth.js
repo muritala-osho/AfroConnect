@@ -59,10 +59,25 @@ const protect = async (req, res, next) => {
     }
 
     if (req.user.suspended && req.user.suspendedUntil > Date.now()) {
+      // Issue a short-lived appeal token so the app can navigate to the appeal screen
+      let appealToken = null;
+      try {
+        const jwt = require('jsonwebtoken');
+        appealToken = jwt.sign(
+          { id: req.user._id, purpose: 'appeal', email: req.user.email },
+          process.env.JWT_SECRET,
+          { expiresIn: '15m' },
+        );
+      } catch (_e) { /* non-fatal */ }
       return res.status(403).json({
         success: false,
         message: 'Your account is temporarily suspended',
-        suspendedUntil: req.user.suspendedUntil
+        isSuspended: true,
+        suspendedUntil: req.user.suspendedUntil,
+        suspensionReason: req.user.banReason || 'Violation of community guidelines',
+        email: req.user.email,
+        appealToken,
+        appeal: req.user.appeal || null,
       });
     }
 

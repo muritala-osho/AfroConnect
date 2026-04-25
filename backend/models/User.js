@@ -489,6 +489,16 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Auto-triggered when a user dismisses too many high-severity safety warnings.
+  // Blocks outgoing chat messages but does NOT log them out — they can still
+  // appeal, browse, and contact support.
+  messagingPaused: {
+    isPaused:        { type: Boolean, default: false },
+    until:           { type: Date,    default: null  },
+    reason:          { type: String,  default: null  },
+    autoTriggeredAt: { type: Date,    default: null  },
+    bypassCount:     { type: Number,  default: 0     },
+  },
   appeal: {
     status: {
       type: String,

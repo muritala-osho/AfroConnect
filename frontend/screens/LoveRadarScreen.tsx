@@ -1,1634 +1,926 @@
-import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import logger from "@/utils/logger";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   View,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Dimensions,
+  StatusBar,
+  Text,
+  ActivityIndicator,
   Modal,
-  TouchableOpacity,
   ScrollView,
 } from "react-native";
-import { useThemedAlert } from "@/components/ThemedAlert";
-import { Image } from "expo-image";
-import * as Location from "expo-location";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
   withTiming,
-  withSpring,
   withDelay,
   Easing,
-  interpolate,
   FadeIn,
   FadeOut,
+  ZoomIn,
   SlideInDown,
   SlideOutDown,
+  interpolate,
 } from "react-native-reanimated";
-import Svg, { Circle, Defs, RadialGradient, Stop, Path, Line } from "react-native-svg";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "@/navigation/RootNavigator";
-import { ScreenScrollView } from "@/components/ScreenScrollView";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ThemedText } from "@/components/ThemedText";
-import { useTheme } from "@/hooks/useTheme";
-import { useAuth } from "@/hooks/useAuth";
-import { useTranslation } from "@/hooks/useLanguage";
-import { Feather } from "@expo/vector-icons";
-import { getApiBaseUrl } from "@/constants/config";
+import Svg, {
+  Defs,
+  RadialGradient,
+  Stop,
+  Circle,
+  Line,
+  G,
+  Path,
+  LinearGradient as SvgLinearGradient,
+} from "react-native-svg";
+import { Image } from "expo-image";
+import * as Location from "expo-location";
+import * as Haptics from "expo-haptics";
 import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
-import * as Haptics from "expo-haptics";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-const { width, height } = Dimensions.get("window");
-const RADAR_SIZE = Math.min(width - 48, 320);
-const CENTER = RADAR_SIZE / 2;
-const AVATAR_SIZE = 52;
+import { RootStackParamList } from "@/navigation/RootNavigator";
+import { useAuth } from "@/hooks/useAuth";
+import { getApiBaseUrl } from "@/constants/config";
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+const RADAR_SIZE = Math.min(SCREEN_W - 32, SCREEN_H * 0.55);
+const RADAR_RADIUS = RADAR_SIZE / 2;
+const AVATAR_SIZE = 48;
+const CENTER_PAD = AVATAR_SIZE / 2 + 18;
+
+const COLORS = {
+  bg: "#06060c",
+  bgGradient: ["#0d0d1a", "#06060c"] as const,
+  accent: "#FF4D8B",
+  accentSoft: "rgba(255, 77, 139, 0.18)",
+  ring: "rgba(255, 77, 139, 0.22)",
+  ringFaint: "rgba(255, 255, 255, 0.06)",
+  text: "#ffffff",
+  textDim: "rgba(255,255,255,0.7)",
+  textMuted: "rgba(255,255,255,0.45)",
+  surface: "rgba(20, 20, 35, 0.85)",
+  cardBorder: "rgba(255,255,255,0.08)",
+};
+
+const Pulse = Animated.createAnimatedComponent(Circle);
 
 interface NearbyUser {
   id: string;
   name: string;
   username?: string;
-  age: number;
-  gender: string;
+  age: number | null;
+  gender?: string;
   bio?: string;
   profilePhoto: string | null;
-  distance: number;
-  angle: number;
-  online: boolean;
-  verified: boolean;
-  premium?: { isActive: boolean; plan?: string };
-  interests: string[];
+  distance: number; // km
+  distanceDisplay?: string;
+  distanceUnit?: "m" | "km";
+  angle: number; // degrees, 0-360
+  online?: boolean;
+  verified?: boolean;
+  interests?: string[];
 }
 
-type LoveRadarScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, "LoveRadar">;
-interface LoveRadarScreenProps {
-  navigation: LoveRadarScreenNavigationProp;
+type Nav = NativeStackNavigationProp<RootStackParamList, "LoveRadar">;
+interface Props { navigation: Nav }
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function formatDistance(km: number): string {
+  if (km == null || isNaN(km)) return "—";
+  if (km < 1) return `${Math.round(km * 1000)}m away`;
+  if (km < 10) return `${km.toFixed(1)}km away`;
+  return `${Math.round(km)}km away`;
 }
 
-function AvatarPulse({ active, color }: { active: boolean; color: string }) {
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(0.5);
+function avatarPosition(angleDeg: number, distance: number, maxRadius: number) {
+  const usableR = RADAR_RADIUS - CENTER_PAD - AVATAR_SIZE / 2 - 4;
+  const norm = Math.max(0.05, Math.min(1, distance / Math.max(1, maxRadius)));
+  const r = CENTER_PAD + norm * usableR;
+  const rad = (angleDeg * Math.PI) / 180;
+  return {
+    x: RADAR_RADIUS + r * Math.sin(rad) - AVATAR_SIZE / 2,
+    y: RADAR_RADIUS - r * Math.cos(rad) - AVATAR_SIZE / 2,
+  };
+}
 
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function PulseRing({ delay = 0 }: { delay?: number }) {
+  const progress = useSharedValue(0);
   useEffect(() => {
-    if (active) {
-      scale.value = withRepeat(
-        withTiming(1.8, { duration: 1600, easing: Easing.out(Easing.ease) }),
-        -1,
-        false
-      );
-      opacity.value = withRepeat(withTiming(0, { duration: 1600 }), -1, false);
-    }
-  }, [active]);
-
+    progress.value = withDelay(
+      delay,
+      withRepeat(withTiming(1, { duration: 2800, easing: Easing.out(Easing.quad) }), -1, false),
+    );
+  }, []);
   const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+    opacity: interpolate(progress.value, [0, 0.1, 1], [0, 0.55, 0]),
+    transform: [{ scale: interpolate(progress.value, [0, 1], [0.15, 1]) }],
   }));
-
-  if (!active) return null;
   return (
     <Animated.View
+      pointerEvents="none"
       style={[
         StyleSheet.absoluteFill,
-        { borderRadius: AVATAR_SIZE / 2, borderWidth: 2, borderColor: color },
+        {
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        style,
+      ]}
+    >
+      <View
+        style={{
+          width: RADAR_SIZE,
+          height: RADAR_SIZE,
+          borderRadius: RADAR_RADIUS,
+          borderWidth: 1.5,
+          borderColor: COLORS.accent,
+          shadowColor: COLORS.accent,
+          shadowOpacity: 0.6,
+          shadowRadius: 12,
+        }}
+      />
+    </Animated.View>
+  );
+}
+
+function SweepLine() {
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 4500, easing: Easing.linear }),
+      -1,
+      false,
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          left: 0,
+          top: 0,
+          width: RADAR_SIZE,
+          height: RADAR_SIZE,
+        },
+        style,
+      ]}
+    >
+      <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
+        <Defs>
+          <SvgLinearGradient id="sweep" x1="0%" y1="0%" x2="100%" y2="0%">
+            <Stop offset="0%" stopColor={COLORS.accent} stopOpacity={0} />
+            <Stop offset="60%" stopColor={COLORS.accent} stopOpacity={0.3} />
+            <Stop offset="100%" stopColor={COLORS.accent} stopOpacity={0.85} />
+          </SvgLinearGradient>
+        </Defs>
+        {/* Cone-like sweep using a path */}
+        <Path
+          d={`M ${RADAR_RADIUS} ${RADAR_RADIUS}
+              L ${RADAR_RADIUS} 0
+              A ${RADAR_RADIUS} ${RADAR_RADIUS} 0 0 1
+                ${RADAR_RADIUS + Math.sin((Math.PI / 4)) * RADAR_RADIUS}
+                ${RADAR_RADIUS - Math.cos((Math.PI / 4)) * RADAR_RADIUS}
+              Z`}
+          fill="url(#sweep)"
+        />
+        {/* Leading edge sharp line */}
+        <Line
+          x1={RADAR_RADIUS}
+          y1={RADAR_RADIUS}
+          x2={RADAR_RADIUS + Math.sin(Math.PI / 4) * RADAR_RADIUS}
+          y2={RADAR_RADIUS - Math.cos(Math.PI / 4) * RADAR_RADIUS}
+          stroke={COLORS.accent}
+          strokeWidth={1.5}
+          strokeOpacity={0.9}
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+function RadarRings() {
+  return (
+    <Svg
+      width={RADAR_SIZE}
+      height={RADAR_SIZE}
+      style={{ position: "absolute", left: 0, top: 0 }}
+      pointerEvents="none"
+    >
+      <Defs>
+        <RadialGradient id="bg" cx="50%" cy="50%" r="50%">
+          <Stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.07} />
+          <Stop offset="60%" stopColor={COLORS.accent} stopOpacity={0.02} />
+          <Stop offset="100%" stopColor={COLORS.accent} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Circle cx={RADAR_RADIUS} cy={RADAR_RADIUS} r={RADAR_RADIUS} fill="url(#bg)" />
+      {[0.3, 0.55, 0.8, 1].map((p, idx) => (
+        <Circle
+          key={idx}
+          cx={RADAR_RADIUS}
+          cy={RADAR_RADIUS}
+          r={RADAR_RADIUS * p - 1}
+          stroke={idx === 3 ? COLORS.ring : COLORS.ringFaint}
+          strokeWidth={idx === 3 ? 1.2 : 1}
+          fill="none"
+        />
+      ))}
+      {/* crosshair */}
+      <Line
+        x1={RADAR_RADIUS}
+        y1={4}
+        x2={RADAR_RADIUS}
+        y2={RADAR_SIZE - 4}
+        stroke={COLORS.ringFaint}
+        strokeWidth={0.8}
+      />
+      <Line
+        x1={4}
+        y1={RADAR_RADIUS}
+        x2={RADAR_SIZE - 4}
+        y2={RADAR_RADIUS}
+        stroke={COLORS.ringFaint}
+        strokeWidth={0.8}
+      />
+    </Svg>
+  );
+}
+
+function CenterDot() {
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1.18, { duration: 1400, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }] }));
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          left: RADAR_RADIUS - 8,
+          top: RADAR_RADIUS - 8,
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          backgroundColor: "#fff",
+          shadowColor: COLORS.accent,
+          shadowOpacity: 0.9,
+          shadowRadius: 12,
+          elevation: 6,
+        },
         style,
       ]}
     />
   );
 }
 
-function PreviewCard({
+function RadarUserAvatar({
   user,
-  onClose,
-  onViewProfile,
+  index,
+  maxRadius,
+  onPress,
+  isSelected,
 }: {
   user: NearbyUser;
-  onClose: () => void;
-  onViewProfile: () => void;
+  index: number;
+  maxRadius: number;
+  onPress: () => void;
+  isSelected: boolean;
 }) {
-  const genderColor = user.gender === "female" ? "#FF6B9D" : "#4A90E2";
+  const pos = useMemo(() => avatarPosition(user.angle, user.distance, maxRadius), [user, maxRadius]);
+  const ring = useSharedValue(0);
+  useEffect(() => {
+    ring.value = withDelay(
+      index * 80,
+      withRepeat(withTiming(1, { duration: 2200, easing: Easing.out(Easing.ease) }), -1, false),
+    );
+  }, []);
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(ring.value, [0, 0.2, 1], [0, 0.55, 0]),
+    transform: [{ scale: interpolate(ring.value, [0, 1], [0.9, 1.7]) }],
+  }));
+  const genderColor = user.gender === "female" ? "#FF6B9D" : user.gender === "male" ? "#4A90E2" : COLORS.accent;
   return (
     <Animated.View
-      entering={SlideInDown.springify().damping(20)}
-      exiting={SlideOutDown.duration(200)}
-      style={styles.previewCard}
+      entering={ZoomIn.delay(index * 60).springify().damping(14)}
+      style={{ position: "absolute", left: pos.x, top: pos.y, width: AVATAR_SIZE, height: AVATAR_SIZE }}
     >
-      {/* Photo */}
-      <View style={styles.previewPhotoWrap}>
-        {user.profilePhoto ? (
-          <Image source={{ uri: user.profilePhoto }} style={styles.previewPhoto} contentFit="cover" />
-        ) : (
-          <LinearGradient
-            colors={user.gender === "female" ? ["#FF6B9D", "#FF4081"] : ["#4A90E2", "#2563EB"]}
-            style={styles.previewPhotoPlaceholder}
-          >
-            <Feather name="user" size={40} color="#fff" />
-          </LinearGradient>
-        )}
-
-        {/* Gradient overlay */}
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.75)"]}
-          style={styles.previewPhotoGradient}
-        />
-
-        {/* Close */}
-        <Pressable style={styles.previewClose} onPress={onClose} hitSlop={8}>
-          <Feather name="x" size={18} color="#fff" />
-        </Pressable>
-
-        {/* Online badge */}
-        {user.online && (
-          <View style={styles.previewOnlineBadge}>
-            <View style={styles.previewOnlineDot} />
-            <ThemedText style={styles.previewOnlineText}>Online</ThemedText>
-          </View>
-        )}
-
-        {/* Name / age overlay */}
-        <View style={styles.previewPhotoInfo}>
-          <View style={styles.previewNameRow}>
-            <ThemedText style={styles.previewName}>{user.name}</ThemedText>
-            {user.verified && (
-              <View style={styles.previewVerifyBadge}>
-                <Feather name="check" size={11} color="#fff" />
-              </View>
-            )}
-            <ThemedText style={styles.previewAge}>{user.age}</ThemedText>
-          </View>
-          <View style={styles.previewDistRow}>
-            <Feather name="map-pin" size={12} color="rgba(255,255,255,0.7)" />
-            <ThemedText style={styles.previewDist}>
-              {user.distance < 1
-                ? `${(user.distance * 1000).toFixed(0)}m away`
-                : `${user.distance.toFixed(1)}km away`}
-            </ThemedText>
-          </View>
-        </View>
-      </View>
-
-      {/* Bio snippet */}
-      {user.bio ? (
-        <View style={styles.previewBioWrap}>
-          <ThemedText style={styles.previewBio} numberOfLines={2}>{user.bio}</ThemedText>
-        </View>
-      ) : null}
-
-      {/* Interests */}
-      {user.interests?.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.previewInterests}
+      {/* pulse glow */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: AVATAR_SIZE,
+            height: AVATAR_SIZE,
+            borderRadius: AVATAR_SIZE / 2,
+            backgroundColor: genderColor,
+          },
+          ringStyle,
+        ]}
+      />
+      <Pressable onPress={onPress} hitSlop={6}>
+        <View
+          style={{
+            width: AVATAR_SIZE,
+            height: AVATAR_SIZE,
+            borderRadius: AVATAR_SIZE / 2,
+            borderWidth: isSelected ? 2.5 : 2,
+            borderColor: isSelected ? "#fff" : genderColor,
+            overflow: "hidden",
+            backgroundColor: "#1a1a2a",
+            shadowColor: genderColor,
+            shadowOpacity: 0.8,
+            shadowRadius: 10,
+            elevation: 4,
+          }}
         >
-          {user.interests.slice(0, 5).map((tag) => (
-            <View key={tag} style={[styles.previewTag, { borderColor: `${genderColor}40`, backgroundColor: `${genderColor}12` }]}>
-              <ThemedText style={[styles.previewTagText, { color: genderColor }]}>{tag}</ThemedText>
+          {user.profilePhoto ? (
+            <Image source={{ uri: user.profilePhoto }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+          ) : (
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="user" size={20} color="#fff" />
             </View>
-          ))}
-        </ScrollView>
-      )}
-
-      {/* Action buttons */}
-      <View style={styles.previewActions}>
-        <Pressable style={styles.previewPassBtn} onPress={onClose}>
-          <Feather name="x" size={22} color="#F87171" />
-        </Pressable>
-
-        <Pressable style={styles.previewProfileBtn} onPress={onViewProfile}>
-          <LinearGradient
-            colors={["#10B981", "#059669"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.previewProfileBtnGrad}
-          >
-            <Feather name="user" size={16} color="#fff" />
-            <ThemedText style={styles.previewProfileBtnText}>View Profile</ThemedText>
-          </LinearGradient>
-        </Pressable>
-
-        <Pressable style={styles.previewLikeBtn}>
-          <Feather name="heart" size={22} color="#10B981" />
-        </Pressable>
-      </View>
+          )}
+        </View>
+        {user.online ? (
+          <View
+            style={{
+              position: "absolute",
+              right: -1,
+              bottom: -1,
+              width: 12,
+              height: 12,
+              borderRadius: 6,
+              backgroundColor: "#22c55e",
+              borderWidth: 2,
+              borderColor: COLORS.bg,
+            }}
+          />
+        ) : null}
+      </Pressable>
     </Animated.View>
   );
 }
 
-export default function LoveRadarScreen({ navigation }: LoveRadarScreenProps) {
-  const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const { token, fetchUser } = useAuth();
-  const { t } = useTranslation();
-  const { showAlert, AlertComponent } = useThemedAlert();
-
-  const [loading, setLoading] = useState(true);
-  const [nearbyUsers, setNearbyUsers] = useState<NearbyUser[]>([]);
-  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationSharingEnabled, setLocationSharingEnabled] = useState(true);
-  const [showFilters, setShowFilters] = useState(false);
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<NearbyUser | null>(null);
-
-  const [filters, setFilters] = useState({
-    radius: 50,
-    ageMin: 18,
-    ageMax: 60,
-    gender: "any" as "any" | "male" | "female",
-  });
-
-  const rotation = useSharedValue(0);
-  const pulse1 = useSharedValue(1);
-  const pulse2 = useSharedValue(1);
-  const scanOpacity = useSharedValue(0.7);
-
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(360, { duration: 4500, easing: Easing.linear }),
-      -1,
-      false
-    );
-    pulse1.value = withRepeat(
-      withTiming(1.4, { duration: 2200, easing: Easing.out(Easing.ease) }),
-      -1,
-      false
-    );
-    pulse2.value = withDelay(
-      1100,
-      withRepeat(
-        withTiming(1.4, { duration: 2200, easing: Easing.out(Easing.ease) }),
-        -1,
-        false
-      )
-    );
-    scanOpacity.value = withRepeat(
-      withTiming(0.35, { duration: 2250, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-  }, []);
-
-  useEffect(() => {
-    handleRefreshLocation(true);
-  }, []);
-
-  const scannerStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  const pulse1Style = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse1.value }],
-    opacity: interpolate(pulse1.value, [1, 1.4], [0.25, 0]),
-  }));
-
-  const pulse2Style = useAnimatedStyle(() => ({
-    transform: [{ scale: pulse2.value }],
-    opacity: interpolate(pulse2.value, [1, 1.4], [0.15, 0]),
-  }));
-
-  const getLocationName = async (lat: number, lng: number) => {
-    try {
-      const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      return {
-        city: place?.city || place?.district || place?.subregion || undefined,
-        country: place?.country || undefined,
-      };
-    } catch {
-      return {};
-    }
-  };
-
-  const updateServerLocation = async (lat: number, lng: number) => {
-    try {
-      const locationName = await getLocationName(lat, lng);
-      await fetch(`${getApiBaseUrl()}/api/radar/location`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ lat, lng, ...locationName }),
-      });
-    } catch (error) {
-      logger.error("Failed to update location:", error);
-    }
-  };
-
-  const fetchNearbyUsers = useCallback(
-    async (coords?: { lat: number; lng: number }) => {
-      const location = coords || userLocation;
-      if (!location || !token) return;
-      try {
-        const params = new URLSearchParams({
-          lat: location.lat.toString(),
-          lng: location.lng.toString(),
-          radius: filters.radius.toString(),
-          ageMin: filters.ageMin.toString(),
-          ageMax: filters.ageMax.toString(),
-          gender: filters.gender,
-        });
-        const response = await fetch(
-          `${getApiBaseUrl()}/api/radar/nearby-users?${params}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const data = await response.json();
-        if (data.success) setNearbyUsers(data.users || []);
-      } catch (error) {
-        logger.error("Failed to fetch nearby users:", error);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [userLocation, token, filters]
-  );
-
-  const handleRefreshLocation = useCallback(async (silent = false) => {
-    try {
-      setLocationLoading(true);
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setLocationPermission(false);
-        setLoading(false);
-        if (!silent) {
-          showAlert(t("locationRequired"), t("enableLocationAccess"), [{ text: t("ok") }], "map-pin");
-        }
-        setLocationLoading(false);
-        return;
-      }
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const coords = { lat: location.coords.latitude, lng: location.coords.longitude };
-      setUserLocation(coords);
-      setLocationPermission(true);
-      try { await updateServerLocation(coords.lat, coords.lng); } catch {}
-      try { await fetchUser(); } catch {}
-      await fetchNearbyUsers(coords);
-      if (!silent) {
-        showAlert(t("success"), t("locationUpdated"), [{ text: t("ok") }], "check-circle");
-      }
-    } catch (error) {
-      if (!silent) {
-        showAlert(t("error"), t("locationError"), [{ text: t("ok") }], "alert-circle");
-      }
-    } finally {
-      setLocationLoading(false);
-    }
-  }, [token, fetchUser, fetchNearbyUsers, t, showAlert]);
-
-  const toggleLocationSharing = async () => {
-    try {
-      const response = await fetch(`${getApiBaseUrl()}/api/radar/location-sharing`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ enabled: !locationSharingEnabled }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setLocationSharingEnabled(!locationSharingEnabled);
-        showAlert(
-          t("locationSharing"),
-          locationSharingEnabled ? t("youAreHidden") : t("youAreVisible"),
-          [{ text: t("ok") }],
-          locationSharingEnabled ? "eye-off" : "eye"
-        );
-      }
-    } catch {
-      showAlert(t("error"), "Failed to update settings", [{ text: t("ok") }], "alert-circle");
-    }
-  };
-
-  const getUserDotPosition = (user: NearbyUser) => {
-    const maxRadius = RADAR_SIZE / 2 - AVATAR_SIZE / 2 - 8;
-    const distanceRatio = Math.min(user.distance / filters.radius, 0.92);
-    const radius = Math.max(distanceRatio * maxRadius, 28);
-    const angleRad = (user.angle * Math.PI) / 180;
-    return {
-      x: CENTER + radius * Math.cos(angleRad),
-      y: CENTER + radius * Math.sin(angleRad),
-    };
-  };
-
-  const getGenderColors = (gender: string): [string, string] =>
-    gender === "female" ? ["#FF6B9D", "#FF4081"] : ["#4A90E2", "#2563EB"];
-
-  const handleAvatarPress = (user: NearbyUser) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSelectedUser(user);
-  };
-
+function PreviewCard({
+  user,
+  onClose,
+  onView,
+}: {
+  user: NearbyUser;
+  onClose: () => void;
+  onView: () => void;
+}) {
   return (
-    <View style={styles.container}>
-      <ScreenScrollView contentContainerStyle={styles.scrollContent}>
-
-        {/* ── Header ── */}
-        <LinearGradient
-          colors={["#10B981", "#059669"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.header, { paddingTop: insets.top + 12 }]}
-        >
-          <TouchableOpacity style={styles.headerBackBtn} onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={20} color="#fff" />
-          </TouchableOpacity>
-
-          <View style={styles.headerCenter}>
-            <View style={styles.headerTitleRow}>
-              <ThemedText style={styles.headerTitle}>Love Radar</ThemedText>
-              <View style={styles.livePill}>
-                <View style={styles.liveDot} />
-                <ThemedText style={styles.liveText}>LIVE</ThemedText>
-              </View>
-            </View>
-            <ThemedText style={styles.headerSub}>Discover people around you</ThemedText>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.headerIconBtn, locationSharingEnabled && styles.headerIconBtnActive]}
-            onPress={toggleLocationSharing}
-          >
-            <Feather
-              name={locationSharingEnabled ? "eye" : "eye-off"}
-              size={18}
-              color={locationSharingEnabled ? "#10B981" : "rgba(255,255,255,0.5)"}
-            />
-          </TouchableOpacity>
-        </LinearGradient>
-
-        {/* ── Stats row ── */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <ThemedText style={styles.statNum}>{nearbyUsers.length}</ThemedText>
-            <ThemedText style={styles.statLbl}>Nearby</ThemedText>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
-          <View style={styles.statCard}>
-            <ThemedText style={styles.statNum}>{filters.radius}km</ThemedText>
-            <ThemedText style={styles.statLbl}>Radius</ThemedText>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
-          <View style={styles.statCard}>
-            {locationLoading ? (
-              <ActivityIndicator size="small" color="#4ADE80" />
-            ) : (
-              <View style={styles.locationStatusRow}>
-                <View style={[styles.locationDot, { backgroundColor: locationPermission ? "#4ADE80" : "#F87171" }]} />
-                <ThemedText style={styles.statNum}>{locationPermission ? "Active" : "Off"}</ThemedText>
-              </View>
-            )}
-            <ThemedText style={styles.statLbl}>GPS</ThemedText>
-          </View>
-        </View>
-
-        {/* ── Filter toggle ── */}
-        <Pressable
-          style={styles.filterToggle}
-          onPress={() => { setShowFilters(!showFilters); Haptics.selectionAsync(); }}
-        >
-          <Feather name="sliders" size={16} color="#10B981" />
-          <ThemedText style={styles.filterToggleText}>
-            {showFilters ? "Hide Filters" : "Adjust Radar Filters"}
-          </ThemedText>
-          <Feather name={showFilters ? "chevron-up" : "chevron-down"} size={16} color="rgba(255,255,255,0.4)" />
-        </Pressable>
-
-        {showFilters && (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.filterPanel}>
-            {/* Distance */}
-            <View style={styles.filterRow}>
-              <View style={styles.filterRowLeft}>
-                <Feather name="compass" size={15} color="#10B981" />
-                <ThemedText style={styles.filterLabel}>Distance</ThemedText>
-              </View>
-              <ThemedText style={styles.filterVal}>{filters.radius}km</ThemedText>
-            </View>
-            <Slider
-              style={styles.fSlider}
-              minimumValue={1}
-              maximumValue={100}
-              value={filters.radius}
-              onValueChange={(v) => setFilters({ ...filters, radius: Math.round(v) })}
-              minimumTrackTintColor="#10B981"
-              maximumTrackTintColor="rgba(255,255,255,0.1)"
-              thumbTintColor="#10B981"
-            />
-
-            {/* Age */}
-            <View style={[styles.filterRow, { marginTop: 12 }]}>
-              <View style={styles.filterRowLeft}>
-                <Feather name="users" size={15} color="#10B981" />
-                <ThemedText style={styles.filterLabel}>Age</ThemedText>
-              </View>
-              <ThemedText style={styles.filterVal}>{filters.ageMin}–{filters.ageMax}</ThemedText>
-            </View>
-            <View style={styles.ageSliderGroup}>
-              <View style={styles.ageSliderRow}>
-                <ThemedText style={styles.ageSliderLbl}>Min {filters.ageMin}</ThemedText>
-                <Slider
-                  style={styles.ageSlider}
-                  minimumValue={18}
-                  maximumValue={filters.ageMax - 1}
-                  value={filters.ageMin}
-                  onValueChange={(v) => setFilters({ ...filters, ageMin: Math.round(v) })}
-                  minimumTrackTintColor="#10B981"
-                  maximumTrackTintColor="rgba(255,255,255,0.1)"
-                  thumbTintColor="#10B981"
-                />
-              </View>
-              <View style={styles.ageSliderRow}>
-                <ThemedText style={styles.ageSliderLbl}>Max {filters.ageMax}</ThemedText>
-                <Slider
-                  style={styles.ageSlider}
-                  minimumValue={filters.ageMin + 1}
-                  maximumValue={80}
-                  value={filters.ageMax}
-                  onValueChange={(v) => setFilters({ ...filters, ageMax: Math.round(v) })}
-                  minimumTrackTintColor="#10B981"
-                  maximumTrackTintColor="rgba(255,255,255,0.1)"
-                  thumbTintColor="#10B981"
-                />
-              </View>
-            </View>
-
-            {/* Gender */}
-            <View style={[styles.filterRow, { marginTop: 12 }]}>
-              <View style={styles.filterRowLeft}>
-                <Feather name="users" size={15} color="#10B981" />
-                <ThemedText style={styles.filterLabel}>Show Me</ThemedText>
-              </View>
-            </View>
-            <View style={styles.genderPills}>
-              {[
-                { value: "any", label: "Everyone", emoji: "🌈" },
-                { value: "female", label: "Women", emoji: "👩" },
-                { value: "male", label: "Men", emoji: "👨" },
-              ].map((g) => (
-                <Pressable
-                  key={g.value}
-                  style={[
-                    styles.genderPill,
-                    filters.gender === g.value && styles.genderPillActive,
-                  ]}
-                  onPress={() => { setFilters({ ...filters, gender: g.value as any }); Haptics.selectionAsync(); }}
-                >
-                  <ThemedText style={styles.genderPillEmoji}>{g.emoji}</ThemedText>
-                  <ThemedText
-                    style={[styles.genderPillText, { color: filters.gender === g.value ? "#10B981" : "rgba(255,255,255,0.6)" }]}
-                  >
-                    {g.label}
-                  </ThemedText>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              style={styles.applyFilterBtn}
-              onPress={() => { setShowFilters(false); fetchNearbyUsers(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
-            >
-              <LinearGradient
-                colors={["#10B981", "#059669"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.applyFilterBtnGrad}
-              >
-                <Feather name="check" size={16} color="#fff" />
-                <ThemedText style={styles.applyFilterBtnText}>Apply & Scan</ThemedText>
-              </LinearGradient>
-            </Pressable>
-          </Animated.View>
-        )}
-
-        {/* ── Radar ── */}
-        <View style={styles.radarSection}>
-          {/* Atmospheric glow */}
-          <View style={styles.radarGlowOuter} />
-
-          <View style={styles.radarCard}>
-            <View style={styles.radarContainer}>
-
-              {/* SVG base: rings + cross-hairs + scan beam */}
-              <Svg width={RADAR_SIZE} height={RADAR_SIZE} style={StyleSheet.absoluteFill}>
-                <Defs>
-                  <RadialGradient id="scanGrad" cx="50%" cy="50%">
-                    <Stop offset="0%" stopColor="#10B981" stopOpacity="0.35" />
-                    <Stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-                  </RadialGradient>
-                  <RadialGradient id="bgGrad" cx="50%" cy="50%">
-                    <Stop offset="0%" stopColor="#10B981" stopOpacity="0.04" />
-                    <Stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-                  </RadialGradient>
-                </Defs>
-
-                {/* Background fill */}
-                <Circle cx={CENTER} cy={CENTER} r={CENTER - 4} fill="url(#bgGrad)" />
-
-                {/* Rings */}
-                {[0.28, 0.52, 0.76, 1].map((f, i) => (
-                  <Circle
-                    key={i}
-                    cx={CENTER}
-                    cy={CENTER}
-                    r={(CENTER - 6) * f}
-                    stroke="rgba(16,185,129,0.18)"
-                    strokeDasharray="5,5"
-                    fill="none"
-                    strokeWidth={1}
-                  />
-                ))}
-
-                {/* Cross-hair lines */}
-                <Line x1={CENTER} y1={6} x2={CENTER} y2={RADAR_SIZE - 6} stroke="rgba(16,185,129,0.08)" strokeWidth={1} />
-                <Line x1={6} y1={CENTER} x2={RADAR_SIZE - 6} y2={CENTER} stroke="rgba(16,185,129,0.08)" strokeWidth={1} />
-              </Svg>
-
-              {/* Rotating scan beam */}
-              <Animated.View style={[StyleSheet.absoluteFill, scannerStyle]}>
-                <Svg width={RADAR_SIZE} height={RADAR_SIZE}>
-                  <Defs>
-                    <RadialGradient id="beam2" cx="50%" cy="50%">
-                      <Stop offset="0%" stopColor="#10B981" stopOpacity="0.5" />
-                      <Stop offset="100%" stopColor="#10B981" stopOpacity="0" />
-                    </RadialGradient>
-                  </Defs>
-                  <Path
-                    d={`M ${CENTER} ${CENTER} L ${CENTER} 8 A ${CENTER - 8} ${CENTER - 8} 0 0 1 ${RADAR_SIZE - 8} ${CENTER} Z`}
-                    fill="url(#beam2)"
-                  />
-                  {/* Bright leading edge */}
-                  <Line
-                    x1={CENTER}
-                    y1={CENTER}
-                    x2={RADAR_SIZE - 8}
-                    y2={CENTER}
-                    stroke="#10B981"
-                    strokeWidth={1.5}
-                    strokeOpacity={0.6}
-                  />
-                </Svg>
-              </Animated.View>
-
-              {/* Pulse rings from center */}
-              <Animated.View
-                style={[
-                  styles.pulseRing,
-                  { width: RADAR_SIZE * 0.55, height: RADAR_SIZE * 0.55, borderRadius: (RADAR_SIZE * 0.55) / 2, borderColor: "#10B981" },
-                  pulse1Style,
-                ]}
-              />
-              <Animated.View
-                style={[
-                  styles.pulseRing,
-                  { width: RADAR_SIZE * 0.55, height: RADAR_SIZE * 0.55, borderRadius: (RADAR_SIZE * 0.55) / 2, borderColor: "#10B981" },
-                  pulse2Style,
-                ]}
-              />
-
-              {/* User avatar pins */}
-              {nearbyUsers.map((u, idx) => {
-                const pos = getUserDotPosition(u);
-                const colors = getGenderColors(u.gender);
-                return (
-                  <Pressable
-                    key={u.id}
-                    style={[
-                      styles.avatarPin,
-                      {
-                        left: pos.x - AVATAR_SIZE / 2,
-                        top: pos.y - AVATAR_SIZE / 2,
-                      },
-                    ]}
-                    onPress={() => handleAvatarPress(u)}
-                  >
-                    <AvatarPulse active={u.online} color={colors[0]} />
-                    <LinearGradient
-                      colors={colors}
-                      style={styles.avatarPinGrad}
-                    >
-                      {u.profilePhoto ? (
-                        <Image source={{ uri: u.profilePhoto }} style={styles.avatarPinImg} contentFit="cover" />
-                      ) : (
-                        <Feather name="user" size={20} color="#fff" />
-                      )}
-                    </LinearGradient>
-                    {u.online && <View style={styles.avatarOnlineDot} />}
-                    {u.verified && (
-                      <View style={styles.avatarVerifyBadge}>
-                        <Feather name="check" size={7} color="#fff" />
-                      </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-
-              {/* Center: user dot */}
-              <View style={styles.centerDot}>
-                <LinearGradient colors={["#10B981", "#059669"]} style={styles.centerDotGrad}>
-                  <View style={styles.centerDotCore} />
-                </LinearGradient>
-              </View>
-            </View>
-
-            {/* Distance ring labels */}
-            <View style={styles.ringLabels}>
-              <View style={styles.distMarkersRow}>
-                <ThemedText style={styles.distMark}>0</ThemedText>
-                <ThemedText style={styles.distMark}>{Math.round(filters.radius / 2)}km</ThemedText>
-                <ThemedText style={styles.distMark}>{filters.radius}km</ThemedText>
-              </View>
-            </View>
-          </View>
-
-          {/* Refresh */}
-          <Pressable
-            style={styles.refreshBtn}
-            onPress={() => handleRefreshLocation()}
-            disabled={locationLoading}
-          >
-            <LinearGradient
-              colors={["rgba(16,185,129,0.15)", "rgba(16,185,129,0.08)"]}
-              style={styles.refreshBtnGrad}
-            >
-              {locationLoading ? (
-                <ActivityIndicator size="small" color="#10B981" />
-              ) : (
-                <Feather name="refresh-cw" size={16} color="#10B981" />
-              )}
-              <ThemedText style={styles.refreshBtnText}>
-                {locationLoading ? "Locating..." : "Refresh Location"}
-              </ThemedText>
-            </LinearGradient>
-          </Pressable>
-        </View>
-
-        {/* ── Nearby People list ── */}
-        <View style={styles.listSection}>
-          <View style={styles.listHeader}>
-            <ThemedText style={styles.listTitle}>People Nearby</ThemedText>
-            {nearbyUsers.length > 0 && (
-              <View style={styles.listCountBadge}>
-                <ThemedText style={styles.listCountText}>{nearbyUsers.length}</ThemedText>
-              </View>
-            )}
-          </View>
-
-          {loading ? (
-            <View style={styles.loadingWrap}>
-              <ActivityIndicator size="large" color="#10B981" />
-              <ThemedText style={styles.loadingText}>Scanning nearby...</ThemedText>
-            </View>
-          ) : nearbyUsers.length === 0 ? (
-            <View style={styles.emptyState}>
-              <View style={styles.emptyIconWrap}>
-                <Feather name="radio" size={40} color="rgba(16,185,129,0.4)" />
-              </View>
-              <ThemedText style={styles.emptyTitle}>No one detected</ThemedText>
-              <ThemedText style={styles.emptySub}>
-                Try expanding your radius or refreshing your location
-              </ThemedText>
-              <Pressable style={styles.emptyAction} onPress={() => handleRefreshLocation()}>
-                <Feather name="refresh-cw" size={14} color="#10B981" />
-                <ThemedText style={styles.emptyActionText}>Refresh</ThemedText>
-              </Pressable>
-            </View>
+    <Animated.View
+      entering={SlideInDown.springify().damping(18)}
+      exiting={SlideOutDown.duration(180)}
+      style={styles.previewCard}
+    >
+      <View style={{ flexDirection: "row" }}>
+        <View style={{ width: 64, height: 64, borderRadius: 32, overflow: "hidden", backgroundColor: "#1a1a2a", borderWidth: 2, borderColor: COLORS.accent }}>
+          {user.profilePhoto ? (
+            <Image source={{ uri: user.profilePhoto }} style={{ width: "100%", height: "100%" }} contentFit="cover" />
           ) : (
-            <View style={styles.usersList}>
-              {nearbyUsers.map((u) => {
-                const colors = getGenderColors(u.gender);
-                return (
-                  <Pressable
-                    key={u.id}
-                    style={styles.userCard}
-                    onPress={() => navigation.navigate("ProfileDetail", { userId: u.id })}
-                  >
-                    <View style={styles.userCardLeft}>
-                      <LinearGradient colors={colors} style={styles.userAvatar}>
-                        {u.profilePhoto ? (
-                          <Image source={{ uri: u.profilePhoto }} style={styles.userAvatarImg} contentFit="cover" />
-                        ) : (
-                          <Feather name="user" size={22} color="#fff" />
-                        )}
-                        {u.online && <View style={styles.cardOnlineBadge} />}
-                      </LinearGradient>
-
-                      <View style={styles.userInfo}>
-                        <View style={styles.userNameRow}>
-                          <ThemedText style={styles.userName} numberOfLines={1}>{u.name}</ThemedText>
-                          {u.verified && (
-                            <View style={styles.cardVerifyBadge}>
-                              <Feather name="check" size={9} color="#fff" />
-                            </View>
-                          )}
-                          <ThemedText style={styles.userAge}>{u.age}</ThemedText>
-                        </View>
-                        <View style={styles.userMetaRow}>
-                          <Feather name="map-pin" size={11} color="rgba(255,255,255,0.4)" />
-                          <ThemedText style={styles.userDist}>
-                            {u.distance < 1
-                              ? `${(u.distance * 1000).toFixed(0)}m away`
-                              : `${u.distance.toFixed(1)}km away`}
-                          </ThemedText>
-                        </View>
-                        {u.interests?.length > 0 && (
-                          <View style={styles.cardInterests}>
-                            {u.interests.slice(0, 2).map((tag) => (
-                              <View key={tag} style={styles.cardTag}>
-                                <ThemedText style={styles.cardTagText}>{tag}</ThemedText>
-                              </View>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    </View>
-
-                    <Pressable
-                      style={styles.cardViewBtn}
-                      onPress={() => handleAvatarPress(u)}
-                    >
-                      <Feather name="eye" size={16} color="#10B981" />
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
+            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="user" size={26} color="#fff" />
             </View>
           )}
         </View>
+        <View style={{ flex: 1, marginLeft: 14, justifyContent: "center" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={styles.previewName} numberOfLines={1}>
+              {user.name}
+              {user.age != null ? <Text style={{ color: COLORS.textDim, fontWeight: "500" }}>{`, ${user.age}`}</Text> : null}
+            </Text>
+            {user.verified ? <Feather name="check-circle" size={14} color="#3b82f6" /> : null}
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4, gap: 6 }}>
+            <Feather name="map-pin" size={12} color={COLORS.accent} />
+            <Text style={styles.previewMeta}>{formatDistance(user.distance)}</Text>
+            {user.online ? (
+              <>
+                <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: COLORS.textMuted, marginHorizontal: 2 }} />
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#22c55e" }} />
+                <Text style={[styles.previewMeta, { color: "#22c55e" }]}>Online</Text>
+              </>
+            ) : null}
+          </View>
+        </View>
+        <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
+          <Feather name="x" size={18} color="#fff" />
+        </Pressable>
+      </View>
 
-        <AlertComponent />
-      </ScreenScrollView>
+      <Pressable onPress={onView} style={({ pressed }) => [styles.viewBtn, pressed && { opacity: 0.85 }]}>
+        <LinearGradient
+          colors={["#FF4D8B", "#FF8A4D"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Text style={styles.viewBtnText}>View Profile</Text>
+        <Feather name="arrow-right" size={16} color="#fff" />
+      </Pressable>
+    </Animated.View>
+  );
+}
 
-      {/* ── Preview card overlay ── */}
-      {selectedUser && (
-        <Modal
-          transparent
-          visible={!!selectedUser}
-          animationType="none"
-          onRequestClose={() => setSelectedUser(null)}
-        >
-          <Pressable style={styles.previewOverlay} onPress={() => setSelectedUser(null)}>
-            <Pressable onPress={(e) => e.stopPropagation()}>
-              <PreviewCard
-                user={selectedUser}
-                onClose={() => setSelectedUser(null)}
-                onViewProfile={() => {
-                  setSelectedUser(null);
-                  navigation.navigate("ProfileDetail", { userId: selectedUser.id });
-                }}
-              />
-            </Pressable>
+function FiltersSheet({
+  visible,
+  onClose,
+  filters,
+  onChange,
+  onApply,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  filters: { radius: number; ageMin: number; ageMax: number; gender: "any" | "male" | "female" };
+  onChange: (next: any) => void;
+  onApply: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.sheetBackdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>Radar Filters</Text>
+
+          <View style={{ marginTop: 16 }}>
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Search radius</Text>
+              <Text style={styles.sliderValue}>{filters.radius} km</Text>
+            </View>
+            <Slider
+              style={{ width: "100%", height: 36 }}
+              minimumValue={1}
+              maximumValue={100}
+              step={1}
+              value={filters.radius}
+              minimumTrackTintColor={COLORS.accent}
+              maximumTrackTintColor="rgba(255,255,255,0.18)"
+              thumbTintColor={COLORS.accent}
+              onValueChange={(v) => onChange({ ...filters, radius: Math.round(v) })}
+            />
+          </View>
+
+          <View style={{ marginTop: 18 }}>
+            <View style={styles.sliderRow}>
+              <Text style={styles.sliderLabel}>Age range</Text>
+              <Text style={styles.sliderValue}>{filters.ageMin} – {filters.ageMax}</Text>
+            </View>
+            <Slider
+              style={{ width: "100%", height: 36 }}
+              minimumValue={18}
+              maximumValue={80}
+              step={1}
+              value={filters.ageMin}
+              minimumTrackTintColor={COLORS.accent}
+              maximumTrackTintColor="rgba(255,255,255,0.18)"
+              thumbTintColor={COLORS.accent}
+              onValueChange={(v) => onChange({ ...filters, ageMin: Math.min(Math.round(v), filters.ageMax - 1) })}
+            />
+            <Slider
+              style={{ width: "100%", height: 36 }}
+              minimumValue={18}
+              maximumValue={80}
+              step={1}
+              value={filters.ageMax}
+              minimumTrackTintColor={COLORS.accent}
+              maximumTrackTintColor="rgba(255,255,255,0.18)"
+              thumbTintColor={COLORS.accent}
+              onValueChange={(v) => onChange({ ...filters, ageMax: Math.max(Math.round(v), filters.ageMin + 1) })}
+            />
+          </View>
+
+          <View style={{ marginTop: 18 }}>
+            <Text style={styles.sliderLabel}>Show me</Text>
+            <View style={{ flexDirection: "row", marginTop: 10, gap: 8 }}>
+              {(["any", "female", "male"] as const).map((g) => (
+                <Pressable
+                  key={g}
+                  onPress={() => onChange({ ...filters, gender: g })}
+                  style={[styles.chip, filters.gender === g && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, filters.gender === g && { color: "#fff" }]}>
+                    {g === "any" ? "Everyone" : g === "female" ? "Women" : "Men"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => {
+              onApply();
+              onClose();
+            }}
+            style={[styles.viewBtn, { marginTop: 24 }]}
+          >
+            <LinearGradient
+              colors={["#FF4D8B", "#FF8A4D"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.viewBtnText}>Apply</Text>
           </Pressable>
-        </Modal>
-      )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ─── Main screen ────────────────────────────────────────────────────────────
+export default function LoveRadarScreen({ navigation }: Props) {
+  const { token } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [users, setUsers] = useState<NearbyUser[]>([]);
+  const [selected, setSelected] = useState<NearbyUser | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    radius: 25,
+    ageMin: 18,
+    ageMax: 60,
+    gender: "any" as "any" | "female" | "male",
+  });
+  const fetchSeq = useRef(0);
+
+  // Acquire location once on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setPermissionDenied(true);
+          setLoading(false);
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        setCoords({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+      } catch (err) {
+        logger.error("Radar location error:", err);
+        setPermissionDenied(true);
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const fetchNearby = useCallback(async () => {
+    if (!coords || !token) return;
+    const seq = ++fetchSeq.current;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        lat: String(coords.lat),
+        lng: String(coords.lng),
+        radius: String(filters.radius),
+        ageMin: String(filters.ageMin),
+        ageMax: String(filters.ageMax),
+        gender: filters.gender,
+      });
+      const res = await fetch(`${getApiBaseUrl()}/api/radar/nearby-users?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (seq !== fetchSeq.current) return;
+      if (data.success) {
+        setUsers((data.users || []) as NearbyUser[]);
+      }
+    } catch (err) {
+      logger.error("Radar fetch error:", err);
+    } finally {
+      if (seq === fetchSeq.current) setLoading(false);
+    }
+  }, [coords, token, filters]);
+
+  useEffect(() => {
+    fetchNearby();
+  }, [fetchNearby]);
+
+  const handleAvatarPress = (user: NearbyUser) => {
+    Haptics.selectionAsync().catch(() => {});
+    setSelected(user);
+  };
+
+  const goToProfile = (user: NearbyUser) => {
+    setSelected(null);
+    navigation.navigate("ProfileDetail" as any, { userId: user.id });
+  };
+
+  const ringLabels = useMemo(() => {
+    const r = filters.radius;
+    return [
+      { label: r < 4 ? `${(r * 0.25).toFixed(1)}km` : `${Math.round(r * 0.25)}km`, ratio: 0.3 },
+      { label: r < 4 ? `${(r * 0.55).toFixed(1)}km` : `${Math.round(r * 0.55)}km`, ratio: 0.55 },
+      { label: `${r}km`, ratio: 1 },
+    ];
+  }, [filters.radius]);
+
+  return (
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.bg} />
+      <LinearGradient colors={COLORS.bgGradient} style={StyleSheet.absoluteFill} />
+
+      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.iconBtn}>
+            <Feather name="x" size={22} color="#fff" />
+          </Pressable>
+          <View style={{ alignItems: "center" }}>
+            <Text style={styles.title}>Love Radar</Text>
+            <Text style={styles.subtitle}>
+              {loading ? "Scanning…" : users.length === 0 ? "No one nearby yet" : `${users.length} nearby`}
+            </Text>
+          </View>
+          <Pressable onPress={() => setFiltersOpen(true)} hitSlop={10} style={styles.iconBtn}>
+            <Feather name="sliders" size={20} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Radar */}
+        <View style={styles.radarWrap}>
+          <View style={styles.radar}>
+            <RadarRings />
+            <PulseRing delay={0} />
+            <PulseRing delay={900} />
+            <PulseRing delay={1800} />
+            <SweepLine />
+            <CenterDot />
+
+            {/* avatars */}
+            {users.map((u, i) => (
+              <RadarUserAvatar
+                key={u.id}
+                user={u}
+                index={i}
+                maxRadius={filters.radius}
+                isSelected={selected?.id === u.id}
+                onPress={() => handleAvatarPress(u)}
+              />
+            ))}
+
+            {/* ring distance labels (top side) */}
+            {ringLabels.map((rl, idx) => (
+              <View
+                key={idx}
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: RADAR_RADIUS + 6,
+                  top: RADAR_RADIUS - RADAR_RADIUS * rl.ratio - 8,
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                  backgroundColor: "rgba(0,0,0,0.45)",
+                }}
+              >
+                <Text style={styles.ringLabel}>{rl.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* You label */}
+          <View style={{ marginTop: 20, alignItems: "center" }}>
+            <Text style={styles.youLabel}>You</Text>
+          </View>
+        </View>
+
+        {/* Bottom action / refresh */}
+        <View style={styles.bottomBar}>
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              fetchNearby();
+            }}
+            disabled={loading || !coords}
+            style={({ pressed }) => [styles.refreshBtn, pressed && { opacity: 0.8 }, (loading || !coords) && { opacity: 0.5 }]}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Feather name="refresh-cw" size={16} color="#fff" />
+            )}
+            <Text style={styles.refreshText}>{loading ? "Scanning" : "Rescan"}</Text>
+          </Pressable>
+          <Text style={styles.bottomHint}>Tap any avatar to see who they are</Text>
+        </View>
+
+        {/* Permission denied overlay */}
+        {permissionDenied ? (
+          <View style={styles.permission}>
+            <Animated.View entering={FadeIn.duration(220)} style={styles.permissionCard}>
+              <Feather name="map-pin" size={28} color={COLORS.accent} />
+              <Text style={styles.permTitle}>Location needed</Text>
+              <Text style={styles.permBody}>
+                Love Radar needs your location to show people nearby. Enable location access in your settings to use the radar.
+              </Text>
+              <Pressable onPress={() => navigation.goBack()} style={styles.permBtn}>
+                <Text style={styles.permBtnText}>Go Back</Text>
+              </Pressable>
+            </Animated.View>
+          </View>
+        ) : null}
+
+        {/* Preview card */}
+        {selected ? (
+          <PreviewCard
+            user={selected}
+            onClose={() => setSelected(null)}
+            onView={() => goToProfile(selected)}
+          />
+        ) : null}
+      </SafeAreaView>
+
+      <FiltersSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        filters={filters}
+        onChange={setFilters}
+        onApply={fetchNearby}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#080f0a",
-  },
-  scrollContent: {
-    paddingBottom: 60,
-  },
-
+  root: { flex: 1, backgroundColor: COLORS.bg },
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 12,
-  },
-  headerBackBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: "center",
-  },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.3,
-  },
-  livePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 999,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#fff",
-  },
-  liveText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: 0.8,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.8)",
-    marginTop: 2,
-  },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-  },
-  headerIconBtnActive: {
-    backgroundColor: "rgba(16,185,129,0.2)",
-    borderColor: "rgba(16,185,129,0.4)",
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    marginHorizontal: 20,
-    marginTop: 16,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  statCard: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-  },
-  statNum: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  statLbl: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.45)",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  statDivider: {
-    width: 1,
-    marginHorizontal: 8,
-  },
-  locationStatusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  locationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  filterToggle: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginHorizontal: 20,
-    marginTop: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: "rgba(16,185,129,0.08)",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.2)",
-  },
-  filterToggleText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#10B981",
-  },
-  filterPanel: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 20,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  filterRow: {
-    flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  filterRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  filterLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "rgba(255,255,255,0.8)",
-  },
-  filterVal: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#10B981",
-  },
-  fSlider: {
-    width: "100%",
-    height: 36,
-  },
-  ageSliderGroup: {
-    gap: 8,
-  },
-  ageSliderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  ageSliderLbl: {
-    fontSize: 11,
-    color: "rgba(255,255,255,0.5)",
-    width: 52,
-    fontWeight: "500",
-  },
-  ageSlider: {
-    flex: 1,
-    height: 36,
-  },
-  genderPills: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  genderPill: {
-    flex: 1,
-    flexDirection: "row",
+  title: { color: COLORS.text, fontSize: 17, fontWeight: "700", letterSpacing: 0.4 },
+  subtitle: { color: COLORS.textMuted, fontSize: 12, marginTop: 2 },
+  iconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.06)",
     alignItems: "center",
     justifyContent: "center",
-    gap: 5,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.04)",
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  genderPillActive: {
-    backgroundColor: "rgba(16,185,129,0.12)",
-    borderColor: "rgba(16,185,129,0.4)",
-  },
-  genderPillEmoji: {
-    fontSize: 14,
-  },
-  genderPillText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  applyFilterBtn: {
-    marginTop: 14,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  applyFilterBtnGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 13,
-  },
-  applyFilterBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#fff",
+    borderColor: "rgba(255,255,255,0.05)",
   },
 
-  radarSection: {
-    marginTop: 22,
-    alignItems: "center",
-  },
-  radarGlowOuter: {
-    position: "absolute",
-    top: -20,
-    width: RADAR_SIZE + 140,
-    height: RADAR_SIZE + 140,
-    borderRadius: (RADAR_SIZE + 140) / 2,
-    backgroundColor: "rgba(16,185,129,0.06)",
-  },
-  radarCard: {
-    backgroundColor: "rgba(16,185,129,0.03)",
-    borderRadius: 32,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.18)",
-    zIndex: 1,
-  },
-  radarContainer: {
+  radarWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  radar: {
     width: RADAR_SIZE,
     height: RADAR_SIZE,
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
+    borderRadius: RADAR_RADIUS,
+    overflow: "visible",
   },
-  pulseRing: {
-    position: "absolute",
-    borderWidth: 1.5,
-  },
-  avatarPin: {
-    position: "absolute",
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    zIndex: 10,
-  },
-  avatarPinGrad: {
-    width: AVATAR_SIZE,
-    height: AVATAR_SIZE,
-    borderRadius: AVATAR_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2.5,
-    borderColor: "rgba(255,255,255,0.35)",
-    overflow: "hidden",
-  },
-  avatarPinImg: {
-    width: AVATAR_SIZE - 5,
-    height: AVATAR_SIZE - 5,
-    borderRadius: (AVATAR_SIZE - 5) / 2,
-  },
-  avatarOnlineDot: {
-    position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
-    backgroundColor: "#4ADE80",
-    borderWidth: 2,
-    borderColor: "#080f0a",
-  },
-  avatarVerifyBadge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#10B981",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "#080f0a",
-  },
-  centerDot: {
-    position: "absolute",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    zIndex: 20,
-  },
-  centerDotGrad: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "rgba(255,255,255,0.4)",
-  },
-  centerDotCore: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#fff",
-  },
-  ringLabels: {},
-  distMarkersRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    marginTop: 10,
-  },
-  distMark: {
-    fontSize: 10,
-    color: "rgba(16,185,129,0.5)",
-    fontWeight: "600",
-  },
-
-  refreshBtn: {
-    marginTop: 14,
-    borderRadius: 14,
-    overflow: "hidden",
-    width: RADAR_SIZE + 32,
-  },
-  refreshBtnGrad: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 13,
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.18)",
-    borderRadius: 14,
-  },
-  refreshBtnText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#10B981",
-  },
-
-  listSection: {
-    marginTop: 28,
-    paddingHorizontal: 20,
-  },
-  listHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  listCountBadge: {
-    backgroundColor: "rgba(16,185,129,0.15)",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.25)",
-  },
-  listCountText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#10B981",
-  },
-  loadingWrap: {
-    paddingVertical: 60,
-    alignItems: "center",
-    gap: 14,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.5)",
-  },
-  emptyState: {
-    alignItems: "center",
-    paddingVertical: 60,
-  },
-  emptyIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "rgba(16,185,129,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-  },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "rgba(255,255,255,0.7)",
-    marginBottom: 8,
-  },
-  emptySub: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.35)",
-    textAlign: "center",
-    paddingHorizontal: 40,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  emptyAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.3)",
-    backgroundColor: "rgba(16,185,129,0.08)",
-  },
-  emptyActionText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#10B981",
-  },
-  usersList: {
-    gap: 10,
-  },
-  userCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.04)",
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.07)",
-  },
-  userCardLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-    gap: 12,
-  },
-  userAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.15)",
-    position: "relative",
-    overflow: "hidden",
-  },
-  userAvatarImg: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  cardOnlineBadge: {
-    position: "absolute",
-    bottom: 1,
-    right: 1,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#4ADE80",
-    borderWidth: 2,
-    borderColor: "#080f0a",
-  },
-  userInfo: {
-    flex: 1,
-    gap: 3,
-  },
-  userNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  userName: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-    flex: 1,
-  },
-  cardVerifyBadge: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: "#10B981",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  userAge: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.6)",
-    fontWeight: "500",
-  },
-  userMetaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  userDist: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.4)",
-  },
-  cardInterests: {
-    flexDirection: "row",
-    gap: 5,
-    marginTop: 2,
-  },
-  cardTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: "rgba(16,185,129,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.2)",
-  },
-  cardTagText: {
+  ringLabel: { color: COLORS.textMuted, fontSize: 10, fontWeight: "500" },
+  youLabel: {
+    color: COLORS.textMuted,
     fontSize: 11,
-    color: "#10B981",
-    fontWeight: "500",
-  },
-  cardViewBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(16,185,129,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
   },
 
-  previewOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "flex-end",
+  bottomBar: {
     paddingHorizontal: 16,
-    paddingBottom: 32,
-  },
-  previewCard: {
-    backgroundColor: "#111a14",
-    borderRadius: 28,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(16,185,129,0.25)",
-  },
-  previewPhotoWrap: {
-    height: 280,
-    position: "relative",
-  },
-  previewPhoto: {
-    width: "100%",
-    height: "100%",
-  },
-  previewPhotoPlaceholder: {
-    width: "100%",
-    height: "100%",
+    paddingBottom: 24,
     alignItems: "center",
-    justifyContent: "center",
   },
-  previewPhotoGradient: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 140,
-  },
-  previewClose: {
-    position: "absolute",
-    top: 14,
-    right: 14,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewOnlineBadge: {
-    position: "absolute",
-    top: 14,
-    left: 14,
+  refreshBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderWidth: 1,
-    borderColor: "rgba(74,222,128,0.3)",
+    borderColor: "rgba(255,255,255,0.08)",
+    gap: 8,
   },
-  previewOnlineDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: "#4ADE80",
-  },
-  previewOnlineText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#4ADE80",
-  },
-  previewPhotoInfo: {
+  refreshText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  bottomHint: { color: COLORS.textMuted, fontSize: 11, marginTop: 10 },
+
+  // preview card
+  previewCard: {
     position: "absolute",
-    bottom: 16,
     left: 16,
     right: 16,
-  },
-  previewNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    marginBottom: 4,
-  },
-  previewName: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#fff",
-    letterSpacing: -0.5,
-  },
-  previewVerifyBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#10B981",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  previewAge: {
-    fontSize: 22,
-    fontWeight: "400",
-    color: "rgba(255,255,255,0.8)",
-  },
-  previewDistRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  previewDist: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.7)",
-  },
-  previewBioWrap: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-  },
-  previewBio: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.7)",
-    lineHeight: 20,
-  },
-  previewInterests: {
-    flexDirection: "row",
-    gap: 7,
-    paddingHorizontal: 18,
-    paddingTop: 12,
-  },
-  previewTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
+    bottom: 26,
+    backgroundColor: COLORS.surface,
+    borderRadius: 18,
+    padding: 14,
     borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
   },
-  previewTagText: {
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  previewActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    gap: 12,
-  },
-  previewPassBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(248,113,113,0.12)",
-    borderWidth: 1.5,
-    borderColor: "rgba(248,113,113,0.3)",
+  previewName: { color: "#fff", fontSize: 17, fontWeight: "700", flexShrink: 1 },
+  previewMeta: { color: COLORS.textDim, fontSize: 12, fontWeight: "500" },
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.08)",
     alignItems: "center",
     justifyContent: "center",
   },
-  previewProfileBtn: {
-    flex: 1,
-    borderRadius: 999,
+  viewBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 13,
+    borderRadius: 14,
     overflow: "hidden",
-  },
-  previewProfileBtnGrad: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    marginTop: 14,
     gap: 8,
   },
-  previewProfileBtnText: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  previewLikeBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(16,185,129,0.12)",
-    borderWidth: 1.5,
-    borderColor: "rgba(16,185,129,0.3)",
+  viewBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  // permission
+  permission: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(6,6,12,0.94)",
     alignItems: "center",
     justifyContent: "center",
+    padding: 20,
   },
+  permissionCard: {
+    backgroundColor: "#13131f",
+    borderRadius: 18,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    maxWidth: 340,
+  },
+  permTitle: { color: "#fff", fontSize: 18, fontWeight: "700", marginTop: 12 },
+  permBody: { color: COLORS.textDim, fontSize: 13, textAlign: "center", marginTop: 8, lineHeight: 19 },
+  permBtn: {
+    marginTop: 20,
+    backgroundColor: COLORS.accent,
+    paddingHorizontal: 22,
+    paddingVertical: 11,
+    borderRadius: 22,
+  },
+  permBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  // sheet
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#13131f",
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 30,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    marginBottom: 14,
+  },
+  sheetTitle: { color: "#fff", fontSize: 17, fontWeight: "700" },
+  sliderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  sliderLabel: { color: COLORS.textDim, fontSize: 13, fontWeight: "600" },
+  sliderValue: { color: "#fff", fontSize: 13, fontWeight: "700" },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  chipActive: { backgroundColor: COLORS.accent, borderColor: COLORS.accent },
+  chipText: { color: COLORS.textDim, fontSize: 13, fontWeight: "600" },
 });

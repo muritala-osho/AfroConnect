@@ -17,6 +17,7 @@ const auditLogSchema = new mongoose.Schema(
         'UPDATE_SETTINGS',
         'CLOSE_TICKET', 'REPLY_TICKET',
         'SAFETY_WARNING_BYPASSED',
+        'LIFT_MESSAGING_PAUSE',
       ],
     },
     category: {

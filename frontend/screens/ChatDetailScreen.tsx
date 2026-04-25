@@ -899,16 +899,25 @@ export default function ChatDetailScreen({
         }
         return response.data.message;
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error("Send error:", error);
-      if (type === "gif") {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m._id === tempMessage._id ? ({ ...m, status: "failed" } as any) : m,
-          ),
+      const data = error?.response?.data;
+      const isPaused = data?.code === "MESSAGING_PAUSED" || error?.response?.status === 403 && /paused|review/i.test(data?.message || "");
+      // Roll back the optimistic message
+      setMessages((prev) =>
+        type === "gif"
+          ? prev.map((m) => (m._id === tempMessage._id ? ({ ...m, status: "failed" } as any) : m))
+          : prev.filter((m) => m._id !== tempMessage._id),
+      );
+      if (isPaused) {
+        const until = data?.pausedUntil ? new Date(data.pausedUntil) : null;
+        const untilStr = until ? ` until ${until.toLocaleString()}` : "";
+        Alert.alert(
+          "Messaging Paused",
+          `${data?.message || "Your messaging has been paused for safety review."}${untilStr}`,
+          [{ text: "OK" }],
         );
-      } else {
-        setMessages((prev) => prev.filter((m) => m._id !== tempMessage._id));
+      } else if (type !== "gif") {
         Alert.alert("Error", "Failed to send message");
       }
     } finally {

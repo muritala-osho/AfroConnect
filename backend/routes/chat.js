@@ -661,6 +661,21 @@ router.patch("/message/:messageId", protect, async (req, res) => {
 
 router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), async (req, res) => {
   try {
+    // Auto-pause enforcement: block messages from users flagged for risky behavior.
+    const mp = req.user.messagingPaused;
+    if (mp?.isPaused && mp.until && new Date(mp.until) > new Date()) {
+      return res.status(403).json({
+        success: false,
+        code: 'MESSAGING_PAUSED',
+        message: mp.reason || 'Your messaging has been paused while our team reviews your recent activity.',
+        pausedUntil: mp.until,
+      });
+    } else if (mp?.isPaused && mp.until && new Date(mp.until) <= new Date()) {
+      // Auto-lift expired pause
+      req.user.messagingPaused = { isPaused: false, until: null, reason: null, autoTriggeredAt: null, bypassCount: 0 };
+      await req.user.save();
+    }
+
     const { matchId } = req.params;
     const {
       content,

@@ -165,13 +165,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             { cancelable: false }
           );
         };
-        const handleSuspended = (data: { days?: number }) => {
+        const handleSuspended = (data: { days?: number; appealToken?: string; reason?: string; suspendedUntil?: string }) => {
+          const goToAppeal = async () => {
+            try {
+              const { navigationRef } = require('@/App');
+              const nav: any = navigationRef;
+              const params = {
+                appealToken: data?.appealToken,
+                email: (user as any)?.email,
+                banReason: data?.reason || 'Violation of community guidelines',
+                bannedAt: data?.suspendedUntil || new Date().toISOString(),
+                appeal: null,
+              };
+              await clearAuthData();
+              if (nav?.isReady?.()) {
+                nav.navigate('AppealBanned', params);
+              }
+            } catch (_e) {
+              await clearAuthData();
+            }
+          };
           Alert.alert(
             'Account Temporarily Suspended',
-            `Your account has been suspended for ${data?.days ?? 'several'} day(s). You will be logged out now.`,
-            [{ text: 'OK', onPress: () => clearAuthData() }],
+            `Your account has been suspended for ${data?.days ?? 'several'} day(s). You can submit an appeal.`,
+            [
+              { text: 'Appeal Now', onPress: goToAppeal },
+              { text: 'Sign Out', style: 'cancel', onPress: () => clearAuthData() },
+            ],
             { cancelable: false }
           );
+        };
+
+        const handleMessagingPaused = (data: { until?: string; reason?: string }) => {
+          const untilStr = data?.until ? ` until ${new Date(data.until).toLocaleString()}` : '';
+          Alert.alert(
+            'Messaging Paused',
+            `${data?.reason || 'Your messaging has been paused for safety review.'}${untilStr}`,
+            [{ text: 'OK' }],
+            { cancelable: true }
+          );
+        };
+        const handleMessagingResumed = () => {
+          Alert.alert('Messaging Resumed', 'You can now send messages again.', [{ text: 'OK' }]);
         };
         const handleSessionRevoked = (data: { reason?: string }) => {
           Alert.alert(
@@ -185,11 +220,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         socketService.on('user:banned', handleBanned);
         socketService.on('user:suspended', handleSuspended);
         socketService.on('session:revoked', handleSessionRevoked);
+        socketService.on('user:messaging-paused', handleMessagingPaused);
+        socketService.on('user:messaging-resumed', handleMessagingResumed);
 
         return () => {
           socketService.off('user:banned', handleBanned);
           socketService.off('user:suspended', handleSuspended);
           socketService.off('session:revoked', handleSessionRevoked);
+          socketService.off('user:messaging-paused', handleMessagingPaused);
+          socketService.off('user:messaging-resumed', handleMessagingResumed);
         };
       } catch (err) {
         logger.error('Socket connection failed:', err);
