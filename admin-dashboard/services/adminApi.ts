@@ -52,6 +52,37 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  getPushVapidKey: async () => {
+    const res = await fetch(`${API_BASE}/admin/push-vapid-key`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  subscribePush: async (subscription: PushSubscriptionJSON) => {
+    const res = await fetch(`${API_BASE}/admin/push-subscribe`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(subscription),
+    });
+    return handleResponse(res);
+  },
+
+  unsubscribePush: async (endpoint?: string) => {
+    const res = await fetch(`${API_BASE}/admin/push-unsubscribe`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+      body: JSON.stringify({ endpoint }),
+    });
+    return handleResponse(res);
+  },
+
+  testPush: async () => {
+    const res = await fetch(`${API_BASE}/admin/push-test`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   getStats: async () => {
     const res = await fetch(`${API_BASE}/admin/stats`, { headers: authHeaders() });
     return handleResponse(res);

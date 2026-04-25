@@ -9,8 +9,10 @@ const Match = require('../models/Match');
 const Message = require('../models/Message');
 const Story = require('../models/Story');
 const AuditLog = require('../models/AuditLog');
+const AdminPushSubscription = require('../models/AdminPushSubscription');
 const redis = require('../utils/redis');
 const verificationController = require('../controllers/verificationController');
+const { sendAdminPushNotification, VAPID_PUBLIC_KEY } = require('../services/adminPushService');
 
 const logAudit = async (req, action, category, severity, targetUser, details, metadata) => {
   try {
@@ -28,6 +30,19 @@ const logAudit = async (req, action, category, severity, targetUser, details, me
       metadata: metadata || null,
       ipAddress: req.ip || req.headers['x-forwarded-for'] || null,
     });
+    if (action === 'SAFETY_WARNING_BYPASSED') {
+      sendAdminPushNotification({
+        type: 'SAFETY_BYPASS',
+        body: `${req.user.name} bypassed a safety warning${targetUser ? ` while messaging ${targetUser.name}` : ''}. Review immediately.`,
+        data: { tab: 'content' },
+      }).catch(() => {});
+    } else if (severity === 'high' && !['SAFETY_ACTION_TAKEN', 'SAFETY_DISMISSED', 'REMOVE_CONTENT', 'APPROVE_CONTENT'].includes(action)) {
+      sendAdminPushNotification({
+        type: 'HIGH_SEVERITY',
+        body: details || `A high-severity event occurred: ${action}`,
+        data: { tab: 'audit' },
+      }).catch(() => {});
+    }
   } catch (e) {
     logger.error('[AuditLog] Failed to write audit entry:', e.message);
   }
@@ -42,6 +57,57 @@ const isAdmin = async (req, res, next) => {
   }
   next();
 };
+
+router.get('/push-vapid-key', protect, isAdmin, (req, res) => {
+  res.json({ success: true, publicKey: VAPID_PUBLIC_KEY });
+});
+
+router.post('/push-subscribe', protect, isAdmin, async (req, res) => {
+  try {
+    const { endpoint, keys } = req.body;
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return res.status(400).json({ success: false, message: 'Invalid subscription object' });
+    }
+    await AdminPushSubscription.findOneAndUpdate(
+      { endpoint },
+      { adminId: req.user._id, adminEmail: req.user.email, endpoint, keys, userAgent: req.headers['user-agent'], lastUsed: new Date() },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, message: 'Push subscription saved' });
+  } catch (error) {
+    logger.error('Push subscribe error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/push-unsubscribe', protect, isAdmin, async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (endpoint) {
+      await AdminPushSubscription.deleteOne({ endpoint });
+    } else {
+      await AdminPushSubscription.deleteMany({ adminId: req.user._id });
+    }
+    res.json({ success: true, message: 'Unsubscribed from push notifications' });
+  } catch (error) {
+    logger.error('Push unsubscribe error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.post('/push-test', protect, isAdmin, async (req, res) => {
+  try {
+    await sendAdminPushNotification({
+      type: 'HIGH_SEVERITY',
+      body: 'This is a test notification from AfroConnect Admin.',
+      data: { tab: 'dashboard' },
+      targetAdminId: req.user._id,
+    });
+    res.json({ success: true, message: 'Test notification sent' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
 
 router.get('/badge-counts', protect, isAdmin, async (req, res) => {
   try {
@@ -374,6 +440,12 @@ router.post('/appeals', protect, async (req, res) => {
     };
     await user.save();
     await redis.del(`profile:me:${user._id}`);
+
+    sendAdminPushNotification({
+      type: 'NEW_APPEAL',
+      body: `${user.name} has submitted a ban appeal and is awaiting your review.`,
+      data: { tab: 'appeals' },
+    }).catch(() => {});
 
     res.json({ success: true, message: 'Appeal submitted successfully. Admins will review it soon.' });
   } catch (error) {

@@ -22,7 +22,7 @@ import RevokeVerification from './views/RevokeVerification';
 import IceBreakers from './views/IceBreakers';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
-import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search } from 'lucide-react';
+import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search, Bell, BellOff } from 'lucide-react';
 import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
@@ -109,6 +109,71 @@ const App: React.FC = () => {
     notifIdRef.current += 1;
     setNotification({ message, type, id: notifIdRef.current });
   }, []);
+
+  const [pushEnabled, setPushEnabled] = useState<boolean>(() => localStorage.getItem('push_enabled') === 'true');
+  const pushSubRef = useRef<PushSubscription | null>(null);
+
+  const registerPush = useCallback(async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { showToast('Notification permission denied.', 'error'); return; }
+
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+
+      const keyData = await adminApi.getPushVapidKey();
+      if (!keyData?.publicKey) return;
+
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) await existing.unsubscribe();
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyData.publicKey,
+      });
+      pushSubRef.current = sub;
+
+      await adminApi.subscribePush(sub.toJSON() as PushSubscriptionJSON);
+      setPushEnabled(true);
+      localStorage.setItem('push_enabled', 'true');
+      showToast('Push notifications enabled.', 'success');
+    } catch (err) {
+      showToast('Could not enable push notifications.', 'error');
+    }
+  }, [showToast]);
+
+  const unregisterPush = useCallback(async () => {
+    try {
+      if (pushSubRef.current) {
+        await adminApi.unsubscribePush(pushSubRef.current.endpoint);
+        await pushSubRef.current.unsubscribe();
+        pushSubRef.current = null;
+      }
+      setPushEnabled(false);
+      localStorage.setItem('push_enabled', 'false');
+      showToast('Push notifications disabled.', 'success');
+    } catch {
+      showToast('Could not disable push notifications.', 'error');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      reg.pushManager.getSubscription().then((sub) => {
+        if (sub) { pushSubRef.current = sub; setPushEnabled(true); }
+      });
+    }).catch(() => {});
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NAVIGATE_TAB' && event.data.tab) {
+        setActiveTab(event.data.tab);
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+  }, [auth.isAuthenticated, setActiveTab]);
 
   const handleLogout = useCallback(() => {
     setAuth({ isAuthenticated: false, user: null });
@@ -406,6 +471,23 @@ const App: React.FC = () => {
               )}
 
               <NotificationCenter onNavigate={setActiveTab} />
+
+              {'Notification' in window && (
+                <button
+                  onClick={pushEnabled ? unregisterPush : registerPush}
+                  title={pushEnabled ? 'Disable push notifications' : 'Enable push notifications'}
+                  className={`relative p-2.5 rounded-xl transition-all border ${
+                    pushEnabled
+                      ? 'bg-teal-50 dark:bg-teal-500/10 border-teal-200 dark:border-teal-500/30 text-teal-600 dark:text-teal-400'
+                      : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-400 dark:text-slate-400 hover:text-teal-500'
+                  }`}
+                >
+                  {pushEnabled ? <Bell size={16} className="animate-none" /> : <BellOff size={16} />}
+                  {pushEnabled && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-teal-500 rounded-full border border-white dark:border-slate-900" />
+                  )}
+                </button>
+              )}
 
               <button
                 onClick={toggleTheme}

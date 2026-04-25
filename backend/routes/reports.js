@@ -7,6 +7,7 @@ const User = require('../models/User');
 const Story = require('../models/Story');
 const Message = require('../models/Message');
 const SuccessStory = require('../models/SuccessStory');
+const { sendAdminPushNotification } = require('../services/adminPushService');
 
 router.post('/', protect, async (req, res) => {
   try {
@@ -162,6 +163,12 @@ router.post('/', protect, async (req, res) => {
       contentPreview: normalizedContentPreview,
       contentMeta
     });
+
+    sendAdminPushNotification({
+      type: 'NEW_REPORT',
+      body: `New ${normalizedReason} report filed against a user. Tap to review in Safety Hub.`,
+      data: { tab: 'reports', reportId: report._id.toString() },
+    }).catch(() => {});
 
     res.status(201).json({
       success: true,
