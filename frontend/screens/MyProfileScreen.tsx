@@ -516,6 +516,16 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
               </ThemedText>
               {(user as any)?.verified && <VerificationBadge verified size="small" />}
               {user?.premium?.isActive && <PremiumBadge size="medium" />}
+              {(user as any)?.privacySettings?.incognitoMode && (
+                <Pressable
+                  onPress={(e) => { e.stopPropagation(); navigation.navigate("Settings"); }}
+                  style={styles.incognitoBadge}
+                  accessibilityLabel="Incognito mode on. Tap to manage in Settings."
+                >
+                  <Ionicons name="eye-off" size={12} color="#FFF" />
+                  <ThemedText style={styles.incognitoBadgeText}>Incognito</ThemedText>
+                </Pressable>
+              )}
             </View>
             {((user as any)?.livingIn || (user as any)?.location?.city || (user as any)?.location?.address) && (
               <View style={styles.locationRow}>
@@ -1590,6 +1600,24 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 10,
     fontWeight: '800',
+  },
+  incognitoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    marginLeft: 8,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  incognitoBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
