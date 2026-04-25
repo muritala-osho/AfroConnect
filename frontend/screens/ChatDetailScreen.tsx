@@ -60,6 +60,15 @@ import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
 import ChatHeader from "@/components/chat/ChatHeader";
 import AttachmentMenu from "@/components/chat/AttachmentMenu";
+import LiveLocationPicker from "@/components/chat/LiveLocationPicker";
+import OptionsMenu from "@/components/chat/OptionsMenu";
+import ChatThemeModal from "@/components/chat/ChatThemeModal";
+import ReportModal from "@/components/chat/ReportModal";
+import VideoViewerModal from "@/components/chat/VideoViewerModal";
+import ImageViewerModal from "@/components/chat/ImageViewerModal";
+import MessageContextMenu from "@/components/chat/MessageContextMenu";
+import EditMessageModal from "@/components/chat/EditMessageModal";
+import TranslateModal from "@/components/chat/TranslateModal";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { scanForSensitiveInfo, showPersonalInfoWarning } from "@/utils/securityWarnings";
 import WavyWaveform from "@/components/chat/WavyWaveform";
@@ -2828,401 +2837,119 @@ export default function ChatDetailScreen({
         onOpenLivePicker={() => { setShowAttachmentMenu(false); setShowLivePicker(true); }}
       />
 
-      {/* Live location duration picker */}
-      <Modal visible={showLivePicker} transparent animationType="fade" onRequestClose={() => setShowLivePicker(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowLivePicker(false)}>
-          <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
-            <View style={{ alignItems: "center", marginBottom: 8 }}>
-              <ThemedText style={[styles.optionsTitle, { color: theme.text, marginBottom: 0 }]}>Share Location</ThemedText>
-              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, textAlign: "center", marginTop: 6, paddingHorizontal: 8 }}>
-                Send your current spot, or share live for a set time.
-              </ThemedText>
-            </View>
-            <Pressable
-              style={styles.optionItem}
-              onPress={() => { setShowLivePicker(false); handleShareLocation(); }}
-            >
-              <Feather name="map-pin" size={22} color="#45B7D1" />
-              <ThemedText style={[styles.optionText, { color: theme.text }]}>Send current location</ThemedText>
-            </Pressable>
-            <View style={{ height: 1, backgroundColor: theme.textSecondary + "20", marginVertical: 6 }} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, marginBottom: 4 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#dc2626" }} />
-              <ThemedText style={{ color: theme.textSecondary, fontSize: 12, fontWeight: "600" }}>LIVE — updates in real time</ThemedText>
-            </View>
-            {[
-              { mins: 15, label: "Live · 15 minutes" },
-              { mins: 60, label: "Live · 1 hour" },
-              { mins: 480, label: "Live · 8 hours" },
-            ].map((opt) => (
-              <Pressable
-                key={opt.mins}
-                style={styles.optionItem}
-                onPress={() => handleShareLocation(opt.mins)}
-              >
-                <Feather name="radio" size={22} color="#dc2626" />
-                <ThemedText style={[styles.optionText, { color: theme.text }]}>{opt.label}</ThemedText>
-              </Pressable>
-            ))}
-            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 8 }]} onPress={() => setShowLivePicker(false)}>
-              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      <LiveLocationPicker
+        visible={showLivePicker}
+        theme={theme}
+        onClose={() => setShowLivePicker(false)}
+        onSendCurrent={() => { setShowLivePicker(false); handleShareLocation(); }}
+        onShareLive={(mins) => handleShareLocation(mins)}
+      />
 
-      {/* Options modal */}
-      <Modal visible={showOptionsMenu} transparent animationType="fade" onRequestClose={() => setShowOptionsMenu(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowOptionsMenu(false)}>
-          <View style={[styles.optionsMenu, { backgroundColor: theme.background }]}>
-            <ThemedText style={[styles.optionsTitle, { color: theme.text }]}>Options</ThemedText>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); toggleScreenshotProtection(); }}>
-              <Feather name="shield" size={22} color={screenshotProtection ? "#4CAF50" : theme.text} />
-              <ThemedText style={[styles.optionText, { color: theme.text }]}>{screenshotProtection ? "Disable Screenshot Protection" : "Enable Screenshot Protection"}</ThemedText>
-              {screenshotProtection && <Feather name="check-circle" size={18} color="#4CAF50" />}
-            </Pressable>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setShowThemeModal(true); }}>
-              <Feather name="image" size={22} color={theme.primary} />
-              <ThemedText style={[styles.optionText, { color: theme.text }]}>Chat Theme</ThemedText>
-            </Pressable>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setThemeMode(isDark ? "light" : "dark"); }}>
-              <Feather name={isDark ? "sun" : "moon"} size={22} color={theme.text} />
-              <ThemedText style={[styles.optionText, { color: theme.text }]}>{isDark ? "Light Mode" : "Dark Mode"}</ThemedText>
-            </Pressable>
-            <Pressable style={styles.optionItem} onPress={() => { setShowOptionsMenu(false); setReportTargetMessage(null); setShowReportModal(true); }}>
-              <Feather name="flag" size={22} color="#FF9800" />
-              <ThemedText style={[styles.optionText, { color: theme.text }]}>Report User</ThemedText>
-            </Pressable>
-            <Pressable style={styles.optionItem} onPress={handleBlockUser}>
-              <Feather name="slash" size={22} color="#F44336" />
-              <ThemedText style={[styles.optionText, { color: "#F44336" }]}>Block User</ThemedText>
-            </Pressable>
-            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 16 }]} onPress={() => setShowOptionsMenu(false)}>
-              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+      <OptionsMenu
+        visible={showOptionsMenu}
+        theme={theme}
+        isDark={isDark}
+        screenshotProtection={screenshotProtection}
+        onClose={() => setShowOptionsMenu(false)}
+        onToggleProtection={() => { setShowOptionsMenu(false); toggleScreenshotProtection(); }}
+        onOpenTheme={() => { setShowOptionsMenu(false); setShowThemeModal(true); }}
+        onToggleColorMode={() => { setShowOptionsMenu(false); setThemeMode(isDark ? "light" : "dark"); }}
+        onOpenReport={() => { setShowOptionsMenu(false); setReportTargetMessage(null); setShowReportModal(true); }}
+        onBlockUser={handleBlockUser}
+      />
 
-      {/* Theme modal */}
-      <Modal visible={showThemeModal} transparent animationType="slide" onRequestClose={() => setShowThemeModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.themeModal, { backgroundColor: theme.background }]}>
-            <View style={styles.themeHeader}>
-              <ThemedText style={[styles.themeTitle, { color: theme.text }]}>Chat Theme</ThemedText>
-              <Pressable onPress={() => setShowThemeModal(false)}><Feather name="x" size={24} color={theme.text} /></Pressable>
-            </View>
-            <ScrollView contentContainerStyle={styles.themeGrid}>
-              {CHAT_THEMES.map((themeItem) => (
-                <Pressable key={themeItem.id} style={[styles.themeItem, chatTheme === themeItem.id && { borderColor: theme.primary, borderWidth: 3 }]} onPress={() => saveChatTheme(themeItem.id)}>
-                  {themeItem.image ? (
-                    <Image source={themeItem.image} style={styles.themePreview} contentFit="cover" />
-                  ) : (
-                    <View style={[styles.themePreview, { backgroundColor: isDark ? "#1A1A1A" : "#E8E8E8", justifyContent: "center", alignItems: "center" }]}>
-                      <ThemedText style={{ color: theme.textSecondary }}>Default</ThemedText>
-                    </View>
-                  )}
-                  <ThemedText style={[styles.themeName, { color: theme.text }]} numberOfLines={1}>{themeItem.name}</ThemedText>
-                  {chatTheme === themeItem.id && <View style={[styles.themeCheck, { backgroundColor: theme.primary }]}><Feather name="check" size={12} color="#FFF" /></View>}
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <ChatThemeModal
+        visible={showThemeModal}
+        theme={theme}
+        isDark={isDark}
+        themes={CHAT_THEMES as any}
+        currentChatTheme={chatTheme}
+        onClose={() => setShowThemeModal(false)}
+        onSelect={saveChatTheme}
+      />
 
-      {/* Report modal */}
-      <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => { setShowReportModal(false); setReportTargetMessage(null); }}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.reportModal, { backgroundColor: theme.background }]}>
-            <View style={styles.reportHeader}>
-              <ThemedText style={[styles.reportTitle, { color: theme.text }]}>{reportTargetMessage ? "Report Image" : `Report ${userName}`}</ThemedText>
-              <Pressable onPress={() => { setShowReportModal(false); setReportTargetMessage(null); }}><Feather name="x" size={24} color={theme.text} /></Pressable>
-            </View>
-            <ThemedText style={[styles.reportSubtitle, { color: theme.textSecondary }]}>Why are you reporting this {reportTargetMessage ? "image" : "user"}?</ThemedText>
-            <ScrollView style={styles.reportReasons}>
-              {REPORT_REASONS.map((reason) => (
-                <Pressable key={reason.id} style={[styles.reportReasonItem, selectedReportReason === reason.id && { backgroundColor: theme.primary + "20", borderColor: theme.primary }, { borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} onPress={() => setSelectedReportReason(reason.id)}>
-                  <Feather name={reason.icon as any} size={20} color={selectedReportReason === reason.id ? theme.primary : theme.text} />
-                  <ThemedText style={[styles.reportReasonText, { color: theme.text }]}>{reason.label}</ThemedText>
-                  {selectedReportReason === reason.id && <Feather name="check-circle" size={20} color={theme.primary} />}
-                </Pressable>
-              ))}
-            </ScrollView>
-            <TextInput style={[styles.reportInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Add more details (optional)" placeholderTextColor={theme.textSecondary} value={reportDetails} onChangeText={setReportDetails} multiline numberOfLines={3} />
-            <Pressable style={[styles.submitReportButton, { backgroundColor: theme.primary, opacity: selectedReportReason ? 1 : 0.5 }]} onPress={handleSubmitReport} disabled={!selectedReportReason || submittingReport}>
-              {submittingReport ? <ActivityIndicator color="#FFF" /> : <ThemedText style={styles.submitReportText}>Submit Report</ThemedText>}
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+      <ReportModal
+        visible={showReportModal}
+        theme={theme}
+        isDark={isDark}
+        userName={userName}
+        isReportingMessage={!!reportTargetMessage}
+        reasons={REPORT_REASONS as any}
+        selectedReportReason={selectedReportReason}
+        reportDetails={reportDetails}
+        submittingReport={submittingReport}
+        onClose={() => { setShowReportModal(false); setReportTargetMessage(null); }}
+        onSelectReason={setSelectedReportReason}
+        onChangeDetails={setReportDetails}
+        onSubmit={handleSubmitReport}
+      />
 
-      {/* Image viewer (swipeable gallery) */}
-      <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { closeImageViewer(); stopViewOnceCountdown(); }}>
-        <GestureHandlerRootView style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { closeImageViewer(); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          {viewOnceViewerActive ? (
-            <View style={styles.imageViewerActions}>
-              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
-                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.imageViewerActions}>
-              {imageGallery.length > 1 && (
-                <View style={[styles.imageViewerActionBtn, { paddingHorizontal: 12 }]}>
-                  <ThemedText style={{ color: "#FFF", fontSize: 13, fontWeight: "700" }}>
-                    {imageViewerIndex + 1} / {imageGallery.length}
-                  </ThemedText>
-                </View>
-              )}
-              <Pressable style={styles.imageViewerActionBtn} onPress={() => {
-                const url = imageGallery[imageViewerIndex] || viewingImage;
-                if (url) saveImage(url);
-              }}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-            </View>
-          )}
-          {viewingImage && (viewOnceViewerActive || imageGallery.length <= 1 ? (
-            <ZoomablePhoto
-              source={{ uri: viewingImage }}
-              width={SCREEN_WIDTH}
-              height={SCREEN_HEIGHT * 0.8}
-            />
-          ) : (
-            <FlatList
-              ref={imageViewerListRef}
-              data={imageGallery}
-              keyExtractor={(u, i) => `${i}_${u}`}
-              horizontal
-              pagingEnabled
-              scrollEnabled={!imageViewerZoomed}
-              showsHorizontalScrollIndicator={false}
-              initialScrollIndex={imageViewerIndex}
-              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
-              onMomentumScrollEnd={(e) => {
-                const newIdx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-                if (newIdx !== imageViewerIndex) {
-                  setImageViewerIndex(newIdx);
-                  setImageViewerZoomed(false);
-                }
-              }}
-              renderItem={({ item: url }) => (
-                <View style={{ width: SCREEN_WIDTH, height: SCREEN_HEIGHT * 0.8, justifyContent: "center" }}>
-                  <ZoomablePhoto
-                    source={{ uri: url }}
-                    width={SCREEN_WIDTH}
-                    height={SCREEN_HEIGHT * 0.8}
-                    onZoomChange={setImageViewerZoomed}
-                  />
-                </View>
-              )}
-            />
-          ))}
-        </GestureHandlerRootView>
-      </Modal>
+      <ImageViewerModal
+        viewingImage={viewingImage}
+        imageGallery={imageGallery}
+        imageViewerIndex={imageViewerIndex}
+        imageViewerZoomed={imageViewerZoomed}
+        imageViewerListRef={imageViewerListRef}
+        viewOnceActive={viewOnceViewerActive}
+        viewOnceCountdown={viewOnceCountdown}
+        screenWidth={SCREEN_WIDTH}
+        screenHeight={SCREEN_HEIGHT}
+        onClose={() => { closeImageViewer(); stopViewOnceCountdown(); }}
+        onSave={saveImage}
+        onIndexChange={setImageViewerIndex}
+        onZoomChange={setImageViewerZoomed}
+      />
 
-      {/* Video viewer */}
-      <Modal visible={!!viewingVideo} transparent animationType="fade" onRequestClose={() => { setViewingVideo(null); stopViewOnceCountdown(); }}>
-        <View style={styles.imageViewerOverlay}>
-          <Pressable style={styles.imageViewerClose} onPress={() => { setViewingVideo(null); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
-          {viewOnceViewerActive ? (
-            <View style={styles.imageViewerActions}>
-              <View style={[styles.imageViewerActionBtn, { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12 }]}>
-                <Ionicons name="eye-outline" size={18} color="#FF6B6B" />
-                <ThemedText style={{ color: "#FF6B6B", fontSize: 13, fontWeight: '700' }}>View Once · Closes in {viewOnceCountdown}s</ThemedText>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.imageViewerActions}>
-              <Pressable style={styles.imageViewerActionBtn} onPress={() => viewingVideo && saveVideo(viewingVideo)}><Ionicons name="download-outline" size={24} color="#FFF" /></Pressable>
-            </View>
-          )}
-          {viewingVideo && <Video source={{ uri: viewingVideo }} style={{ width: "100%", height: "80%" }} useNativeControls={!viewOnceViewerActive} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} />}
-        </View>
-      </Modal>
+      <VideoViewerModal
+        videoUri={viewingVideo}
+        viewOnceActive={viewOnceViewerActive}
+        viewOnceCountdown={viewOnceCountdown}
+        onClose={() => { setViewingVideo(null); stopViewOnceCountdown(); }}
+        onSave={saveVideo}
+      />
 
-      {/* Message context menu */}
-      <Modal visible={showMessageMenu} transparent animationType="fade" onRequestClose={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
-        <Pressable style={styles.modalOverlay} onPress={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
-          <View style={[styles.messageMenuModal, { backgroundColor: theme.background }]}>
-            {selectedMessage && (
-              <View style={[styles.messageMenuPreview, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
-                <ThemedText style={[styles.messageMenuPreviewText, { color: theme.text }]} numberOfLines={2}>
-                  {selectedMessage.content || selectedMessage.text || (selectedMessage.type === "image" ? "📷 Photo" : selectedMessage.type === "video" ? "🎬 Video" : "🎤 Voice")}
-                </ThemedText>
-              </View>
-            )}
+      <MessageContextMenu
+        visible={showMessageMenu}
+        theme={theme}
+        isDark={isDark}
+        selectedMessage={selectedMessage}
+        myId={myId}
+        onClose={() => { setShowMessageMenu(false); setSelectedMessage(null); }}
+        onReact={handleReact}
+        onReply={handleReply}
+        onTranslate={handleTranslateOpen}
+        onEdit={handleEditOpen}
+        onReportMessage={() => { setReportTargetMessage(selectedMessage); setShowMessageMenu(false); setShowReportModal(true); }}
+        onDeleteForMe={handleDeleteForMe}
+        onDeleteForEveryone={handleDeleteForEveryone}
+      />
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.quickReactionBar}
-              contentContainerStyle={{ paddingHorizontal: 8, alignItems: 'center' }}
-              scrollEnabled
-              onStartShouldSetResponder={() => true}
-            >
-              {["❤️","😂","😍","😮","😢","🔥","👍","💯","🥰","😭","😤","🤣","💀","🥺","🤩","😎","🙌","👏","💪","🫶","🎉","✨","💅","🤔","😏","🤯","💔","🤍","😇","🥳"].map(emoji => (
-                <Pressable key={emoji} style={styles.quickReactionBtn} onPress={() => handleReact(emoji)}>
-                  <ThemedText style={styles.quickReactionEmoji}>{emoji}</ThemedText>
-                </Pressable>
-              ))}
-            </ScrollView>
+      <EditMessageModal
+        visible={showEditModal}
+        theme={theme}
+        isDark={isDark}
+        editText={editText}
+        submittingEdit={submittingEdit}
+        onChangeText={setEditText}
+        onClose={() => { setShowEditModal(false); setEditingMessage(null); }}
+        onSubmit={handleEditSubmit}
+      />
 
-            <Pressable style={styles.messageMenuItem} onPress={handleReply}>
-              <Feather name="corner-up-left" size={22} color={theme.primary} />
-              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Reply</ThemedText>
-            </Pressable>
-            <Pressable style={styles.messageMenuItem} onPress={handleTranslateOpen}>
-              <MaterialCommunityIcons name="translate" size={22} color={theme.primary} />
-              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Translate</ThemedText>
-            </Pressable>
-            {selectedMessage && (() => {
-              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
-              return String(sid) === String(myId) && selectedMessage.type === "text" && !selectedMessage.deletedForEveryone;
-            })() && (
-              <Pressable style={styles.messageMenuItem} onPress={handleEditOpen}>
-                <Feather name="edit-3" size={22} color={theme.primary} />
-                <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Edit Message</ThemedText>
-              </Pressable>
-            )}
-            {selectedMessage && (() => {
-              const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id;
-              return String(sid) !== String(myId) && !selectedMessage.deletedForEveryone;
-            })() && (
-              <Pressable style={styles.messageMenuItem} onPress={() => { setReportTargetMessage(selectedMessage); setShowMessageMenu(false); setShowReportModal(true); }}>
-                <Feather name="flag" size={22} color="#F44336" />
-                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Report Message</ThemedText>
-              </Pressable>
-            )}
-            <Pressable style={styles.messageMenuItem} onPress={handleDeleteForMe}>
-              <Feather name="trash-2" size={22} color="#FF9800" />
-              <ThemedText style={[styles.messageMenuItemText, { color: theme.text }]}>Delete for Me</ThemedText>
-            </Pressable>
-            {selectedMessage && (() => { const sid = typeof selectedMessage.sender === "string" ? selectedMessage.sender : selectedMessage.sender?._id; return String(sid) === String(myId); })() && (
-              <Pressable style={styles.messageMenuItem} onPress={handleDeleteForEveryone}>
-                <Feather name="trash" size={22} color="#F44336" />
-                <ThemedText style={[styles.messageMenuItemText, { color: "#F44336" }]}>Delete for Everyone</ThemedText>
-              </Pressable>
-            )}
-            <Pressable style={[styles.cancelButton, { borderColor: theme.textSecondary, marginTop: 12 }]} onPress={() => { setShowMessageMenu(false); setSelectedMessage(null); }}>
-              <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
-
-      {/* Edit message modal */}
-      <Modal visible={showEditModal} transparent animationType="slide" onRequestClose={() => { setShowEditModal(false); setEditingMessage(null); }}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-          <Pressable style={styles.modalOverlay} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
-            {/* Plain View with onStartShouldSetResponder stops touches from bubbling
-                to the outer Pressable, so the modal stays open and the TextInput
-                keeps focus on every keystroke (fixes the one-letter-at-a-time bug). */}
-            <View
-              style={[styles.translateModal, { backgroundColor: theme.background }]}
-              onStartShouldSetResponder={() => true}
-            >
-              <View style={styles.translateHeader}>
-                <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Edit Message</ThemedText>
-                <Pressable onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
-                  <Feather name="x" size={24} color={theme.text} />
-                </Pressable>
-              </View>
-              <TextInput
-                style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", minHeight: 80, textAlignVertical: "top", paddingTop: 12 }]}
-                value={editText}
-                onChangeText={setEditText}
-                multiline
-                autoFocus
-                placeholderTextColor={theme.textSecondary}
-                placeholder="Edit your message..."
-              />
-              <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary, fontSize: 11, marginTop: 4 }]}>Messages can only be edited within 15 minutes of sending</ThemedText>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-                <Pressable style={[styles.cancelButton, { flex: 1, borderColor: theme.border }]} onPress={() => { setShowEditModal(false); setEditingMessage(null); }}>
-                  <ThemedText style={[styles.cancelButtonText, { color: theme.text }]}>Cancel</ThemedText>
-                </Pressable>
-                <Pressable
-                  style={[styles.translateButton, { flex: 1, backgroundColor: editText.trim() ? theme.primary : theme.primary + "55", marginTop: 0 }]}
-                  onPress={handleEditSubmit}
-                  disabled={!editText.trim() || submittingEdit}
-                >
-                  {submittingEdit ? (
-                    <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                    <>
-                      <Feather name="check" size={18} color="#FFF" />
-                      <ThemedText style={styles.translateButtonText}>Save</ThemedText>
-                    </>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Translate modal */}
-      <Modal visible={showTranslateModal} transparent animationType="slide" onRequestClose={() => { setShowTranslateModal(false); setSelectedMessage(null); }}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.translateModal, { backgroundColor: theme.background }]}>
-            <View style={styles.translateHeader}>
-              <ThemedText style={[styles.translateTitle, { color: theme.text }]}>Translate Message</ThemedText>
-              <Pressable onPress={() => { setShowTranslateModal(false); setSelectedMessage(null); }}><Feather name="x" size={24} color={theme.text} /></Pressable>
-            </View>
-            {selectedMessage && (
-              <View style={[styles.translateOriginal, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
-                <ThemedText style={[styles.translateOriginalLabel, { color: theme.textSecondary }]}>Original</ThemedText>
-                <ThemedText style={[styles.translateOriginalText, { color: theme.text }]} numberOfLines={3}>{selectedMessage.content || selectedMessage.text || ""}</ThemedText>
-              </View>
-            )}
-            {translating ? (
-              <View style={styles.translateLoading}>
-                <ActivityIndicator size="large" color={theme.primary} />
-                <ThemedText style={[styles.translateLoadingText, { color: theme.textSecondary }]}>Translating...</ThemedText>
-              </View>
-            ) : translatedText ? (
-              <View style={[styles.translateResult, { backgroundColor: theme.primary + "15", borderColor: theme.primary }]}>
-                <ThemedText style={[styles.translateResultLabel, { color: theme.primary }]}>Translation ({translateTargetLang})</ThemedText>
-                <ThemedText style={[styles.translateResultText, { color: theme.text }]}>{translatedText}</ThemedText>
-                <View style={{ flexDirection: "row", gap: 8 }}>
-                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: theme.primary, flex: 1 }]} onPress={handleCopyTranslation}>
-                    <Feather name="copy" size={16} color="#FFF" />
-                    <ThemedText style={styles.translateCopyText}>Copy</ThemedText>
-                  </Pressable>
-                  <Pressable style={[styles.translateCopyBtn, { backgroundColor: isDark ? "#333" : "#E0E0E0", flex: 1 }]} onPress={() => { setTranslatedText(""); setTranslateTargetLang(savedTranslateLang); }}>
-                    <MaterialCommunityIcons name="translate" size={16} color={theme.text} />
-                    <ThemedText style={[styles.translateCopyText, { color: theme.text }]}>Retranslate</ThemedText>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <View>
-                <ThemedText style={[styles.translatePickLabel, { color: theme.textSecondary }]}>Quick pick or type a language</ThemedText>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
-                  {["English","French","Swahili","Yoruba","Hausa","Amharic","Arabic","Zulu","Somali","Igbo","Portuguese","Spanish"].map((lang) => (
-                    <Pressable
-                      key={lang}
-                      style={[{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: translateTargetLang === lang ? theme.primary : (isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.12)"), backgroundColor: translateTargetLang === lang ? theme.primary + "22" : "transparent" }]}
-                      onPress={() => setTranslateTargetLang(lang)}
-                    >
-                      <ThemedText style={{ fontSize: 13, color: translateTargetLang === lang ? theme.primary : theme.textSecondary }}>{lang}</ThemedText>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                <TextInput style={[styles.translateLangInput, { color: theme.text, backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5", borderColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)" }]} placeholder="Or type any language..." placeholderTextColor={theme.textSecondary} value={translateTargetLang} onChangeText={setTranslateTargetLang} />
-                <Pressable style={[styles.translateButton, { backgroundColor: theme.primary, opacity: translateTargetLang.trim() ? 1 : 0.5 }]} onPress={() => translateTargetLang.trim() && handleTranslate(translateTargetLang.trim())} disabled={!translateTargetLang.trim()}>
-                  <MaterialCommunityIcons name="translate" size={20} color="#FFF" />
-                  <ThemedText style={styles.translateButtonText}>Translate</ThemedText>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <TranslateModal
+        visible={showTranslateModal}
+        theme={theme}
+        isDark={isDark}
+        selectedMessage={selectedMessage}
+        translateTargetLang={translateTargetLang}
+        translatedText={translatedText}
+        translating={translating}
+        savedTranslateLang={savedTranslateLang}
+        onClose={() => { setShowTranslateModal(false); setSelectedMessage(null); }}
+        onSetLang={setTranslateTargetLang}
+        onTranslate={handleTranslate}
+        onCopyTranslation={handleCopyTranslation}
+        onClearTranslation={() => setTranslatedText("")}
+      />
     </ThemedView>
   );
 }
