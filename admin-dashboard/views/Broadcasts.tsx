@@ -43,6 +43,31 @@ const STATUS_CONFIG = {
 
 type LedgerTab = 'sent' | 'scheduled' | 'drafts';
 
+interface DraftBroadcast {
+  id: string;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  target: BroadcastTarget;
+  scheduledAt?: string;
+  savedAt: number;
+}
+
+const DRAFTS_STORAGE_KEY = 'afroconnect_broadcast_drafts_v1';
+
+const loadDrafts = (): DraftBroadcast[] => {
+  try {
+    const raw = localStorage.getItem(DRAFTS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+};
+
+const persistDrafts = (drafts: DraftBroadcast[]) => {
+  try { localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(drafts)); } catch { /* ignore */ }
+};
+
 const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const [campaignTitle, setCampaignTitle] = useState('');
   const [campaignBody, setCampaignBody] = useState('');
@@ -57,9 +82,8 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const [queueLoading, setQueueLoading] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [firingId, setFiringId] = useState<string | null>(null);
-
-  const token = localStorage.getItem('afroconnect_token');
-  const authHeader = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const [drafts, setDrafts] = useState<DraftBroadcast[]>(() => loadDrafts());
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -89,8 +113,7 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const fetchQueue = useCallback(async () => {
     setQueueLoading(true);
     try {
-      const res = await fetch('/api/admin/scheduled-broadcasts?limit=100', { headers: authHeader });
-      const data = await res.json();
+      const data = await adminApi.getScheduledBroadcasts(100);
       if (data.success) setScheduledQueue(data.broadcasts || []);
     } catch {
       setScheduledQueue([]);
@@ -111,23 +134,38 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
     }
     setIsSending(true);
     try {
-      if (dispatchMode === 'scheduled' && status !== 'draft') {
-        const res = await fetch('/api/admin/scheduled-broadcasts', {
-          method: 'POST',
-          headers: authHeader,
-          body: JSON.stringify({
-            title: campaignTitle,
-            body: campaignBody,
-            imageUrl: campaignImage || undefined,
-            target: targetSegment,
-            scheduledAt,
-          }),
+      if (status === 'draft') {
+        const id = editingDraftId || `draft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const draft: DraftBroadcast = {
+          id,
+          title: campaignTitle,
+          body: campaignBody,
+          imageUrl: campaignImage || undefined,
+          target: targetSegment,
+          scheduledAt: dispatchMode === 'scheduled' ? scheduledAt : undefined,
+          savedAt: Date.now(),
+        };
+        setDrafts(prev => {
+          const without = prev.filter(d => d.id !== id);
+          const next = [draft, ...without];
+          persistDrafts(next);
+          return next;
         });
-        const data = await res.json();
+        setEditingDraftId(null);
+        if (showToast) showToast(editingDraftId ? 'Draft updated.' : 'Campaign saved to drafts.', 'success');
+      } else if (dispatchMode === 'scheduled') {
+        const data = await adminApi.scheduleBroadcast({
+          title: campaignTitle,
+          body: campaignBody,
+          imageUrl: campaignImage || undefined,
+          target: targetSegment,
+          scheduledAt,
+        });
         if (!data.success) throw new Error(data.message || 'Failed to schedule.');
         if (showToast) showToast(`Broadcast queued for ${new Date(scheduledAt).toLocaleString()}.`, 'success');
         if (ledgerTab === 'scheduled') fetchQueue();
-      } else if (status !== 'draft') {
+        if (editingDraftId) deleteDraft(editingDraftId, false);
+      } else {
         await adminApi.sendBroadcast({
           title: campaignTitle,
           body: campaignBody,
@@ -147,8 +185,7 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
         };
         setHistory(prev => [newEntry, ...prev]);
         if (showToast) showToast(`Immediate dispatch to ${targetSegment} segment initiated.`, 'success');
-      } else {
-        if (showToast) showToast('Campaign saved to drafts.', 'success');
+        if (editingDraftId) deleteDraft(editingDraftId, false);
       }
       resetForm();
     } catch (err: any) {
@@ -161,19 +198,15 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const handleCancel = async (id: string) => {
     setCancellingId(id);
     try {
-      const res = await fetch(`/api/admin/scheduled-broadcasts/${id}`, {
-        method: 'DELETE',
-        headers: authHeader,
-      });
-      const data = await res.json();
+      const data = await adminApi.cancelScheduledBroadcast(id);
       if (data.success) {
         setScheduledQueue(prev => prev.map(b => b._id === id ? { ...b, status: 'cancelled' } : b));
         if (showToast) showToast('Scheduled broadcast cancelled.', 'success');
       } else {
         if (showToast) showToast(data.message || 'Could not cancel.', 'error');
       }
-    } catch {
-      if (showToast) showToast('Cancel failed. Try again.', 'error');
+    } catch (err: any) {
+      if (showToast) showToast(err.message || 'Cancel failed. Try again.', 'error');
     } finally {
       setCancellingId(null);
     }
@@ -182,22 +215,44 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
   const handleFireNow = async (id: string) => {
     setFiringId(id);
     try {
-      const res = await fetch(`/api/admin/scheduled-broadcasts/${id}/fire`, {
-        method: 'POST',
-        headers: authHeader,
-      });
-      const data = await res.json();
+      const data = await adminApi.fireScheduledBroadcast(id);
       if (data.success) {
         setScheduledQueue(prev => prev.map(b => b._id === id ? { ...b, status: 'fired', firedAt: new Date().toISOString() } : b));
         if (showToast) showToast('Broadcast fired immediately!', 'success');
       } else {
         if (showToast) showToast(data.message || 'Could not fire.', 'error');
       }
-    } catch {
-      if (showToast) showToast('Fire failed. Try again.', 'error');
+    } catch (err: any) {
+      if (showToast) showToast(err.message || 'Fire failed. Try again.', 'error');
     } finally {
       setFiringId(null);
     }
+  };
+
+  const deleteDraft = (id: string, notify = true) => {
+    setDrafts(prev => {
+      const next = prev.filter(d => d.id !== id);
+      persistDrafts(next);
+      return next;
+    });
+    if (editingDraftId === id) setEditingDraftId(null);
+    if (notify && showToast) showToast('Draft deleted.', 'success');
+  };
+
+  const editDraft = (draft: DraftBroadcast) => {
+    setCampaignTitle(draft.title);
+    setCampaignBody(draft.body);
+    setCampaignImage(draft.imageUrl || '');
+    setTargetSegment(draft.target);
+    if (draft.scheduledAt) {
+      setScheduledAt(draft.scheduledAt);
+      setDispatchMode('scheduled');
+    } else {
+      setDispatchMode('immediate');
+    }
+    setEditingDraftId(draft.id);
+    if (showToast) showToast('Draft loaded into the composer.', 'success');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const resetForm = () => {
@@ -206,6 +261,7 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
     setCampaignImage('');
     setScheduledAt('');
     setDispatchMode('immediate');
+    setEditingDraftId(null);
   };
 
   const loadTemplate = (template: PushTemplate) => {
@@ -608,11 +664,59 @@ const Broadcasts: React.FC<BroadcastsProps> = ({ showToast }) => {
               </tbody>
             </table>
           </div>
+        ) : drafts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <div className="p-5 bg-gray-50 dark:bg-slate-800 rounded-3xl mb-4">
+              <Save size={32} className="text-slate-300" />
+            </div>
+            <h3 className="text-base font-black dark:text-white mb-1">No drafts yet</h3>
+            <p className="text-sm text-slate-400 font-medium">Use the "Save Draft" button in the composer to save a campaign for later.</p>
+          </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center opacity-50">
-            <Save size={32} className="text-slate-300 mb-3" />
-            <p className="text-sm font-black text-slate-400">Drafts are session-based</p>
-            <p className="text-xs text-slate-400 font-medium mt-1">Saved drafts appear here during this session.</p>
+          <div className="divide-y divide-gray-50 dark:divide-slate-800">
+            {drafts.map(d => (
+              <div key={d.id} className="px-8 py-5 flex items-center gap-5 hover:bg-gray-50/60 dark:hover:bg-slate-800/30 transition-colors group">
+                <div className="shrink-0 h-10 w-10 rounded-2xl flex items-center justify-center bg-slate-50 dark:bg-slate-700 text-slate-500">
+                  <Save size={14} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-sm font-black dark:text-white truncate">{d.title || '(untitled)'}</span>
+                    <span className="px-2 py-0.5 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg text-[9px] font-black uppercase">
+                      {TARGET_LABELS[d.target] || d.target}
+                    </span>
+                    {d.scheduledAt && (
+                      <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg text-[9px] font-black uppercase">
+                        Scheduled
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate font-medium">{d.body}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="flex items-center gap-1 text-[10px] text-slate-400 font-bold">
+                      <Clock size={9} />
+                      Saved {new Date(d.savedAt).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="shrink-0 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => editDraft(d)}
+                    title="Load draft into composer"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-xl text-[10px] font-black uppercase hover:bg-brand-100 transition-colors"
+                  >
+                    <ArrowRight size={11} /> Use
+                  </button>
+                  <button
+                    onClick={() => deleteDraft(d.id)}
+                    title="Delete draft"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-xl text-[10px] font-black uppercase hover:bg-rose-100 transition-colors"
+                  >
+                    <Trash2 size={11} /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

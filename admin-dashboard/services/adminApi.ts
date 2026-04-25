@@ -242,6 +242,42 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  getScheduledBroadcasts: async (limit = 100) => {
+    const res = await fetch(`${API_BASE}/admin/scheduled-broadcasts?limit=${limit}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  scheduleBroadcast: async (payload: {
+    title: string;
+    body: string;
+    target: string;
+    imageUrl?: string;
+    scheduledAt: string;
+  }) => {
+    const res = await fetch(`${API_BASE}/admin/scheduled-broadcasts`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  cancelScheduledBroadcast: async (id: string) => {
+    const res = await fetch(`${API_BASE}/admin/scheduled-broadcasts/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
+  fireScheduledBroadcast: async (id: string) => {
+    const res = await fetch(`${API_BASE}/admin/scheduled-broadcasts/${id}/fire`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    return handleResponse(res);
+  },
+
   updateAppSettings: async (settings: Record<string, unknown>) => {
     const res = await fetch(`${API_BASE}/admin/settings`, {
       method: 'PUT',

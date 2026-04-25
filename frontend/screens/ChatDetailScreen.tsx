@@ -58,6 +58,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/context/UnreadContext";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import WavyWaveform from "@/components/chat/WavyWaveform";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
@@ -2965,7 +2966,7 @@ export default function ChatDetailScreen({
 
       {/* Image viewer (swipeable gallery) */}
       <Modal visible={!!viewingImage} transparent animationType="fade" onRequestClose={() => { closeImageViewer(); stopViewOnceCountdown(); }}>
-        <View style={styles.imageViewerOverlay}>
+        <GestureHandlerRootView style={styles.imageViewerOverlay}>
           <Pressable style={styles.imageViewerClose} onPress={() => { closeImageViewer(); stopViewOnceCountdown(); }}><Feather name="x" size={28} color="#FFF" /></Pressable>
           {viewOnceViewerActive ? (
             <View style={styles.imageViewerActions}>
@@ -3025,7 +3026,7 @@ export default function ChatDetailScreen({
               )}
             />
           ))}
-        </View>
+        </GestureHandlerRootView>
       </Modal>
 
       {/* Video viewer */}
