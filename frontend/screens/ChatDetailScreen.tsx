@@ -59,6 +59,7 @@ import { setChatScreenOpen } from "@/context/UnreadContext";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { scanForSensitiveInfo, showPersonalInfoWarning } from "@/utils/securityWarnings";
 import WavyWaveform from "@/components/chat/WavyWaveform";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
@@ -311,6 +312,8 @@ export default function ChatDetailScreen({
   const soundRef = useRef<Audio.Sound | null>(null);
   const htmlAudioRef = useRef<any>(null);
   const sendMessageRef = useRef<any>(null);
+  const securityWarningSuppressedRef = useRef<boolean>(false);
+  const recentlyWarnedTextRef = useRef<string>("");
   const matchIdRef = useRef<string | null>(null);
 
   const [typingDotAnim1] = useState(new Animated.Value(0));
@@ -791,6 +794,29 @@ export default function ChatDetailScreen({
     const textToSend = content || message.trim();
     if (!textToSend && type === "text") return;
     if (!matchId || !token || sending) return;
+
+    // Safety scan: warn before sending text that contains personal/contact info
+    if (
+      type === "text" &&
+      !securityWarningSuppressedRef.current &&
+      recentlyWarnedTextRef.current !== textToSend
+    ) {
+      const scan = scanForSensitiveInfo(textToSend);
+      if (scan.isSensitive) {
+        recentlyWarnedTextRef.current = textToSend;
+        showPersonalInfoWarning(
+          scan.reasons,
+          () => {
+            securityWarningSuppressedRef.current = true;
+            sendMessage(textToSend, type, extraData);
+          },
+          () => {
+            setMessage(textToSend);
+          },
+        );
+        return;
+      }
+    }
 
     setMessage("");
     setSending(true);
