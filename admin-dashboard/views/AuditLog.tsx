@@ -49,6 +49,7 @@ const ACTION_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
   UPDATE_SETTINGS:       { label: 'Settings Updated',       icon: <Settings size={14} />,     color: 'text-slate-600 dark:text-slate-400',    bg: 'bg-slate-50 dark:bg-slate-500/10' },
   CLOSE_TICKET:          { label: 'Ticket Closed',          icon: <MessageSquare size={14} />,color: 'text-slate-600 dark:text-slate-400',    bg: 'bg-slate-50 dark:bg-slate-500/10' },
   REPLY_TICKET:          { label: 'Ticket Reply',           icon: <MessageSquare size={14} />,color: 'text-blue-600 dark:text-blue-400',      bg: 'bg-blue-50 dark:bg-blue-500/10' },
+  SAFETY_WARNING_BYPASSED:{ label: 'Safety Warning Bypassed', icon: <AlertTriangle size={14} />,color: 'text-rose-600 dark:text-rose-400',     bg: 'bg-rose-50 dark:bg-rose-500/10' },
 };
 
 const SEVERITY_CONFIG = {
@@ -58,12 +59,13 @@ const SEVERITY_CONFIG = {
   critical: { label: 'Critical', color: 'text-rose-700 dark:text-rose-400',    bg: 'bg-rose-50 dark:bg-rose-500/10' },
 };
 
-const CATEGORIES = ['All', 'USER_MANAGEMENT', 'VERIFICATION', 'MODERATION', 'BROADCAST', 'APPEAL', 'SYSTEM', 'SUPPORT'];
+const CATEGORIES = ['All', 'USER_MANAGEMENT', 'VERIFICATION', 'MODERATION', 'BROADCAST', 'APPEAL', 'SYSTEM', 'SUPPORT', 'USER_SAFETY'];
 const SEVERITIES = ['All', 'critical', 'high', 'medium', 'low'];
 
 const CATEGORY_LABELS: Record<string, string> = {
   USER_MANAGEMENT: 'Users', VERIFICATION: 'Verification', MODERATION: 'Moderation',
   BROADCAST: 'Broadcasts', APPEAL: 'Appeals', SYSTEM: 'System', SUPPORT: 'Support',
+  USER_SAFETY: 'User Safety',
 };
 
 const AuditLog: React.FC = () => {

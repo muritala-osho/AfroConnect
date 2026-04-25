@@ -808,6 +808,12 @@ export default function ChatDetailScreen({
           scan.reasons,
           () => {
             securityWarningSuppressedRef.current = true;
+            // Fire-and-forget audit log so admins can spot risky patterns
+            post("/safety/warning-bypassed", {
+              matchId,
+              reasons: scan.reasons,
+              contentLength: textToSend.length,
+            }, token).catch(() => {});
             sendMessage(textToSend, type, extraData);
           },
           () => {

@@ -16,20 +16,23 @@ const auditLogSchema = new mongoose.Schema(
         'SEND_BROADCAST',
         'UPDATE_SETTINGS',
         'CLOSE_TICKET', 'REPLY_TICKET',
+        'SAFETY_WARNING_BYPASSED',
       ],
     },
     category: {
       type: String,
       required: true,
-      enum: ['USER_MANAGEMENT', 'VERIFICATION', 'MODERATION', 'BROADCAST', 'APPEAL', 'SYSTEM', 'SUPPORT'],
+      enum: ['USER_MANAGEMENT', 'VERIFICATION', 'MODERATION', 'BROADCAST', 'APPEAL', 'SYSTEM', 'SUPPORT', 'USER_SAFETY'],
     },
     severity: {
       type: String,
       default: 'medium',
       enum: ['low', 'medium', 'high', 'critical'],
     },
-    adminId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    adminName:  { type: String, required: true },
+    // For admin actions these hold the admin's identity. For user-triggered
+    // safety events (USER_SAFETY category) these hold the acting user instead.
+    adminId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
+    adminName:  { type: String, required: false },
     adminEmail: { type: String },
 
     targetUserId:    { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
