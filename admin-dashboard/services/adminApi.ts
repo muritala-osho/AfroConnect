@@ -47,6 +47,11 @@ export const adminApi = {
     return data;
   },
 
+  getBadgeCounts: async () => {
+    const res = await fetch(`${API_BASE}/admin/badge-counts`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
   getStats: async () => {
     const res = await fetch(`${API_BASE}/admin/stats`, { headers: authHeaders() });
     return handleResponse(res);

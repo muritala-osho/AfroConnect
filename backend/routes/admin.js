@@ -43,6 +43,38 @@ const isAdmin = async (req, res, next) => {
   next();
 };
 
+router.get('/badge-counts', protect, isAdmin, async (req, res) => {
+  try {
+    const SupportTicket = require('../models/SupportTicket');
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [reports, verifications, appeals, safetyBypasses, auditHighSeverity, openTickets, unreadTickets] = await Promise.all([
+      Report.countDocuments({ status: 'pending' }),
+      User.countDocuments({ verificationStatus: 'pending' }),
+      User.countDocuments({ 'appeal.status': 'pending', isBanned: true }),
+      AuditLog.countDocuments({ action: 'SAFETY_WARNING_BYPASSED', createdAt: { $gte: since24h } }),
+      AuditLog.countDocuments({ severity: 'high', createdAt: { $gte: since24h } }),
+      SupportTicket.countDocuments({ status: 'open' }).catch(() => 0),
+      SupportTicket.countDocuments({ status: 'open', unreadByAgent: { $gt: 0 } }).catch(() => 0),
+    ]);
+    const flaggedContent = reports + safetyBypasses;
+    res.json({
+      success: true,
+      counts: {
+        reports,
+        verifications,
+        appeals,
+        content: flaggedContent,
+        audit: auditHighSeverity,
+        tickets: openTickets,
+        unreadTickets,
+      },
+    });
+  } catch (error) {
+    logger.error('Badge counts error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.get('/reports', protect, isAdmin, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;

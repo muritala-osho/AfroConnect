@@ -10,7 +10,7 @@ interface SidebarProps {
   adminName: string;
   adminAvatar?: string;
   onLogout: () => void;
-  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number };
+  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; audit: number };
 }
 
 const SECTION_GROUPS = [
@@ -41,6 +41,19 @@ const BADGE_MAP: Record<string, keyof NonNullable<SidebarProps['pendingCounts']>
   verification: 'verifications',
   support: 'tickets',
   agent: 'unreadTickets',
+  appeals: 'appeals',
+  content: 'content',
+  audit: 'audit',
+};
+
+const BADGE_COLOR: Record<string, string> = {
+  reports:      'bg-rose-500',
+  content:      'bg-rose-500',
+  audit:        'bg-rose-600 animate-pulse',
+  appeals:      'bg-amber-500',
+  verification: 'bg-amber-500',
+  support:      'bg-sky-500',
+  agent:        'bg-sky-500',
 };
 
 const AfroLogo = () => (
@@ -137,7 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </div>
 
                         {badge > 0 && (
-                          <span className="shrink-0 h-5 min-w-[20px] px-1.5 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-badgePop">
+                          <span className={`shrink-0 h-5 min-w-[20px] px-1.5 text-white text-[9px] font-black rounded-full flex items-center justify-center animate-badgePop ${BADGE_COLOR[item.id] || 'bg-rose-500'}`}>
                             {badge > 99 ? '99+' : badge}
                           </span>
                         )}

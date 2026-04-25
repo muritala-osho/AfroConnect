@@ -32,7 +32,17 @@ const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'rep
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
 const LOCKOUT_SECONDS = 60;
-const BADGE_POLL_MS = 90_000;
+const BADGE_POLL_MS = 20_000;
+
+const BADGE_CLEAR_MAP: Record<string, keyof PendingCounts> = {
+  reports: 'reports',
+  verification: 'verifications',
+  appeals: 'appeals',
+  content: 'content',
+  audit: 'audit',
+  support: 'tickets',
+  agent: 'unreadTickets',
+};
 
 const PAGE_TITLES: Record<string, string> = {
   dashboard: 'Dashboard', users: 'User Management', analytics: 'Analytics',
@@ -43,7 +53,7 @@ const PAGE_TITLES: Record<string, string> = {
   churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
 };
 
-interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number }
+interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; audit: number }
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -60,7 +70,7 @@ const App: React.FC = () => {
     return (saved as 'light' | 'dark') || 'light';
   });
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTabRaw] = useState('dashboard');
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
@@ -68,7 +78,14 @@ const App: React.FC = () => {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; id: number } | null>(null);
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
-  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0 });
+  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0, audit: 0 });
+  const setActiveTab = useCallback((tab: string) => {
+    setActiveTabRaw(tab);
+    const countKey = BADGE_CLEAR_MAP[tab];
+    if (countKey) {
+      setPendingCounts(prev => ({ ...prev, [countKey]: 0 }));
+    }
+  }, []);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const notifIdRef = useRef(0);
 
@@ -97,7 +114,7 @@ const App: React.FC = () => {
     setAuth({ isAuthenticated: false, user: null });
     localStorage.removeItem('afroconnect_auth');
     clearToken();
-    setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0 });
+    setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0, audit: 0 });
     showToast('Session terminated safely.', 'success');
   }, [showToast]);
 
@@ -133,18 +150,19 @@ const App: React.FC = () => {
   const fetchBadgeCounts = useCallback(async () => {
     if (!auth.isAuthenticated) return;
     try {
-      const [rRes, vRes, tRes] = await Promise.allSettled([
-        adminApi.getReports('pending'),
-        adminApi.getVerifications(),
-        adminApi.getAllSupportTickets(),
-      ]);
-      const allTickets: any[] = tRes.status === 'fulfilled' && tRes.value?.success ? (tRes.value.tickets || []) : [];
-      setPendingCounts({
-        reports:       rRes.status === 'fulfilled' && rRes.value?.success ? (rRes.value.reports?.length || 0) : 0,
-        verifications: vRes.status === 'fulfilled' && vRes.value?.success ? (vRes.value.verifications?.length || 0) : 0,
-        tickets:       allTickets.filter((t: any) => t.status === 'open').length,
-        unreadTickets: allTickets.filter((t: any) => (t.unreadByAgent ?? 0) > 0).length,
-      });
+      const data = await adminApi.getBadgeCounts();
+      if (data?.success && data.counts) {
+        const c = data.counts;
+        setPendingCounts(prev => ({
+          reports:       c.reports       ?? prev.reports,
+          verifications: c.verifications ?? prev.verifications,
+          tickets:       c.tickets       ?? prev.tickets,
+          unreadTickets: c.unreadTickets ?? prev.unreadTickets,
+          appeals:       c.appeals       ?? prev.appeals,
+          content:       c.content       ?? prev.content,
+          audit:         c.audit         ?? prev.audit,
+        }));
+      }
     } catch {
     }
   }, [auth.isAuthenticated]);
