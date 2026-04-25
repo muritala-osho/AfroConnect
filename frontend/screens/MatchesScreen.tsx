@@ -12,6 +12,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { Gesture, GestureDetector, GestureHandlerRootView, ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Image } from "expo-image";
+import { SafeImage } from "@/components/SafeImage";
+import { Skeleton } from "@/components/SkeletonLoader";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -121,10 +123,12 @@ const MatchCardItem = React.memo(({ item, isTall, isLast, onPress, getCompatibil
       onPress={() => onPress(item.user.id)}
     >
       {photoSource ? (
-        <Image
+        <SafeImage
           source={photoSource}
           style={styles.matchPhoto}
           contentFit="cover"
+          transition={200}
+          placeholder={{ blurhash: "L6PZfSi_.AyE_3t7t7R**0o#DgR4" }}
         />
       ) : (
         <View style={[styles.matchPhoto, styles.noPhotoContainer]}>
@@ -541,8 +545,21 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
   if (loading) {
     return (
-      <ThemedView style={[styles.container, styles.centerContent]}>
-        <ActivityIndicator size="large" color={theme.primary} />
+      <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
+        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
+          <ThemedText style={styles.headerTitle}>{t('matches')}</ThemedText>
+        </View>
+        <View style={[styles.skeletonGrid, { paddingHorizontal: Spacing.lg }]}>
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <Skeleton
+              key={`m-skel-${i}`}
+              width={COLUMN_WIDTH}
+              height={i % 3 === 1 ? COLUMN_WIDTH * 1.2 : TALL_CARD_HEIGHT}
+              borderRadius={BorderRadius.md}
+              style={{ marginBottom: CARD_GAP }}
+            />
+          ))}
+        </View>
       </ThemedView>
     );
   }
@@ -731,6 +748,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#2A2A2A",
     alignItems: "center",
     justifyContent: "center",
+  },
+  skeletonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: Spacing.md,
   },
   cardGradient: {
     position: "absolute",
