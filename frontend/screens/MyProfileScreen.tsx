@@ -27,6 +27,7 @@ import SpotifyEmbedPlayer from "@/components/SpotifyEmbedPlayer";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import VoiceBio from "@/components/VoiceBio";
+import { ProfileCompletionBanner } from "@/components/ProfileCompletion";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type MyProfileScreenNavigationProp = CompositeNavigationProp<
@@ -578,6 +579,10 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             <ThemedText style={[styles.actionButtonText, { color: '#FFF', fontSize: 12 }]}>Visitors</ThemedText>
           </Pressable>
         </View>
+
+        <ProfileCompletionBanner
+          onPromptPress={() => navigation.navigate("EditProfile")}
+        />
 
         {user?.bio && (
           <View style={styles.section}>
