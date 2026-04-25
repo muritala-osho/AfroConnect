@@ -2630,7 +2630,7 @@ export default function ChatDetailScreen({
       </View>
 
       {/* BODY */}
-      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 68 : insets.bottom}>
+      <KAVController style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
