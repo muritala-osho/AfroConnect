@@ -721,6 +721,183 @@ router.get('/premium-members', protect, isAdmin, async (req, res) => {
 });
 
 
+// Grant a user free Premium access (admin comp / VIP / influencer / refund credit etc.)
+// POST /admin/users/:userId/grant-premium  { plan: 'gold'|'platinum'|'plus', durationDays: number, reason?: string }
+router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) => {
+  try {
+    const { plan = 'platinum', durationDays = 30, reason } = req.body || {};
+    const allowedPlans = ['plus', 'gold', 'platinum'];
+    if (!allowedPlans.includes(plan)) {
+      return res.status(400).json({ success: false, message: `Plan must be one of: ${allowedPlans.join(', ')}` });
+    }
+    const days = Math.max(1, Math.min(3650, parseInt(durationDays, 10) || 30));
+
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const now = new Date();
+    // If already active, extend from current expiry; otherwise from now.
+    const currentExpiry = user.premium?.expiresAt ? new Date(user.premium.expiresAt) : null;
+    const baseDate = user.premium?.isActive && currentExpiry && currentExpiry > now ? currentExpiry : now;
+    const expiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
+
+    const features = {
+      unlimitedSwipes: true,
+      seeWhoLikesYou: true,
+      unlimitedRewinds: true,
+      boostPerMonth: plan === 'platinum' ? 10 : plan === 'gold' ? 5 : 1,
+      superLikesPerDay: plan === 'platinum' ? 10 : plan === 'gold' ? 5 : 3,
+      noAds: true,
+      advancedFilters: true,
+      readReceipts: true,
+      priorityMatches: plan !== 'plus',
+      incognitoMode: plan === 'platinum',
+      voiceNoteLimit: 30,
+      unsendLimit: 15,
+    };
+
+    user.premium = {
+      ...(user.premium?.toObject ? user.premium.toObject() : user.premium || {}),
+      isActive: true,
+      plan,
+      source: 'admin',
+      productId: `admin_grant_${plan}`,
+      expiresAt,
+      activatedAt: user.premium?.activatedAt || now,
+      cancelledAt: null,
+      autoRenewing: false,
+      lastEventType: 'ADMIN_GRANT',
+      lastEventAt: now,
+      features,
+    };
+
+    await user.save();
+    if (redis?.del) {
+      await redis.del(`profile:me:${user._id}`).catch(() => {});
+    }
+
+    await logAudit(
+      req,
+      'GRANT_PREMIUM',
+      'SUBSCRIPTION',
+      'high',
+      user,
+      `Granted ${plan} for ${days} days (until ${expiresAt.toISOString()})${reason ? ` — ${reason}` : ''}`
+    );
+
+    res.json({
+      success: true,
+      message: `${plan} premium granted for ${days} days`,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        premium: user.premium,
+      },
+    });
+  } catch (error) {
+    logger.error('Grant premium error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Revoke a previously-granted free premium (only valid when source==='admin').
+router.post('/users/:userId/revoke-premium', protect, isAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const user = await User.findById(req.params.userId);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (user.premium?.source && user.premium.source !== 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot revoke a paid subscription (source: ${user.premium.source}). Use the store cancellation flow instead.`,
+      });
+    }
+
+    const now = new Date();
+    user.premium = {
+      ...(user.premium?.toObject ? user.premium.toObject() : user.premium || {}),
+      isActive: false,
+      plan: 'free',
+      expiresAt: now,
+      cancelledAt: now,
+      autoRenewing: false,
+      lastEventType: 'ADMIN_REVOKE',
+      lastEventAt: now,
+      features: {
+        unlimitedSwipes: false,
+        seeWhoLikesYou: false,
+        unlimitedRewinds: false,
+        boostPerMonth: 0,
+        superLikesPerDay: 0,
+        noAds: false,
+        advancedFilters: false,
+        readReceipts: false,
+        priorityMatches: false,
+        incognitoMode: false,
+        voiceNoteLimit: 30,
+        unsendLimit: 15,
+      },
+    };
+
+    await user.save();
+    if (redis?.del) {
+      await redis.del(`profile:me:${user._id}`).catch(() => {});
+    }
+
+    await logAudit(
+      req,
+      'REVOKE_PREMIUM',
+      'SUBSCRIPTION',
+      'high',
+      user,
+      `Revoked admin-granted premium${reason ? ` — ${reason}` : ''}`
+    );
+
+    res.json({
+      success: true,
+      message: 'Premium revoked',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        premium: user.premium,
+      },
+    });
+  } catch (error) {
+    logger.error('Revoke premium error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Lightweight user lookup for the "Grant Premium" admin modal.
+// GET /admin/users/lookup?q=email_or_name
+router.get('/users/lookup', protect, isAdmin, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) return res.json({ success: true, users: [] });
+
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const safe = escape(q);
+    const users = await User.find({
+      $or: [
+        { email: { $regex: safe, $options: 'i' } },
+        { name: { $regex: safe, $options: 'i' } },
+      ],
+    })
+      .select('name email avatar premium')
+      .limit(10)
+      .lean();
+
+    res.json({ success: true, users });
+  } catch (error) {
+    logger.error('User lookup error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+
 router.get('/subscriptions-revenue', protect, isAdmin, async (req, res) => {
   try {
     const activeSubscriptions = await User.countDocuments({ 'premium.isActive': true });

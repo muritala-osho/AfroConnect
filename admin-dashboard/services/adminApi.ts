@@ -179,6 +179,29 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  lookupUsers: async (q: string) => {
+    const res = await fetch(`${API_BASE}/admin/users/lookup?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    return handleResponse(res);
+  },
+
+  grantPremium: async (userId: string, payload: { plan: 'plus' | 'gold' | 'platinum'; durationDays: number; reason?: string }) => {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}/grant-premium`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return handleResponse(res);
+  },
+
+  revokePremium: async (userId: string, reason?: string) => {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}/revoke-premium`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(res);
+  },
+
   getVerifications: async () => {
     const res = await fetch(`${API_BASE}/admin/verifications`, { headers: authHeaders() });
     return handleResponse(res);

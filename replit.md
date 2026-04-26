@@ -55,6 +55,7 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   Support Desk: centralized system for managing support tickets, with agent assignment and chat interface.
     *   Payments & Revenue tracking.
     *   Premium Members panel: per-user subscription state from `GET /admin/premium-members` showing source (iOS/Android/web/admin), plan, expiry, days-remaining, auto-renew status, last webhook event, transaction identifiers, and active feature flags. Filters by source, plan, status (expiring soon / cancelled-but-active / expired), auto-renew, plus search by name/email/transaction ID/purchase token.
+    *   Grant Free Premium: admins can comp users with paid features via a header button on the Premium Members panel. Backed by `POST /admin/users/:userId/grant-premium` (plan = plus|gold|platinum, durationDays, optional reason), `POST /admin/users/:userId/revoke-premium` (only revokes admin-granted premium — store-billed subscriptions must be cancelled at the store), and `GET /admin/users/lookup?q=` for typeahead search. Granting an active subscription extends the existing expiry. All grants/revokes write `category: SUBSCRIPTION` audit log entries with severity `high`.
     *   Dynamic content and user data, removing all mock data for production-ready administration.
 
 ## External Dependencies

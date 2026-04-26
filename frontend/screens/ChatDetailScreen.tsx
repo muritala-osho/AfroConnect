@@ -114,6 +114,16 @@ export default function ChatDetailScreen({
   const myId = useMemo(() => (user as any)?._id || user?.id || "", [user]);
 
   const [message, setMessage] = useState("");
+  const [hasMessage, setHasMessage] = useState(false);
+  // Keep `hasMessage` in lock-step with the input from every code path
+  // (typing, drafts, icebreakers, emoji picker, send-clear, etc.).
+  // The boolean is what drives the send/mic swap, so isolating it
+  // from `message` lets the memoized swap re-render only when needed
+  // and keeps the toggle visually instant.
+  useEffect(() => {
+    const next = message.trim().length > 0;
+    setHasMessage((prev) => (prev === next ? prev : next));
+  }, [message]);
   const [messages, setMessages] = useState<Message[]>([]);
   const messagesRef = useRef<Message[]>([]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -2856,13 +2866,13 @@ export default function ChatDetailScreen({
               <Pressable style={styles.aiButton} onPress={fetchAISuggestions}>
                 <MaterialCommunityIcons name="robot" size={24} color={showAISuggestions ? theme.primary : theme.textSecondary} />
               </Pressable>
-              {message.trim() ? (
-                <Pressable onPress={() => sendMessage()} style={[styles.sendButton, { backgroundColor: theme.primary }]} disabled={sending}>
-                  {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
-                </Pressable>
-              ) : (
-                <Pressable style={styles.micButton} onPress={startRecording}><Feather name="mic" size={24} color={theme.primary} /></Pressable>
-              )}
+              <SendOrMicSwap
+                hasMessage={hasMessage}
+                sending={sending}
+                themePrimary={theme.primary}
+                onSend={() => sendMessage()}
+                onMicStart={startRecording}
+              />
             </>
           )}
         </Animated.View>
@@ -3006,6 +3016,64 @@ export default function ChatDetailScreen({
   );
 }
 
+// Memoized swap between the send icon and the mic icon. Both views are
+// kept mounted and crossfade with a fast (110ms) native-driven transition,
+// so the toggle is perceptually instant and immune to the parent's
+// keystroke re-renders.
+const SendOrMicSwap = React.memo(function SendOrMicSwap({
+  hasMessage,
+  sending,
+  themePrimary,
+  onSend,
+  onMicStart,
+}: {
+  hasMessage: boolean;
+  sending: boolean;
+  themePrimary: string;
+  onSend: () => void;
+  onMicStart: () => void;
+}) {
+  const sendOpacity = useRef(new Animated.Value(hasMessage ? 1 : 0)).current;
+  const micOpacity = useRef(new Animated.Value(hasMessage ? 0 : 1)).current;
+  const sendScale = useRef(new Animated.Value(hasMessage ? 1 : 0.6)).current;
+  const micScale = useRef(new Animated.Value(hasMessage ? 0.6 : 1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(sendOpacity, { toValue: hasMessage ? 1 : 0, duration: 110, useNativeDriver: true }),
+      Animated.timing(micOpacity, { toValue: hasMessage ? 0 : 1, duration: 110, useNativeDriver: true }),
+      Animated.spring(sendScale, { toValue: hasMessage ? 1 : 0.6, useNativeDriver: true, bounciness: 6, speed: 28 }),
+      Animated.spring(micScale, { toValue: hasMessage ? 0.6 : 1, useNativeDriver: true, bounciness: 6, speed: 28 }),
+    ]).start();
+  }, [hasMessage, sendOpacity, micOpacity, sendScale, micScale]);
+
+  return (
+    <View style={styles.sendMicSwap} pointerEvents="box-none">
+      <Animated.View
+        style={[styles.swapLayer, { opacity: micOpacity, transform: [{ scale: micScale }] }]}
+        pointerEvents={hasMessage ? "none" : "auto"}
+      >
+        <Pressable style={styles.micButton} onPress={onMicStart} hitSlop={8}>
+          <Feather name="mic" size={24} color={themePrimary} />
+        </Pressable>
+      </Animated.View>
+      <Animated.View
+        style={[styles.swapLayer, { opacity: sendOpacity, transform: [{ scale: sendScale }] }]}
+        pointerEvents={hasMessage ? "auto" : "none"}
+      >
+        <Pressable
+          onPress={onSend}
+          style={[styles.sendButton, { backgroundColor: themePrimary }]}
+          disabled={sending}
+          hitSlop={8}
+        >
+          {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="send" size={20} color="#FFF" />}
+        </Pressable>
+      </Animated.View>
+    </View>
+  );
+});
+
 const styles = StyleSheet.create<any>({
   container: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingVertical: 12, borderBottomWidth: 1 },
@@ -3112,6 +3180,8 @@ const styles = StyleSheet.create<any>({
   aiButton: { padding: 6, marginBottom: 2 },
   sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 2 },
   micButton: { padding: 8, marginBottom: 2 },
+  sendMicSwap: { width: 44, height: 44, justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  swapLayer: { position: "absolute", justifyContent: "center", alignItems: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   attachmentMenu: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
   attachmentTitle: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 20 },

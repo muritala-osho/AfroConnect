@@ -2,8 +2,17 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Crown, Loader2, RefreshCw, AlertCircle, Search, Apple, Smartphone, Globe, Shield,
   ChevronLeft, ChevronRight, X, Calendar, RotateCw, AlertTriangle, CheckCircle2, XCircle,
+  Gift, Trash2, UserPlus,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
+
+type LookupUser = {
+  _id: string;
+  name?: string;
+  email?: string;
+  avatar?: string;
+  premium?: { isActive?: boolean; plan?: string; source?: string | null; expiresAt?: string | null };
+};
 
 type PremiumFeatures = {
   unlimitedSwipes?: boolean; seeWhoLikesYou?: boolean; unlimitedRewinds?: boolean;
@@ -84,6 +93,15 @@ const PremiumMembers: React.FC = () => {
   const [status, setStatus] = useState<string>('');
   const [autoRenew, setAutoRenew] = useState<string>('');
   const [selected, setSelected] = useState<PremiumMember | null>(null);
+  const [showGrant, setShowGrant] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -116,6 +134,28 @@ const PremiumMembers: React.FC = () => {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [search, source, plan, status, autoRenew]);
 
+  const handleRevoke = async (m: PremiumMember) => {
+    if (m.premium?.source && m.premium.source !== 'admin') {
+      setToast({ kind: 'error', text: `Can't revoke a ${m.premium.source} subscription. Use the store cancel flow.` });
+      return;
+    }
+    if (!window.confirm(`Revoke premium for ${m.name || m.email}?`)) return;
+    try {
+      setRevokingId(m._id);
+      const res = await adminApi.revokePremium(m._id);
+      if (res?.success) {
+        setToast({ kind: 'success', text: 'Premium revoked.' });
+        fetchData(true);
+      } else {
+        setToast({ kind: 'error', text: res?.message || 'Failed to revoke.' });
+      }
+    } catch (err: any) {
+      setToast({ kind: 'error', text: err?.message || 'Failed to revoke.' });
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
   const onSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSearch(searchInput.trim());
@@ -140,15 +180,35 @@ const PremiumMembers: React.FC = () => {
             Live subscription state synced from Apple & Google webhooks
           </p>
         </div>
-        <button
-          onClick={() => fetchData(true)}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 transition-all"
-        >
-          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowGrant(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-sm"
+          >
+            <Gift size={15} />
+            Grant Free Premium
+          </button>
+          <button
+            onClick={() => fetchData(true)}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:border-teal-400 hover:text-teal-600 transition-all"
+          >
+            <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {toast && (
+        <div className={`flex items-center gap-3 p-4 rounded-2xl text-sm font-semibold ${
+          toast.kind === 'success'
+            ? 'bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+            : 'bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-700 dark:text-rose-400'
+        }`}>
+          {toast.kind === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          {toast.text}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-center gap-3 p-4 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl text-sm text-rose-700 dark:text-rose-400 font-semibold">
@@ -345,12 +405,26 @@ const PremiumMembers: React.FC = () => {
                           <p className="text-[10px] text-slate-400">{fmtDateTime(m.premium?.lastEventAt)}</p>
                         </td>
                         <td className="px-5 py-3 text-right">
-                          <button
-                            onClick={() => setSelected(m)}
-                            className="text-xs font-bold text-teal-600 hover:text-teal-700"
-                          >
-                            Details
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => setSelected(m)}
+                              className="text-xs font-bold text-teal-600 hover:text-teal-700"
+                            >
+                              Details
+                            </button>
+                            {(!m.premium?.source || m.premium?.source === 'admin') && (
+                              <button
+                                onClick={() => handleRevoke(m)}
+                                disabled={revokingId === m._id}
+                                title="Revoke admin-granted premium"
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-40"
+                              >
+                                {revokingId === m._id
+                                  ? <Loader2 size={13} className="animate-spin" />
+                                  : <Trash2 size={13} />}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -459,6 +533,254 @@ const PremiumMembers: React.FC = () => {
           </div>
         </div>
       )}
+
+      {showGrant && (
+        <GrantPremiumModal
+          onClose={() => setShowGrant(false)}
+          onGranted={(msg) => {
+            setShowGrant(false);
+            setToast({ kind: 'success', text: msg });
+            fetchData(true);
+          }}
+          onError={(msg) => setToast({ kind: 'error', text: msg })}
+        />
+      )}
+    </div>
+  );
+};
+
+const GrantPremiumModal: React.FC<{
+  onClose: () => void;
+  onGranted: (msg: string) => void;
+  onError: (msg: string) => void;
+}> = ({ onClose, onGranted, onError }) => {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<LookupUser[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [picked, setPicked] = useState<LookupUser | null>(null);
+  const [plan, setPlan] = useState<'plus' | 'gold' | 'platinum'>('platinum');
+  const [duration, setDuration] = useState<number>(30);
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Debounced lookup
+  useEffect(() => {
+    if (picked) return;
+    const q = query.trim();
+    if (q.length < 2) { setResults([]); return; }
+    let cancelled = false;
+    setSearching(true);
+    const t = setTimeout(async () => {
+      try {
+        const res = await adminApi.lookupUsers(q);
+        if (!cancelled && res?.success) setResults(res.users || []);
+      } catch (_) {
+        if (!cancelled) setResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, picked]);
+
+  const submit = async () => {
+    if (!picked) return;
+    if (!duration || duration < 1) { onError('Duration must be at least 1 day.'); return; }
+    try {
+      setSubmitting(true);
+      const res = await adminApi.grantPremium(picked._id, {
+        plan,
+        durationDays: duration,
+        reason: reason.trim() || undefined,
+      });
+      if (res?.success) {
+        onGranted(res.message || `${plan} granted to ${picked.name || picked.email}`);
+      } else {
+        onError(res?.message || 'Failed to grant premium.');
+      }
+    } catch (err: any) {
+      onError(err?.message || 'Failed to grant premium.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+              <Gift size={18} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black dark:text-white">Grant Free Premium</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">Comp a user with paid features (VIP, refund credit, partner, etc.)</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* Step 1: pick user */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 flex items-center gap-1">
+              <UserPlus size={11} /> User
+            </p>
+            {picked ? (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 dark:bg-teal-500/10 border border-teal-200 dark:border-teal-500/20">
+                <img
+                  src={picked.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(picked.name || picked.email || 'U')}&background=14b8a6&color=fff&bold=true`}
+                  className="h-9 w-9 rounded-xl object-cover"
+                  alt=""
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-gray-900 dark:text-white truncate">{picked.name || '—'}</p>
+                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{picked.email}</p>
+                  {picked.premium?.isActive && (
+                    <p className="text-[10px] mt-0.5 text-amber-600 dark:text-amber-400 font-bold">
+                      Already premium ({picked.premium.plan} via {picked.premium.source || 'unknown'}) — granting will extend.
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => { setPicked(null); setQuery(''); setResults([]); }}
+                  className="text-xs font-bold text-rose-600 hover:underline"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    autoFocus
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by name or email…"
+                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
+                  />
+                  {searching && (
+                    <Loader2 size={14} className="animate-spin absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  )}
+                </div>
+                {results.length > 0 && (
+                  <div className="mt-2 max-h-56 overflow-y-auto border border-gray-100 dark:border-slate-800 rounded-xl divide-y divide-gray-100 dark:divide-slate-800">
+                    {results.map((u) => (
+                      <button
+                        key={u._id}
+                        onClick={() => setPicked(u)}
+                        className="w-full flex items-center gap-3 p-2.5 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors"
+                      >
+                        <img
+                          src={u.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || u.email || 'U')}&background=14b8a6&color=fff&bold=true`}
+                          className="h-8 w-8 rounded-lg object-cover"
+                          alt=""
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{u.name || '—'}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{u.email}</p>
+                        </div>
+                        {u.premium?.isActive && (
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-black uppercase">
+                            {u.premium.plan}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!searching && query.trim().length >= 2 && results.length === 0 && (
+                  <p className="mt-2 text-xs text-slate-400">No users found.</p>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Step 2: plan & duration */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Plan</p>
+            <div className="grid grid-cols-3 gap-2">
+              {(['plus', 'gold', 'platinum'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPlan(p)}
+                  className={`px-3 py-2.5 rounded-xl text-sm font-bold capitalize border transition-all ${
+                    plan === p
+                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                      : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:border-amber-300'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Duration (days)</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {[7, 30, 90, 180, 365].map((d) => (
+                <button
+                  key={d}
+                  onClick={() => setDuration(d)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    duration === d
+                      ? 'bg-teal-500 text-white border-teal-500'
+                      : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:border-teal-300'
+                  }`}
+                >
+                  {d === 7 ? '1 wk' : d === 30 ? '1 mo' : d === 90 ? '3 mo' : d === 180 ? '6 mo' : '1 yr'}
+                </button>
+              ))}
+              <input
+                type="number"
+                min={1}
+                max={3650}
+                value={duration}
+                onChange={(e) => setDuration(parseInt(e.target.value, 10) || 0)}
+                className="w-24 px-3 py-1.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-lg text-xs text-gray-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Reason (optional, for audit log)</p>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Influencer comp, refund credit, beta tester…"
+              className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
+            />
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-gray-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={!picked || submitting || !duration}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white disabled:opacity-50 hover:opacity-90"
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
+            Grant {plan} for {duration}d
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
