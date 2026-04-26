@@ -246,8 +246,26 @@ router.get('/', protect, async (req, res) => {
 
 router.get('/unread-count', protect, async (req, res) => {
   try {
-    const count = await Notification.countDocuments({ recipient: req.user._id, read: false });
+    const { type } = req.query;
+    const filter = { recipient: req.user._id, read: false };
+    if (type) filter.type = { $in: type.split(',') };
+    const count = await Notification.countDocuments(filter);
     res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/mark-type-read', protect, async (req, res) => {
+  try {
+    const { type } = req.body;
+    if (!type) return res.status(400).json({ success: false, message: 'type is required' });
+    const types = type.split(',');
+    await Notification.updateMany(
+      { recipient: req.user._id, type: { $in: types }, read: false },
+      { read: true }
+    );
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });
   }

@@ -15,6 +15,7 @@ import { Image } from "expo-image";
 import { SafeImage } from "@/components/SafeImage";
 import { Skeleton } from "@/components/SkeletonLoader";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
+import { useUnread } from "@/contexts/UnreadContext";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MainTabParamList } from "@/navigation/MainTabNavigator";
@@ -185,6 +186,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { showAlert, AlertComponent } = useThemedAlert();
+  const { resetMatchBadge } = useUnread();
   const [matches, setMatches] = useState<MatchWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -196,6 +198,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
   useFocusEffect(
     useCallback(() => {
       loadMatches();
+      resetMatchBadge();
     }, [token])
   );
 

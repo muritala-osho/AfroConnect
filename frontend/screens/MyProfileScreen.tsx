@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { View, StyleSheet, Pressable, Modal, Dimensions, ScrollView, TouchableOpacity } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { SafeImage } from "@/components/SafeImage";
@@ -7,7 +7,8 @@ import ZoomablePhoto from "@/components/ZoomablePhoto";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { CompositeNavigationProp } from "@react-navigation/native";
+import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
+import { useUnread } from "@/contexts/UnreadContext";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { MainTabParamList } from "@/navigation/MainTabNavigator";
@@ -167,7 +168,14 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
   const { del } = useApi();
   const { t } = useTranslation();
   const { showAlert, AlertComponent } = useThemedAlert();
+  const { resetProfileBadge } = useUnread();
   const insets = useSafeAreaInsets();
+
+  useFocusEffect(
+    useCallback(() => {
+      resetProfileBadge();
+    }, [])
+  );
   const [selectedPhoto, setSelectedPhoto] = useState<number>(0);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [currentHeroPhoto, setCurrentHeroPhoto] = useState(0);

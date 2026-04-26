@@ -12,6 +12,10 @@ interface UnreadContextType {
   unreadNotifCount: number;
   setUnreadNotifCount: (n: number) => void;
   refreshNotifCount: () => void;
+  newMatchCount: number;
+  resetMatchBadge: () => void;
+  newProfileCount: number;
+  resetProfileBadge: () => void;
 }
 
 const UnreadContext = createContext<UnreadContextType>({
@@ -21,6 +25,10 @@ const UnreadContext = createContext<UnreadContextType>({
   unreadNotifCount: 0,
   setUnreadNotifCount: () => {},
   refreshNotifCount: () => {},
+  newMatchCount: 0,
+  resetMatchBadge: () => {},
+  newProfileCount: 0,
+  resetProfileBadge: () => {},
 });
 
 /** Safely update the OS-level app icon badge (iOS + some Android launchers). */
@@ -29,11 +37,39 @@ function syncOsBadge(count: number) {
   Notifications.setBadgeCountAsync(count).catch(() => {});
 }
 
+async function fetchUnreadByType(authToken: string, type: string): Promise<number> {
+  try {
+    const res = await fetch(
+      `${getApiBaseUrl()}/api/notifications/unread-count?type=${type}`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    return data.success && typeof data.count === 'number' ? data.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function markTypeRead(authToken: string, type: string): Promise<void> {
+  try {
+    await fetch(`${getApiBaseUrl()}/api/notifications/mark-type-read`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ type }),
+    });
+  } catch {}
+}
+
 export function UnreadProvider({ children }: { children: React.ReactNode }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [newMatchCount, setNewMatchCount] = useState(0);
+  const [newProfileCount, setNewProfileCount] = useState(0);
 
-  // Track whether the user is currently inside any chat screen.
   const chatOpenRef = useRef(false);
 
   const incrementUnread = useCallback(() => {
@@ -51,7 +87,6 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
     syncOsBadge(0);
   }, []);
 
-  // Register a method so ChatDetailScreen can signal it is open/closed
   (UnreadContext as any)._setChatOpen = (open: boolean) => {
     chatOpenRef.current = open;
     if (open) {
@@ -75,8 +110,22 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  // Fetch the real unread count from the server on mount so the badge
-  // reflects actual DB state rather than starting from 0 every launch.
+  const resetMatchBadge = useCallback(async () => {
+    setNewMatchCount(0);
+    try {
+      const authToken = await AsyncStorage.getItem('auth_token');
+      if (authToken) await markTypeRead(authToken, 'match');
+    } catch {}
+  }, []);
+
+  const resetProfileBadge = useCallback(async () => {
+    setNewProfileCount(0);
+    try {
+      const authToken = await AsyncStorage.getItem('auth_token');
+      if (authToken) await markTypeRead(authToken, 'profile_view,super_like,verification');
+    } catch {}
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -85,13 +134,15 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
         const authToken = await AsyncStorage.getItem('auth_token');
         if (!authToken) return;
 
-        const [chatRes, notifRes] = await Promise.all([
+        const [chatRes, notifRes, matchCount, profileCount] = await Promise.all([
           fetch(`${getApiBaseUrl()}/api/chat/unread-count`, {
             headers: { Authorization: `Bearer ${authToken}` },
           }).catch(() => null),
           fetch(`${getApiBaseUrl()}/api/notifications/unread-count`, {
             headers: { Authorization: `Bearer ${authToken}` },
           }).catch(() => null),
+          fetchUnreadByType(authToken, 'match'),
+          fetchUnreadByType(authToken, 'profile_view,super_like,verification'),
         ]);
 
         if (!cancelled && chatRes?.ok) {
@@ -107,8 +158,11 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
             setUnreadNotifCount(data.count);
           }
         }
+        if (!cancelled) {
+          setNewMatchCount(matchCount);
+          setNewProfileCount(profileCount);
+        }
       } catch {
-        // Network failure on startup — badge stays at 0, increments on next message
       }
     };
 
@@ -129,7 +183,12 @@ export function UnreadProvider({ children }: { children: React.ReactNode }) {
   }, [incrementUnread]);
 
   return (
-    <UnreadContext.Provider value={{ unreadCount, resetUnread, incrementUnread, unreadNotifCount, setUnreadNotifCount, refreshNotifCount }}>
+    <UnreadContext.Provider value={{
+      unreadCount, resetUnread, incrementUnread,
+      unreadNotifCount, setUnreadNotifCount, refreshNotifCount,
+      newMatchCount, resetMatchBadge,
+      newProfileCount, resetProfileBadge,
+    }}>
       {children}
     </UnreadContext.Provider>
   );
@@ -139,7 +198,6 @@ export function useUnread() {
   return useContext(UnreadContext);
 }
 
-// Called by ChatDetailScreen to suppress badge counting while user is in a chat
 export function setChatScreenOpen(open: boolean) {
   const fn = (UnreadContext as any)._setChatOpen;
   if (typeof fn === 'function') fn(open);

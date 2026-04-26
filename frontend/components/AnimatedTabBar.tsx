@@ -28,7 +28,7 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 export default function AnimatedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { unreadCount, unreadNotifCount } = useUnread();
+  const { unreadCount, unreadNotifCount, newMatchCount, newProfileCount } = useUnread();
 
   return (
     <View
@@ -44,11 +44,21 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
         const icon = TAB_ICONS[route.name] || 'circle';
-        const showBadge =
-          (route.name === 'Chats' && unreadCount > 0) ||
-          (route.name === 'Notifications' && unreadNotifCount > 0);
-        const badgeNum =
-          route.name === 'Notifications' ? unreadNotifCount : unreadCount;
+
+        let badgeCount = 0;
+        let dotOnly = false;
+
+        if (route.name === 'Chats') {
+          badgeCount = unreadCount;
+        } else if (route.name === 'Notifications') {
+          badgeCount = unreadNotifCount;
+        } else if (route.name === 'Matches') {
+          badgeCount = newMatchCount;
+          dotOnly = true;
+        } else if (route.name === 'MyProfile') {
+          badgeCount = newProfileCount;
+          dotOnly = true;
+        }
 
         const onPress = () => {
           const event = navigation.emit({
@@ -73,7 +83,8 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
             onPress={onPress}
             theme={theme}
             label={route.name}
-            badgeCount={showBadge ? badgeNum : 0}
+            badgeCount={badgeCount}
+            dotOnly={dotOnly}
           />
         );
       })}
@@ -88,6 +99,7 @@ function TabButton({
   theme,
   label,
   badgeCount,
+  dotOnly,
 }: {
   icon: keyof typeof Feather.glyphMap;
   isFocused: boolean;
@@ -95,6 +107,7 @@ function TabButton({
   theme: any;
   label: string;
   badgeCount: number;
+  dotOnly: boolean;
 }) {
   const scale = useSharedValue(1);
   const rotation = useSharedValue(0);
@@ -129,7 +142,6 @@ function TabButton({
       onPressOut={handlePressOut}
       style={[styles.tabButton, containerAnimatedStyle]}
     >
-      {/* Icon + optional unread badge */}
       <View style={styles.iconWrapper}>
         <Animated.View style={animatedStyle}>
           <Feather
@@ -139,8 +151,11 @@ function TabButton({
           />
         </Animated.View>
 
-        {/* Unread message count badge */}
-        {badgeCount > 0 && (
+        {badgeCount > 0 && dotOnly && (
+          <View style={styles.dot} />
+        )}
+
+        {badgeCount > 0 && !dotOnly && (
           <View style={styles.badge}>
             <Text style={styles.badgeText} numberOfLines={1}>
               {badgeCount > 99 ? '99+' : String(badgeCount)}
@@ -205,6 +220,17 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     lineHeight: 12,
+  },
+  dot: {
+    position: 'absolute',
+    top: -3,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   activeIndicator: {
     position: 'absolute',

@@ -758,8 +758,8 @@ io.on('connection', (socket) => {
       const callerName = caller?.name || 'Someone';
       const callerPhoto = caller?.photos?.[0] || caller?.profilePicture || '';
       const isVideo = callType === 'video';
-      const notifTitle = `Missed ${isVideo ? 'video' : 'voice'} call`;
-      const notifBody = `${callerName} tried to reach you`;
+      const notifTitle = `Missed ${isVideo ? 'video' : 'voice'} call from ${callerName}`;
+      const notifBody = `Tap to call back`;
 
       await Notification.create({
         recipient: receiverId,
