@@ -1,6 +1,10 @@
 const logger = require('./logger');
 const User = require('../models/User');
-const { sendRenewalReminderEmail, sendInactivityEmail } = require('./emailService');
+const {
+  sendRenewalReminderEmail,
+  sendInactivityEmail,
+  sendAdminGrantExpiryWarningEmail,
+} = require('./emailService');
 const { runChurnPrediction } = require('./churnEngine');
 
 const THIRTY_DAYS_MS   = 30 * 24 * 60 * 60 * 1000;
@@ -107,16 +111,86 @@ const runPremiumExpiry = async () => {
   }
 };
 
+/**
+ * Warn admins about admin-granted premium subscriptions expiring within 7 days.
+ * Each grant is only warned about once per expiry window — `premium.adminGrantExpiryWarningSentAt`
+ * is reset to null whenever an admin re-grants/extends.
+ */
+const runAdminGrantExpiryWarnings = async () => {
+  try {
+    const now = new Date();
+    const sevenDays = new Date(now.getTime() + SEVEN_DAYS_MS);
+
+    const grantees = await User.find({
+      'premium.isActive': true,
+      'premium.source': 'admin',
+      'premium.expiresAt': { $gte: now, $lte: sevenDays },
+      $or: [
+        { 'premium.adminGrantExpiryWarningSentAt': null },
+        { 'premium.adminGrantExpiryWarningSentAt': { $exists: false } },
+      ],
+    }).select('email name premium').lean();
+
+    if (grantees.length === 0) return;
+
+    const admins = await User.find({ isAdmin: true })
+      .select('email name')
+      .lean();
+
+    if (admins.length === 0) {
+      logger.log('[ScheduledJobs] Admin-grant expiry warning skipped — no admins configured.');
+      return;
+    }
+
+    let notified = 0;
+    for (const grantee of grantees) {
+      const msUntilExpiry = new Date(grantee.premium.expiresAt).getTime() - now.getTime();
+      const daysLeft = Math.max(1, Math.ceil(msUntilExpiry / (24 * 60 * 60 * 1000)));
+
+      let anySent = false;
+      for (const admin of admins) {
+        if (!admin.email) continue;
+        const result = await sendAdminGrantExpiryWarningEmail({
+          adminEmail: admin.email,
+          adminName: admin.name,
+          granteeName: grantee.name,
+          granteeEmail: grantee.email,
+          expiresAt: grantee.premium.expiresAt,
+          daysLeft,
+          reason: grantee.premium.adminGrantReason,
+        });
+        if (result?.success) anySent = true;
+      }
+
+      if (anySent) {
+        await User.updateOne(
+          { _id: grantee._id },
+          { $set: { 'premium.adminGrantExpiryWarningSentAt': now } }
+        );
+        notified += 1;
+      }
+    }
+
+    if (notified > 0) {
+      logger.log(`[ScheduledJobs] Admin grant expiry warnings sent for ${notified}/${grantees.length} grant(s) to ${admins.length} admin(s).`);
+    }
+  } catch (err) {
+    logger.error('[ScheduledJobs] Admin grant expiry warning job error:', err.message);
+  }
+};
+
 const startScheduledJobs = () => {
   logger.log('[ScheduledJobs] Starting scheduled email jobs (interval: 1 hour)...');
 
   runRenewalReminders();
   runInactivityEmails();
   runPremiumExpiry();
+  runAdminGrantExpiryWarnings();
 
   setInterval(runRenewalReminders, CHECK_INTERVAL);
   setInterval(runInactivityEmails, CHECK_INTERVAL);
   setInterval(runPremiumExpiry, CHECK_INTERVAL);
+  setInterval(runAdminGrantExpiryWarnings, CHECK_INTERVAL);
 
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   setTimeout(() => {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Crown, Loader2, RefreshCw, AlertCircle, Search, Apple, Smartphone, Globe, Shield,
   ChevronLeft, ChevronRight, X, Calendar, RotateCw, AlertTriangle, CheckCircle2, XCircle,
-  Gift, Trash2, UserPlus,
+  Gift, Trash2, UserPlus, Clock,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 
@@ -49,7 +49,9 @@ type PremiumMember = {
 
 type Summary = {
   totalActive: number; ios: number; android: number; web: number;
+  admin?: number;
   cancelledButActive: number; autoRenewOff: number;
+  adminGrantsExpiringSoon?: number;
 };
 
 const SourceIcon: React.FC<{ source?: string | null; size?: number }> = ({ source, size = 14 }) => {
@@ -78,6 +80,16 @@ const daysUntil = (s?: string | null): number | null => {
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
 };
 
+const planLabel = (plan?: string | null, source?: string | null): string => {
+  if (!plan || plan === 'free') return '—';
+  if (plan === 'admin_grant' || source === 'admin') return 'Admin Grant';
+  if (plan === 'day') return 'Daily';
+  if (plan === 'week') return 'Weekly';
+  if (plan === 'month') return 'Monthly';
+  if (plan === 'year') return 'Yearly';
+  return plan.charAt(0).toUpperCase() + plan.slice(1);
+};
+
 const PremiumMembers: React.FC = () => {
   const [members, setMembers] = useState<PremiumMember[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -89,7 +101,6 @@ const PremiumMembers: React.FC = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [source, setSource] = useState<string>('');
-  const [plan, setPlan] = useState<string>('');
   const [status, setStatus] = useState<string>('');
   const [autoRenew, setAutoRenew] = useState<string>('');
   const [selected, setSelected] = useState<PremiumMember | null>(null);
@@ -110,7 +121,6 @@ const PremiumMembers: React.FC = () => {
       const res = await adminApi.getPremiumMembers({
         page, limit: 25, search: search || undefined,
         source: source || undefined,
-        plan: plan || undefined,
         status: status || undefined,
         autoRenew: autoRenew || undefined,
       });
@@ -127,12 +137,12 @@ const PremiumMembers: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, search, source, plan, status, autoRenew]);
+  }, [page, search, source, status, autoRenew]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // Reset to page 1 when filters change
-  useEffect(() => { setPage(1); }, [search, source, plan, status, autoRenew]);
+  useEffect(() => { setPage(1); }, [search, source, status, autoRenew]);
 
   const handleRevoke = async (m: PremiumMember) => {
     if (m.premium?.source && m.premium.source !== 'admin') {
@@ -165,11 +175,10 @@ const PremiumMembers: React.FC = () => {
     const chips: Array<{ key: string; label: string; onClear: () => void }> = [];
     if (search) chips.push({ key: 'search', label: `Search: ${search}`, onClear: () => { setSearch(''); setSearchInput(''); } });
     if (source) chips.push({ key: 'source', label: `Source: ${source}`, onClear: () => setSource('') });
-    if (plan) chips.push({ key: 'plan', label: `Plan: ${plan}`, onClear: () => setPlan('') });
-    if (status) chips.push({ key: 'status', label: `Status: ${status.replace('_', ' ')}`, onClear: () => setStatus('') });
+    if (status) chips.push({ key: 'status', label: `Status: ${status.replace(/_/g, ' ')}`, onClear: () => setStatus('') });
     if (autoRenew) chips.push({ key: 'auto', label: `Auto-renew: ${autoRenew}`, onClear: () => setAutoRenew('') });
     return chips;
-  }, [search, source, plan, status, autoRenew]);
+  }, [search, source, status, autoRenew]);
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -218,22 +227,45 @@ const PremiumMembers: React.FC = () => {
       )}
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         {[
           { label: 'Active Total', val: summary?.totalActive ?? '—', icon: <Crown size={18} />, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-500/10' },
           { label: 'iOS', val: summary?.ios ?? '—', icon: <Apple size={18} />, color: 'text-slate-700 dark:text-slate-300', bg: 'bg-slate-50 dark:bg-slate-800' },
           { label: 'Android', val: summary?.android ?? '—', icon: <Smartphone size={18} />, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-500/10' },
+          { label: 'Admin Grants', val: summary?.admin ?? '—', icon: <Shield size={18} />, color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-500/10' },
           { label: 'Cancel Pending', val: summary?.cancelledButActive ?? '—', icon: <AlertTriangle size={18} />, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-500/10' },
-          { label: 'Auto-Renew Off', val: summary?.autoRenewOff ?? '—', icon: <XCircle size={18} />, color: 'text-rose-500', bg: 'bg-rose-50 dark:bg-rose-500/10' },
-        ].map((s, i) => (
-          <div key={i} className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center gap-3">
-            <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
-            <div>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.label}</p>
-              <p className="text-lg font-black dark:text-white">{s.val}</p>
-            </div>
-          </div>
-        ))}
+          {
+            label: 'Grants Expiring',
+            val: summary?.adminGrantsExpiringSoon ?? '—',
+            icon: <Clock size={18} />,
+            color: (summary?.adminGrantsExpiringSoon ?? 0) > 0 ? 'text-rose-600' : 'text-rose-500',
+            bg: (summary?.adminGrantsExpiringSoon ?? 0) > 0
+              ? 'bg-rose-100 dark:bg-rose-500/20 ring-2 ring-rose-300 dark:ring-rose-500/40'
+              : 'bg-rose-50 dark:bg-rose-500/10',
+            onClick: (summary?.adminGrantsExpiringSoon ?? 0) > 0 ? () => { setStatus('admin_expiring'); setSource(''); } : undefined,
+            tooltip: 'Admin-granted comps expiring within 7 days',
+          },
+        ].map((s, i) => {
+          const clickable = !!(s as any).onClick;
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={(s as any).onClick}
+              disabled={!clickable}
+              title={(s as any).tooltip}
+              className={`bg-white dark:bg-slate-900 p-4 rounded-2xl border border-gray-100 dark:border-slate-800 flex items-center gap-3 text-left ${
+                clickable ? 'hover:border-rose-300 cursor-pointer transition-all' : 'cursor-default'
+              }`}
+            >
+              <div className={`p-2.5 rounded-xl ${s.bg} ${s.color}`}>{s.icon}</div>
+              <div>
+                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.label}</p>
+                <p className="text-lg font-black dark:text-white">{s.val}</p>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filters */}
@@ -261,24 +293,13 @@ const PremiumMembers: React.FC = () => {
             <option value="admin">Admin Granted</option>
           </select>
           <select
-            value={plan}
-            onChange={(e) => setPlan(e.target.value)}
-            className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
-          >
-            <option value="">All Plans</option>
-            <option value="day">Daily</option>
-            <option value="week">Weekly</option>
-            <option value="month">Monthly</option>
-            <option value="year">Yearly</option>
-            <option value="platinum">Platinum</option>
-          </select>
-          <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
             className="px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white"
           >
             <option value="">All Statuses</option>
             <option value="expiring_soon">Expiring in 7 days</option>
+            <option value="admin_expiring">Admin grants expiring</option>
             <option value="cancelled_active">Cancelled (still active)</option>
             <option value="expired">Expired</option>
           </select>
@@ -361,7 +382,7 @@ const PremiumMembers: React.FC = () => {
                             </span>
                             <span className="text-[10px] text-slate-400">·</span>
                             <span className="text-xs font-bold text-teal-600 capitalize">
-                              {m.premium?.plan || '—'}
+                              {planLabel(m.premium?.plan, m.premium?.source)}
                             </span>
                             {m.premium?.environment === 'Sandbox' && (
                               <span className="ml-1 px-1.5 py-0.5 text-[9px] font-black uppercase bg-amber-100 text-amber-700 rounded">Sandbox</span>
@@ -488,7 +509,7 @@ const PremiumMembers: React.FC = () => {
                   )}
                 </span>
               } />
-              <Field label="Plan" value={selected.premium?.plan || '—'} />
+              <Field label="Plan" value={planLabel(selected.premium?.plan, selected.premium?.source)} />
               <Field label="Product ID" mono value={selected.premium?.productId || '—'} />
               <Field label="Activated" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.activatedAt)} />
               <Field label="Restored" icon={<Calendar size={12} />} value={fmtDateTime(selected.premium?.restoredAt)} />
@@ -558,7 +579,6 @@ const GrantPremiumModal: React.FC<{
   const [results, setResults] = useState<LookupUser[]>([]);
   const [searching, setSearching] = useState(false);
   const [picked, setPicked] = useState<LookupUser | null>(null);
-  const [plan, setPlan] = useState<'plus' | 'gold' | 'platinum'>('platinum');
   const [duration, setDuration] = useState<number>(30);
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -589,12 +609,11 @@ const GrantPremiumModal: React.FC<{
     try {
       setSubmitting(true);
       const res = await adminApi.grantPremium(picked._id, {
-        plan,
         durationDays: duration,
         reason: reason.trim() || undefined,
       });
       if (res?.success) {
-        onGranted(res.message || `${plan} granted to ${picked.name || picked.email}`);
+        onGranted(res.message || `Premium granted to ${picked.name || picked.email}`);
       } else {
         onError(res?.message || 'Failed to grant premium.');
       }
@@ -645,7 +664,7 @@ const GrantPremiumModal: React.FC<{
                   <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{picked.email}</p>
                   {picked.premium?.isActive && (
                     <p className="text-[10px] mt-0.5 text-amber-600 dark:text-amber-400 font-bold">
-                      Already premium ({picked.premium.plan} via {picked.premium.source || 'unknown'}) — granting will extend.
+                      Already premium ({planLabel(picked.premium.plan, picked.premium.source)} via {picked.premium.source || 'unknown'}) — granting will extend their expiry date.
                     </p>
                   )}
                 </div>
@@ -691,7 +710,7 @@ const GrantPremiumModal: React.FC<{
                         </div>
                         {u.premium?.isActive && (
                           <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-black uppercase">
-                            {u.premium.plan}
+                            {planLabel(u.premium.plan, u.premium.source)}
                           </span>
                         )}
                       </button>
@@ -705,23 +724,14 @@ const GrantPremiumModal: React.FC<{
             )}
           </div>
 
-          {/* Step 2: plan & duration */}
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Plan</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(['plus', 'gold', 'platinum'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPlan(p)}
-                  className={`px-3 py-2.5 rounded-xl text-sm font-bold capitalize border transition-all ${
-                    plan === p
-                      ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
-                      : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:border-amber-300'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
+          {/* Step 2: duration (single Premium plan — duration is the only knob) */}
+          <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-3 flex items-start gap-2">
+            <Crown size={16} className="text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-bold text-amber-800 dark:text-amber-300">AfroConnect Premium</p>
+              <p className="text-[11px] text-amber-700/80 dark:text-amber-300/70">
+                All paid features unlocked: unlimited likes, see who likes you, 10 super-likes/day, incognito mode, advanced filters, ad-free, and more.
+              </p>
             </div>
           </div>
 
@@ -777,7 +787,7 @@ const GrantPremiumModal: React.FC<{
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white disabled:opacity-50 hover:opacity-90"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
-            Grant {plan} for {duration}d
+            Grant Premium for {duration}d
           </button>
         </div>
       </div>

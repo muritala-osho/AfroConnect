@@ -569,7 +569,7 @@ const userSchema = new mongoose.Schema({
     },
     plan: {
       type: String,
-      enum: ['free', 'plus', 'gold', 'platinum'],
+      enum: ['free', 'day', 'week', 'month', 'year', 'admin_grant'],
       default: 'free'
     },
     expiresAt: {
@@ -601,7 +601,9 @@ const userSchema = new mongoose.Schema({
     cancelledAt: { type: Date, default: null },
     autoRenewing: { type: Boolean, default: null },
     lastEventType: { type: String, default: null },
-    lastEventAt: { type: Date, default: null }
+    lastEventAt: { type: Date, default: null },
+    adminGrantReason: { type: String, default: null },
+    adminGrantExpiryWarningSentAt: { type: Date, default: null }
   },
   countryOfOrigin: {
     type: String,

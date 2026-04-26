@@ -184,7 +184,7 @@ export const adminApi = {
     return handleResponse(res);
   },
 
-  grantPremium: async (userId: string, payload: { plan: 'plus' | 'gold' | 'platinum'; durationDays: number; reason?: string }) => {
+  grantPremium: async (userId: string, payload: { durationDays: number; reason?: string }) => {
     const res = await fetch(`${API_BASE}/admin/users/${userId}/grant-premium`, {
       method: 'POST',
       headers: authHeaders(),

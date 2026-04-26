@@ -657,6 +657,10 @@ router.get('/premium-members', protect, isAdmin, async (req, res) => {
     } else if (status === 'cancelled_active') {
       query['premium.cancelledAt'] = { $ne: null };
       query['premium.isActive'] = true;
+    } else if (status === 'admin_expiring') {
+      const sevenDays = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      query['premium.source'] = 'admin';
+      query['premium.expiresAt'] = { $lte: sevenDays, $gt: new Date() };
     }
 
     if (source) query['premium.source'] = source;
@@ -684,20 +688,39 @@ router.get('/premium-members', protect, isAdmin, async (req, res) => {
         .skip((pageNum - 1) * limitNum)
         .lean(),
       User.countDocuments(query),
-      User.aggregate([
-        { $match: { 'premium.isActive': true } },
-        {
-          $group: {
-            _id: null,
-            totalActive: { $sum: 1 },
-            ios: { $sum: { $cond: [{ $eq: ['$premium.source', 'ios'] }, 1, 0] } },
-            android: { $sum: { $cond: [{ $eq: ['$premium.source', 'android'] }, 1, 0] } },
-            web: { $sum: { $cond: [{ $eq: ['$premium.source', 'web'] }, 1, 0] } },
-            cancelledButActive: { $sum: { $cond: [{ $ne: ['$premium.cancelledAt', null] }, 1, 0] } },
-            autoRenewOff: { $sum: { $cond: [{ $eq: ['$premium.autoRenewing', false] }, 1, 0] } }
+      (() => {
+        const now = new Date();
+        const sevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        return User.aggregate([
+          { $match: { 'premium.isActive': true } },
+          {
+            $group: {
+              _id: null,
+              totalActive: { $sum: 1 },
+              ios: { $sum: { $cond: [{ $eq: ['$premium.source', 'ios'] }, 1, 0] } },
+              android: { $sum: { $cond: [{ $eq: ['$premium.source', 'android'] }, 1, 0] } },
+              web: { $sum: { $cond: [{ $eq: ['$premium.source', 'web'] }, 1, 0] } },
+              admin: { $sum: { $cond: [{ $eq: ['$premium.source', 'admin'] }, 1, 0] } },
+              cancelledButActive: { $sum: { $cond: [{ $ne: ['$premium.cancelledAt', null] }, 1, 0] } },
+              autoRenewOff: { $sum: { $cond: [{ $eq: ['$premium.autoRenewing', false] }, 1, 0] } },
+              adminGrantsExpiringSoon: {
+                $sum: {
+                  $cond: [
+                    {
+                      $and: [
+                        { $eq: ['$premium.source', 'admin'] },
+                        { $gte: ['$premium.expiresAt', now] },
+                        { $lte: ['$premium.expiresAt', sevenDays] }
+                      ]
+                    },
+                    1, 0
+                  ]
+                }
+              }
+            }
           }
-        }
-      ])
+        ]);
+      })()
     ]);
 
     res.json({
@@ -710,8 +733,8 @@ router.get('/premium-members', protect, isAdmin, async (req, res) => {
         pages: Math.ceil(total / limitNum)
       },
       summary: summaryAgg[0] || {
-        totalActive: 0, ios: 0, android: 0, web: 0,
-        cancelledButActive: 0, autoRenewOff: 0
+        totalActive: 0, ios: 0, android: 0, web: 0, admin: 0,
+        cancelledButActive: 0, autoRenewOff: 0, adminGrantsExpiringSoon: 0
       }
     });
   } catch (error) {
@@ -722,14 +745,12 @@ router.get('/premium-members', protect, isAdmin, async (req, res) => {
 
 
 // Grant a user free Premium access (admin comp / VIP / influencer / refund credit etc.)
-// POST /admin/users/:userId/grant-premium  { plan: 'gold'|'platinum'|'plus', durationDays: number, reason?: string }
+// POST /admin/users/:userId/grant-premium  { durationDays: number, reason?: string }
+// AfroConnect has a single Premium tier — only the duration is configurable.
+const { PREMIUM_FEATURES } = require('../services/iapWebhookService');
 router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) => {
   try {
-    const { plan = 'platinum', durationDays = 30, reason } = req.body || {};
-    const allowedPlans = ['plus', 'gold', 'platinum'];
-    if (!allowedPlans.includes(plan)) {
-      return res.status(400).json({ success: false, message: `Plan must be one of: ${allowedPlans.join(', ')}` });
-    }
+    const { durationDays = 30, reason } = req.body || {};
     const days = Math.max(1, Math.min(3650, parseInt(durationDays, 10) || 30));
 
     const user = await User.findById(req.params.userId);
@@ -741,17 +762,9 @@ router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) =
     const baseDate = user.premium?.isActive && currentExpiry && currentExpiry > now ? currentExpiry : now;
     const expiresAt = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000);
 
+    // All paid users get the same feature set — see iapWebhookService.PREMIUM_FEATURES.
     const features = {
-      unlimitedSwipes: true,
-      seeWhoLikesYou: true,
-      unlimitedRewinds: true,
-      boostPerMonth: plan === 'platinum' ? 10 : plan === 'gold' ? 5 : 1,
-      superLikesPerDay: plan === 'platinum' ? 10 : plan === 'gold' ? 5 : 3,
-      noAds: true,
-      advancedFilters: true,
-      readReceipts: true,
-      priorityMatches: plan !== 'plus',
-      incognitoMode: plan === 'platinum',
+      ...PREMIUM_FEATURES,
       voiceNoteLimit: 30,
       unsendLimit: 15,
     };
@@ -759,9 +772,9 @@ router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) =
     user.premium = {
       ...(user.premium?.toObject ? user.premium.toObject() : user.premium || {}),
       isActive: true,
-      plan,
+      plan: 'admin_grant',
       source: 'admin',
-      productId: `admin_grant_${plan}`,
+      productId: 'admin_grant',
       expiresAt,
       activatedAt: user.premium?.activatedAt || now,
       cancelledAt: null,
@@ -769,6 +782,9 @@ router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) =
       lastEventType: 'ADMIN_GRANT',
       lastEventAt: now,
       features,
+      adminGrantReason: reason ? String(reason).slice(0, 500) : null,
+      // Reset so a future expiry warning email goes out for the new expiry date.
+      adminGrantExpiryWarningSentAt: null,
     };
 
     await user.save();
@@ -782,12 +798,12 @@ router.post('/users/:userId/grant-premium', protect, isAdmin, async (req, res) =
       'SUBSCRIPTION',
       'high',
       user,
-      `Granted ${plan} for ${days} days (until ${expiresAt.toISOString()})${reason ? ` — ${reason}` : ''}`
+      `Granted Premium for ${days} days (until ${expiresAt.toISOString()})${reason ? ` — ${reason}` : ''}`
     );
 
     res.json({
       success: true,
-      message: `${plan} premium granted for ${days} days`,
+      message: `Premium granted for ${days} days`,
       user: {
         _id: user._id,
         name: user.name,
