@@ -21,6 +21,7 @@ import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/nativ
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
@@ -42,6 +43,13 @@ import {
   OrientationMode,
   DegradationPreference,
 } from "@/utils/agoraNative";
+
+/* react-native-agora isn't bundled in Expo Go (it's a native module), so we
+   detect Expo Go at runtime and fall back to socket-only signalling instead
+   of crashing with "createAgoraRtcEngine is not a function". */
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  Constants.executionEnvironment === "storeClient";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.44, 175);
