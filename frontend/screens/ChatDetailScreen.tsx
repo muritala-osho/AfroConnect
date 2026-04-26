@@ -2146,11 +2146,17 @@ export default function ChatDetailScreen({
                       const loadFailed = failedGifLoads.has(item._id);
                       const reloadKey = gifReloadKey[item._id] || 0;
                       if (!gifSrc) {
+                        // Old GIF messages saved before the persistence fix had no URL
+                        // stored on the server. Make this clear instead of showing a
+                        // dead "unavailable" state.
                         return (
-                          <View style={[styles.messageImage, { width: gifW, height: 140, alignItems: "center", justifyContent: "center", backgroundColor: isMe ? "rgba(255,255,255,0.12)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }]}>
-                            <Ionicons name="image-outline" size={32} color={isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary} />
-                            <ThemedText style={{ marginTop: 6, fontSize: 12, color: isMe ? "rgba(255,255,255,0.75)" : theme.textSecondary }}>
-                              GIF unavailable
+                          <View style={[styles.messageImage, { width: gifW, height: 150, alignItems: "center", justifyContent: "center", padding: 12, backgroundColor: isMe ? "rgba(255,255,255,0.12)" : isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }]}>
+                            <Ionicons name="image-outline" size={28} color={isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary} />
+                            <ThemedText style={{ marginTop: 6, fontSize: 12, fontWeight: "600", color: isMe ? "rgba(255,255,255,0.85)" : theme.text }}>
+                              GIF couldn't be loaded
+                            </ThemedText>
+                            <ThemedText style={{ marginTop: 2, fontSize: 10, textAlign: "center", color: isMe ? "rgba(255,255,255,0.6)" : theme.textSecondary }}>
+                              Ask the sender to send it again
                             </ThemedText>
                             <View style={styles.gifBadge}>
                               <ThemedText style={styles.gifBadgeText}>GIF</ThemedText>

@@ -752,6 +752,7 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       if (gifHeight) messageData.gifHeight = gifHeight;
       messageData.gifSource = gifSource || "tenor";
       messageData.content = "🎞️ GIF";
+      console.log(`[GIF] Saving message: gifUrl=${gifUrl} preview=${messageData.gifPreview} source=${messageData.gifSource}`);
     } else if (type === "location") {
       messageData.latitude = latitude;
       messageData.longitude = longitude;
