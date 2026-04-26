@@ -678,11 +678,9 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      // Only auto-scroll to newest message if user is already near the bottom.
-      // This prevents hijacking scroll position when reading older messages.
-      if (isNearBottomRef.current) {
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
-      }
+      // Always scroll to the latest message on receive so old messages move
+      // up and the new text is visible — standard chat UX.
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});

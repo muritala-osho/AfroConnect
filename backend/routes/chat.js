@@ -692,6 +692,11 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       replyTo,
       viewOnce,
       liveDurationMin,
+      gifUrl,
+      gifPreview,
+      gifWidth,
+      gifHeight,
+      gifSource,
     } = req.body;
 
     const match = await Match.findById(matchId);
@@ -726,6 +731,27 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       messageData.audioUrl = audioUrl;
       messageData.audioDuration = audioDuration || 0;
       messageData.content = content || "🎤 Voice message";
+    } else if (type === "gif") {
+      // GIFs were previously dropped here, leaving the receiver with a message
+      // that had `type:"gif"` but no URL — only the sender saw the GIF because
+      // their optimistic local copy still held the URL. Persist them properly.
+      if (!gifUrl) {
+        return res.status(400).json({ success: false, message: "gifUrl is required" });
+      }
+      const isValidGifUrl = (u) =>
+        typeof u === "string" && /^https:\/\//i.test(u) && !/^blob:|^data:|^file:/i.test(u);
+      if (!isValidGifUrl(gifUrl)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid gifUrl: must be a permanent https URL from a GIF provider",
+        });
+      }
+      messageData.gifUrl = gifUrl;
+      messageData.gifPreview = isValidGifUrl(gifPreview) ? gifPreview : gifUrl;
+      if (gifWidth) messageData.gifWidth = gifWidth;
+      if (gifHeight) messageData.gifHeight = gifHeight;
+      messageData.gifSource = gifSource || "tenor";
+      messageData.content = "🎞️ GIF";
     } else if (type === "location") {
       messageData.latitude = latitude;
       messageData.longitude = longitude;
