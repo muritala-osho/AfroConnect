@@ -317,6 +317,12 @@ export default function ChatDetailScreen({
   const flatListRef = useRef<FlashList<any>>(null);
   const isNearBottomRef = useRef(true);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Throttle outgoing typing emits to once per 2s, and remember whether we
+  // currently have an "I'm typing" state on the wire so we can send a final
+  // `isTyping:false` when the user pauses or sends.
+  const lastTypingSentRef = useRef<number>(0);
+  const typingStopTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isCurrentlyTypingRef = useRef<boolean>(false);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -718,9 +724,16 @@ export default function ChatDetailScreen({
     const handleTyping = (data: any) => {
       const typingUserId = data.userId || data.senderId;
       if (typingUserId && String(typingUserId) !== String(myId)) {
-        setIsTyping(true);
+        // Honor explicit isTyping:false so the indicator hides immediately
+        // when the other side stops, instead of waiting for the 3s fallback.
+        const isTypingFlag = data.isTyping !== false;
+        setIsTyping(isTypingFlag);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
+        if (isTypingFlag) {
+          // Safety-net: clear the bubble after 3s of silence in case we miss
+          // the matching isTyping:false event (e.g. socket drop on sender).
+          typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 3000);
+        }
       }
     };
 
@@ -792,6 +805,15 @@ export default function ChatDetailScreen({
     });
 
     return () => {
+      // Make sure we don't leave a stale "typing…" bubble on the other
+      // side after the user navigates away from this chat.
+      if (isCurrentlyTypingRef.current && matchId) {
+        socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: false });
+        isCurrentlyTypingRef.current = false;
+      }
+      if (typingStopTimerRef.current) { clearTimeout(typingStopTimerRef.current); typingStopTimerRef.current = null; }
+      if (typingTimeoutRef.current) { clearTimeout(typingTimeoutRef.current); typingTimeoutRef.current = null; }
+
       socketService.off("chat:new-message");
       socketService.off("message:new");
       socketService.off("chat:message-delivered");
@@ -843,6 +865,13 @@ export default function ChatDetailScreen({
     setMessage("");
     recentlyWarnedTextRef.current = "";
     setSending(true);
+    // Tell the receiver we stopped typing the moment we hit send, so their
+    // "typing…" bubble disappears instead of lingering for 2-3s.
+    if (matchId && isCurrentlyTypingRef.current) {
+      socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: false });
+      isCurrentlyTypingRef.current = false;
+      if (typingStopTimerRef.current) { clearTimeout(typingStopTimerRef.current); typingStopTimerRef.current = null; }
+    }
     if (userId) AsyncStorage.removeItem(`chat_draft_${userId}`).catch(() => {});
     setShowEmojiPicker(false);
     setShowAISuggestions(false);
@@ -1098,10 +1127,29 @@ export default function ChatDetailScreen({
     setViewOnceCountdown(10);
   };
 
+  /**
+   * Notify the other side that we're typing — but throttle so we don't
+   * flood the socket with one event per keystroke. We also schedule a
+   * trailing isTyping:false 2s after the last keystroke so their bubble
+   * disappears the moment we pause (instead of waiting for the 3s fallback).
+   */
   const handleTypingIndicator = useCallback(() => {
-    if (matchId && token) {
+    if (!matchId || !token) return;
+
+    const now = Date.now();
+    if (!isCurrentlyTypingRef.current || now - lastTypingSentRef.current > 2000) {
       socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: true });
+      lastTypingSentRef.current = now;
+      isCurrentlyTypingRef.current = true;
     }
+
+    if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = setTimeout(() => {
+      if (isCurrentlyTypingRef.current && matchId) {
+        socketService.emit("chat:typing", { chatId: matchId, userId: myId, isTyping: false });
+        isCurrentlyTypingRef.current = false;
+      }
+    }, 2000);
   }, [matchId, token, myId]);
 
   const handleEmojiSelect = (emoji: string) => setMessage((prev) => prev + emoji);
