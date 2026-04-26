@@ -411,7 +411,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
       FREE_MAX_DISTANCE_KM
     );
-    const maxDist = isPremium ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
+    const maxDist = Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
     const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
     const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
@@ -463,7 +463,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       return { ...userObj, score, scoreBreakdown: breakdown, distance: distanceKm };
     });
 
-    if (!isGlobal && hasOrigin && !isPremium) {
+    if (!isGlobal && hasOrigin) {
       users = users.filter(u => u.distance == null || u.distance <= maxDist);
     }
 

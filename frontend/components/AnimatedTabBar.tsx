@@ -28,7 +28,7 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
 export default function AnimatedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { unreadCount, unreadNotifCount, newMatchCount, newProfileCount } = useUnread();
+  const { unreadCount, newMatchCount, newProfileCount } = useUnread();
 
   return (
     <View
@@ -50,8 +50,6 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
 
         if (route.name === 'Chats') {
           badgeCount = unreadCount;
-        } else if (route.name === 'Notifications') {
-          badgeCount = unreadNotifCount;
         } else if (route.name === 'Matches') {
           badgeCount = newMatchCount;
           dotOnly = true;

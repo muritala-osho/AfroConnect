@@ -16,15 +16,34 @@ export async function pushLiveLocation(authToken?: string, options?: { force?: b
       if (lastSent && Date.now() - Number(lastSent) < MIN_INTERVAL_MS) return;
     }
 
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) return;
+
     const { status } = await Location.getForegroundPermissionsAsync();
     if (status !== 'granted') {
       const req = await Location.requestForegroundPermissionsAsync();
       if (req.status !== 'granted') return;
     }
 
-    const loc = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    let loc: Location.LocationObject | null = null;
+    try {
+      loc = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Low,
+          maximumAge: 60000,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('location_timeout')), 10000)
+        ),
+      ]);
+    } catch (_) {
+      try {
+        const last = await Location.getLastKnownPositionAsync();
+        if (last) loc = last;
+      } catch (_2) {}
+    }
+
+    if (!loc) return;
 
     const body: any = {
       lat: loc.coords.latitude,
@@ -55,7 +74,9 @@ export async function pushLiveLocation(authToken?: string, options?: { force?: b
     if (res.ok) {
       await AsyncStorage.setItem(LAST_SENT_KEY, String(Date.now()));
     }
-  } catch (err) {
-    logger.warn('[liveLocation] Failed to push live location:', err);
+  } catch (err: any) {
+    if (err?.message !== 'location_timeout') {
+      logger.warn('[liveLocation] Failed to push live location:', err);
+    }
   }
 }
