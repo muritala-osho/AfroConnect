@@ -299,9 +299,12 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     let searchLat = lat ? parseFloat(lat) : null;
     let searchLng = lng ? parseFloat(lng) : null;
 
+    let isPassportOrTravel = false;
+
     if (currentUser.premium?.isActive && currentUser.passportLocation?.isActive && currentUser.passportLocation?.coordinates?.length >= 2) {
       searchLng = currentUser.passportLocation.coordinates[0];
       searchLat = currentUser.passportLocation.coordinates[1];
+      isPassportOrTravel = true;
     }
     else if (currentUser.premium?.isActive && currentUser.activeLocationId) {
       const activeLoc = (currentUser.additionalLocations || []).find(
@@ -310,6 +313,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       if (activeLoc?.lat && activeLoc?.lng) {
         searchLat = activeLoc.lat;
         searchLng = activeLoc.lng;
+        isPassportOrTravel = true;
         logger.log(`[DISCOVERY] Using saved location: ${activeLoc.city || activeLoc.name} (${activeLoc.lat}, ${activeLoc.lng})`);
       }
     }
@@ -411,7 +415,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
       FREE_MAX_DISTANCE_KM
     );
-    const maxDist = Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
+    const maxDist = (isGlobal || isPassportOrTravel) ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
     const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
     const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
@@ -463,7 +467,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       return { ...userObj, score, scoreBreakdown: breakdown, distance: distanceKm };
     });
 
-    if (!isGlobal && hasOrigin) {
+    if (!isGlobal && !isPassportOrTravel && hasOrigin) {
       users = users.filter(u => u.distance == null || u.distance <= maxDist);
     }
 

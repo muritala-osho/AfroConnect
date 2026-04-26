@@ -173,14 +173,24 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
             sendSmartNotification(currentUserFull, {
               title: "It's a Match! 🎉",
               body: `You and ${targetUser.name} liked each other!`,
-              data: { type: 'match' },
+              data: {
+                type: 'match',
+                senderId: String(targetUser._id),
+                senderName: targetUser.name,
+                senderPhoto: targetUser.photos?.[0] || null,
+              },
             }, 'match').catch(() => {});
           }
           if (targetUserFull) {
             sendSmartNotification(targetUserFull, {
               title: "It's a Match! 🎉",
               body: `You and ${currentUser.name} liked each other!`,
-              data: { type: 'match' },
+              data: {
+                type: 'match',
+                senderId: String(currentUser._id),
+                senderName: currentUser.name,
+                senderPhoto: currentUser.photos?.[0] || null,
+              },
             }, 'match').catch(() => {});
           }
         } catch (pushErr) {
@@ -254,7 +264,13 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
               body: isSuper
                 ? `${currentUser.name} Super Liked your profile — open AfroConnect to see!`
                 : 'Someone on AfroConnect liked your profile. Come see!',
-              data: { type: 'like', screen: 'Likes' },
+              data: {
+                type: isSuper ? 'super_like' : 'like',
+                screen: 'Likes',
+                senderId: String(currentUser._id),
+                senderName: currentUser.name,
+                senderPhoto: currentUser.photos?.[0] || null,
+              },
             },
             'like',
           ).catch(() => {});

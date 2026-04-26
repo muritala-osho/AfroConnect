@@ -46,29 +46,84 @@ export const navigationRef = createNavigationContainerRef<any>();
 function navigateFromNotification(data: Record<string, any>) {
   if (!navigationRef.isReady()) return;
   const nav = navigationRef as any;
-  const { type, screen, senderId, senderName } = data || {};
+  const { type, screen, senderId, senderName, senderPhoto, callType } = data || {};
+  const photo = senderPhoto || "";
+
+  // Message — open the exact conversation
   if (type === "message" || screen === "ChatDetail") {
     if (senderId) {
-      nav.navigate("ChatDetail", {
-        userId: senderId,
-        userName: senderName || "User",
-        userPhoto: "",
-      });
+      nav.navigate("ChatDetail", { userId: senderId, userName: senderName || "User", userPhoto: photo });
     } else {
       nav.navigate("MainTabs", { screen: "Chats" });
     }
     return;
   }
+
+  // New match — open Matches tab
   if (type === "match" || screen === "Matches") {
     nav.navigate("MainTabs", { screen: "Matches" });
     return;
   }
-  if (screen === "Discovery") {
+
+  // Like or Super Like — open Matches tab (where likes are shown)
+  if (type === "like" || type === "super_like") {
+    nav.navigate("MainTabs", { screen: "Matches" });
+    return;
+  }
+
+  // Missed call — open chat so user can call back
+  if (type === "missed_call" || type === "call") {
+    if (senderId) {
+      nav.navigate("ChatDetail", { userId: senderId, userName: senderName || "User", userPhoto: photo });
+    } else {
+      nav.navigate("MainTabs", { screen: "Chats" });
+    }
+    return;
+  }
+
+  // Story view, reply, or reaction — open that user's story
+  if (type === "story") {
+    if (senderId) {
+      nav.navigate("StoryViewer", { userId: senderId, userName: senderName || "User", userPhoto: photo });
+    } else {
+      nav.navigate("MainTabs", { screen: "Discovery" });
+    }
+    return;
+  }
+
+  // Profile view — open Visitors screen
+  if (type === "profile_view" || screen === "Visitors") {
+    nav.navigate("Visitors");
+    return;
+  }
+
+  // Verification status update — open Verification screen
+  if (type === "verification" || screen === "Verification") {
+    nav.navigate("Verification");
+    return;
+  }
+
+  // Subscription / premium update — open Premium screen
+  if (type === "subscription" || screen === "Premium") {
+    nav.navigate("Premium");
+    return;
+  }
+
+  // Security / device alert — open Device Management
+  if (type === "security" || screen === "DeviceManagement") {
+    nav.navigate("DeviceManagement");
+    return;
+  }
+
+  // Broadcast / system announcements — go to Discovery (home)
+  if (type === "broadcast" || type === "system") {
     nav.navigate("MainTabs", { screen: "Discovery" });
     return;
   }
-  if (type === "security" || screen === "DeviceManagement") {
-    nav.navigate("DeviceManagement");
+
+  // Generic screen-based fallback
+  if (screen === "Discovery") {
+    nav.navigate("MainTabs", { screen: "Discovery" });
     return;
   }
 }
