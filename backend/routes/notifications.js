@@ -264,7 +264,24 @@ router.patch('/read-all', protect, async (req, res) => {
 
 router.patch('/:id/read', protect, async (req, res) => {
   try {
-    await Notification.findOneAndUpdate({ _id: req.params.id, recipient: req.user._id }, { read: true });
+    const notif = await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user._id },
+      { read: true },
+      { new: false }
+    );
+
+    if (notif && notif.data && notif.data.matchId && (notif.type === 'message' || notif.data.type === 'message')) {
+      try {
+        const Message = require('../models/Message');
+        await Message.updateMany(
+          { matchId: notif.data.matchId, receiver: req.user._id, seen: false },
+          { seen: true, seenAt: new Date(), status: 'seen' }
+        );
+      } catch (chatErr) {
+        logger.error('[Notifications] chat read-receipt error:', chatErr);
+      }
+    }
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server error' });

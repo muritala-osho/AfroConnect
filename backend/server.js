@@ -747,6 +747,7 @@ io.on('connection', (socket) => {
     try {
       if (!callerId || !receiverId) return;
       const User = require('./models/User');
+      const Notification = require('./models/Notification');
       const [caller, receiver] = await Promise.all([
         User.findById(callerId).select('name photos profilePicture'),
         User.findById(receiverId).select(
@@ -757,14 +758,33 @@ io.on('connection', (socket) => {
       const callerName = caller?.name || 'Someone';
       const callerPhoto = caller?.photos?.[0] || caller?.profilePicture || '';
       const isVideo = callType === 'video';
+      const notifTitle = `Missed ${isVideo ? 'video' : 'voice'} call`;
+      const notifBody = `${callerName} tried to reach you`;
+
+      await Notification.create({
+        recipient: receiverId,
+        sender: callerId,
+        type: 'call',
+        title: notifTitle,
+        body: notifBody,
+        data: {
+          type: 'call',
+          screen: 'ChatDetail',
+          senderId: callerId.toString(),
+          senderName: callerName,
+          senderPhoto: callerPhoto,
+          callType,
+        },
+      });
+
       const { sendSmartNotification } = require('./utils/pushNotifications');
       await sendSmartNotification(
         receiver,
         {
-          title: `Missed ${isVideo ? 'video' : 'voice'} call`,
-          body: `${callerName} tried to reach you`,
+          title: notifTitle,
+          body: notifBody,
           data: {
-            type: 'message',
+            type: 'call',
             screen: 'ChatDetail',
             senderId: callerId.toString(),
             senderName: callerName,

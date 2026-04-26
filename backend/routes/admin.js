@@ -1201,6 +1201,7 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
 
     if (!scheduled) {
       setImmediate(async () => {
+        const Notification = require('../models/Notification');
         let sent = 0;
         for (const user of users) {
           try {
@@ -1215,6 +1216,13 @@ router.post('/broadcasts', protect, isAdmin, async (req, res) => {
               'system',
             );
             if (ok) sent++;
+            await Notification.create({
+              recipient: user._id,
+              type: 'system',
+              title,
+              body,
+              data: { type: 'broadcast', screen: 'Home' },
+            });
           } catch (e) {
             logger.error('[Broadcast] Push error for user', user._id, e.message);
           }

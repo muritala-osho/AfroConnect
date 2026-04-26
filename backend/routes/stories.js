@@ -5,10 +5,12 @@ const Story = require('../models/Story');
 const Match = require('../models/Match');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const Notification = require('../models/Notification');
 const validate = require('../middleware/validate');
 const { uploadLimiter } = require('../middleware/rateLimiter');
 const schemas = require('../validators/schemas');
 const redis = require('../utils/redis');
+const { sendSmartNotification } = require('../utils/pushNotifications');
 
 const STORY_ACTIVE_TTL = 30;   // seconds — active feed refreshes quickly
 const STORY_USER_TTL   = 60;   // seconds — single-user story list
@@ -299,6 +301,38 @@ router.post('/:storyId/view', protect, async (req, res) => {
     if (!alreadyViewed) {
       story.views.push({ user: req.user._id });
       await story.save();
+
+      if (story.user.toString() !== req.user._id.toString()) {
+        try {
+          const viewer = await User.findById(req.user._id).select('name photos profilePicture');
+          const owner = await User.findById(story.user).select('pushToken pushNotificationsEnabled muteSettings notificationPreferences');
+          const viewerName = viewer?.name || 'Someone';
+
+          await Notification.create({
+            recipient: story.user,
+            sender: req.user._id,
+            type: 'story',
+            title: `${viewerName} viewed your story`,
+            body: '',
+            data: { type: 'story', screen: 'Stories' },
+          });
+
+          if (owner) {
+            await sendSmartNotification(
+              owner,
+              {
+                title: `${viewerName} viewed your story`,
+                body: '',
+                data: { type: 'story', screen: 'Stories' },
+              },
+              'story',
+              req.user._id.toString(),
+            );
+          }
+        } catch (notifErr) {
+          console.error('Story view notification error:', notifErr);
+        }
+      }
     }
 
     res.json({ success: true });
@@ -376,6 +410,30 @@ router.post('/:storyId/react', protect, validate(schemas.stories.storyReact), as
             storyReaction: { emoji, storyId: story._id },
             createdAt: new Date().toISOString()
           });
+        }
+
+        try {
+          const reactorName = reactor?.name || 'Someone';
+          const notifBody = `Reacted ${emoji} to your story`;
+          await Notification.create({
+            recipient: story.user._id,
+            sender: req.user._id,
+            type: 'story',
+            title: reactorName,
+            body: notifBody,
+            data: { type: 'story', screen: 'Stories', matchId: match._id.toString() },
+          });
+          const ownerForPush = await User.findById(story.user._id).select('pushToken pushNotificationsEnabled muteSettings notificationPreferences');
+          if (ownerForPush) {
+            await sendSmartNotification(
+              ownerForPush,
+              { title: reactorName, body: notifBody, data: { type: 'story', screen: 'Stories' } },
+              'story',
+              req.user._id.toString(),
+            );
+          }
+        } catch (notifErr) {
+          console.error('Story reaction notification error:', notifErr);
         }
       }
     } catch (msgError) {
@@ -459,6 +517,30 @@ router.post('/:storyId/reply', protect, validate(schemas.stories.storyReply), as
           createdAt: new Date().toISOString()
         });
       }
+    }
+
+    try {
+      const replierName = replier?.name || 'Someone';
+      const notifBody = message.trim().length > 80 ? message.trim().substring(0, 77) + '...' : message.trim();
+      await Notification.create({
+        recipient: story.user._id,
+        sender: req.user._id,
+        type: 'story',
+        title: replierName,
+        body: notifBody,
+        data: { type: 'story', screen: 'Stories', matchId: match?._id?.toString() },
+      });
+      const ownerForPush = await User.findById(story.user._id).select('pushToken pushNotificationsEnabled muteSettings notificationPreferences');
+      if (ownerForPush) {
+        await sendSmartNotification(
+          ownerForPush,
+          { title: replierName, body: notifBody, data: { type: 'story', screen: 'Stories' } },
+          'story',
+          req.user._id.toString(),
+        );
+      }
+    } catch (notifErr) {
+      console.error('Story reply notification error:', notifErr);
     }
 
     res.json({ success: true, message: 'Reply sent', hasMatch: !!match });
