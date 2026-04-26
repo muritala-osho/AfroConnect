@@ -5,6 +5,7 @@ import DiscoveryScreen from "@/screens/DiscoveryScreen";
 import MatchesScreen from "@/screens/MatchesScreen";
 import ChatsScreen from "@/screens/ChatsScreen";
 import MyProfileScreen from "@/screens/MyProfileScreen";
+import NotificationsScreen from "@/screens/NotificationsScreen";
 import { useTheme } from "@/hooks/useTheme";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import AnimatedTabBar from "@/components/AnimatedTabBar";
@@ -13,6 +14,7 @@ export type MainTabParamList = {
   Discovery: undefined;
   Matches: undefined;
   Chats: undefined;
+  Notifications: undefined;
   MyProfile: undefined;
 };
 
@@ -58,6 +60,13 @@ export default function MainTabNavigator() {
       <Tab.Screen
         name="Chats"
         component={ChatsScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="Notifications"
+        component={NotificationsScreen}
         options={{
           headerShown: false,
         }}

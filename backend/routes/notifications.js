@@ -215,4 +215,69 @@ router.get('/status', protect, async (req, res) => {
   }
 });
 
+const Notification = require('../models/Notification');
+
+router.get('/', protect, async (req, res) => {
+  const userId = req.user?._id;
+  try {
+    const { page = 1, limit = 30, type } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit) || 30));
+    const filter = { recipient: userId };
+    if (type && type !== 'all') filter.type = type;
+
+    const [notifications, total, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .populate('sender', 'name photos verified')
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+      Notification.countDocuments(filter),
+      Notification.countDocuments({ recipient: userId, read: false }),
+    ]);
+
+    res.json({ success: true, notifications, total, unreadCount, page: pageNum, pages: Math.ceil(total / limitNum) });
+  } catch (error) {
+    logger.error('[Notifications] list error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/unread-count', protect, async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({ recipient: req.user._id, read: false });
+    res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/read-all', protect, async (req, res) => {
+  try {
+    await Notification.updateMany({ recipient: req.user._id, read: false }, { read: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.patch('/:id/read', protect, async (req, res) => {
+  try {
+    await Notification.findOneAndUpdate({ _id: req.params.id, recipient: req.user._id }, { read: true });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.delete('/clear', protect, async (req, res) => {
+  try {
+    await Notification.deleteMany({ recipient: req.user._id });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;

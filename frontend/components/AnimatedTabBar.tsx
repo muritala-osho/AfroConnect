@@ -21,13 +21,14 @@ const TAB_ICONS: Record<string, keyof typeof Feather.glyphMap> = {
   Events: 'calendar',
   Stories: 'award',
   Chats: 'message-circle',
+  Notifications: 'bell',
   MyProfile: 'user',
 };
 
 export default function AnimatedTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
-  const { unreadCount } = useUnread();
+  const { unreadCount, unreadNotifCount } = useUnread();
 
   return (
     <View
@@ -43,7 +44,11 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
       {state.routes.map((route, index) => {
         const isFocused = state.index === index;
         const icon = TAB_ICONS[route.name] || 'circle';
-        const showBadge = route.name === 'Chats' && unreadCount > 0;
+        const showBadge =
+          (route.name === 'Chats' && unreadCount > 0) ||
+          (route.name === 'Notifications' && unreadNotifCount > 0);
+        const badgeNum =
+          route.name === 'Notifications' ? unreadNotifCount : unreadCount;
 
         const onPress = () => {
           const event = navigation.emit({
@@ -68,7 +73,7 @@ export default function AnimatedTabBar({ state, descriptors, navigation }: Botto
             onPress={onPress}
             theme={theme}
             label={route.name}
-            badgeCount={showBadge ? unreadCount : 0}
+            badgeCount={showBadge ? badgeNum : 0}
           />
         );
       })}

@@ -188,6 +188,30 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
         }
 
         try {
+          const Notification = require('../models/Notification');
+          await Promise.all([
+            Notification.create({
+              recipient: currentUser._id,
+              sender: targetUser._id,
+              type: 'match',
+              title: "It's a Match! 🎉",
+              body: `You and ${targetUser.name} liked each other!`,
+              data: { matchId: match._id, userId: String(targetUser._id) },
+            }),
+            Notification.create({
+              recipient: targetUser._id,
+              sender: currentUser._id,
+              type: 'match',
+              title: "It's a Match! 🎉",
+              body: `You and ${currentUser.name} liked each other!`,
+              data: { matchId: match._id, userId: String(currentUser._id) },
+            }),
+          ]);
+        } catch (notifErr) {
+          logger.error('Match in-app notification error (non-critical):', notifErr.message);
+        }
+
+        try {
           const { sendNewMatchEmail } = require('../utils/emailService');
           const currentUserPhoto = currentUser.photos?.[0] || null;
           const targetUserPhoto  = targetUser.photos?.[0] || null;
@@ -238,6 +262,23 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
         }
       } catch (likeNotifErr) {
         logger.error('[Push] Like notification error (non-critical):', likeNotifErr.message);
+      }
+
+      try {
+        const Notification = require('../models/Notification');
+        const isSuper = action === 'superlike';
+        await Notification.create({
+          recipient: targetUserId,
+          sender: currentUser._id,
+          type: isSuper ? 'super_like' : 'like',
+          title: isSuper ? '⭐ You got a Super Like!' : '💚 Someone liked you!',
+          body: isSuper
+            ? `${currentUser.name} Super Liked your profile!`
+            : 'Someone liked your profile — tap to see who',
+          data: { type: isSuper ? 'super_like' : 'like', userId: String(currentUser._id) },
+        });
+      } catch (likeInAppErr) {
+        logger.error('[InApp] Like notification error (non-critical):', likeInAppErr.message);
       }
     }
 
