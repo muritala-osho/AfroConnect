@@ -417,9 +417,41 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     );
     const maxDist = (isGlobal || isPassportOrTravel) ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
-    const effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
-    const effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+    let effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
+    let effectiveLng = searchLng || (lng ? parseFloat(lng) : null);
+
+    // Fall back to the user's stored profile coordinates if the client didn't
+    // send them on this request (e.g. silent radar refresh).
+    if (effectiveLat == null || effectiveLng == null) {
+      const stored = currentUser?.location;
+      const storedLat = stored?.coordinates?.coordinates?.[1] ?? stored?.lat ?? null;
+      const storedLng = stored?.coordinates?.coordinates?.[0] ?? stored?.lng ?? null;
+      if (storedLat != null && storedLng != null) {
+        effectiveLat = storedLat;
+        effectiveLng = storedLng;
+      }
+    }
     const hasOrigin = effectiveLat != null && effectiveLng != null;
+
+    // Gate: a user who is not using Global discovery and has no usable origin
+    // (no GPS in this request, no stored profile coords, no active passport/saved
+    // location) must enable location before they can browse. Returning an empty
+    // result with `requiresLocation:true` lets the client show a clear prompt
+    // instead of silently leaking unfiltered users.
+    if (!isGlobal && !hasOrigin) {
+      if (resolveInflight) resolveInflight({ users: [], nextCursor: null, requiresLocation: true });
+      if (inflightCacheKey) {
+        const inflight = req.app.get('discoveryInflight');
+        if (inflight) inflight.delete(inflightCacheKey);
+      }
+      return res.json({
+        success: true,
+        users: [],
+        nextCursor: null,
+        requiresLocation: true,
+        message: 'Enable location to discover people near you, or switch to Global (Premium) to browse by country.',
+      });
+    }
 
     if (isGlobal) {
       if (countryFilter) {

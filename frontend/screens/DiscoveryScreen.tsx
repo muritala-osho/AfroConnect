@@ -127,6 +127,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [newUserFound, setNewUserFound] = useState(false);
   const [locationPermissionChecked, setLocationPermissionChecked] = useState(false);
   const [hasLocationPermission, setHasLocationPermission] = useState<boolean | null>(null);
+  const [requiresLocation, setRequiresLocation] = useState(false);
   const [showSuperLikeAnimation, setShowSuperLikeAnimation] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [discoveryType, setDiscoveryType] = useState<'local' | 'global'>('local');
@@ -379,6 +380,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       }
       
       logger.log('[DISCOVERY] API call complete, response:', response.success);
+      if (response.success && (response.data as any)?.requiresLocation) {
+        logger.log('[DISCOVERY] Backend says location required — showing gate');
+        setRequiresLocation(true);
+        setUsers([]);
+        setLoading(false);
+        return;
+      }
+      setRequiresLocation(false);
       if (response.success && response.data?.users) {
         logger.log(`[DISCOVERY] Success. Raw users count: ${response.data.users.length}`);
         const myInterests = new Set(user.interests || []);
@@ -1345,6 +1354,70 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
             {t('lookingForPeople')}
           </ThemedText>
+        </ThemedView>
+      </GestureHandlerRootView>
+    );
+  }
+
+  if (requiresLocation && !currentUser) {
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ThemedView style={[styles.container, styles.centerContent]}>
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyIconContainer}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: theme.primary + '20' }]}>
+                <Feather name="map-pin" size={48} color={theme.primary} />
+              </View>
+            </View>
+
+            <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
+              Enable location to start discovering
+            </ThemedText>
+            <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+              We use your location to show you people nearby. Your exact coordinates are never shared with other users — only an approximate distance.
+            </ThemedText>
+
+            <View style={styles.emptyButtonsContainer}>
+              <Pressable
+                style={[styles.emptyRefreshButton, { backgroundColor: theme.primary, opacity: locationLoading ? 0.7 : 1 }]}
+                onPress={handleShareLocation}
+                disabled={locationLoading}
+              >
+                <Feather name="map-pin" size={18} color="#FFF" />
+                <ThemedText style={styles.emptyRefreshButtonText}>
+                  {locationLoading ? 'Enabling…' : 'Enable Location'}
+                </ThemedText>
+              </Pressable>
+
+              {user?.premium?.isActive && (
+                <Pressable
+                  style={[styles.loveRadarButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
+                  onPress={() => {
+                    setDiscoveryType('global');
+                    setRequiresLocation(false);
+                    setLoading(true);
+                    loadPotentialMatches();
+                  }}
+                >
+                  <Feather name="globe" size={18} color={theme.primary} />
+                  <ThemedText style={[styles.loveRadarButtonText, { color: theme.primary }]}>
+                    Browse Globally
+                  </ThemedText>
+                </Pressable>
+              )}
+            </View>
+
+            <Pressable
+              style={styles.emptySettingsLink}
+              onPress={() => navigation.navigate("Settings")}
+            >
+              <Feather name="sliders" size={16} color={theme.textSecondary} />
+              <ThemedText style={[styles.emptySettingsText, { color: theme.textSecondary }]}>
+                Open settings
+              </ThemedText>
+            </Pressable>
+          </View>
+          <AlertComponent />
         </ThemedView>
       </GestureHandlerRootView>
     );
