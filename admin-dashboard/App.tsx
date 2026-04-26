@@ -17,7 +17,6 @@ import SupportDesk from './views/SupportDesk';
 import AgentDashboard from './views/AgentDashboard';
 import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
-import AuditLog from './views/AuditLog';
 import RevokeVerification from './views/RevokeVerification';
 import IceBreakers from './views/IceBreakers';
 import { AuthState, AdminRole } from './types';
@@ -27,7 +26,7 @@ import { adminApi, clearToken } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'audit'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -39,7 +38,6 @@ const BADGE_CLEAR_MAP: Record<string, keyof PendingCounts> = {
   verification: 'verifications',
   appeals: 'appeals',
   content: 'content',
-  audit: 'audit',
   support: 'tickets',
   agent: 'unreadTickets',
 };
@@ -50,10 +48,10 @@ const PAGE_TITLES: Record<string, string> = {
   support: 'Support Desk', agent: 'My Tickets', settings: 'System Settings',
   verification: 'Verification Requests', 'revoke-verification': 'Revoke Verified Badge',
   broadcasts: 'Broadcasts', appeals: 'Appeals',
-  churn: 'Churn Intelligence', profile: 'My Profile', audit: 'Audit Log',
+  churn: 'Churn Intelligence', profile: 'My Profile',
 };
 
-interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; audit: number }
+interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; }
 
 const App: React.FC = () => {
   const [auth, setAuth] = useState<AuthState>(() => {
@@ -78,7 +76,7 @@ const App: React.FC = () => {
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error'; id: number } | null>(null);
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
-  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0, audit: 0 });
+  const [pendingCounts, setPendingCounts] = useState<PendingCounts>({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0 });
   const setActiveTab = useCallback((tab: string) => {
     setActiveTabRaw(tab);
     const countKey = BADGE_CLEAR_MAP[tab];
@@ -179,7 +177,7 @@ const App: React.FC = () => {
     setAuth({ isAuthenticated: false, user: null });
     localStorage.removeItem('afroconnect_auth');
     clearToken();
-    setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0, audit: 0 });
+    setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0 });
     showToast('Session terminated safely.', 'success');
   }, [showToast]);
 
@@ -225,7 +223,6 @@ const App: React.FC = () => {
           unreadTickets: c.unreadTickets ?? prev.unreadTickets,
           appeals:       c.appeals       ?? prev.appeals,
           content:       c.content       ?? prev.content,
-          audit:         c.audit         ?? prev.audit,
         }));
       }
     } catch {
@@ -542,7 +539,6 @@ const App: React.FC = () => {
                 {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}
                 {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
                 {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
-                {activeTab === 'audit'        && canAccessTab('audit')        && <AuditLog />}
                 {activeTab === 'icebreakers'  && canAccessTab('icebreakers')  && <IceBreakers showToast={showToast} />}
                 {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 

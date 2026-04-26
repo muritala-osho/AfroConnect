@@ -10,7 +10,7 @@ interface SidebarProps {
   adminName: string;
   adminAvatar?: string;
   onLogout: () => void;
-  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; audit: number };
+  pendingCounts?: { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; };
 }
 
 const SECTION_GROUPS = [
@@ -32,7 +32,7 @@ const SECTION_GROUPS = [
   },
   {
     label: 'Tools',
-    ids: ['broadcasts', 'icebreakers', 'audit'],
+    ids: ['broadcasts', 'icebreakers'],
   },
   {
     label: 'System',
@@ -47,13 +47,11 @@ const BADGE_MAP: Record<string, keyof NonNullable<SidebarProps['pendingCounts']>
   agent: 'unreadTickets',
   appeals: 'appeals',
   content: 'content',
-  audit: 'audit',
 };
 
 const BADGE_COLOR: Record<string, string> = {
   reports:      'bg-rose-500',
   content:      'bg-rose-500',
-  audit:        'bg-rose-600 animate-pulse',
   appeals:      'bg-amber-500',
   verification: 'bg-amber-500',
   support:      'bg-sky-500',
