@@ -24,11 +24,15 @@ const SECTION_GROUPS = [
   },
   {
     label: 'Revenue',
-    ids: ['payments', 'analytics'],
+    ids: ['payments', 'premium', 'analytics'],
   },
   {
-    label: 'Communication',
-    ids: ['broadcasts', 'support', 'agent'],
+    label: 'Support',
+    ids: ['support', 'agent'],
+  },
+  {
+    label: 'Tools',
+    ids: ['broadcasts', 'icebreakers', 'audit'],
   },
   {
     label: 'System',

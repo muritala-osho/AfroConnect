@@ -141,6 +141,72 @@ router.get('/badge-counts', protect, isAdmin, async (req, res) => {
   }
 });
 
+router.get('/audit-log/stats', protect, isAdmin, async (req, res) => {
+  try {
+    const [total, bySeverityRaw, byCategoryRaw, topAdminsRaw] = await Promise.all([
+      AuditLog.countDocuments({}),
+      AuditLog.aggregate([{ $group: { _id: '$severity', count: { $sum: 1 } } }]),
+      AuditLog.aggregate([{ $group: { _id: '$category', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 8 }]),
+      AuditLog.aggregate([
+        { $match: { adminId: { $ne: null } } },
+        { $group: { _id: '$adminId', name: { $first: '$adminName' }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+      ]),
+    ]);
+
+    const bySeverity = Object.fromEntries(bySeverityRaw.map(s => [s._id, s.count]));
+    const byCategory = byCategoryRaw.map(c => ({ category: c._id || 'Unknown', count: c.count }));
+    const topAdmins = topAdminsRaw.map(a => ({ id: a._id, name: a.name || 'System', count: a.count }));
+
+    res.json({ success: true, stats: { total, bySeverity, byCategory, topAdmins } });
+  } catch (error) {
+    logger.error('Audit log stats error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+router.get('/audit-log', protect, isAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 30, category, severity, search } = req.query;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 30));
+
+    const filter = {};
+    if (category && category !== 'All') filter.category = category;
+    if (severity && severity !== 'All') filter.severity = severity;
+    if (search) {
+      const regex = { $regex: search, $options: 'i' };
+      filter.$or = [
+        { action: regex },
+        { adminName: regex },
+        { adminEmail: regex },
+        { targetUserName: regex },
+        { targetUserEmail: regex },
+        { details: regex },
+      ];
+    }
+
+    const [logs, total] = await Promise.all([
+      AuditLog.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((pageNum - 1) * limitNum)
+        .limit(limitNum)
+        .lean(),
+      AuditLog.countDocuments(filter),
+    ]);
+
+    res.json({
+      success: true,
+      logs,
+      pagination: { page: pageNum, limit: limitNum, total, pages: Math.ceil(total / limitNum) },
+    });
+  } catch (error) {
+    logger.error('Audit log fetch error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.get('/reports', protect, isAdmin, async (req, res) => {
   try {
     const { status = 'pending' } = req.query;
