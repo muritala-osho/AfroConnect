@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  StyleSheet, 
-  Pressable, 
-  FlatList, 
-  TextInput, 
+import React, { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -21,13 +22,28 @@ export default function ManageLocationsScreen({ navigation }: any) {
   const { user, token, fetchUser } = useAuth();
   const { post, del } = useApi();
   const insets = useSafeAreaInsets();
-  
-  const [locations, setLocations] = useState<any[]>(user?.additionalLocations || []);
+
+  const [locations, setLocations] = useState<any[]>([]);
   const [newLocation, setNewLocation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isPremium = user?.premium?.isActive;
 
-  const handleAddLocation = async () => {
+  // Keep locations in sync whenever the user context updates (e.g. after
+  // fetchUser() refreshes the profile on successful add/delete).
+  useEffect(() => {
+    if (user?.additionalLocations) {
+      setLocations(
+        (user.additionalLocations as any[]).map((l: any) => ({
+          ...l,
+          _id: l._id ? String(l._id) : l.id ? String(l.id) : String(Date.now()),
+        }))
+      );
+    }
+  }, [user?.additionalLocations]);
+
+  const handleAddLocation = useCallback(async () => {
     if (!isPremium) {
       Alert.alert("Premium Feature", "Additional locations is a premium feature. Upgrade to unlock!");
       return;
@@ -39,12 +55,16 @@ export default function ManageLocationsScreen({ navigation }: any) {
       return;
     }
 
-    // Optimistic add — show the new chip instantly and clear the input so the
-    // tap feels immediate. We reconcile with the server response once it
-    // arrives (and roll back on failure).
+    if (locations.length >= 3) {
+      Alert.alert("Limit reached", "You can save a maximum of 3 additional locations.");
+      return;
+    }
+
+    setSaving(true);
+    const previous = locations;
+
     const tempId = `temp_${Date.now()}`;
     const optimisticItem = { _id: tempId, id: tempId, name, optimistic: true };
-    const previous = locations;
     setLocations(prev => [...prev, optimisticItem]);
     setNewLocation("");
 
@@ -54,12 +74,15 @@ export default function ManageLocationsScreen({ navigation }: any) {
         { name },
         token ?? undefined,
       );
-      if (res.success && res.data?.locations) {
-        setLocations(res.data.locations);
-        // Refresh the auth user in the background so the Discovery passport
-        // picker gets the new entry, but never block the UI on it.
-        if (fetchUser) {
-          fetchUser().catch(() => {});
+      if (res.success && res.data) {
+        const serverLocations: any[] = res.data.locations ?? (res.data as any)?.locations ?? [];
+        if (serverLocations.length > 0 || res.success) {
+          const normalised = serverLocations.map((l: any) => ({
+            ...l,
+            _id: l._id ? String(l._id) : String(l.id ?? Date.now()),
+          }));
+          setLocations(normalised);
+          if (fetchUser) fetchUser().catch(() => {});
         }
       } else {
         setLocations(previous);
@@ -70,32 +93,40 @@ export default function ManageLocationsScreen({ navigation }: any) {
       setLocations(previous);
       setNewLocation(name);
       Alert.alert("Error", "An unexpected error occurred");
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [isPremium, newLocation, locations, post, token, fetchUser]);
 
-  const handleDeleteLocation = async (id: string) => {
-    // Optimistic delete for the same instant-feel reason.
+  const handleDeleteLocation = useCallback(async (id: string) => {
+    setDeletingId(id);
     const previous = locations;
-    setLocations(prev => prev.filter(l => (l._id || l.id) !== id));
+    setLocations(prev => prev.filter(l => String(l._id ?? l.id) !== String(id)));
+
     try {
       const res = await del<{ success: boolean; locations?: any[] }>(
         `/users/me/locations/${id}`,
         token ?? undefined,
       );
-      if (res.success && res.data?.locations) {
-        setLocations(res.data.locations);
-        if (fetchUser) {
-          fetchUser().catch(() => {});
-        }
-      } else if (!res.success) {
+      if (res.success) {
+        const serverLocations: any[] = res.data?.locations ?? [];
+        const normalised = serverLocations.map((l: any) => ({
+          ...l,
+          _id: l._id ? String(l._id) : String(l.id ?? Date.now()),
+        }));
+        setLocations(normalised);
+        if (fetchUser) fetchUser().catch(() => {});
+      } else {
         setLocations(previous);
         Alert.alert("Error", "Failed to delete location");
       }
     } catch (_e) {
       setLocations(previous);
       Alert.alert("Error", "Failed to delete location");
+    } finally {
+      setDeletingId(null);
     }
-  };
+  }, [locations, del, token, fetchUser]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
@@ -119,17 +150,24 @@ export default function ManageLocationsScreen({ navigation }: any) {
         <View style={styles.addSection}>
           <TextInput
             style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-            placeholder="Add new location..."
+            placeholder={isPremium ? "Add new location (e.g. London)" : "Upgrade to add locations"}
             placeholderTextColor={theme.textSecondary}
             value={newLocation}
             onChangeText={setNewLocation}
-            editable={isPremium}
+            editable={isPremium && !saving}
+            returnKeyType="done"
+            onSubmitEditing={handleAddLocation}
           />
-          <Pressable 
-            style={[styles.addButton, { backgroundColor: isPremium ? theme.primary : theme.textSecondary }]} 
+          <Pressable
+            style={[styles.addButton, { backgroundColor: isPremium && !saving ? theme.primary : theme.textSecondary }]}
             onPress={handleAddLocation}
+            disabled={saving}
           >
-            <Feather name="plus" size={24} color="#FFF" />
+            {saving ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Feather name="plus" size={24} color="#FFF" />
+            )}
           </Pressable>
         </View>
 
@@ -145,17 +183,39 @@ export default function ManageLocationsScreen({ navigation }: any) {
         <ThemedText style={styles.sectionTitle}>Additional Locations</ThemedText>
         <FlatList
           data={locations}
-          keyExtractor={(item) => item._id || item.id}
-          renderItem={({ item }) => (
-            <View style={[styles.locationItem, { borderBottomColor: theme.border }]}>
-              <ThemedText style={styles.locationItemText}>{item.name}</ThemedText>
-              <Pressable onPress={() => handleDeleteLocation(item._id || item.id)}>
-                <Feather name="trash-2" size={20} color="#FF3B30" />
-              </Pressable>
-            </View>
-          )}
+          keyExtractor={(item) => String(item._id ?? item.id ?? Math.random())}
+          renderItem={({ item }) => {
+            const itemId = String(item._id ?? item.id);
+            const isDeleting = deletingId === itemId;
+            return (
+              <View style={[styles.locationItem, { borderBottomColor: theme.border }]}>
+                <View style={styles.locationItemLeft}>
+                  <Ionicons name="location-outline" size={18} color={theme.primary} />
+                  <ThemedText style={styles.locationItemText}>{item.name}</ThemedText>
+                  {item.city && item.city !== item.name && (
+                    <ThemedText style={[styles.locationSubtext, { color: theme.textSecondary }]}>
+                      {item.city}{item.country ? `, ${item.country}` : ''}
+                    </ThemedText>
+                  )}
+                </View>
+                <Pressable
+                  onPress={() => handleDeleteLocation(itemId)}
+                  disabled={isDeleting}
+                  style={styles.deleteButton}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color="#FF3B30" />
+                  ) : (
+                    <Feather name="trash-2" size={20} color="#FF3B30" />
+                  )}
+                </Pressable>
+              </View>
+            );
+          }}
           ListEmptyComponent={
-            <ThemedText style={styles.emptyText}>No additional locations added yet.</ThemedText>
+            <ThemedText style={styles.emptyText}>
+              {isPremium ? "No additional locations added yet." : "Upgrade to Premium to save locations."}
+            </ThemedText>
           }
         />
       </View>
@@ -180,6 +240,9 @@ const styles = StyleSheet.create({
   premiumText: { flex: 1, fontSize: 13, fontWeight: '600' },
   sectionTitle: { fontSize: 14, fontWeight: '700', marginBottom: 10, marginTop: 10 },
   locationItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, borderBottomWidth: 1 },
+  locationItemLeft: { flex: 1, flexDirection: 'column', gap: 2 },
   locationItemText: { fontSize: 16 },
-  emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 }
+  locationSubtext: { fontSize: 12 },
+  deleteButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  emptyText: { textAlign: 'center', marginTop: 40, opacity: 0.5 },
 });

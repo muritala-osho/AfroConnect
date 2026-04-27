@@ -125,10 +125,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Premium-only: persist the last batch of discovery cards to AsyncStorage
-  // so the deck renders instantly on cold app open instead of showing a
-  // spinner while waiting for /users/nearby. Free users keep the loading
-  // state — instant-load is one of the perks Premium ships with.
+  // Persist the last batch of discovery cards to AsyncStorage so the deck
+  // renders instantly on cold app open instead of showing a spinner while
+  // waiting for /users/nearby. Available to all users.
   const DISCOVERY_CACHE_KEY = `discovery_cache_v1:${user?.id || 'anon'}`;
   const DISCOVERY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
   const [loading, setLoading] = useState(true);
@@ -479,11 +478,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setUsers(filteredUsers);
         setCurrentIndex(0);
 
-        // Premium-only: persist the batch so the next cold-open renders the
-        // deck instantly. We store the processed cards (already mapped to
-        // DiscoverUser shape) so re-hydrating doesn't need any work on app
-        // open. Free users skip this — they keep the loading-spinner UX.
-        if (user?.premium?.isActive && filteredUsers.length > 0) {
+        // Persist the batch so the next cold-open renders the deck instantly.
+        // Both free and premium users benefit from the cache.
+        if (filteredUsers.length > 0) {
           AsyncStorage.setItem(
             DISCOVERY_CACHE_KEY,
             JSON.stringify({
@@ -541,12 +538,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       preferencesRef.current = currentPrefs;
       
       const loadData = async () => {
-        // Premium-only instant render: on the very first mount of this screen,
-        // try to hydrate the deck from the AsyncStorage cache so the user sees
-        // photo cards the moment Discovery opens — no spinner, no refresh
-        // needed. We still fire the network call right after to refresh the
-        // batch in the background.
-        if (isFirstLoad && user?.premium?.isActive) {
+        // Instant render on first mount: try to hydrate the deck from the
+        // AsyncStorage cache so photo cards appear immediately — no spinner.
+        // We still fire the network call right after to refresh in background.
+        if (isFirstLoad) {
           try {
             const cached = await AsyncStorage.getItem(DISCOVERY_CACHE_KEY);
             if (cached) {
