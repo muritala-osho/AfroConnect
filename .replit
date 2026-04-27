@@ -46,7 +46,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd frontend && npm install --legacy-peer-deps && EXPO_FORCE_WEBCONTAINER_ENV=1 ./node_modules/.bin/expo start --tunnel"
+args = "bash frontend/scripts/start-expo.sh"
 
 [[workflows.workflow]]
 name = "Admin Dashboard"
