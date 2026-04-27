@@ -346,6 +346,27 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'AfroConnect API is running' });
 });
 
+// Redis connectivity check — hit this endpoint to confirm REDIS_URL is working.
+// Returns { connected: true } when Redis responds to PING, false otherwise.
+app.get('/api/health/redis', async (req, res) => {
+  try {
+    const redisUtil = require('./utils/redis');
+    const alive = await redisUtil.ping();
+    const urlSet = !!process.env.REDIS_URL;
+    res.json({
+      connected: alive,
+      urlConfigured: urlSet,
+      message: alive
+        ? '✅ Redis is connected and responding'
+        : urlSet
+          ? '⚠️ REDIS_URL is set but Redis is not reachable (check URL / firewall)'
+          : '❌ REDIS_URL environment variable is not set',
+    });
+  } catch (err) {
+    res.status(500).json({ connected: false, error: err.message });
+  }
+});
+
 /*
  * ── App version check ──────────────────────────────────────────────────────
  * Update `latestVersion` here whenever you release a new build.

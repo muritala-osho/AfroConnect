@@ -536,6 +536,15 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Stable refs so useFocusEffect / intervals can always call the latest
+  // version of these callbacks without listing them as deps (which would
+  // restart the effect on every token change and cause repeated API calls).
+  const fetchConversationsRef = useRef<((search?: string, isRefresh?: boolean) => Promise<void>) | null>(null);
+  const fetchCallHistoryRef = useRef<(() => Promise<void>) | null>(null);
+  const fetchMyStoriesRef = useRef<(() => Promise<boolean>) | null>(null);
+  const loadLocalSettingsRef = useRef<(() => Promise<void>) | null>(null);
+
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("chat:read-local", (chatId) => {
       setConversations((prev) =>
@@ -586,6 +595,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       logger.log("Settings load error:", e);
     }
   }, []);
+  useEffect(() => { loadLocalSettingsRef.current = loadLocalSettings; }, [loadLocalSettings]);
 
   const markUserStoryViewed = useCallback(async (userId: string) => {
     setViewedStoryUsers((prev) => {
@@ -650,6 +660,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     setUserHasStory(false);
     return false;
   }, [token, get]);
+  useEffect(() => { fetchMyStoriesRef.current = fetchMyStories; }, [fetchMyStories]);
 
   const fetchStories = useCallback(async () => {
     if (!token) return [];
@@ -687,6 +698,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       logger.log("Call history fetch error:", error);
     }
   }, [token, get]);
+  useEffect(() => { fetchCallHistoryRef.current = fetchCallHistory; }, [fetchCallHistory]);
 
   const fetchConversations = useCallback(
     async (search?: string, isRefresh = false) => {
@@ -708,6 +720,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     },
     [token, loadCachedData],
   );
+  useEffect(() => { fetchConversationsRef.current = fetchConversations; }, [fetchConversations]);
   async function fetchConversationsFromServer(
     search?: string,
     isBackground = false,
@@ -800,6 +813,10 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     }
   }
   useFocusEffect(
+    // Empty dep array: set up once per focus cycle. All callbacks are accessed
+    // through stable refs so we don't re-run (and re-fetch) whenever token or
+    // any upstream useCallback identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback(() => {
       resetUnread();
 
@@ -818,43 +835,41 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
           await AsyncStorage.removeItem("@story_posted");
         }
 
-        const loadPromises = [
-          loadLocalSettings(),
-          fetchConversations(undefined, !!refreshNeeded),
-          fetchCallHistory(),
-        ];
-
-        await Promise.all(loadPromises);
+        await Promise.all([
+          loadLocalSettingsRef.current?.(),
+          fetchConversationsRef.current?.(undefined, !!refreshNeeded),
+          fetchCallHistoryRef.current?.(),
+        ]);
 
         try {
-          const currentConvs = conversations;
-          if (currentConvs.length > 0) {
-            const keys = currentConvs.map((c) => `chat_draft_${c.user.id}`);
-            const pairs = await AsyncStorage.multiGet(keys);
-            const newDrafts: Record<string, string> = {};
-            pairs.forEach(([key, value]) => {
-              if (value) {
-                const userId = key.replace("chat_draft_", "");
-                newDrafts[userId] = value;
-              }
-            });
-            setDrafts(newDrafts);
-          }
+          // Draft loading uses functional-state update so we don't need
+          // conversations in the dep array.
+          setConversations((currentConvs) => {
+            if (currentConvs.length > 0) {
+              const keys = currentConvs.map((c) => `chat_draft_${c.user.id}`);
+              AsyncStorage.multiGet(keys).then((pairs) => {
+                const newDrafts: Record<string, string> = {};
+                pairs.forEach(([key, value]) => {
+                  if (value) {
+                    const userId = key.replace("chat_draft_", "");
+                    newDrafts[userId] = value;
+                  }
+                });
+                setDrafts(newDrafts);
+              }).catch(() => {});
+            }
+            return currentConvs;
+          });
         } catch { /* ignore */ }
 
         if (storyPosted) {
-          await fetchMyStories();
+          await fetchMyStoriesRef.current?.();
         } else {
-          fetchMyStories();
+          fetchMyStoriesRef.current?.();
         }
       };
       checkAndLoad().catch((e) => logger.error(e));
-    }, [
-      fetchConversations,
-      loadLocalSettings,
-      fetchMyStories,
-      fetchCallHistory,
-    ]),
+    }, []),
   );
 
   useEffect(() => {

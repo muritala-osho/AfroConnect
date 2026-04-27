@@ -158,6 +158,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const blendShownIds = useRef<Set<string>>(new Set());
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
+
+  // Stable refs that always point to the latest callback / primitive value.
+  // Using refs instead of putting functions in useEffect dep arrays prevents
+  // spurious re-runs caused by useCallback identity changes.
+  const loadPotentialMatchesRef = useRef<((silent?: boolean) => Promise<void>) | null>(null);
+  const fetchRadarNearbyUsersRef = useRef<(() => Promise<void>) | null>(null);
+  const tokenRef = useRef<string | null>(token ?? null);
+  const hasLocationPermissionRef = useRef<boolean | null>(hasLocationPermission);
   
   const superLikeScale = useSharedValue(0);
   const superLikeOpacity = useSharedValue(0);
@@ -501,6 +509,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry]);
 
+  // Keep stable refs in sync with latest values — zero cost, runs after each render.
+  useEffect(() => { loadPotentialMatchesRef.current = loadPotentialMatches; }, [loadPotentialMatches]);
+  useEffect(() => { fetchRadarNearbyUsersRef.current = fetchRadarNearbyUsers; }, [fetchRadarNearbyUsers]);
+  useEffect(() => { tokenRef.current = token ?? null; }, [token]);
+  useEffect(() => { hasLocationPermissionRef.current = hasLocationPermission; }, [hasLocationPermission]);
+
   const hasInitiallyLoaded = useRef(false);
   const preferencesRef = useRef<string>('');
   
@@ -568,14 +582,19 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         }
         // Background-refresh: pass silent=true when we already showed cached
         // cards so the loading spinner never appears over a usable deck.
-        await loadPotentialMatches(hadCachedUsers);
+        // Call via ref so this effect doesn't re-run when the callback identity changes.
+        await loadPotentialMatchesRef.current?.(hadCachedUsers);
         if (users.length < 3) {
-          fetchRadarNearbyUsers();
+          fetchRadarNearbyUsersRef.current?.();
         }
       };
       loadData();
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, loadPotentialMatches, fetchRadarNearbyUsers, discoveryType, selectedCountry]);
+  // Intentionally omit loadPotentialMatches / fetchRadarNearbyUsers — their
+  // identity changes when their own deps change, which would cause this effect
+  // to re-fire and trigger duplicate API calls. We reach them via stable refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, discoveryType, selectedCountry]);
 
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isAnimatingRef = useRef(false);
@@ -584,19 +603,24 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   }, [isAnimating]);
 
   useFocusEffect(
+    // Empty dep array: set up the interval once per screen-focus cycle.
+    // All live values are read through stable refs so the interval/timeout
+    // is never needlessly torn down and restarted when token or permission
+    // state changes (which used to fire a fresh radar scan on every change).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useCallback(() => {
       checkLocationPermission();
       
       const initialScanTimeout = setTimeout(() => {
-        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
-          fetchRadarNearbyUsers();
+        if (hasLocationPermissionRef.current !== false && tokenRef.current && !isAnimatingRef.current) {
+          fetchRadarNearbyUsersRef.current?.();
         }
       }, 1000);
       
       radarIntervalRef.current = setInterval(() => {
         // Skip while a swipe animation is mid-flight to avoid jank
-        if (hasLocationPermission !== false && token && !isAnimatingRef.current) {
-          fetchRadarNearbyUsers();
+        if (hasLocationPermissionRef.current !== false && tokenRef.current && !isAnimatingRef.current) {
+          fetchRadarNearbyUsersRef.current?.();
         }
       }, 30000);
       
@@ -606,7 +630,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           clearInterval(radarIntervalRef.current);
         }
       };
-    }, [token, hasLocationPermission])
+    }, [])
   );
 
   useEffect(() => {
@@ -1087,6 +1111,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     navigation.navigate("ProfileDetail", { userId: targetUser.id });
   }, [currentIndex, users, navigation]);
 
+  // Stored as a ref so the blend effect dep array only uses primitives.
+  const userFavSongRef = useRef<any>((user as any)?.favoriteSong);
+  useEffect(() => { userFavSongRef.current = (user as any)?.favoriteSong; }, [(user as any)?.favoriteSong]);
+
   useEffect(() => {
     if (loading || isAnimating) return;
     const cur = users[currentIndex];
@@ -1096,7 +1124,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     const shared = cur.sharedInterests || [];
     const score = cur.similarityScore || 0;
 
-    const mySong = (user as any)?.favoriteSong;
+    const mySong = userFavSongRef.current;
     const theirSong = cur.favoriteSong;
     const norm = (s?: string) => (s || '').trim().toLowerCase();
     let songMatch: { type: 'song' | 'artist'; title?: string; artist?: string; albumArt?: string } | undefined;
@@ -1120,7 +1148,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       }
     }
-  }, [currentIndex, users, loading, isAnimating, user]);
+  // Replace `user` (whole object, changes every context update) with just the
+  // two primitives that actually matter for the blend calculation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex, users, loading, isAnimating]);
 
   const handleBlendLike = useCallback(() => {
     if (!blendMatch) return;
