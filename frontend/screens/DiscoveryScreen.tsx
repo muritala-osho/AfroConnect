@@ -324,7 +324,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [token, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, hasLocationPermission, locationPermissionChecked]);
 
-  const loadPotentialMatches = useCallback(async () => {
+  const loadPotentialMatches = useCallback(async (silent = false) => {
     if (!user?.id || !token) {
       logger.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
       setLoading(false);
@@ -333,7 +333,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
 
     logger.log('[DISCOVERY] loadPotentialMatches starting...');
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const params: Record<string, any> = {
         limit: 50,
       };
@@ -484,7 +484,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           AsyncStorage.setItem(
             DISCOVERY_CACHE_KEY,
             JSON.stringify({
-              users: filteredUsers.slice(0, 20),
+              users: filteredUsers.slice(0, 30),
               cachedAt: Date.now(),
               discoveryType,
               selectedCountry,
@@ -538,9 +538,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       preferencesRef.current = currentPrefs;
       
       const loadData = async () => {
-        // Instant render on first mount: try to hydrate the deck from the
-        // AsyncStorage cache so photo cards appear immediately — no spinner.
-        // We still fire the network call right after to refresh in background.
+        // Instant render on first mount: hydrate from AsyncStorage cache so
+        // photo cards appear immediately — no spinner on cold open.
+        // We still fire the network call in background to refresh the deck.
+        let hadCachedUsers = false;
         if (isFirstLoad) {
           try {
             const cached = await AsyncStorage.getItem(DISCOVERY_CACHE_KEY);
@@ -558,21 +559,16 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 setCurrentIndex(0);
                 setLoading(false);
                 parsed.users.forEach((u: any) => seenUserIds.current.add(u.id));
-              } else {
-                setLoading(true);
+                hadCachedUsers = true;
               }
-            } else {
-              setLoading(true);
             }
           } catch {
-            setLoading(true);
+            // Ignore cache read errors — fall through to normal load
           }
-        } else {
-          setLoading(true);
         }
-        // Run nearby query first; only fall back to radar if we got few results.
-        // Avoids two concurrent location lookups + duplicate API calls on every load.
-        await loadPotentialMatches();
+        // Background-refresh: pass silent=true when we already showed cached
+        // cards so the loading spinner never appears over a usable deck.
+        await loadPotentialMatches(hadCachedUsers);
         if (users.length < 3) {
           fetchRadarNearbyUsers();
         }

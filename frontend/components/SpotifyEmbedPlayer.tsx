@@ -13,7 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from "expo-av";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -128,7 +128,12 @@ export default function SpotifyEmbedPlayer({
     try {
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
+        allowsRecordingIOS: false,
+        interruptionModeIOS: InterruptionModeIOS.DoNotMix,
         staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+        playThroughEarpieceAndroid: false,
       });
 
       let audioUrl: string | null = previewUrl || null;
