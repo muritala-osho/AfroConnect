@@ -338,19 +338,18 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     const matchedUserIds = matches.flatMap(m => m.users.map(u => u.toString())).filter(id => id !== req.user.id.toString());
     excludedIds = [...excludedIds, ...matchedUserIds];
 
-    const FriendRequest = require('../models/FriendRequest');
-    const pendingRequests = await FriendRequest.find({
-      $or: [
-        { sender: req.user._id, status: 'pending' },
-        { receiver: req.user._id, status: 'pending' }
-      ]
-    }).select('sender receiver');
-    const pendingIds = pendingRequests.map(r => {
-      const sid = r.sender.toString();
-      const rid = r.receiver.toString();
-      return sid === req.user._id.toString() ? rid : sid;
-    });
-    excludedIds = [...excludedIds, ...pendingIds];
+    // NOTE: We deliberately do NOT exclude users with pending FriendRequests
+    // any more. Previously this hid two groups from Discovery:
+    //   1. Users I already liked (request where I'm the sender) — already
+    //      excluded via swipedRight above, so this was redundant.
+    //   2. Users who liked ME but I haven't responded to yet (request where
+    //      I'm the receiver) — these were being silently hidden, which is
+    //      why people reported "users show on Radar but never appear on
+    //      Discovery." Showing them on Discovery lets the swipe trigger an
+    //      instant Match (their pending request becomes the mutual right-
+    //      swipe in the /swipe handler).
+    // Now Discovery and Radar use the same exclusion set: blocked, blocked-by,
+    // already-swiped (left or right), and active matches.
 
     excludedIds = [...new Set(excludedIds)];
 

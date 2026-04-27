@@ -130,8 +130,59 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
     const currentUser = await User.findById(req.user._id);
 
     if (action === 'like' || action === 'superlike') {
-      if (action === 'superlike' && !req.user.premium?.isActive) {
-        return res.status(403).json({ success: false, message: 'Super Like is a Premium feature!' });
+      // Daily Super-Like cap: 5/day for Premium, 1/day for Free.
+      // Counts are stored in Redis under `superlikecount:<userId>:<YYYY-MM-DD>`
+      // and expire at UTC midnight. Falls back to the existing `dailySwipes`
+      // shape on the user document if Redis is unavailable.
+      if (action === 'superlike') {
+        const isPremium = !!req.user.premium?.isActive;
+        const dailyCap = isPremium ? 5 : 1;
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const slKey = `superlikecount:${req.user._id}:${todayStr}`;
+        const usedFromRedis = await redis.incr(slKey);
+
+        if (usedFromRedis !== null) {
+          if (usedFromRedis === 1) {
+            const secondsUntilMidnight = Math.floor(
+              (new Date().setUTCHours(24, 0, 0, 0) - Date.now()) / 1000
+            );
+            await redis.expire(slKey, secondsUntilMidnight);
+          }
+          if (usedFromRedis > dailyCap) {
+            const upgradeHint = isPremium
+              ? `Daily Super Like limit reached (${dailyCap}/day). Resets at midnight.`
+              : `Daily Super Like limit reached (${dailyCap}/day). Upgrade to Premium for ${5}/day.`;
+            return res.status(403).json({
+              success: false,
+              code: 'SUPERLIKE_LIMIT_REACHED',
+              message: upgradeHint,
+              dailyCap,
+              isPremium,
+            });
+          }
+        } else {
+          // Redis unavailable — fall back to a per-user counter on the User doc.
+          const today = new Date(); today.setHours(0, 0, 0, 0);
+          const last = currentUser.superLikesDaily?.lastReset
+            ? new Date(currentUser.superLikesDaily.lastReset)
+            : new Date(0);
+          last.setHours(0, 0, 0, 0);
+          if (!currentUser.superLikesDaily || last < today) {
+            currentUser.superLikesDaily = { count: 0, lastReset: new Date() };
+          }
+          if ((currentUser.superLikesDaily.count || 0) >= dailyCap) {
+            return res.status(403).json({
+              success: false,
+              code: 'SUPERLIKE_LIMIT_REACHED',
+              message: isPremium
+                ? `Daily Super Like limit reached (${dailyCap}/day).`
+                : `Daily Super Like limit reached (${dailyCap}/day). Upgrade to Premium for 5/day.`,
+              dailyCap,
+              isPremium,
+            });
+          }
+          currentUser.superLikesDaily.count = (currentUser.superLikesDaily.count || 0) + 1;
+        }
       }
 
       if (!currentUser.swipedRight.includes(targetUserId)) {

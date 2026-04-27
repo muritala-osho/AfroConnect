@@ -18,6 +18,7 @@ import Animated, {
   SlideOutUp,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -124,6 +125,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // Premium-only: persist the last batch of discovery cards to AsyncStorage
+  // so the deck renders instantly on cold app open instead of showing a
+  // spinner while waiting for /users/nearby. Free users keep the loading
+  // state — instant-load is one of the perks Premium ships with.
+  const DISCOVERY_CACHE_KEY = `discovery_cache_v1:${user?.id || 'anon'}`;
+  const DISCOVERY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
   const [loading, setLoading] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
   const [locationLoading, setLocationLoading] = useState(false);
@@ -332,9 +339,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         limit: 50,
       };
 
-      if (discoveryType === 'local' && user.location?.lat && user.location?.lng) {
-        params.lat = user.location.lat;
-        params.lng = user.location.lng;
+      // Normalize stored coords. The user may have either flat lat/lng or the
+      // GeoJSON form `location.coordinates: [lng, lat]` from the server. Read
+      // both so the request always includes coordinates if ANY form exists —
+      // this keeps the cache key stable and lets distance be computed on the
+      // first load instead of the silent stored-coord fallback.
+      const loc: any = user.location || {};
+      const storedLat = loc.lat ?? loc.coordinates?.coordinates?.[1] ?? loc.coordinates?.[1];
+      const storedLng = loc.lng ?? loc.coordinates?.coordinates?.[0] ?? loc.coordinates?.[0];
+
+      if (discoveryType === 'local' && Number.isFinite(storedLat) && Number.isFinite(storedLng)) {
+        params.lat = storedLat;
+        params.lng = storedLng;
         const rawMax = user.preferences?.maxDistance || 50;
         params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 50);
       } else if (discoveryType === 'global') {
@@ -462,6 +478,22 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         
         setUsers(filteredUsers);
         setCurrentIndex(0);
+
+        // Premium-only: persist the batch so the next cold-open renders the
+        // deck instantly. We store the processed cards (already mapped to
+        // DiscoverUser shape) so re-hydrating doesn't need any work on app
+        // open. Free users skip this — they keep the loading-spinner UX.
+        if (user?.premium?.isActive && filteredUsers.length > 0) {
+          AsyncStorage.setItem(
+            DISCOVERY_CACHE_KEY,
+            JSON.stringify({
+              users: filteredUsers.slice(0, 20),
+              cachedAt: Date.now(),
+              discoveryType,
+              selectedCountry,
+            }),
+          ).catch(() => {});
+        }
       } else {
         setUsers([]);
       }
@@ -504,11 +536,45 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     });
     
     if (!hasInitiallyLoaded.current || currentPrefs !== preferencesRef.current) {
+      const isFirstLoad = !hasInitiallyLoaded.current;
       hasInitiallyLoaded.current = true;
       preferencesRef.current = currentPrefs;
       
       const loadData = async () => {
-        setLoading(true);
+        // Premium-only instant render: on the very first mount of this screen,
+        // try to hydrate the deck from the AsyncStorage cache so the user sees
+        // photo cards the moment Discovery opens — no spinner, no refresh
+        // needed. We still fire the network call right after to refresh the
+        // batch in the background.
+        if (isFirstLoad && user?.premium?.isActive) {
+          try {
+            const cached = await AsyncStorage.getItem(DISCOVERY_CACHE_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              const fresh =
+                parsed?.cachedAt &&
+                Date.now() - parsed.cachedAt < DISCOVERY_CACHE_TTL_MS &&
+                parsed?.discoveryType === discoveryType &&
+                (parsed?.selectedCountry || null) === (selectedCountry || null) &&
+                Array.isArray(parsed?.users) &&
+                parsed.users.length > 0;
+              if (fresh) {
+                setUsers(parsed.users);
+                setCurrentIndex(0);
+                setLoading(false);
+                parsed.users.forEach((u: any) => seenUserIds.current.add(u.id));
+              } else {
+                setLoading(true);
+              }
+            } else {
+              setLoading(true);
+            }
+          } catch {
+            setLoading(true);
+          }
+        } else {
+          setLoading(true);
+        }
         // Run nearby query first; only fall back to radar if we got few results.
         // Avoids two concurrent location lookups + duplicate API calls on every load.
         await loadPotentialMatches();
