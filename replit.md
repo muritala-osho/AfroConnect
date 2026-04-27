@@ -81,6 +81,13 @@ AfroConnect is built as a monorepo containing three distinct applications:
 *   **Matches tab loading**: removed the full-screen skeleton grid. The header, "Today's Match" banner, and Matches/Likes tabs render immediately on mount; if `loading && data.length === 0`, a small inline `ActivityIndicator` shows inside the scroll area instead. The previous `Skeleton` import is gone.
     *   Dynamic content and user data, removing all mock data for production-ready administration.
 
+## Local Dev Tooling
+*   **Expo start wrapper** (`frontend/scripts/expo-start.js`): All `npm` scripts (`start`, `tunnel`, `android`, `ios`, `web`, `dev`) go through this Node wrapper instead of calling `npx expo start` directly. It does two portable things:
+    1. Sets `EXPO_FORCE_WEBCONTAINER_ENV=1` so `--tunnel` uses Expo's modern WebSocket tunnel (`*.boltexpo.dev`) instead of the deprecated ngrok 2.3.41 client bundled with Expo. The legacy ngrok v2 protocol no longer reaches ngrok's servers, so `instance.connect()` rejects with no `error.response`, which previously surfaced as `CommandError: TypeError: Cannot read properties of undefined (reading 'body')` from inside `@expo/ngrok/src/client.js`.
+    2. If a `replit.nix` is present (Replit / Nix sandbox), it shells out to `nix eval` and prepends every dep's `lib` directory to `LD_LIBRARY_PATH` so the `@react-native/debugger-shell` dotslash binary can find `libglib-2.0.so.0`, `libnspr4.so`, `libgit2-*.so`, etc. On a normal Linux/macOS dev machine the block is a no-op.
+*   **Ngrok client patch** (`frontend/scripts/patch-expo-ngrok.js`): Postinstall step that hardens `@expo/ngrok/src/client.js` so when `error.response` is undefined it throws a clear "Re-run with the modern WebSocket tunnel" message instead of the opaque TypeError. Idempotent — guarded with an `AFRO_NGROK_PATCHED` marker. Chained from `package.json` `postinstall` after `patch-metro.js`.
+*   **Local Linux requirement**: If running on a fresh Linux dev machine and the React Native DevTools shell complains about missing `libglib-2.0.so.0` or similar, install the Chromium runtime libs via your distro (`apt install libglib2.0-0 libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2`). Not needed on macOS / Windows.
+
 ## External Dependencies
 *   **MongoDB**: Primary database for all application data.
 *   **Cloudinary**: Cloud-based media management for image and video uploads.
