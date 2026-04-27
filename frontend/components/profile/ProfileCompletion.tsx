@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -75,16 +75,26 @@ export const ProfileCompletionCard: React.FC<ProfileCompletionProps> = ({
   const [loading, setLoading] = useState(true);
   const [progressAnim] = useState(new Animated.Value(0));
 
+  // Keep a ref to the latest api so the effect below can safely use [] deps.
+  // The useApi() hook has internal useState(loading/error) which causes a new
+  // object identity on every render — putting `api` in fetchData's dep list
+  // creates an infinite loop: fetch → loading state changes → new api object
+  // → fetchData recreates → useEffect fires → fetch again → repeat.
+  const apiRef = useRef(api);
+  useEffect(() => { apiRef.current = api; }, [api]);
+
+  const progressAnimRef = useRef(progressAnim);
+
   const fetchData = useCallback(async () => {
     try {
       const [statusRes, promptsRes] = await Promise.all([
-        api.get('/profile-completion/status'),
-        api.get('/profile-completion/prompts'),
+        apiRef.current.get('/profile-completion/status'),
+        apiRef.current.get('/profile-completion/prompts'),
       ]);
 
       if (statusRes.success) {
         setStatus(statusRes.data as any);
-        Animated.timing(progressAnim, {
+        Animated.timing(progressAnimRef.current, {
           toValue: (statusRes.data as any).completionPercentage / 100,
           duration: 1000,
           useNativeDriver: false,
@@ -99,7 +109,9 @@ export const ProfileCompletionCard: React.FC<ProfileCompletionProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [api, progressAnim]);
+  // Empty deps — fetch once on mount. All values accessed through stable refs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetchData();

@@ -342,6 +342,10 @@ export default function ChatDetailScreen({
   const sendMessageRef = useRef<any>(null);
   const recentlyWarnedTextRef = useRef<string>("");
   const matchIdRef = useRef<string | null>(null);
+  // Internal gate to prevent double-sends. Separate from the `sending` UI
+  // state so the button can reset immediately (WhatsApp-style) while the
+  // HTTP request is still in flight.
+  const isSendingInFlightRef = useRef(false);
 
   const [typingDotAnim1] = useState(new Animated.Value(0));
   const [typingDotAnim2] = useState(new Animated.Value(0));
@@ -692,12 +696,10 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      // Only auto-scroll to new message if user is already near the bottom.
-      // If they've scrolled up to read old messages, don't interrupt them.
-      if (isNearBottomRef.current !== false) {
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
-        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 250);
-      }
+      // Always scroll to the new incoming message so it's visible, matching
+      // WhatsApp's behaviour. The inverted list means offset 0 = newest message.
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 250);
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
@@ -848,7 +850,12 @@ export default function ChatDetailScreen({
   const sendMessage = async (content?: string, type: string = "text", extraData?: any) => {
     const textToSend = content || message.trim();
     if (!textToSend && type === "text") return;
-    if (!matchId || !token || sending) return;
+    if (!matchId || !token) return;
+    // Use a ref guard instead of `sending` state so the button can reset
+    // immediately after the optimistic add (WhatsApp-style), while the HTTP
+    // request is still in flight.
+    if (isSendingInFlightRef.current) return;
+    isSendingInFlightRef.current = true;
 
     // Safety scan: warn before sending text that contains personal/contact info
     if (
@@ -867,9 +874,12 @@ export default function ChatDetailScreen({
               reasons: scan.reasons,
               contentLength: textToSend.length,
             }, token).catch(() => {});
+            // Release the guard before recursing so the call goes through
+            isSendingInFlightRef.current = false;
             sendMessage(textToSend, type, extraData);
           },
           () => {
+            isSendingInFlightRef.current = false;
             setMessage(textToSend);
           },
         );
@@ -879,7 +889,6 @@ export default function ChatDetailScreen({
 
     setMessage("");
     recentlyWarnedTextRef.current = "";
-    setSending(true);
     // Tell the receiver we stopped typing the moment we hit send, so their
     // "typing…" bubble disappears instead of lingering for 2-3s.
     if (matchId && isCurrentlyTypingRef.current) {
@@ -916,6 +925,12 @@ export default function ChatDetailScreen({
     };
     setMessages((prev) => [...prev, tempMessage]);
     setReplyingTo(null);
+
+    // Reset the send button IMMEDIATELY after the optimistic message is added
+    // (WhatsApp-style) so the user can start typing their next message right
+    // away without waiting for the server response.
+    setSending(false);
+
     // Two scroll attempts: first fires right after React batches the state
     // update, second is a safety net for slower devices / longer re-renders.
     setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 60);
@@ -985,7 +1000,9 @@ export default function ChatDetailScreen({
         Alert.alert("Error", "Failed to send message");
       }
     } finally {
-      setSending(false);
+      // Release the double-send guard. The UI button was already re-enabled
+      // right after the optimistic message was added (WhatsApp-style).
+      isSendingInFlightRef.current = false;
     }
     return undefined;
   };
