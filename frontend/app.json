@@ -69,9 +69,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "./plugins/withCallKeep",
-      "@react-native-firebase/messaging",
-      [
+      "./plugins/withCallKeep",      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
