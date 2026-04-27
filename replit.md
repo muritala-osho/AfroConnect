@@ -82,6 +82,12 @@ AfroConnect is built as a monorepo containing three distinct applications:
     *   Dynamic content and user data, removing all mock data for production-ready administration.
 
 ## Local Dev Tooling
+*   **Expo Go vs dev build**: `npm run start`, `npm run tunnel`, `npm run android`, `npm run ios` all pass `--go` so the QR is an `exp://...` URL that opens directly in **Expo Go**. To use a custom dev build (required for `react-native-agora`, `react-native-callkeep`, `react-native-iap`, `react-native-voip-push-notification` — none of these work in Expo Go), use `npm run tunnel:dev` instead.
+*   **Backend URL config**: The frontend reads its API base URL from `process.env.EXPO_PUBLIC_API_URL` in `constants/config.ts`. Expo only inlines vars that start with `EXPO_PUBLIC_` and live in `frontend/.env` (NOT the repo root, NOT the backend folder). To point the app at the Render backend, create `frontend/.env` containing:
+    ```
+    EXPO_PUBLIC_API_URL=https://<your-render-app>.onrender.com
+    ```
+    Then fully restart Metro (`Ctrl+C` then `npm run tunnel` again). Without this, login fails with "Couldn't connect to server" because there is no fallback URL — the config throws a clear error in dev logs.
 *   **Expo start wrapper** (`frontend/scripts/expo-start.js`): All `npm` scripts (`start`, `tunnel`, `android`, `ios`, `web`, `dev`) go through this Node wrapper instead of calling `npx expo start` directly. It does two portable things:
     1. Sets `EXPO_FORCE_WEBCONTAINER_ENV=1` so `--tunnel` uses Expo's modern WebSocket tunnel (`*.boltexpo.dev`) instead of the deprecated ngrok 2.3.41 client bundled with Expo. The legacy ngrok v2 protocol no longer reaches ngrok's servers, so `instance.connect()` rejects with no `error.response`, which previously surfaced as `CommandError: TypeError: Cannot read properties of undefined (reading 'body')` from inside `@expo/ngrok/src/client.js`.
     2. If a `replit.nix` is present (Replit / Nix sandbox), it shells out to `nix eval` and prepends every dep's `lib` directory to `LD_LIBRARY_PATH` so the `@react-native/debugger-shell` dotslash binary can find `libglib-2.0.so.0`, `libnspr4.so`, `libgit2-*.so`, etc. On a normal Linux/macOS dev machine the block is a no-op.
