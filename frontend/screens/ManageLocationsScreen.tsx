@@ -7,7 +7,6 @@ import {
   FlatList, 
   TextInput, 
   Alert,
-  ActivityIndicator
 } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
@@ -25,7 +24,6 @@ export default function ManageLocationsScreen({ navigation }: any) {
   
   const [locations, setLocations] = useState<any[]>(user?.additionalLocations || []);
   const [newLocation, setNewLocation] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const isPremium = user?.premium?.isActive;
 
@@ -35,40 +33,67 @@ export default function ManageLocationsScreen({ navigation }: any) {
       return;
     }
 
-    if (!newLocation.trim()) {
+    const name = newLocation.trim();
+    if (!name) {
       Alert.alert("Error", "Please enter a location name");
       return;
     }
 
+    // Optimistic add — show the new chip instantly and clear the input so the
+    // tap feels immediate. We reconcile with the server response once it
+    // arrives (and roll back on failure).
+    const tempId = `temp_${Date.now()}`;
+    const optimisticItem = { _id: tempId, id: tempId, name, optimistic: true };
+    const previous = locations;
+    setLocations(prev => [...prev, optimisticItem]);
+    setNewLocation("");
+
     try {
-      setLoading(true);
-      const res = await post('/users/me/locations', { name: newLocation }, token ?? undefined);
-      if (res.success) {
-        setNewLocation("");
-        if (fetchUser) await fetchUser();
-        setLocations(res.locations || []);
+      const res = await post<{ success: boolean; locations?: any[]; message?: string }>(
+        '/users/me/locations',
+        { name },
+        token ?? undefined,
+      );
+      if (res.success && res.data?.locations) {
+        setLocations(res.data.locations);
+        // Refresh the auth user in the background so the Discovery passport
+        // picker gets the new entry, but never block the UI on it.
+        if (fetchUser) {
+          fetchUser().catch(() => {});
+        }
       } else {
+        setLocations(previous);
+        setNewLocation(name);
         Alert.alert("Error", res.message || "Failed to add location");
       }
-    } catch (e) {
+    } catch (_e) {
+      setLocations(previous);
+      setNewLocation(name);
       Alert.alert("Error", "An unexpected error occurred");
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleDeleteLocation = async (id: string) => {
+    // Optimistic delete for the same instant-feel reason.
+    const previous = locations;
+    setLocations(prev => prev.filter(l => (l._id || l.id) !== id));
     try {
-      setLoading(true);
-      const res = await del(`/users/me/locations/${id}`, token ?? undefined);
-      if (res.success) {
-        if (fetchUser) await fetchUser();
-        setLocations(res.locations || []);
+      const res = await del<{ success: boolean; locations?: any[] }>(
+        `/users/me/locations/${id}`,
+        token ?? undefined,
+      );
+      if (res.success && res.data?.locations) {
+        setLocations(res.data.locations);
+        if (fetchUser) {
+          fetchUser().catch(() => {});
+        }
+      } else if (!res.success) {
+        setLocations(previous);
+        Alert.alert("Error", "Failed to delete location");
       }
-    } catch (e) {
+    } catch (_e) {
+      setLocations(previous);
       Alert.alert("Error", "Failed to delete location");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -103,9 +128,8 @@ export default function ManageLocationsScreen({ navigation }: any) {
           <Pressable 
             style={[styles.addButton, { backgroundColor: isPremium ? theme.primary : theme.textSecondary }]} 
             onPress={handleAddLocation}
-            disabled={loading}
           >
-            {loading ? <ActivityIndicator color="#FFF" /> : <Feather name="plus" size={24} color="#FFF" />}
+            <Feather name="plus" size={24} color="#FFF" />
           </Pressable>
         </View>
 
