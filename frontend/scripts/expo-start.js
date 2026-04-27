@@ -6,6 +6,10 @@ const path = require('path');
 process.env.EXPO_FORCE_WEBCONTAINER_ENV =
   process.env.EXPO_FORCE_WEBCONTAINER_ENV || '1';
 
+if (process.env.EXPO_UNSTABLE_HEADLESS == null) {
+  process.env.EXPO_UNSTABLE_HEADLESS = 'false';
+}
+
 try {
   const repoRoot = path.resolve(__dirname, '..', '..');
   const replitNix = path.join(repoRoot, 'replit.nix');
