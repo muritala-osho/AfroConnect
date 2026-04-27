@@ -764,7 +764,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         </View>
           <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
             <ThemedText style={{ fontSize: 12 }}>
-              Dist: {user?.premium?.isActive ? (user?.preferences?.maxDistance ? Math.round(user.preferences.maxDistance / 1000) : 50) : 'Premium'}
+              Dist: {user?.premium?.isActive ? (user?.preferences?.maxDistance ? `${user.preferences.maxDistance}km` : '50km') : 'Premium'}
             </ThemedText>
           </View>
         <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>

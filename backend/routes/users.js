@@ -414,7 +414,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
       FREE_MAX_DISTANCE_KM
     );
-    const maxDist = (isGlobal || isPassportOrTravel) ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
+    const maxDist = (isPremium || isGlobal || isPassportOrTravel) ? rawMaxDist : Math.min(rawMaxDist, FREE_MAX_DISTANCE_KM);
 
     let effectiveLat = searchLat || (lat ? parseFloat(lat) : null);
     let effectiveLng = searchLng || (lng ? parseFloat(lng) : null);

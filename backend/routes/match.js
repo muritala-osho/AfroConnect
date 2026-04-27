@@ -589,7 +589,7 @@ router.get('/daily-match', protect, async (req, res) => {
       // Hide users in Incognito Mode from the daily match suggestion pool.
       'privacySettings.incognitoMode': { $ne: true },
       ...genderFilter
-    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(60);
+    }).select('name age bio photos interests lifestyle countryOfOrigin tribe languages diasporaGeneration location verified premium onlineStatus voiceBio').limit(300);
 
     const maxDist = normaliseMaxDistanceKm(me.preferences?.maxDistance, 0);
     if (maxDist > 0) {
