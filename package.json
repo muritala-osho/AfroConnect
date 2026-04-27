@@ -11,5 +11,9 @@
   "description": "",
   "dependencies": {
     "resend": "^6.10.0"
+  },
+  "overrides": {
+    "uuid": "14.0.0",
+    "@xmldom/xmldom": "0.9.10"
   }
 }

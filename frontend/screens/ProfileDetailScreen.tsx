@@ -465,16 +465,16 @@ export default function ProfileDetailScreen() {
             <View style={styles.nameRow}>
               <ThemedText style={styles.name} numberOfLines={1}>
                 {user.name}
-                {user.age ? (
-                  <ThemedText style={styles.nameAge}>, {user.age}</ThemedText>
-                ) : null}
               </ThemedText>
-              {user.verified && (
-                <VerificationBadge size={18} />
-              )}
               {user.premium?.isActive && (
                 <PremiumBadge size="medium" style={{ marginLeft: 6 }} />
               )}
+              {user.verified && (
+                <VerificationBadge size={18} />
+              )}
+              {user.age ? (
+                <ThemedText style={styles.nameAge}>, {user.age}</ThemedText>
+              ) : null}
             </View>
             <View style={styles.statusRow}>
               <ActivityStatus onlineStatus={user.onlineStatus || (user.online ? 'online' : 'offline')} />

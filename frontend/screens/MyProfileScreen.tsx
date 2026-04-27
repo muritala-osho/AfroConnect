@@ -519,12 +519,12 @@ export default function MyProfileScreen({ navigation }: MyProfileScreenProps) {
             <View style={styles.nameRow}>
               <ThemedText style={styles.heroName} numberOfLines={1} ellipsizeMode="tail">
                 {user?.name || "User"}
-                {user?.age && !(user as any)?.privacySettings?.hideAge && (
-                  <ThemedText style={styles.heroAge}>, {user.age}</ThemedText>
-                )}
               </ThemedText>
+              {user?.premium?.isActive && <PremiumBadge size="medium" style={{ marginLeft: 6 }} />}
               {(user as any)?.verified && <VerificationBadge verified size="small" />}
-              {user?.premium?.isActive && <PremiumBadge size="medium" />}
+              {user?.age && !(user as any)?.privacySettings?.hideAge && (
+                <ThemedText style={styles.heroAge}>, {user.age}</ThemedText>
+              )}
               {(user as any)?.privacySettings?.incognitoMode && (
                 <Pressable
                   onPress={(e) => { e.stopPropagation(); navigation.navigate("Settings"); }}

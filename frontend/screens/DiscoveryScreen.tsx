@@ -1817,15 +1817,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 <View style={styles.nameRow}>
                   <ThemedText style={styles.profileName} numberOfLines={1} adjustsFontSizeToFit={false}>
                     {currentUser.name?.split(' ')[0]}
-                    {currentUser.age != null && (
-                      <ThemedText style={styles.profileAge}>, {currentUser.age}</ThemedText>
-                    )}
                   </ThemedText>
+                  {(currentUser as any).premium?.isActive && (
+                    <PremiumBadge size="small" style={{ marginLeft: 5 }} />
+                  )}
                   {currentUser.verified && (
                     <VerificationBadge size={22} />
                   )}
-                  {(currentUser as any).premium?.isActive && (
-                    <PremiumBadge size="small" style={{ marginLeft: 4 }} />
+                  {currentUser.age != null && (
+                    <ThemedText style={styles.profileAge}>, {currentUser.age}</ThemedText>
                   )}
                 </View>
 
