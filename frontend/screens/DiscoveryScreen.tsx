@@ -37,6 +37,10 @@ import { useApi } from "@/hooks/useApi";
 import { getApiBaseUrl } from "@/constants/config";
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
+import {
+  getCachedPermissionStatus,
+  requestAndCachePermission,
+} from '@/utils/locationPermission';
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { VerificationBadge } from "@/components/VerificationBadge";
@@ -184,7 +188,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   }, [token, api]);
 
   const checkLocationPermission = useCallback(async () => {
-    const { status } = await Location.getForegroundPermissionsAsync();
+    // Use the cached permission value when possible so we don't re-query the
+    // OS (or repeatedly trigger any system-side throttles) on every screen
+    // focus. The cache TTLs out at 24h.
+    const status = await getCachedPermissionStatus();
     const granted = status === 'granted';
     setHasLocationPermission(granted);
     setLocationPermissionChecked(true);
@@ -206,11 +213,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       
       let permissionGranted: boolean | null = hasLocationPermission;
       if (!locationPermissionChecked) {
-        const { status } = await Location.getForegroundPermissionsAsync();
+        const status = await getCachedPermissionStatus();
         permissionGranted = status === 'granted';
         setHasLocationPermission(permissionGranted);
         setLocationPermissionChecked(true);
-        
+
         if (!permissionGranted) {
           setRadarScanning(false);
           return;
@@ -1211,13 +1218,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
       
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      
+      const status = await requestAndCachePermission();
+
       if (status !== 'granted') {
+        setHasLocationPermission(false);
+        setLocationPermissionChecked(true);
         showAlert(t('locationRequired'), t('enableLocationAccess'), [{ text: t('ok'), style: 'default' }], 'map-pin');
         setLocationLoading(false);
         return;
       }
+
+      setHasLocationPermission(true);
+      setLocationPermissionChecked(true);
       
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
@@ -1245,8 +1257,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         if (Platform.OS !== 'web') {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         }
+        // Drop the gate immediately and reset the preferences ref so the
+        // initial-load useEffect re-fires once `user.location.lat/lng` flips
+        // in. Calling `loadPotentialMatches()` directly here would use the
+        // stale memoized closure (without the new coords) and re-trigger the
+        // requiresLocation gate, which is the bug new users hit on signup.
+        setRequiresLocation(false);
+        preferencesRef.current = '';
+        setLoading(true);
         showAlert(t('success'), t('locationUpdated'), [{ text: t('ok'), style: 'default' }], 'check-circle');
-        loadPotentialMatches();
       }
     } catch (error) {
       logger.error('Location sharing error:', error);

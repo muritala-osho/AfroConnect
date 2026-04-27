@@ -13,7 +13,6 @@ import Animated, {
 import { Gesture, GestureDetector, GestureHandlerRootView, ScrollView as GHScrollView } from "react-native-gesture-handler";
 import { Image } from "expo-image";
 import { SafeImage } from "@/components/SafeImage";
-import { Skeleton } from "@/components/SkeletonLoader";
 import { CompositeNavigationProp, useFocusEffect } from "@react-navigation/native";
 import { useUnread } from "@/contexts/UnreadContext";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
@@ -463,6 +462,13 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
   const renderLikesMasonryGrid = useCallback(() => {
     if (whoLikesMe.length === 0) {
+      if (loading) {
+        return (
+          <View style={styles.inlineLoader}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        );
+      }
       return (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconContainer}>
@@ -484,7 +490,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         </View>
       </View>
     );
-  }, [whoLikesMe, likesColumnData, theme.textSecondary, theme.text]);
+  }, [whoLikesMe, likesColumnData, theme.textSecondary, theme.text, loading, theme.primary]);
 
   const matchesColumnData = useMemo(() => {
     const left: { item: MatchWithUser; isTall: boolean; isLast: boolean }[] = [];
@@ -509,6 +515,13 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
 
   const renderMasonryGrid = useCallback(() => {
     if (matches.length === 0) {
+      if (loading) {
+        return (
+          <View style={styles.inlineLoader}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        );
+      }
       return renderEmptyState();
     }
 
@@ -522,7 +535,7 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
         </View>
       </View>
     );
-  }, [matches, matchesColumnData, renderMatchCard]);
+  }, [matches, matchesColumnData, renderMatchCard, loading, theme.primary]);
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -545,27 +558,6 @@ export default function MatchesScreen({ navigation }: MatchesScreenProps) {
       </Pressable>
     </View>
   );
-
-  if (loading) {
-    return (
-      <ThemedView style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
-          <ThemedText style={styles.headerTitle}>{t('matches')}</ThemedText>
-        </View>
-        <View style={[styles.skeletonGrid, { paddingHorizontal: Spacing.lg }]}>
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <Skeleton
-              key={`m-skel-${i}`}
-              width={COLUMN_WIDTH}
-              height={i % 3 === 1 ? COLUMN_WIDTH * 1.2 : TALL_CARD_HEIGHT}
-              borderRadius={BorderRadius.md}
-              style={{ marginBottom: CARD_GAP }}
-            />
-          ))}
-        </View>
-      </ThemedView>
-    );
-  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -673,6 +665,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
+  },
+  inlineLoader: {
+    paddingVertical: Spacing.xl * 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabs: {
     flexDirection: 'row',
