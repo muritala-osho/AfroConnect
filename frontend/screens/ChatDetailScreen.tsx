@@ -404,6 +404,10 @@ export default function ChatDetailScreen({
         duration: Platform.OS === "ios" ? (e.duration || 250) : 80,
         useNativeDriver: false,
       }).start();
+      // When the keyboard opens the viewport shrinks — scroll to the newest
+      // message so it isn't hidden behind the keyboard.
+      const scrollDelay = Platform.OS === "ios" ? (e.duration || 250) : 150;
+      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), scrollDelay);
     });
     const hideSub = Keyboard.addListener(hideEvent, (e) => {
       Animated.timing(inputPaddingAnim, {
@@ -688,9 +692,12 @@ export default function ChatDetailScreen({
         if (prev.some((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      // Always scroll to the latest message on receive so old messages move
-      // up and the new text is visible — standard chat UX.
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
+      // Only auto-scroll to new message if user is already near the bottom.
+      // If they've scrolled up to read old messages, don't interrupt them.
+      if (isNearBottomRef.current !== false) {
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
+        setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 250);
+      }
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
@@ -909,7 +916,10 @@ export default function ChatDetailScreen({
     };
     setMessages((prev) => [...prev, tempMessage]);
     setReplyingTo(null);
-    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+    // Two scroll attempts: first fires right after React batches the state
+    // update, second is a safety net for slower devices / longer re-renders.
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 60);
+    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 200);
 
     try {
       const response = await post<{ message: Message }>(
