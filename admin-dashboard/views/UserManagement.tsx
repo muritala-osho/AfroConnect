@@ -9,6 +9,8 @@ import {
 import { adminApi } from '../services/adminApi';
 import PermissionGuard from '../components/PermissionGuard';
 import { SkeletonTableRow } from '../components/Skeleton';
+import UserNotificationLog from './UserNotificationLog';
+import { Bell } from 'lucide-react';
 
 interface UserManagementProps {
   showToast?: (message: string, type: 'success' | 'error') => void;
@@ -22,7 +24,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const [error, setError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'activity' | 'safety'>('bio');
+  const [activeProfileTab, setActiveProfileTab] = useState<'bio' | 'activity' | 'safety' | 'notifications'>('bio');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'suspended' | 'banned' | 'warned'>('all');
   const [page, setPage] = useState(1);
@@ -649,6 +651,7 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                   { id: 'bio', label: 'Profile', icon: <Eye size={14} /> },
                   { id: 'activity', label: 'Activity', icon: <History size={14} /> },
                   { id: 'safety', label: 'Safety', icon: <ShieldAlert size={14} /> },
+                  { id: 'notifications', label: 'Notifications', icon: <Bell size={14} /> },
                 ].map(tab => (
                   <button
                     key={tab.id}
@@ -791,6 +794,9 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                       <p className="text-xs font-mono text-slate-500 break-all">{selectedUser._id}</p>
                     </div>
                   </div>
+                )}
+                {activeProfileTab === 'notifications' && (
+                  <UserNotificationLog userId={selectedUser._id} userEmail={selectedUser.email} />
                 )}
                 {activeProfileTab === 'safety' && (
                   <div className="space-y-4 animate-fadeIn">

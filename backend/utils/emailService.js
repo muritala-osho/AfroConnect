@@ -1,27 +1,39 @@
 const logger = require('./logger');
-async function brevoSend({ to, subject, html, text }) {
-  const response = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      sender: {
-        name: 'AfroConnect',
-        email: process.env.BREVO_SENDER_EMAIL,
+const { logEmail } = require('./notificationLogger');
+
+async function brevoSend({ to, subject, html, text, userId, type }) {
+  let response;
+  try {
+    response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'Content-Type': 'application/json',
       },
-      to: [{ email: to }],
-      subject,
-      htmlContent: html,
-      textContent: text,
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(JSON.stringify(err));
+      body: JSON.stringify({
+        sender: {
+          name: 'AfroConnect',
+          email: process.env.BREVO_SENDER_EMAIL,
+        },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+    });
+  } catch (networkErr) {
+    logEmail({ to, subject, html, userId, type, status: 'failed', errorMessage: networkErr?.message }).catch(() => {});
+    throw networkErr;
   }
-  return response.json();
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const errMessage = JSON.stringify(err).slice(0, 500);
+    logEmail({ to, subject, html, userId, type, status: 'failed', errorMessage: errMessage }).catch(() => {});
+    throw new Error(errMessage);
+  }
+  const json = await response.json().catch(() => ({}));
+  logEmail({ to, subject, html, userId, type, status: 'sent', providerId: json?.messageId || null }).catch(() => {});
+  return json;
 }
 
 function escapeHtml(str) {

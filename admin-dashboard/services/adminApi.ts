@@ -589,6 +589,22 @@ export const adminApi = {
     const res = await fetchWithAuth(`${API_BASE}/admin/sentry/overview?${params.toString()}`);
     return handleResponse(res);
   },
+
+  getUserNotifications: async (
+    userId: string,
+    opts: { page?: number; limit?: number; channel?: 'email' | 'push'; status?: string } = {}
+  ) => {
+    const params = new URLSearchParams();
+    if (opts.page) params.set('page', String(opts.page));
+    if (opts.limit) params.set('limit', String(opts.limit));
+    if (opts.channel) params.set('channel', opts.channel);
+    if (opts.status) params.set('status', opts.status);
+    const qs = params.toString();
+    const res = await fetchWithAuth(
+      `${API_BASE}/admin/users/${userId}/notifications${qs ? `?${qs}` : ''}`
+    );
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;

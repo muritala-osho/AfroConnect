@@ -589,6 +589,59 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
 
 router.post('/revoke-verification/:userId', protect, isAdmin, verificationController.revokeVerification);
 
+router.get('/users/:userId/notifications', protect, isAdmin, async (req, res) => {
+  try {
+    const NotificationLog = require('../models/NotificationLog');
+    const { userId } = req.params;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+    const skip = (page - 1) * limit;
+
+    const filter = { recipient: userId };
+    if (req.query.channel && ['email', 'push', 'inapp', 'socket'].includes(req.query.channel)) {
+      filter.channel = req.query.channel;
+    }
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.type) filter.type = req.query.type;
+
+    const [items, total, statsAgg] = await Promise.all([
+      NotificationLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      NotificationLog.countDocuments(filter),
+      NotificationLog.aggregate([
+        { $match: { recipient: new (require('mongoose')).Types.ObjectId(userId) } },
+        {
+          $group: {
+            _id: { channel: '$channel', status: '$status' },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const stats = { email: { sent: 0, failed: 0 }, push: { sent: 0, failed: 0 }, total };
+    statsAgg.forEach((row) => {
+      const ch = row._id.channel;
+      const st = row._id.status;
+      if (!stats[ch]) stats[ch] = { sent: 0, failed: 0 };
+      if (st === 'failed' || st === 'bounced') stats[ch].failed += row.count;
+      else stats[ch].sent += row.count;
+    });
+
+    res.json({
+      success: true,
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      stats,
+      items,
+    });
+  } catch (error) {
+    logger.error('Get user notifications error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);

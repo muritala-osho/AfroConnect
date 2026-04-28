@@ -1,5 +1,7 @@
 const logger = require('./logger');
 const { Expo } = require('expo-server-sdk');
+const { logPush } = require('./notificationLogger');
+
 const expo = new Expo({
   accessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
   useFcmV1: true,
@@ -56,9 +58,10 @@ async function checkPushReceipts(ticketIdMap) {
   }
 }
 
-async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge }) {
+async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge, userId, type }) {
   if (!Expo.isExpoPushToken(pushToken)) {
     logger.warn(`[Push] Invalid Expo push token — skipping: ${pushToken}`);
+    logPush({ pushToken, title, body, data, userId, type, status: 'failed', errorMessage: 'Invalid Expo push token' }).catch(() => {});
     return null;
   }
 
@@ -83,16 +86,26 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
     }
 
     const ticketIdMap = new Map();
+    let firstTicketId = null;
+    let anyError = null;
     for (const ticket of tickets) {
       if (ticket.status === 'error') {
+        anyError = ticket.message || (ticket.details && ticket.details.error) || 'unknown';
         logger.error(`[Push] Ticket error: ${ticket.message}`, ticket.details);
         if (ticket.details?.error === 'DeviceNotRegistered') {
           await clearInvalidToken(pushToken);
         }
       } else if (ticket.id) {
+        if (!firstTicketId) firstTicketId = ticket.id;
         ticketIdMap.set(ticket.id, pushToken);
       }
     }
+    logPush({
+      pushToken, title, body, data, userId, type,
+      status: anyError ? 'failed' : 'sent',
+      providerId: firstTicketId,
+      errorMessage: anyError,
+    }).catch(() => {});
 
     if (ticketIdMap.size > 0) {
       setTimeout(() => checkPushReceipts(ticketIdMap), 20 * 60 * 1000);
