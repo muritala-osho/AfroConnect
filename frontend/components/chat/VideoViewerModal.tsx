@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Pressable, StyleSheet } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from '../../utils/expoAvCompat';
 import { ThemedText } from '@/components/ThemedText';
 
 type Props = {

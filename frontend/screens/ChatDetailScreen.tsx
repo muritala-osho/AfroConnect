@@ -46,7 +46,7 @@ import { startLiveLocationShare, stopLiveLocationShare, isSharingLive } from "@/
 import * as FileSystem from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
-import { Audio, Video, ResizeMode } from "expo-av";
+import { Audio, Video, ResizeMode } from "../utils/expoAvCompat";
 import { useApi } from "@/hooks/useApi";
 import { KeyboardAvoidingView as KAVController } from "react-native-keyboard-controller";
 import socketService from "@/services/socket";

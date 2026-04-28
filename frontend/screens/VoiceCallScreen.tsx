@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Audio } from "expo-av";
+import { Audio } from "../utils/expoAvCompat";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";

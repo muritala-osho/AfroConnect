@@ -2,7 +2,7 @@ import logger from '@/utils/logger';
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator, Alert, Platform, Dimensions } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
-import { Video, ResizeMode } from 'expo-av';
+import { Video, ResizeMode } from '../utils/expoAvCompat';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import { Ionicons, Feather } from '@expo/vector-icons';

@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as Notifications from 'expo-notifications';
-import { Audio } from 'expo-av';
+import { Audio } from '../../utils/expoAvCompat';
 import { useAuth } from '@/hooks/useAuth';
 import socketService from '@/services/socket';
 import { useNavigation } from '@react-navigation/native';

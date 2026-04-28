@@ -89,8 +89,7 @@
           "android": {
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "enableMinifyInReleaseBuilds": true,
-            "extraProguardRules": "-dontwarn expo.modules.core.interfaces.services.**\n-dontwarn expo.modules.av.**\n-keep class expo.modules.av.** { *; }\n-keep class expo.modules.core.interfaces.services.** { *; }"
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -101,12 +100,6 @@
           "color": "#FF6B9D",
           "defaultChannel": "default",
           "sounds": []
-        }
-      ],
-      [
-        "expo-av",
-        {
-          "microphonePermission": "Allow AfroConnect to access your microphone to record voice messages."
         }
       ],
       "expo-web-browser",
@@ -124,7 +117,12 @@
       ],
       "expo-secure-store",
       "@react-native-community/datetimepicker",
-      "expo-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow AfroConnect to access your microphone to record voice messages."
+        }
+      ],
       "expo-font",
       "expo-image",
       "expo-sharing",

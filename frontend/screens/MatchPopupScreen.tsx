@@ -12,7 +12,7 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import * as Haptics from 'expo-haptics';
-import { Audio } from 'expo-av';
+import { Audio } from '../utils/expoAvCompat';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 

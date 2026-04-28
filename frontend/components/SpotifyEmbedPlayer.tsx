@@ -13,7 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from "expo-av";
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from "../utils/expoAvCompat";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, Platform, Alert, Modal, ScrollView, Keyboard } from "react-native";
 import { KeyboardAvoidingView as KAVController, KeyboardStickyView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
-import { Video, ResizeMode } from "expo-av";
+import { Video, ResizeMode } from "../utils/expoAvCompat";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "@/navigation/RootNavigator";
