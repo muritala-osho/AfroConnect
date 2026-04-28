@@ -35,6 +35,7 @@ export interface Message {
   viewOnceOpenedBy?: string[];
   edited?: boolean;
   editedAt?: string;
+  seenAt?: string;
   storyReaction?: {
     storyId: string;
     emoji?: string;

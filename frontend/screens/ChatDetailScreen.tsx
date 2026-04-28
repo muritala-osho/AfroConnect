@@ -727,11 +727,14 @@ export default function ChatDetailScreen({
       const matchesByUser = String(readByUserId) === String(userId);
       if (!matchesByRoom && !matchesByUser) return;
 
+      const readAtIso =
+        data.readAt || data.seenAt || new Date().toISOString();
+
       setMessages((prev) =>
         prev.map((m) => {
           const senderId = typeof m.sender === "string" ? m.sender : m.sender?._id;
           if (String(senderId) === String(myId) && m.status !== "seen") {
-            return { ...m, status: "seen" };
+            return { ...m, status: "seen", seenAt: m.seenAt || readAtIso };
           }
           return m;
         }),
@@ -2047,6 +2050,20 @@ export default function ChatDetailScreen({
     [enrichedMessages],
   );
 
+  // Identify the last own message that has been seen — we only render the
+  // "Seen at HH:MM" caption on this single message to avoid noisy footers
+  // on every bubble (matches WhatsApp / iMessage behavior).
+  const lastSeenOwnMessageId = useMemo(() => {
+    for (let i = enrichedMessages.length - 1; i >= 0; i--) {
+      const m = enrichedMessages[i];
+      const senderId = typeof m.sender === "string" ? m.sender : m.sender?._id;
+      if (String(senderId) === String(myId) && m.status === "seen") {
+        return m._id;
+      }
+    }
+    return null;
+  }, [enrichedMessages, myId]);
+
   const formatRecordingTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -2580,6 +2597,19 @@ export default function ChatDetailScreen({
                         />
                       )}
                     </View>
+                    {isMe && item._id === lastSeenOwnMessageId && item.status === "seen" && (
+                      <ThemedText
+                        style={{
+                          fontSize: 10,
+                          color: "rgba(255,255,255,0.65)",
+                          alignSelf: "flex-end",
+                          marginTop: 2,
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Seen{item.seenAt ? ` at ${formatTime(item.seenAt)}` : ""}
+                      </ThemedText>
+                    )}
                   </View>
 
                 </View>
@@ -2611,7 +2641,7 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, failedGifLoads, gifReloadKey, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, failedGifLoads, gifReloadKey, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds, lastSeenOwnMessageId],
   );
 
   const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);

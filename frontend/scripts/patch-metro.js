@@ -20,7 +20,16 @@ if (fs.existsSync(metroPkgPath)) {
       './src/Bundler': './src/Bundler.js',
       './src/shared/types': './src/shared/types.js',
       './src/DeltaBundler/types': './src/DeltaBundler/types.js',
+      './src/DeltaBundler/Graph': './src/DeltaBundler/Graph.js',
       './src/DeltaBundler/Serializers/helpers/js': './src/DeltaBundler/Serializers/helpers/js.js',
+      './src/DeltaBundler/Serializers/sourceMapString': './src/DeltaBundler/Serializers/sourceMapString.js',
+      './src/lib/bundleToString': './src/lib/bundleToString.js',
+      './src/lib/CountingSet': './src/lib/CountingSet.js',
+      './src/lib/countLines': './src/lib/countLines.js',
+      './src/lib/getAppendScripts': './src/lib/getAppendScripts.js',
+      './src/ModuleGraph/worker/JsFileWrapping': './src/ModuleGraph/worker/JsFileWrapping.js',
+      './src/ModuleGraph/worker/generateImportNames': './src/ModuleGraph/worker/generateImportNames.js',
+      './src/Bundler/util': './src/Bundler/util.js',
     };
     let patched = false;
     for (const [exportPath, filePath] of Object.entries(neededExports)) {
@@ -34,6 +43,67 @@ if (fs.existsSync(metroPkgPath)) {
       console.log('[patch-metro] Patched metro/package.json exports.');
     } else {
       console.log('[patch-metro] metro/package.json already patched.');
+    }
+  }
+}
+
+// ── 1c. Patch metro-transform-worker/package.json — same class of issue: ──
+//        Expo SDK 52's metro-config imports `metro-transform-worker/src/utils/getMinifier`.
+const mtwPkgPath = path.join(__dirname, '..', 'node_modules', 'metro-transform-worker', 'package.json');
+
+if (fs.existsSync(mtwPkgPath)) {
+  const pkg = JSON.parse(fs.readFileSync(mtwPkgPath, 'utf8'));
+  if (pkg.exports) {
+    const neededExports = {
+      './src/utils/getMinifier': './src/utils/getMinifier.js',
+      './src/utils/assetTransformer': './src/utils/assetTransformer.js',
+    };
+    let patched = false;
+    for (const [exportPath, filePath] of Object.entries(neededExports)) {
+      if (!pkg.exports[exportPath]) {
+        pkg.exports[exportPath] = filePath;
+        patched = true;
+      }
+    }
+    if (patched) {
+      fs.writeFileSync(mtwPkgPath, JSON.stringify(pkg, null, 2) + '\n');
+      console.log('[patch-metro] Patched metro-transform-worker/package.json exports.');
+    } else {
+      console.log('[patch-metro] metro-transform-worker/package.json already patched.');
+    }
+  }
+}
+
+// ── 1b. Patch metro-cache/package.json so @expo/metro-config can require ──
+//        `metro-cache/src/stores/FileStore`. The newer metro-cache package
+//        (shipped with RN 0.83.x) restricts subpath access via the "exports"
+//        field, which breaks Expo SDK 52's @expo/metro-config that imports
+//        FileStore directly. The file exists on disk; we just need to expose it.
+const metroCachePkgPath = path.join(__dirname, '..', 'node_modules', 'metro-cache', 'package.json');
+
+if (fs.existsSync(metroCachePkgPath)) {
+  const pkg = JSON.parse(fs.readFileSync(metroCachePkgPath, 'utf8'));
+  if (pkg.exports) {
+    const neededExports = {
+      './src/stores/FileStore': './src/stores/FileStore.js',
+      './src/stores/AutoCleanFileStore': './src/stores/AutoCleanFileStore.js',
+      './src/stores/HttpStore': './src/stores/HttpStore.js',
+      './src/stores/HttpGetStore': './src/stores/HttpGetStore.js',
+      './src/stores/HttpError': './src/stores/HttpError.js',
+      './src/stores/NetworkError': './src/stores/NetworkError.js',
+    };
+    let patched = false;
+    for (const [exportPath, filePath] of Object.entries(neededExports)) {
+      if (!pkg.exports[exportPath]) {
+        pkg.exports[exportPath] = filePath;
+        patched = true;
+      }
+    }
+    if (patched) {
+      fs.writeFileSync(metroCachePkgPath, JSON.stringify(pkg, null, 2) + '\n');
+      console.log('[patch-metro] Patched metro-cache/package.json exports.');
+    } else {
+      console.log('[patch-metro] metro-cache/package.json already patched.');
     }
   }
 }

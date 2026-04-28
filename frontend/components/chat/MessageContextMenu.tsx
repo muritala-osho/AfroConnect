@@ -46,11 +46,19 @@ export default function MessageContextMenu({
       : selectedMessage.sender?._id
     : null;
   const isOwn = senderId && String(senderId) === String(myId);
+  // Mirror backend rule: only the sender can edit their own text messages,
+  // and only within 15 minutes of sending. Hiding the option after the
+  // window expires avoids a confusing "Cannot edit" alert later.
+  const FIFTEEN_MIN_MS = 15 * 60 * 1000;
+  const withinEditWindow = selectedMessage?.createdAt
+    ? Date.now() - new Date(selectedMessage.createdAt).getTime() <= FIFTEEN_MIN_MS
+    : false;
   const canEdit =
     selectedMessage &&
     isOwn &&
     selectedMessage.type === 'text' &&
-    !selectedMessage.deletedForEveryone;
+    !selectedMessage.deletedForEveryone &&
+    withinEditWindow;
   const canReport =
     selectedMessage && !isOwn && !selectedMessage.deletedForEveryone;
 
