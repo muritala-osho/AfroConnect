@@ -61,7 +61,8 @@
         "android.permission.CALL_PHONE",
         "android.permission.READ_PHONE_STATE",
         "android.permission.READ_PHONE_NUMBERS",
-        "android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+        "android.permission.BIND_TELECOM_CONNECTION_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -87,7 +88,8 @@
         {
           "android": {
             "enableProguardInReleaseBuilds": true,
-            "enableShrinkResourcesInReleaseBuilds": true
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "enableMinifyInReleaseBuilds": true
           }
         }
       ],
@@ -131,11 +133,11 @@
     "experiments": {
       "reactCompiler": false
     },
+    "owner": "muritala1935",
     "extra": {
       "eas": {
-        "projectId": "6d96f0e1-1af8-4b2c-aec1-43be03ba7fa1"
+        "projectId": "02d9392d-4e0a-4496-845d-28f0f65af038"
       }
-    },
-    "owner": "oluwanifemidavid"
+    }
   }
 }
