@@ -17,6 +17,7 @@ import {
   Headphones,
   ShieldOff,
   MessageCircleQuestion,
+  AlertTriangle,
 } from 'lucide-react';
 import { AdminRole, PushTemplate } from './types';
 
@@ -34,6 +35,7 @@ export const NAV_ITEMS = [
   { id: 'payments',     label: 'Finances',            icon: <CreditCard size={20} />,      roles: [AdminRole.SUPER_ADMIN] },
   { id: 'premium',      label: 'Premium Members',     icon: <Crown size={20} />,           roles: [AdminRole.SUPER_ADMIN] },
   { id: 'analytics',    label: 'Intelligence',        icon: <Activity size={20} />,        roles: [AdminRole.SUPER_ADMIN] },
+  { id: 'sentry',       label: 'Error Monitoring',    icon: <AlertTriangle size={20} />,   roles: [AdminRole.SUPER_ADMIN] },
   { id: 'broadcasts',   label: 'Broadcasts',          icon: <Megaphone size={20} />,       roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'icebreakers',  label: 'Icebreakers',         icon: <MessageCircleQuestion size={20} />, roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR] },
   { id: 'profile',      label: 'My Profile',          icon: <UserCircle size={20} />,      roles: [AdminRole.SUPER_ADMIN, AdminRole.MODERATOR, AdminRole.SUPPORT] },

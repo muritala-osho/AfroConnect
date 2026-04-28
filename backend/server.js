@@ -464,6 +464,8 @@ const auditLogRoutes = require('./routes/auditLog');
 app.use('/api/admin/audit-log', auditLogRoutes);
 const scheduledBroadcastRoutes = require('./routes/scheduledBroadcasts');
 app.use('/api/admin/scheduled-broadcasts', scheduledBroadcastRoutes);
+const adminSentryRoutes = require('./routes/adminSentry');
+app.use('/api/admin/sentry', adminSentryRoutes);
 const safetyAuditRoutes = require('./routes/safetyAudit');
 app.use('/api/safety', safetyAuditRoutes);
 app.use('/admin', express.static(path.join(__dirname, '../public/admin')));

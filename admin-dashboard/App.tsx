@@ -19,6 +19,7 @@ import Appeals from './views/Appeals';
 import ChurnIntelligence from './views/ChurnIntelligence';
 import RevokeVerification from './views/RevokeVerification';
 import IceBreakers from './views/IceBreakers';
+import SentryMonitor from './views/SentryMonitor';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search, Bell, BellOff } from 'lucide-react';
@@ -26,7 +27,7 @@ import { adminApi, clearToken, setOnAdminSessionExpired } from './services/admin
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
-const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn'];
+const ALL_TABS = ['dashboard', 'users', 'analytics', 'payments', 'premium', 'reports', 'content', 'settings', 'verification', 'revoke-verification', 'profile', 'broadcasts', 'icebreakers', 'support', 'agent', 'appeals', 'churn', 'sentry'];
 
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_LOGIN_ATTEMPTS = 5;
@@ -49,6 +50,7 @@ const PAGE_TITLES: Record<string, string> = {
   verification: 'Verification Requests', 'revoke-verification': 'Revoke Verified Badge',
   broadcasts: 'Broadcasts', appeals: 'Appeals',
   churn: 'Churn Intelligence', profile: 'My Profile',
+  sentry: 'Error Monitoring',
 };
 
 interface PendingCounts { reports: number; verifications: number; tickets: number; unreadTickets: number; appeals: number; content: number; }
@@ -548,6 +550,7 @@ const App: React.FC = () => {
                 {activeTab === 'broadcasts'   && canAccessTab('broadcasts')   && <Broadcasts showToast={showToast} />}
                 {activeTab === 'appeals'      && canAccessTab('appeals')      && <Appeals showToast={showToast} />}
                 {activeTab === 'churn'        && canAccessTab('churn')        && <ChurnIntelligence showToast={showToast} />}
+                {activeTab === 'sentry'       && canAccessTab('sentry')       && <SentryMonitor />}
                 {activeTab === 'icebreakers'  && canAccessTab('icebreakers')  && <IceBreakers showToast={showToast} />}
                 {activeTab === 'profile'      && canAccessTab('profile')      && <AdminProfile auth={auth} onUpdate={handleUpdateAdminProfile} showToast={showToast} />}
 

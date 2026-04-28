@@ -1,0 +1,13 @@
+uploads = []
+
+[[generated]]
+id = "oabBSO0ASPVpjErp1ybQ4"
+uri = "file://attached_assets/generated_images/verification_screen_mockup.png"
+type = "image"
+title = "generated_image"
+
+[[outputs]]
+id = "c8kuVbaREpRs7VAGVkU1N"
+uri = "file://attached_assets/generated_images/verification_screen_mockup.png"
+type = "image"
+title = "AfroConnect Verification Screen — UI Mockup"

@@ -87,6 +87,10 @@ AfroConnect is built as a monorepo containing three distinct applications:
 | `SENTRY_ORG` | `frontend/eas.json` → production `env` | Source map uploads |
 | `SENTRY_PROJECT` | `frontend/eas.json` → production `env` | Source map uploads |
 
+### Sentry Admin Widget
+*   **Backend proxy** (`backend/routes/adminSentry.js`, mounted at `/api/admin/sentry`): Two admin-only endpoints — `GET /config` (returns whether Sentry env vars are present + org/project slugs) and `GET /overview?range=24h|7d|14d|30d&project=<slug>` which proxies to Sentry's REST API using `SENTRY_AUTH_TOKEN`. Returns `{ summary: { totalErrors, totalSessions, crashFreeRate, unresolvedIssues }, errorSeries: [{ts, count}], topIssues: [...] }`. In-memory 30s cache keyed on `org:project:range` to stay under Sentry's rate limits.
+*   **Admin view** (`admin-dashboard/views/SentryMonitor.tsx`): Real-time error monitoring page registered as nav item `sentry` (label "Error Monitoring", super-admin only). Auto-refreshes every 30s, range selector (24h/7d/14d/30d), KPI cards (total errors, crash-free rate, unresolved issues, affected users), area chart of error volume, and clickable top-issues list that deep-links to Sentry. Shows a setup-required state when `/config` reports `configured: false`.
+
 ## Face Verification Gating
 *   **`isFaceVerified` field** (`backend/models/User.js`): new Boolean field (default `false`, indexed) that is the dedicated gate flag for face verification. Set to `true` by the admin approve route and `false` by the reject route, always in sync with `verified` and `verificationStatus`.
 *   **Backend gates** (enforced in all environments, not just production):

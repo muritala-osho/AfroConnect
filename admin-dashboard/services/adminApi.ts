@@ -578,6 +578,17 @@ export const adminApi = {
     const res = await fetchWithAuth(`${API_BASE}/icebreakers/admin/${id}`, { method: 'DELETE' });
     return handleResponse(res);
   },
+
+  getSentryConfig: async () => {
+    const res = await fetchWithAuth(`${API_BASE}/admin/sentry/config`);
+    return handleResponse(res);
+  },
+  getSentryOverview: async (range: '24h' | '7d' | '14d' | '30d' = '24h', project?: string) => {
+    const params = new URLSearchParams({ range });
+    if (project) params.set('project', project);
+    const res = await fetchWithAuth(`${API_BASE}/admin/sentry/overview?${params.toString()}`);
+    return handleResponse(res);
+  },
 };
 
 export default adminApi;
