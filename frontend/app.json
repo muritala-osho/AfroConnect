@@ -71,6 +71,7 @@
     },
     "plugins": [
       "./plugins/withCallKeep",
+      "./plugins/withFirebaseManifestFix",
       [
         "expo-splash-screen",
         {
