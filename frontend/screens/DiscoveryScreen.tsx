@@ -1441,26 +1441,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const nextUser = users[currentIndex + 1];
 
   if (loading) {
+    // Lightweight loader instead of the heavy radar-pulse skeleton.
+    // The skeleton used three reanimated shared values + withRepeat that ran
+    // every frame on cold open, slowed first paint, and could end up showing
+    // for 200-400ms before cards arrived. A single ActivityIndicator paints
+    // instantly and gets out of the way the moment /users/nearby resolves.
+    // Cached-deck users skip this branch entirely (loading is set false
+    // synchronously after AsyncStorage hydration).
     return (
       <GestureHandlerRootView style={styles.container}>
         <ThemedView style={[styles.container, styles.centerContent]}>
-          <View style={styles.emptyRadarContainer}>
-            <Animated.View style={[styles.emptyRadarPulse, radarPulseStyle]}>
-              <View style={[styles.emptyRadarRing, { borderColor: theme.primary }]} />
-            </Animated.View>
-            <Animated.View style={[styles.emptyRadarPulse, radarPulse2Style]}>
-              <View style={[styles.emptyRadarRingOuter, { borderColor: theme.primary }]} />
-            </Animated.View>
-            <Animated.View style={[styles.emptyRadarCenter, { backgroundColor: theme.primary }, radarRotationStyle]}>
-              <Feather name="radio" size={32} color="#FFF" />
-            </Animated.View>
-          </View>
-          <ThemedText style={[styles.loadingTitle, { color: theme.text }]}>
-            {t('findingYourMatches')}
-          </ThemedText>
-          <ThemedText style={[styles.loadingText, { color: theme.textSecondary }]}>
-            {t('lookingForPeople')}
-          </ThemedText>
+          <ActivityIndicator size="large" color={theme.primary} />
         </ThemedView>
       </GestureHandlerRootView>
     );

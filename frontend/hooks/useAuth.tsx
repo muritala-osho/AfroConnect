@@ -273,6 +273,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       setToken(authToken);
       setUser(finalUserData);
+      // Fire-and-forget: warm the discovery cache in the background so when
+      // the user lands on Discovery the deck is already there — no spinner,
+      // no blank screen on first open after login/signup.
+      prefetchDiscovery(authToken, finalUserData).catch(() => {});
     } catch (error) {
       logger.error("Error saving auth data:", error);
       await Promise.all([
@@ -282,6 +286,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ]);
       setToken(authToken);
       setUser(userData);
+      prefetchDiscovery(authToken, userData).catch(() => {});
+    }
+  };
+
+  // Background pre-fetch of the discovery deck. Writes the result into the
+  // same AsyncStorage key (`discovery_cache_v1:<userId>`) that DiscoveryScreen
+  // hydrates from on mount, so the first paint shows real cards instead of
+  // a loading spinner. Silent on error — Discovery has its own fetch path.
+  const prefetchDiscovery = async (authToken: string, userData: User) => {
+    try {
+      const baseUrl = getApiBaseUrl();
+      const loc: any = userData.location || {};
+      const lat = loc.lat ?? loc.coordinates?.coordinates?.[1] ?? loc.coordinates?.[1];
+      const lng = loc.lng ?? loc.coordinates?.coordinates?.[0] ?? loc.coordinates?.[0];
+      const params = new URLSearchParams({ limit: '30' });
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        params.set('lat', String(lat));
+        params.set('lng', String(lng));
+        const rawMax = userData.preferences?.maxDistance || 50;
+        const maxD = userData.premium?.isActive ? rawMax : Math.min(rawMax, 50);
+        params.set('maxDistance', String(maxD));
+      }
+      const res = await fetch(`${baseUrl}/api/users/nearby?${params.toString()}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data?.success || !Array.isArray(data?.users) || data.users.length === 0) return;
+      // Shape the payload to match what DiscoveryScreen.loadPotentialMatches
+      // produces, so the hydrated deck renders immediately on first mount.
+      const shaped = data.users.slice(0, 30).map((u: any) => {
+        const userPhotos = u.photos && u.photos.length > 0 ? u.photos : (u.profilePhoto ? [u.profilePhoto] : []);
+        const processedPhotos = userPhotos
+          .map((p: any) => (typeof p === 'string' ? p : p?.url || null))
+          .filter(Boolean);
+        return {
+          id: u._id || u.id,
+          name: u.name || 'Unknown',
+          age: u.age,
+          bio: u.bio || '',
+          photos: processedPhotos,
+          interests: u.interests || [],
+          online: u.online,
+          distance: u.distance,
+          similarityScore: 0,
+          sharedInterests: [],
+          gender: u.gender || 'male',
+          verified: u.verified || false,
+          location: u.location,
+          isBoosted: u.isBoosted || false,
+          needsVerification: u.needsVerification || false,
+          premium: u.premium || undefined,
+          favoriteSong: u.favoriteSong || undefined,
+        };
+      });
+      const cacheKey = `discovery_cache_v1:${userData.id || 'anon'}`;
+      await AsyncStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          users: shaped,
+          cachedAt: Date.now(),
+          discoveryType: 'local',
+          selectedCountry: null,
+        }),
+      );
+    } catch {
+      // Silent: this is purely an optimization. DiscoveryScreen will still
+      // do its own fetch on mount.
     }
   };
 

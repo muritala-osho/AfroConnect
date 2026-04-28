@@ -2645,6 +2645,16 @@ export default function ChatDetailScreen({
             isNearBottomRef.current = e.nativeEvent.contentOffset.y < 120;
           }}
           scrollEventThrottle={100}
+          onContentSizeChange={() => {
+            // Defensive: when the message list grows (new send/receive),
+            // make sure the latest message is visible if the user is at the
+            // bottom. The inverted list means offset 0 = newest message.
+            // We respect isNearBottomRef so we never hijack the scroll while
+            // the user is reading older history.
+            if (isNearBottomRef.current) {
+              flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            }
+          }}
           onEndReached={loadMoreMessages}
           onEndReachedThreshold={0.1}
           ListFooterComponent={

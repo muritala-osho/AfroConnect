@@ -9,17 +9,17 @@ export const GlobalPlatform = Platform;
 
 
 export const getApiBaseUrl = (): string => {
+  // Production-only networking: the app must always talk to the Render-hosted
+  // backend. We intentionally do NOT fall back to Replit dev domains or
+  // localhost — that previously caused the mobile build to silently hit a dev
+  // tunnel in production and break authentication when the tunnel went away.
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, ''); // strip trailing slash
   }
 
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    return `https://${process.env.REPLIT_DEV_DOMAIN}`;
-  }
-
   throw new Error(
     '[Config] EXPO_PUBLIC_API_URL is not set. ' +
-    'Add it to your .env file: EXPO_PUBLIC_API_URL=https://your-backend-url.onrender.com'
+    'Add it to frontend/.env: EXPO_PUBLIC_API_URL=https://<your-render-app>.onrender.com'
   );
 };
 
