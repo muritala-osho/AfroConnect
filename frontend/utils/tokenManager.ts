@@ -9,6 +9,7 @@ type TokenCallback = (token: string | null) => void;
 let isRefreshing = false;
 let refreshQueue: TokenCallback[] = [];
 let onSessionExpiredCallback: (() => void) | null = null;
+let onTokenRefreshedCallback: ((newToken: string) => void) | null = null;
 let proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Refresh ~60s before the token actually expires so a request that fires at
@@ -24,6 +25,10 @@ function drainQueue(token: string | null) {
 
 export function setOnSessionExpired(cb: (() => void) | null) {
   onSessionExpiredCallback = cb;
+}
+
+export function setOnTokenRefreshed(cb: ((newToken: string) => void) | null) {
+  onTokenRefreshedCallback = cb;
 }
 
 // Decode a JWT payload without pulling in a library. JWTs are
@@ -186,6 +191,10 @@ export const tokenManager = {
       if (data.refreshToken) {
         await this.setRefreshToken(data.refreshToken);
       }
+      // Notify the auth context so React state reflects the new token
+      // immediately — without this, components reading `token` from context
+      // would carry the old expired token until the next explicit re-render.
+      onTokenRefreshedCallback?.(data.token);
       drainQueue(data.token);
       return data.token;
     } finally {

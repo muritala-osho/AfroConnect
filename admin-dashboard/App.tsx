@@ -22,7 +22,7 @@ import IceBreakers from './views/IceBreakers';
 import { AuthState, AdminRole } from './types';
 import { NAV_ITEMS } from './constants';
 import { LogIn, ShieldCheck, Sun, Moon, CheckCircle, AlertCircle, X, Loader2, Lock, Search, Bell, BellOff } from 'lucide-react';
-import { adminApi, clearToken } from './services/adminApi';
+import { adminApi, clearToken, setOnAdminSessionExpired } from './services/adminApi';
 import { AuthProvider } from './contexts/AuthContext';
 import AccessDenied from './components/AccessDenied';
 
@@ -173,21 +173,30 @@ const App: React.FC = () => {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [auth.isAuthenticated, setActiveTab]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback((reason?: string) => {
     setAuth({ isAuthenticated: false, user: null });
     localStorage.removeItem('afroconnect_auth');
     clearToken();
     setPendingCounts({ reports: 0, verifications: 0, tickets: 0, unreadTickets: 0, appeals: 0, content: 0 });
-    showToast('Session terminated safely.', 'success');
+    showToast(reason || 'Session terminated safely.', reason ? 'error' : 'success');
   }, [showToast]);
+
+  // Register the session-expired hook so adminApi can force logout when the
+  // refresh token is invalid or has expired, without coupling the API layer
+  // to React state directly.
+  useEffect(() => {
+    setOnAdminSessionExpired(() => {
+      handleLogout('Your session has expired. Please sign in again.');
+    });
+    return () => { setOnAdminSessionExpired(null); };
+  }, [handleLogout]);
 
   useEffect(() => {
     if (!auth.isAuthenticated) return;
     const resetTimer = () => {
       if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
       inactivityTimer.current = setTimeout(() => {
-        handleLogout();
-        setNotification({ message: 'Session expired due to inactivity.', type: 'error', id: ++notifIdRef.current });
+        handleLogout('Session expired due to inactivity. Please sign in again.');
       }, INACTIVITY_TIMEOUT_MS);
     };
     const events = ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'click'];

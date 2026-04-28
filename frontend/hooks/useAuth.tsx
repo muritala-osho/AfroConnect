@@ -6,7 +6,7 @@ import { useApi } from "./useApi";
 import socketService from "@/services/socket";
 import { getApiBaseUrl } from "@/constants/config";
 import logger from "@/utils/logger";
-import { tokenManager, setOnSessionExpired, ACCESS_TOKEN_KEY } from "@/utils/tokenManager";
+import { tokenManager, setOnSessionExpired, setOnTokenRefreshed, ACCESS_TOKEN_KEY } from "@/utils/tokenManager";
 
 function getDeviceInfo(): { deviceName: string; platform: string } {
   const model = Device.modelName || "Unknown Device";
@@ -143,6 +143,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setOnSessionExpired(() => { clearAuthDataRef.current(); });
     return () => { setOnSessionExpired(null); };
+  }, []);
+
+  // Keep the React `token` state in sync whenever the token manager silently
+  // refreshes the access token in the background. Without this, all code that
+  // reads `token` from AuthContext would still carry the old expired value even
+  // though SecureStore and useApi already have the fresh token.
+  useEffect(() => {
+    setOnTokenRefreshed((newToken: string) => {
+      setToken(newToken);
+    });
+    return () => { setOnTokenRefreshed(null); };
   }, []);
 
   const userProfileComplete = useMemo(() => {
