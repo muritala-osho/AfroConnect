@@ -87,6 +87,8 @@ export interface User {
     ethnicity?: string;
     relationshipStatus?: string;
   };
+  isFaceVerified?: boolean;
+  verificationStatus?: 'none' | 'not_requested' | 'pending' | 'approved' | 'rejected';
   googleId?: string;
   isAdmin?: boolean;
   premium?: { isActive: boolean; plan: string; expiresAt?: string };

@@ -118,11 +118,50 @@ function formatDistanceAway(target: any, currentUser: any): string | null {
 export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user, token, updateProfile } = useAuth();
+  const { user, token, updateProfile, fetchUser } = useAuth();
   const { t } = useTranslation();
   const api = useApi();
   const { showAlert, AlertComponent } = useThemedAlert();
-  
+
+  // ─── Face verification gate ───────────────────────────────────────────────
+  // Always read the user's latest verification state from the backend on every
+  // screen focus so an admin approval is reflected immediately without restart.
+  type FaceGateStatus = 'loading' | 'not_requested' | 'pending' | 'approved' | 'rejected';
+  const [faceGateStatus, setFaceGateStatus] = useState<FaceGateStatus>('loading');
+
+  const checkFaceGate = useCallback(async () => {
+    if (!token) return;
+    setFaceGateStatus('loading');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/verification/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data?.success && data?.data) {
+        const { verified, status } = data.data;
+        if (verified && status === 'approved') {
+          setFaceGateStatus('approved');
+        } else {
+          setFaceGateStatus((status as FaceGateStatus) || 'not_requested');
+        }
+      } else {
+        setFaceGateStatus('not_requested');
+      }
+    } catch {
+      setFaceGateStatus('not_requested');
+    }
+  }, [token]);
+
+  useFocusEffect(
+    useCallback(() => {
+      checkFaceGate();
+      // Refresh user context in background so the rest of the app stays in sync
+      fetchUser().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
+  // ─────────────────────────────────────────────────────────────────────────
+
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   // Persist the last batch of discovery cards to AsyncStorage so the deck
@@ -1456,6 +1495,121 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       </GestureHandlerRootView>
     );
   }
+
+  // ── Face verification gate ───────────────────────────────────────────────
+  if (faceGateStatus === 'loading') {
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ThemedView style={[styles.container, styles.centerContent]}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </ThemedView>
+      </GestureHandlerRootView>
+    );
+  }
+
+  if (faceGateStatus !== 'approved') {
+    const isPending  = faceGateStatus === 'pending';
+    const isRejected = faceGateStatus === 'rejected';
+
+    const gateTitle = isPending
+      ? 'Verification under review'
+      : isRejected
+        ? 'Verification failed'
+        : 'Verify your face before seeing users';
+
+    const gateSubtitle = isPending
+      ? 'Our team is reviewing your submission. You\'ll be notified once it\'s approved — usually within 24 hours.'
+      : isRejected
+        ? 'Your verification was not approved. Please try again with a clearer video in good lighting.'
+        : 'To protect our community, you need to complete face verification before discovering and interacting with other users.';
+
+    const gateIcon: any = isPending ? 'clock' : isRejected ? 'x-circle' : 'shield';
+    const gateIconColor = isPending ? '#F59E0B' : isRejected ? '#EF4444' : theme.primary;
+    const gateBgColor   = isPending ? '#FEF3C7' : isRejected ? '#FEE2E2' : theme.primary + '18';
+
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ThemedView style={[styles.container, { paddingTop: insets.top }]}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }}>
+            {/* Icon circle */}
+            <View style={{
+              width: 100, height: 100, borderRadius: 50,
+              backgroundColor: gateBgColor,
+              justifyContent: 'center', alignItems: 'center',
+              marginBottom: 28,
+            }}>
+              <Feather name={gateIcon} size={44} color={gateIconColor} />
+            </View>
+
+            {/* Title */}
+            <ThemedText style={{
+              fontSize: 22, fontWeight: '800', textAlign: 'center',
+              color: theme.text, marginBottom: 14, lineHeight: 30,
+            }}>
+              {gateTitle}
+            </ThemedText>
+
+            {/* Subtitle */}
+            <ThemedText style={{
+              fontSize: 15, textAlign: 'center', lineHeight: 22,
+              color: theme.textSecondary, marginBottom: 36,
+            }}>
+              {gateSubtitle}
+            </ThemedText>
+
+            {/* Status pill */}
+            <View style={{
+              paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+              backgroundColor: gateBgColor, marginBottom: 32,
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+            }}>
+              <View style={{
+                width: 8, height: 8, borderRadius: 4,
+                backgroundColor: gateIconColor,
+              }} />
+              <ThemedText style={{ fontSize: 13, fontWeight: '700', color: gateIconColor }}>
+                {isPending ? 'Under Review' : isRejected ? 'Rejected' : 'Not Verified'}
+              </ThemedText>
+            </View>
+
+            {/* CTA */}
+            {!isPending && (
+              <Pressable
+                onPress={() => navigation.navigate('Verification')}
+                style={({ pressed }) => ({
+                  backgroundColor: theme.primary,
+                  paddingVertical: 16, paddingHorizontal: 40,
+                  borderRadius: 50, opacity: pressed ? 0.85 : 1,
+                  shadowColor: theme.primary, shadowOffset: { width: 0, height: 6 },
+                  shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
+                })}
+              >
+                <ThemedText style={{ color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 0.3 }}>
+                  {isRejected ? 'Try Again' : 'Verify Now'}
+                </ThemedText>
+              </Pressable>
+            )}
+
+            {isPending && (
+              <Pressable
+                onPress={() => { checkFaceGate(); fetchUser().catch(() => {}); }}
+                style={({ pressed }) => ({
+                  borderWidth: 2, borderColor: theme.primary,
+                  paddingVertical: 14, paddingHorizontal: 36,
+                  borderRadius: 50, opacity: pressed ? 0.75 : 1,
+                })}
+              >
+                <ThemedText style={{ color: theme.primary, fontWeight: '700', fontSize: 15 }}>
+                  Refresh Status
+                </ThemedText>
+              </Pressable>
+            )}
+          </View>
+        </ThemedView>
+      </GestureHandlerRootView>
+    );
+  }
+  // ─── End face gate ────────────────────────────────────────────────────────
 
   if (requiresLocation && !currentUser) {
     return (

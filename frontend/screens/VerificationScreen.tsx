@@ -450,19 +450,22 @@ export default function VerificationScreen() {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <ThemedText style={[styles.alertTitle, { color: '#FFC107' }]}>Under Review</ThemedText>
                 <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  We're reviewing your verification video now. This usually takes up to 24 hours.
+                  We're reviewing your verification video. This usually takes up to 24 hours. You'll be able to discover and interact with other users as soon as you're approved.
                 </ThemedText>
               </View>
             </View>
           )}
 
-          {verificationState?.status === 'rejected' && verificationState.rejectionReason && (
+          {verificationState?.status === 'rejected' && (
             <View style={[styles.alertCard, { backgroundColor: '#F4433615', borderColor: '#F4433640' }]}>
               <Ionicons name="alert-circle" size={24} color="#F44336" />
               <View style={{ flex: 1, marginLeft: 12 }}>
-                <ThemedText style={[styles.alertTitle, { color: '#F44336' }]}>Rejection Reason</ThemedText>
+                <ThemedText style={[styles.alertTitle, { color: '#F44336' }]}>Verification Failed</ThemedText>
                 <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  {verificationState.rejectionReason}
+                  {verificationState.rejectionReason
+                    ? verificationState.rejectionReason
+                    : 'Your verification was not approved. Please record a new video in good lighting and try again.'}
+                  {' '}Discovery and swiping will be unlocked once you pass verification.
                 </ThemedText>
               </View>
             </View>
@@ -474,7 +477,7 @@ export default function VerificationScreen() {
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <ThemedText style={[styles.alertTitle, { color: '#4CAF50' }]}>You're Verified!</ThemedText>
                 <ThemedText style={[styles.alertDesc, { color: theme.textSecondary }]}>
-                  Your verified badge is live on your profile. Keep enjoying AfroConnect!
+                  Your verified badge is live on your profile. Head to Discover to start connecting!
                 </ThemedText>
               </View>
             </View>

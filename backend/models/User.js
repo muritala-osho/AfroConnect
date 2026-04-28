@@ -178,6 +178,11 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  isFaceVerified: {
+    type: Boolean,
+    default: false,
+    index: true,
+  },
   isVerified: {
     type: Boolean,
     default: false

@@ -91,6 +91,17 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
   try {
     const { targetUserId, action } = req.body;
 
+    // Face verification gate — prevents any API-level bypass
+    const swipeGateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus');
+    if (!swipeGateUser || !swipeGateUser.isFaceVerified || swipeGateUser.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message: 'Face verification required to interact with profiles',
+        verificationRequired: true,
+        verificationStatus: swipeGateUser?.verificationStatus || 'not_requested',
+      });
+    }
+
     if (!req.user.premium?.isActive) {
       const todayStr = new Date().toISOString().slice(0, 10);
       const swipeKey = `swipecount:${req.user._id}:${todayStr}`;

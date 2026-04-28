@@ -204,6 +204,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
     user.verified                    = true;
+    user.isFaceVerified              = true;
     user.verificationStatus          = 'approved';
     user.verificationApprovedBy      = req.user._id;
     user.verificationApprovedAt      = new Date();
@@ -248,6 +249,8 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
     const user = await User.findById(req.params.userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    user.isFaceVerified              = false;
+    user.verified                    = false;
     user.verificationStatus          = 'rejected';
     user.verificationRejectionReason = reason || 'Video does not meet requirements';
     user.verificationApprovedAt      = null;

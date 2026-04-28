@@ -253,6 +253,20 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
+    // Face verification gate — enforced in all environments.
+    // We re-fetch the user's verification state from DB to prevent any
+    // client-side bypass (the JWT payload only carries tokenVersion, not
+    // isFaceVerified, so an attacker cannot craft a token to bypass this).
+    const gateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus');
+    if (!gateUser || !gateUser.isFaceVerified || gateUser.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message: 'Face verification required',
+        verificationRequired: true,
+        verificationStatus: gateUser?.verificationStatus || 'not_requested',
+      });
+    }
+
     const cursor = req.query.cursor ? String(req.query.cursor) : null;
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 40, 1), 60);
 
