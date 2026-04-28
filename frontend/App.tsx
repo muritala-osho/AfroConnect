@@ -13,6 +13,7 @@ import { initCallKeep } from "@/services/callkeep";
 import { registerVoipPushNotifications } from "@/services/voipPush";
 import { requestFCMPermissionAndGetToken } from "@/services/firebaseMessaging";
 import { pushLiveLocation } from "@/utils/liveLocation";
+import { tokenManager } from "@/utils/tokenManager";
 
 import RootNavigator from "@/navigation/RootNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -293,6 +294,18 @@ function AppContent() {
     const ONE_HOUR_MS = 60 * 60 * 1000;
     const appStateSubscription = AppState.addEventListener("change", (nextState) => {
       if (appState.current.match(/inactive|background/) && nextState === "active") {
+        // The phone may have been asleep for hours. The proactive-refresh
+        // setTimeout is paused while the JS thread is suspended, so the access
+        // token can be expired by the time we wake up. Check immediately and
+        // refresh BEFORE any other foregrounded code (push registration,
+        // live-location push, screen mounts) makes its first API call.
+        if (tokenManager.isAccessTokenExpiringSoon(token ?? null)) {
+          tokenManager.refresh().catch(() => {});
+        } else if (token) {
+          // Re-arm the timer that was paused during background.
+          tokenManager.armProactiveRefresh(token);
+        }
+
         const timeSinceLastReg = Date.now() - lastTokenRegistration.current;
         if (timeSinceLastReg >= ONE_HOUR_MS) {
           lastTokenRegistration.current = Date.now();

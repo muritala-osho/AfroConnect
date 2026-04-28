@@ -21,11 +21,19 @@ const redis = require('../utils/redis');
 const validate = require("../middleware/validate");
 const schemas = require("../validators/schemas");
 
+// Access tokens are intentionally short-lived (30 minutes). The frontend
+// silently refreshes them via /refresh ~60s before expiry using the long-lived
+// refresh token, so the user stays logged in continuously without ever seeing
+// a 401. If you change ACCESS_TOKEN_TTL_SECONDS, also update the proactive
+// refresh schedule in frontend/utils/tokenManager.ts (it reads the JWT's `exp`
+// directly so no constant lives there).
+const ACCESS_TOKEN_TTL_SECONDS = 30 * 60;
+
 const generateToken = (userId, tokenVersion = 0, sessionId = null) => {
   const payload = { id: userId, tokenVersion };
   if (sessionId) payload.sessionId = sessionId;
   return jwt.sign(payload, process.env.JWT_SECRET, {
-    expiresIn: "24h",
+    expiresIn: ACCESS_TOKEN_TTL_SECONDS,
   });
 };
 
@@ -539,6 +547,12 @@ router.post("/logout", async (req, res) => {
   }
 });
 
+// Window during which a just-rotated previous refresh token is still accepted.
+// Long enough to absorb network retries and slow client-side persists, short
+// enough that a leaked refresh token becomes useless almost immediately after
+// its first use.
+const REFRESH_TOKEN_GRACE_MS = 60 * 1000;
+
 router.post("/refresh", refreshLimiter, async (req, res) => {
   try {
     const { refreshToken: rawToken } = req.body;
@@ -547,7 +561,19 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
     }
 
     const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const session = await Session.findOne({ refreshTokenHash: hash });
+
+    // Accept either the current hash or a recently-rotated previous hash that
+    // is still inside its grace window. This makes rotation safe against
+    // duplicate / racing requests without weakening the security model.
+    let session = await Session.findOne({ refreshTokenHash: hash });
+    let usedPreviousHash = false;
+    if (!session) {
+      session = await Session.findOne({
+        previousRefreshTokenHash: hash,
+        previousRefreshTokenExpiresAt: { $gt: new Date() },
+      });
+      usedPreviousHash = !!session;
+    }
 
     if (!session) {
       return res.status(401).json({ success: false, message: "Invalid refresh token", tokenRevoked: true });
@@ -565,34 +591,32 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       return res.status(401).json({ success: false, message: "Account unavailable", tokenRevoked: true });
     }
 
-    // Bump lastActive so the Session TTL (30d sliding window from lastActive)
-    // keeps the session alive while the user is active. We deliberately do NOT
-    // rotate the refresh token on every refresh — see comment below.
+    // If the caller used the still-valid previous hash (meaning they never
+    // got our last rotated token), don't rotate again — just hand back a new
+    // access token. The current refresh token already in the DB is the one
+    // we want them to keep using.
+    if (usedPreviousHash) {
+      session.lastActive = new Date();
+      await session.save();
+      const newAccessToken = generateToken(user._id, user.tokenVersion || 0, session.sessionId);
+      return res.json({ success: true, token: newAccessToken });
+    }
+
+    // Normal rotation path: issue a new refresh token, demote the current
+    // one to "previous" with a 60s grace window.
+    const { raw: newRefreshRaw, hash: newRefreshHash } = generateRefreshToken();
+    session.previousRefreshTokenHash = session.refreshTokenHash;
+    session.previousRefreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_GRACE_MS);
+    session.refreshTokenHash = newRefreshHash;
     session.lastActive = new Date();
     await session.save();
 
     const newAccessToken = generateToken(user._id, user.tokenVersion || 0, session.sessionId);
 
-    // IMPORTANT: refresh-token rotation removed.
-    //
-    // Previously we generated a new refresh token on every /refresh call and
-    // wrote its hash to the session. That created a logout race: any time the
-    // client failed to persist the new token (transient network failure mid-
-    // response, SecureStore write error, app force-quit between request and
-    // save, two parallel cold-start requests slipping past the singleton
-    // refresh lock during a tab/process restart), the next refresh attempt
-    // would arrive at the server with an old hash, hit the `!session` branch
-    // above, and the user would be logged out before their 24h access token
-    // would have expired naturally.
-    //
-    // The refresh token now remains stable for the lifetime of the Session
-    // (sliding 30-day TTL via the lastActive index). Sessions are still
-    // revocable via /logout (deletes the row) and via the redis revocation
-    // set checked in middleware/auth.js. Multi-device login still works —
-    // each device gets its own Session row with its own refresh token.
     return res.json({
       success: true,
       token: newAccessToken,
+      refreshToken: newRefreshRaw,
     });
   } catch (error) {
     logger.error("Token refresh error:", error);

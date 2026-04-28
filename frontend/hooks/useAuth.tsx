@@ -249,6 +249,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
         setPendingProfileSetup(pendingSetup === 'true');
+        // Arm the silent-refresh timer for the persisted access token.
+        // If the token is already expiring (or expired) the timer fires an
+        // immediate refresh, so the first API call the app makes after
+        // launch always carries a fresh token.
+        tokenManager.armProactiveRefresh(storedToken);
       }
     } catch (error) {
       logger.error("Error loading auth data:", error);
@@ -508,19 +513,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      const currentToken = token || await tokenManager.getAccessToken();
-      if (currentToken) {
-        await fetch(`${getApiBaseUrl()}/api/auth/logout`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${currentToken}`,
-          },
-        });
-      }
-    } catch (_) {}
+    // Capture the token BEFORE we clear local state so the backend revoke
+    // call still has something to send.
+    const currentToken = token || await tokenManager.getAccessToken();
+
+    // Clear local auth state IMMEDIATELY. This flips `isAuthenticated` to
+    // false, which makes the navigator redirect to the login screen on the
+    // very next render — the user never waits on the network. The server-side
+    // logout fires in the background and is best-effort; even if it fails,
+    // the local tokens are already wiped, the socket is disconnected, and
+    // the access token will expire on its own within 30 minutes.
     await clearAuthData();
+
+    if (currentToken) {
+      fetch(`${getApiBaseUrl()}/api/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
+        },
+      }).catch(() => {});
+    }
   };
 
   const updateProfile = async (data: Partial<User>) => {
