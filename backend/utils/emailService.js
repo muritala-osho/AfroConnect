@@ -555,6 +555,45 @@ const getSuspensionEmailTemplate = (userName, reason, durationDays) => emailShel
   ${emailFooter()}
 `);
 
+const getVerificationRevokedTemplate = (userName, reason) => emailShell(`
+  <tr>
+    <td style="background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+               padding: 40px 30px; text-align: center;">
+      ${LOGO_BLOCK}
+      <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700;">Verified Badge Removed</h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 48px 40px;">
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
+        We're writing to let you know that your verified badge on AfroConnect has been removed
+        following a review by our trust &amp; safety team.
+      </p>
+      <div style="background-color: #FEF2F2; border-left: 4px solid #DC2626;
+                  padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
+        <p style="margin: 0; color: #991B1B; font-size: 14px; line-height: 1.6;">
+          <strong>Reason:</strong> ${reason || 'Your verification no longer meets our community standards.'}
+        </p>
+      </div>
+      <p style="margin: 20px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        Your account is still active, but you will no longer appear as verified to other members
+        and access to the discovery feed will be paused until you re-verify.
+      </p>
+      <h3 style="margin: 28px 0 12px 0; color: #1a1a1a; font-size: 16px;">What happens next</h3>
+      <ul style="color: #555555; font-size: 14px; line-height: 1.9; padding-left: 20px; margin: 0 0 24px 0;">
+        <li>You can submit a new verification video at any time from <strong>Profile → Get Verified</strong></li>
+        <li>Use a clear, well-lit recording that matches the photos on your profile</li>
+        <li>If you believe this was a mistake, reply to this email or contact support from the app</li>
+      </ul>
+      <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
+        We take trust seriously to keep AfroConnect a safe space for everyone. Thank you for understanding.
+      </p>
+    </td>
+  </tr>
+  ${emailFooter()}
+`);
+
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 const sendVerificationApprovedEmail = async (email, userName) => {
@@ -582,6 +621,20 @@ const sendVerificationRejectedEmail = async (email, userName, reason) => {
     return { success: true };
   } catch (error) {
     logger.error('Error sending verification rejected email:', error);
+  }
+};
+
+const sendVerificationRevokedEmail = async (email, userName, reason) => {
+  try {
+    await brevoSend({
+      to: email,
+      subject: 'Your AfroConnect verified badge has been removed',
+      html: getVerificationRevokedTemplate(userName, reason),
+    });
+    logger.log('Verification revoked email sent');
+    return { success: true };
+  } catch (error) {
+    logger.error('Error sending verification revoked email:', error);
   }
 };
 
@@ -1053,6 +1106,7 @@ module.exports = {
   sendAppealDecisionEmail,
   sendVerificationApprovedEmail,
   sendVerificationRejectedEmail,
+  sendVerificationRevokedEmail,
   sendWarningEmail,
   sendSuspensionEmail,
   sendSuspensionLiftedEmail,

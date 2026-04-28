@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { protect, isAdmin } = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
+const { isAdmin } = require('../middleware/supportAccess');
 
 const SENTRY_API_BASE = 'https://sentry.io/api/0';
 const CACHE_TTL_MS = 30_000;

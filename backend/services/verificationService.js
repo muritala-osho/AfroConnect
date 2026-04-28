@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const redis = require('../utils/redis');
+const logger = require('../utils/logger');
 const { sendNotification } = require('./notificationService');
+const { sendVerificationRevokedEmail } = require('../utils/emailService');
 
 const createServiceError = (message, statusCode) => {
   const error = new Error(message);
@@ -26,6 +28,7 @@ const revokeVerification = async ({ userId, reason, adminId }) => {
 
   user.verified = false;
   user.isVerified = false;
+  user.isFaceVerified = false;
   user.verificationStatus = 'none';
   user.verificationHistory = user.verificationHistory || [];
   user.verificationHistory.push({
@@ -42,6 +45,14 @@ const revokeVerification = async ({ userId, reason, adminId }) => {
     user._id,
     `Your verified badge has been removed. Reason: ${trimmedReason}`,
   );
+
+  if (user.email) {
+    try {
+      await sendVerificationRevokedEmail(user.email, user.name, trimmedReason);
+    } catch (emailError) {
+      logger.error('Failed to send verification revoked email:', emailError);
+    }
+  }
 
   return user;
 };

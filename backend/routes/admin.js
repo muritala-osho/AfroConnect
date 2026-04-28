@@ -597,13 +597,52 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
     }
 
     user.verified = true;
+    user.isFaceVerified = true;
     user.verificationStatus = 'approved';
     user.verificationApprovedBy = req.user._id;
     user.verificationApprovedAt = new Date();
+    user.verificationRejectionReason = null;
     await user.save();
     await redis.del(`profile:me:${user._id}`);
 
     await logAudit(req, 'APPROVE_VERIFICATION', 'VERIFICATION', 'medium', user, `ID verification approved for ${user.name}`);
+
+    if (user.email) {
+      try {
+        const { sendVerificationApprovedEmail } = require('../utils/emailService');
+        await sendVerificationApprovedEmail(user.email, user.name);
+      } catch (emailError) {
+        logger.error('Failed to send verification approved email:', emailError);
+      }
+    }
+
+    try {
+      if (user.pushToken && user.pushNotificationsEnabled !== false) {
+        const { sendExpoPushNotification } = require('../utils/pushNotifications');
+        await sendExpoPushNotification(user.pushToken, {
+          title: '✅ Verification Approved!',
+          body: 'Congratulations! Your face verification has been approved. You can now discover and connect with other users.',
+          data: { type: 'verification_approved', screen: 'Discovery' },
+          channelId: 'default',
+          priority: 'high',
+        });
+      }
+    } catch (pushError) {
+      logger.error('Failed to send verification approved push notification:', pushError);
+    }
+
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(user._id.toString()).emit('user:verified', {
+          userId: user._id.toString(),
+          verified: true,
+          verificationStatus: 'approved',
+        });
+      }
+    } catch (socketError) {
+      logger.error('Failed to emit verification socket event:', socketError);
+    }
 
     res.json({
       success: true,
@@ -624,13 +663,54 @@ router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) =
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    const rejectionReason = reason || 'Photos do not meet requirements';
+    user.isFaceVerified = false;
+    user.verified = false;
     user.verificationStatus = 'rejected';
-    user.verificationRejectionReason = reason || 'Photos do not meet requirements';
+    user.verificationRejectionReason = rejectionReason;
+    user.verificationApprovedAt = null;
     await user.save();
     await redis.del(`profile:me:${user._id}`);
 
     await logAudit(req, 'REJECT_VERIFICATION', 'VERIFICATION', 'medium', user,
-      `ID verification rejected. Reason: ${reason || 'Photos do not meet requirements'}`);
+      `ID verification rejected. Reason: ${rejectionReason}`);
+
+    if (user.email) {
+      try {
+        const { sendVerificationRejectedEmail } = require('../utils/emailService');
+        await sendVerificationRejectedEmail(user.email, user.name, rejectionReason);
+      } catch (emailError) {
+        logger.error('Failed to send verification rejection email:', emailError);
+      }
+    }
+
+    try {
+      if (user.pushToken && user.pushNotificationsEnabled !== false) {
+        const { sendExpoPushNotification } = require('../utils/pushNotifications');
+        await sendExpoPushNotification(user.pushToken, {
+          title: '❌ Verification Not Approved',
+          body: `Reason: ${rejectionReason}. Please try again with a clearer video in good lighting.`,
+          data: { type: 'verification_rejected', screen: 'Verification' },
+          channelId: 'default',
+          priority: 'high',
+        });
+      }
+    } catch (pushError) {
+      logger.error('Failed to send verification rejected push notification:', pushError);
+    }
+
+    try {
+      const io = req.app.get('io');
+      if (io) {
+        io.to(user._id.toString()).emit('user:verification-rejected', {
+          userId: user._id.toString(),
+          verificationStatus: 'rejected',
+          reason: rejectionReason,
+        });
+      }
+    } catch (socketError) {
+      logger.error('Failed to emit verification socket event:', socketError);
+    }
 
     res.json({
       success: true,
