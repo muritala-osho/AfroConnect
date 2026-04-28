@@ -6,37 +6,18 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
-      }
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "",
-        "SENTRY_ORG": "",
-        "SENTRY_PROJECT": "",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
       }
     },
     "production": {
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
-      },
-      "env": {
-        "EXPO_PUBLIC_SENTRY_DSN": "",
-        "SENTRY_ORG": "",
-        "SENTRY_PROJECT": "",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
-        "SENTRY_DISABLE_NATIVE_DEBUG_UPLOAD": "true"
       }
     }
   },

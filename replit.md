@@ -70,22 +70,16 @@ AfroConnect is built as a monorepo containing three distinct applications:
 *   **Client-side 401 handling**: `frontend/hooks/useApi.ts` (78–108) intercepts 401s on non-`/auth/*` endpoints, calls `tokenManager.refresh()`, and retries the original request once. `frontend/utils/tokenManager.ts` only triggers `onSessionExpiredCallback` (logout) when refresh returns 401/403 or `tokenRevoked: true`; transient network failures or 5xx responses keep tokens intact and let the next request retry.
 
 ## Sentry Error Monitoring
-*   **Mobile app** (`frontend/index.js`): `Sentry.init()` is called as the first statement in the bundle — before Firebase, before registerRootComponent — so the SDK can attach native crash handlers. Init is gated on `EXPO_PUBLIC_SENTRY_DSN` being non-empty, so the app works without Sentry configured. The root component is wrapped with `Sentry.wrap(App)`. `tracesSampleRate: 0.15` in production, disabled in `__DEV__`.
-*   **ErrorBoundary** (`frontend/components/ErrorBoundary.tsx`): `componentDidCatch` now calls `Sentry.captureException(error, { contexts: { react: { componentStack } } })` so every React render crash appears in Sentry with a full component trace.
-*   **Logger** (`frontend/utils/logger.ts`): `logger.error()` in production extracts an `Error` instance and calls `Sentry.captureException`, or `Sentry.captureMessage` for plain strings. `logger.warn()` adds a Sentry breadcrumb. Debug output is still silenced.
-*   **Backend** (`backend/server.js`): `@sentry/node` (v10, already in `package.json`) is initialized at the very top of `server.js` (before all other requires) gated on `SENTRY_DSN`. `Sentry.setupExpressErrorHandler(app)` is placed immediately before the generic error-handler middleware so all unhandled Express errors are captured.
-*   **Admin Dashboard** (`admin-dashboard/index.tsx`): `@sentry/react` (v10, newly installed) is initialized before the React tree renders, gated on `VITE_SENTRY_DSN`. Includes `browserTracingIntegration()` and `replayIntegration()`. Root is wrapped with `Sentry.ErrorBoundary`.
-*   **Source map uploads** (`frontend/eas.json`): `SENTRY_DISABLE_AUTO_UPLOAD=true` is set in all EAS build profiles by default so builds succeed without credentials. Remove this flag from `production`/`preview` profiles and fill in `SENTRY_ORG` + `SENTRY_PROJECT` once Sentry is configured.
+*   **Mobile app — Sentry FULLY REMOVED** (per user request, to unblock APK builds; we'll re-add later). `@sentry/react-native` is uninstalled from `frontend/package.json`. `frontend/index.js` no longer imports or initializes Sentry — the root component is registered directly with `registerRootComponent(App)`. `frontend/utils/logger.ts` is a plain console wrapper (no Sentry breadcrumbs, no captureException). `frontend/components/ErrorBoundary.tsx` no longer forwards to Sentry (still catches and renders the fallback). The `@sentry/react-native` Expo plugin block is removed from `frontend/app.json` and all `EXPO_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_DISABLE_AUTO_UPLOAD` entries are removed from `frontend/eas.json` build profiles. To re-add later: `npm i @sentry/react-native`, restore the plugin in `app.json`, restore the init in `index.js`, restore Sentry calls in logger + ErrorBoundary.
+*   **Backend** (`backend/server.js`): `@sentry/node` (v10, already in `package.json`) is initialized at the very top of `server.js` (before all other requires) gated on `SENTRY_DSN`. `Sentry.setupExpressErrorHandler(app)` is placed immediately before the generic error-handler middleware so all unhandled Express errors are captured. Backend Sentry is no-op when `SENTRY_DSN` is not set.
+*   **Admin Dashboard** (`admin-dashboard/index.tsx`): `@sentry/react` (v10) is initialized before the React tree renders, gated on `VITE_SENTRY_DSN`. Includes `browserTracingIntegration()` and `replayIntegration()`. Root is wrapped with `Sentry.ErrorBoundary`. Also no-op when DSN is not set.
 
-### Keys required
+### Keys required (only when re-enabling later)
 | Key | Where to put it | Used by |
 |-----|----------------|---------|
-| `EXPO_PUBLIC_SENTRY_DSN` | `frontend/eas.json` → each build profile `env` | Mobile app |
 | `SENTRY_DSN` | Backend environment secrets (Render / Replit) | Backend |
 | `VITE_SENTRY_DSN` | `admin-dashboard/.env` (local) / Vercel env var | Admin dashboard |
-| `SENTRY_AUTH_TOKEN` | EAS secret (`eas secret:create`) | Source map uploads |
-| `SENTRY_ORG` | `frontend/eas.json` → production `env` | Source map uploads |
-| `SENTRY_PROJECT` | `frontend/eas.json` → production `env` | Source map uploads |
+| `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT` | Backend env vars | Sentry admin widget proxy |
 
 ### Sentry Admin Widget
 *   **Backend proxy** (`backend/routes/adminSentry.js`, mounted at `/api/admin/sentry`): Two admin-only endpoints — `GET /config` (returns whether Sentry env vars are present + org/project slugs) and `GET /overview?range=24h|7d|14d|30d&project=<slug>` which proxies to Sentry's REST API using `SENTRY_AUTH_TOKEN`. Returns `{ summary: { totalErrors, totalSessions, crashFreeRate, unresolvedIssues }, errorSeries: [{ts, count}], topIssues: [...] }`. In-memory 30s cache keyed on `org:project:range` to stay under Sentry's rate limits.
