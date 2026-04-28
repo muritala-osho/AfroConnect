@@ -89,7 +89,8 @@
           "android": {
             "enableProguardInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true,
-            "enableMinifyInReleaseBuilds": true
+            "enableMinifyInReleaseBuilds": true,
+            "extraProguardRules": "-dontwarn expo.modules.core.interfaces.services.**\n-dontwarn expo.modules.av.**\n-keep class expo.modules.av.** { *; }\n-keep class expo.modules.core.interfaces.services.** { *; }"
           }
         }
       ],
