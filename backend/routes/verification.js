@@ -220,6 +220,21 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
     }
 
     try {
+      if (user.pushToken && user.pushNotificationsEnabled !== false) {
+        const { sendExpoPushNotification } = require('../utils/pushNotifications');
+        await sendExpoPushNotification(user.pushToken, {
+          title: '✅ Verification Approved!',
+          body: 'Congratulations! Your face verification has been approved. You can now discover and connect with other users.',
+          data: { type: 'verification_approved', screen: 'Discovery' },
+          channelId: 'default',
+          priority: 'high',
+        });
+      }
+    } catch (pushError) {
+      console.error('Failed to send verification approved push notification:', pushError);
+    }
+
+    try {
       const io = req.app.get('io');
       if (io) {
         io.to(user._id.toString()).emit('user:verified', {
@@ -262,6 +277,24 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
       await sendVerificationRejectedEmail(user.email, user.name, reason);
     } catch (emailError) {
       console.error('Failed to send verification rejection email:', emailError);
+    }
+
+    try {
+      if (user.pushToken && user.pushNotificationsEnabled !== false) {
+        const { sendExpoPushNotification } = require('../utils/pushNotifications');
+        const rejectionMsg = reason
+          ? `Reason: ${reason}. Please try again with a clearer video.`
+          : 'Please try again with a clearer video in good lighting.';
+        await sendExpoPushNotification(user.pushToken, {
+          title: '❌ Verification Not Approved',
+          body: rejectionMsg,
+          data: { type: 'verification_rejected', screen: 'Verification' },
+          channelId: 'default',
+          priority: 'high',
+        });
+      }
+    } catch (pushError) {
+      console.error('Failed to send verification rejected push notification:', pushError);
     }
 
     res.json({

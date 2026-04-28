@@ -69,6 +69,24 @@ AfroConnect is built as a monorepo containing three distinct applications:
 *   **Refresh-token rotation removed** (previous behaviour caused premature logouts well before the 24h access-token expiry). The `/auth/refresh` route now only bumps `session.lastActive` and issues a new access token; the refresh token itself stays the same for the lifetime of the Session. Rationale: the old "rotate on every refresh" pattern lost the user's session whenever the new token failed to persist client-side (transient network error mid-response, SecureStore write failure, app force-quit between request and storage write, parallel cold-start requests slipping past the singleton in-memory refresh lock). Sessions are still revocable via `/auth/logout` (deletes the Session row) and via the redis revocation set keyed by `revoked:${sessionId}` (checked in both `/auth/refresh` and `middleware/auth.js`). Multi-device login is unaffected — each device has its own Session row with its own refresh token.
 *   **Client-side 401 handling**: `frontend/hooks/useApi.ts` (78–108) intercepts 401s on non-`/auth/*` endpoints, calls `tokenManager.refresh()`, and retries the original request once. `frontend/utils/tokenManager.ts` only triggers `onSessionExpiredCallback` (logout) when refresh returns 401/403 or `tokenRevoked: true`; transient network failures or 5xx responses keep tokens intact and let the next request retry.
 
+## Sentry Error Monitoring
+*   **Mobile app** (`frontend/index.js`): `Sentry.init()` is called as the first statement in the bundle — before Firebase, before registerRootComponent — so the SDK can attach native crash handlers. Init is gated on `EXPO_PUBLIC_SENTRY_DSN` being non-empty, so the app works without Sentry configured. The root component is wrapped with `Sentry.wrap(App)`. `tracesSampleRate: 0.15` in production, disabled in `__DEV__`.
+*   **ErrorBoundary** (`frontend/components/ErrorBoundary.tsx`): `componentDidCatch` now calls `Sentry.captureException(error, { contexts: { react: { componentStack } } })` so every React render crash appears in Sentry with a full component trace.
+*   **Logger** (`frontend/utils/logger.ts`): `logger.error()` in production extracts an `Error` instance and calls `Sentry.captureException`, or `Sentry.captureMessage` for plain strings. `logger.warn()` adds a Sentry breadcrumb. Debug output is still silenced.
+*   **Backend** (`backend/server.js`): `@sentry/node` (v10, already in `package.json`) is initialized at the very top of `server.js` (before all other requires) gated on `SENTRY_DSN`. `Sentry.setupExpressErrorHandler(app)` is placed immediately before the generic error-handler middleware so all unhandled Express errors are captured.
+*   **Admin Dashboard** (`admin-dashboard/index.tsx`): `@sentry/react` (v10, newly installed) is initialized before the React tree renders, gated on `VITE_SENTRY_DSN`. Includes `browserTracingIntegration()` and `replayIntegration()`. Root is wrapped with `Sentry.ErrorBoundary`.
+*   **Source map uploads** (`frontend/eas.json`): `SENTRY_DISABLE_AUTO_UPLOAD=true` is set in all EAS build profiles by default so builds succeed without credentials. Remove this flag from `production`/`preview` profiles and fill in `SENTRY_ORG` + `SENTRY_PROJECT` once Sentry is configured.
+
+### Keys required
+| Key | Where to put it | Used by |
+|-----|----------------|---------|
+| `EXPO_PUBLIC_SENTRY_DSN` | `frontend/eas.json` → each build profile `env` | Mobile app |
+| `SENTRY_DSN` | Backend environment secrets (Render / Replit) | Backend |
+| `VITE_SENTRY_DSN` | `admin-dashboard/.env` (local) / Vercel env var | Admin dashboard |
+| `SENTRY_AUTH_TOKEN` | EAS secret (`eas secret:create`) | Source map uploads |
+| `SENTRY_ORG` | `frontend/eas.json` → production `env` | Source map uploads |
+| `SENTRY_PROJECT` | `frontend/eas.json` → production `env` | Source map uploads |
+
 ## Face Verification Gating
 *   **`isFaceVerified` field** (`backend/models/User.js`): new Boolean field (default `false`, indexed) that is the dedicated gate flag for face verification. Set to `true` by the admin approve route and `false` by the reject route, always in sync with `verified` and `verificationStatus`.
 *   **Backend gates** (enforced in all environments, not just production):

@@ -1,3 +1,16 @@
+const Sentry = require('@sentry/node');
+
+// Sentry must be initialised as early as possible — before any other imports
+// that touch Express, DB, or Redis — so it can instrument them automatically.
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.15 : 0,
+    enabled: !!process.env.SENTRY_DSN,
+  });
+}
+
 const logger = require('./utils/logger');
 const express = require('express');
 const mongoose = require('mongoose');
@@ -1122,6 +1135,12 @@ io.on('connection', (socket) => {
     logger.log('User disconnected:', socket.id);
   });
 });
+
+// Sentry error handler — must come BEFORE the generic error handler so it
+// captures the exception before we swallow the details from the response.
+if (process.env.SENTRY_DSN) {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {

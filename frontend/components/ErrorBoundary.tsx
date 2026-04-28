@@ -1,5 +1,6 @@
 import React, { Component, ComponentType, PropsWithChildren } from "react";
 import { ErrorFallback, ErrorFallbackProps } from "@/components/ErrorFallback";
+import * as Sentry from "@sentry/react-native";
 
 export type ErrorBoundaryProps = PropsWithChildren<{
   FallbackComponent?: ComponentType<ErrorFallbackProps>;
@@ -30,6 +31,12 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }): void {
+    // Forward to Sentry so render-time exceptions appear in the dashboard
+    // with the full component stack for fast triage.
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info.componentStack } },
+    });
+
     if (typeof this.props.onError === "function") {
       this.props.onError(error, info.componentStack);
     }

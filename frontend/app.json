@@ -122,7 +122,13 @@
         }
       ],
       "expo-secure-store",
-      "@sentry/react-native",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "",
+          "project": ""
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-audio",
       "expo-font",
