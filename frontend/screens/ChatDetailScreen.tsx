@@ -637,6 +637,11 @@ export default function ChatDetailScreen({
           }
 
           put(`/chat/${mId}/read`, {}, token).catch(() => {});
+
+          // Scroll to the newest message (offset 0 = bottom with inverted list).
+          // Two delayed calls handle both fast and slow layout passes.
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 100);
+          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 400);
         }
       }
     } catch (error) {

@@ -536,10 +536,17 @@ export default function VideoCallScreen() {
   /* ── Flip camera ── */
   const flipCamera = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (Platform.OS === "web") agoraService.switchCamera();
-    else if (!isExpoGo) engineRef.current?.switchCamera();
+    if (Platform.OS === "web") {
+      agoraService.switchCamera();
+    } else if (!isExpoGo) {
+      if (engineRef.current && engineReady) {
+        engineRef.current.switchCamera();
+      } else {
+        logger.warn("[VideoCall] flipCamera called before engine was ready");
+      }
+    }
     showControls();
-  }, [showControls]);
+  }, [engineReady, showControls]);
 
   /* ── Toggle speaker ── */
   const toggleSpeaker = useCallback(async () => {

@@ -104,6 +104,11 @@ class SocketService {
 
   private reattachListeners() {
     this.listeners.forEach((callbacks, event) => {
+      // Remove all existing socket-level listeners for this event before
+      // re-adding them. Without this, every reconnect multiplies the handlers
+      // which causes duplicate chat messages, missed incoming calls (busy
+      // response on the second handler), and other ghost events.
+      this.socket?.off(event);
       callbacks.forEach(callback => {
         if (this.socket) {
           this.socket.on(event, (...args) => callback(...args));

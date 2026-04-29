@@ -604,6 +604,11 @@ export default function VoiceCallScreen() {
       staysActiveInBackground: true,
       playThroughEarpieceAndroid: !isSpeakerOn,
     }).catch(() => {});
+    // Sync the WebView's speaker routing with the current isSpeakerOn state so
+    // audio routes correctly from the moment the call connects (default: earpiece).
+    if (Platform.OS !== "web") {
+      sendToWebView({ action: "speaker", on: isSpeakerOn });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 

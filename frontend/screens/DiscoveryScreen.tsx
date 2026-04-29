@@ -128,10 +128,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // screen focus so an admin approval is reflected immediately without restart.
   type FaceGateStatus = 'loading' | 'not_requested' | 'pending' | 'approved' | 'rejected';
   const [faceGateStatus, setFaceGateStatus] = useState<FaceGateStatus>('loading');
+  // Ref so checkFaceGate can read the current status without being a dep
+  const faceGateStatusRef = useRef<FaceGateStatus>('loading');
+  useEffect(() => { faceGateStatusRef.current = faceGateStatus; }, [faceGateStatus]);
 
   const checkFaceGate = useCallback(async () => {
     if (!token) return;
-    setFaceGateStatus('loading');
+    // Skip resetting to 'loading' when already approved — prevents a blank/spinner
+    // flash every time the user navigates back to Discovery after verification.
+    if (faceGateStatusRef.current !== 'approved') {
+      setFaceGateStatus('loading');
+    }
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/verification/status`, {
         headers: { Authorization: `Bearer ${token}` },
