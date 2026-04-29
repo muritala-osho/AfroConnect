@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
+import { ensureCallPermissions } from "@/utils/callPermissions";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
 
@@ -500,6 +501,17 @@ export default function VideoCallScreen() {
   /* ── Accept incoming ── */
   const handleAccept = useCallback(async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Verify camera + mic BEFORE accepting — otherwise we'd connect with a
+    // black local video and the caller would think we hung up. The helper
+    // shows a one-tap "Open Settings" dialog if either is hard-denied.
+    const ok = await ensureCallPermissions(true);
+    if (!ok) {
+      socketService.declineCall({ callerId, callType: "video" });
+      setStatus("declined");
+      clearCall();
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 900);
+      return;
+    }
     await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
     socketService.acceptCall({ callerId, callData: activeCallData });
@@ -507,7 +519,7 @@ export default function VideoCallScreen() {
     startGlobalTimer();
     showControls();
     if (activeCallData) joinAgoraVideo(activeCallData);
-  }, [callerId, activeCallData, stopRingtone, joinAgoraVideo, startGlobalTimer, setStatus, showControls]);
+  }, [callerId, activeCallData, stopRingtone, joinAgoraVideo, startGlobalTimer, setStatus, showControls, clearCall, navigation]);
 
   /* ── Toggle mute ── */
   const toggleMute = useCallback(() => {
@@ -568,6 +580,11 @@ export default function VideoCallScreen() {
   /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setStatus("failed");
+    // Verify camera + mic BEFORE we even ring the other side. Avoids the
+    // confusing case where we'd dial out and then connect with a black
+    // local video. On hard-deny the helper shows a one-tap Settings link.
+    const ok = await ensureCallPermissions(true);
+    if (!ok) { setStatus("failed"); return; }
     try {
       const response = await post<any>(
         "/agora/call/initiate",

@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
+import { ensureMicPermission } from "@/utils/callPermissions";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
 import { getApiBaseUrl } from "@/constants/config";
 import WebView from "react-native-webview";
@@ -283,20 +284,9 @@ export default function VoiceCallScreen() {
     }
   }, [isIncoming, stopRingtone]);
 
-  /* ── Mic permission ── */
+  /* ── Mic permission (with one-tap Settings shortcut on hard-deny) ── */
   const requestMicPermission = useCallback(async () => {
-    try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status === "granted") return true;
-      Alert.alert(
-        "Microphone Required",
-        "Please allow microphone access in Settings to make voice calls.",
-        [{ text: "OK" }],
-      );
-      return false;
-    } catch {
-      return false;
-    }
+    return ensureMicPermission();
   }, []);
 
   /* ── WebView bridge ── */
