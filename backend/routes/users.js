@@ -236,6 +236,21 @@ router.get('/countries', protect, async (req, res) => {
 });
 
 
+// Frontend pings this when the discovery deck returns 0 cards. We record the
+// timestamp so a scheduled job can later send a "new people are waiting!"
+// push notification once fresh users become available.
+router.post('/discovery-stack-exhausted', protect, async (req, res) => {
+  try {
+    await User.updateOne(
+      { _id: req.user.id },
+      { $set: { discoveryStackExhaustedAt: new Date() } }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
   let inflightCacheKey = null;
   let resolveInflight = null;

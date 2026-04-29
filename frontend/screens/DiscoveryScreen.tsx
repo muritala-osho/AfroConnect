@@ -127,18 +127,44 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // Always read the user's latest verification state from the backend on every
   // screen focus so an admin approval is reflected immediately without restart.
   type FaceGateStatus = 'loading' | 'not_requested' | 'pending' | 'approved' | 'rejected';
-  const [faceGateStatus, setFaceGateStatus] = useState<FaceGateStatus>('loading');
+  // Seed the gate status SYNCHRONOUSLY from the user object we already have in
+  // memory. This prevents the visible "flicker" where the screen briefly
+  // showed the discovery deck (or a loading spinner) before the verification
+  // status fetch returned and snapped the gate UI back into place.
+  const seedGateFromUser = (u: any): FaceGateStatus => {
+    if (!u) return 'loading';
+    if (u.verified || u.verificationStatus === 'approved') return 'approved';
+    if (u.verificationStatus === 'pending' || u.verificationStatus === 'in_review') return 'pending';
+    if (u.verificationStatus === 'rejected') return 'rejected';
+    return 'not_requested';
+  };
+  const [faceGateStatus, setFaceGateStatus] = useState<FaceGateStatus>(() => seedGateFromUser(user));
   // Ref so checkFaceGate can read the current status without being a dep
-  const faceGateStatusRef = useRef<FaceGateStatus>('loading');
+  const faceGateStatusRef = useRef<FaceGateStatus>(seedGateFromUser(user));
   useEffect(() => { faceGateStatusRef.current = faceGateStatus; }, [faceGateStatus]);
+
+  // Keep the gate in sync when the global user object updates (e.g. after
+  // fetchUser refreshes). Only downgrade *away* from 'approved' if the
+  // server explicitly says so — this prevents transient null/loading states
+  // from making the gate flicker back open.
+  useEffect(() => {
+    const seeded = seedGateFromUser(user);
+    if (seeded === 'loading') return;
+    if (seeded === faceGateStatusRef.current) return;
+    if (faceGateStatusRef.current === 'approved' && seeded !== 'approved' && seeded !== 'rejected') {
+      // Don't lose 'approved' just because user briefly came back without
+      // verificationStatus populated. We'll only revert on rejected/explicit.
+      return;
+    }
+    setFaceGateStatus(seeded);
+  }, [user, (user as any)?.verified, (user as any)?.verificationStatus]);
 
   const checkFaceGate = useCallback(async () => {
     if (!token) return;
-    // Skip resetting to 'loading' when already approved — prevents a blank/spinner
-    // flash every time the user navigates back to Discovery after verification.
-    if (faceGateStatusRef.current !== 'approved') {
-      setFaceGateStatus('loading');
-    }
+    // Don't reset to 'loading' here — we already have a sensible seeded value
+    // from the user object, and showing 'loading' would re-introduce the
+    // flicker we just fixed. We just refresh from the server in the
+    // background and update once data arrives.
     try {
       const res = await fetch(`${getApiBaseUrl()}/api/verification/status`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -148,14 +174,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         const { verified, status } = data.data;
         if (verified && status === 'approved') {
           setFaceGateStatus('approved');
-        } else {
-          setFaceGateStatus((status as FaceGateStatus) || 'not_requested');
+        } else if (status) {
+          setFaceGateStatus(status as FaceGateStatus);
         }
-      } else {
-        setFaceGateStatus('not_requested');
+        // If status is missing/null, leave the seeded value alone — never
+        // downgrade to 'not_requested' when we already have 'pending' from
+        // the user object.
       }
+      // On non-success response we deliberately do nothing so the seeded
+      // value sticks. This kills the "pending → not_requested → pending"
+      // flicker that happened on slow networks.
     } catch {
-      setFaceGateStatus('not_requested');
+      // Network error — keep seeded state, retry on next focus.
     }
   }, [token]);
 
@@ -378,7 +408,29 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
   }, [token, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, hasLocationPermission, locationPermissionChecked]);
 
-  const loadPotentialMatches = useCallback(async (silent = false) => {
+  // Tracks whether a silent "next batch" prefetch is currently in-flight so we
+  // don't fire multiple background loads when the user is rapidly swiping
+  // through the last few cards of the current batch.
+  const prefetchInFlightRef = useRef(false);
+  // Tracks whether we've already pinged the backend that this user has
+  // exhausted their discovery stack. We only want to ping once per actual
+  // empty result, so the backend cron can later push a "new people are
+  // waiting" notification.
+  const stackExhaustedReportedRef = useRef(false);
+
+  const reportStackExhausted = useCallback(() => {
+    if (stackExhaustedReportedRef.current) return;
+    if (!token) return;
+    stackExhaustedReportedRef.current = true;
+    api
+      .post('/users/discovery-stack-exhausted', {}, token)
+      .catch(() => {
+        // Silent — this is a best-effort hint to the backend cron that the
+        // user should be notified later when fresh people show up.
+      });
+  }, [api, token]);
+
+  const loadPotentialMatches = useCallback(async (silent = false, append = false) => {
     if (!user?.id || !token) {
       logger.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
       setLoading(false);
@@ -528,32 +580,66 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         
         const filteredUsers = usersWithSimilarity.filter(u => !seenUserIds.current.has(u.id));
         filteredUsers.forEach(u => seenUserIds.current.add(u.id));
-        
-        setUsers(filteredUsers);
-        setCurrentIndex(0);
 
-        // Persist the batch so the next cold-open renders the deck instantly.
-        // Both free and premium users benefit from the cache.
-        if (filteredUsers.length > 0) {
-          AsyncStorage.setItem(
-            DISCOVERY_CACHE_KEY,
-            JSON.stringify({
-              users: filteredUsers.slice(0, 30),
-              cachedAt: Date.now(),
-              discoveryType,
-              selectedCountry,
-            }),
-          ).catch(() => {});
+        if (append) {
+          // Background prefetch — keep current card position, just add new
+          // people to the end of the deck so swiping never has to wait.
+          if (filteredUsers.length > 0) {
+            setUsers(prev => [...prev, ...filteredUsers]);
+            stackExhaustedReportedRef.current = false;
+          } else {
+            // Server has no more people right now — flag the stack as
+            // exhausted so the backend cron can push a notification later
+            // when fresh users appear.
+            reportStackExhausted();
+          }
+        } else {
+          setUsers(filteredUsers);
+          setCurrentIndex(0);
+
+          // Persist the batch so the next cold-open renders the deck instantly.
+          // Both free and premium users benefit from the cache.
+          if (filteredUsers.length > 0) {
+            stackExhaustedReportedRef.current = false;
+            AsyncStorage.setItem(
+              DISCOVERY_CACHE_KEY,
+              JSON.stringify({
+                users: filteredUsers.slice(0, 30),
+                cachedAt: Date.now(),
+                discoveryType,
+                selectedCountry,
+              }),
+            ).catch(() => {});
+          } else {
+            // Empty result on a primary fetch = stack is exhausted.
+            reportStackExhausted();
+          }
+
+          // Warm the image cache for the first few cards so they appear
+          // instantly the moment the user arrives at them. expo-image
+          // already caches on display, but pre-warming the next 3 photos
+          // removes any hint of a fade-in for fast swipers.
+          try {
+            const upcomingPhotos = filteredUsers
+              .slice(0, 3)
+              .map((u: any) => u.photos?.[0])
+              .filter(Boolean) as string[];
+            if (upcomingPhotos.length > 0) {
+              Image.prefetch(upcomingPhotos).catch(() => {});
+            }
+          } catch {}
         }
-      } else {
+      } else if (!append) {
         setUsers([]);
+        reportStackExhausted();
       }
     } catch (error) {
       logger.error("[DISCOVERY] Error loading nearby users:", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
+      if (append) prefetchInFlightRef.current = false;
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry]);
+  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry, reportStackExhausted]);
 
   // Keep stable refs in sync with latest values — zero cost, runs after each render.
   useEffect(() => { loadPotentialMatchesRef.current = loadPotentialMatches; }, [loadPotentialMatches]);
@@ -1015,9 +1101,31 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     }
     resetCardPosition();
     setIsAnimating(false);
+
+    const remaining = users.length - currentIndex - 1;
+
+    // Pre-warm the next 2 photos in the deck so they show instantly when the
+    // card flips into view.
+    try {
+      const next = users.slice(currentIndex + 1, currentIndex + 3);
+      const nextPhotos = next.map(u => u.photos?.[0]).filter(Boolean) as string[];
+      if (nextPhotos.length > 0) Image.prefetch(nextPhotos).catch(() => {});
+    } catch {}
+
+    // Background-prefetch the NEXT batch when only 4 cards remain. The cards
+    // are appended to the existing deck so the user keeps swiping smoothly
+    // instead of seeing a refresh / spinner at the end.
+    if (remaining <= 4 && !prefetchInFlightRef.current && users.length > 0) {
+      prefetchInFlightRef.current = true;
+      loadPotentialMatches(true /* silent */, true /* append */);
+    }
+
     if (currentIndex < users.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
+      // Truly out of cards in memory. Trigger a foreground load so the user
+      // sees the empty/loading state cleanly. The prefetch above usually
+      // means we never actually reach this branch.
       setCurrentIndex(0);
       loadPotentialMatches();
     }

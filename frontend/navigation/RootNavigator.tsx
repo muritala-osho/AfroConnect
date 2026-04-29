@@ -115,31 +115,49 @@ function VerificationPopup({ isProfileComplete }: { isProfileComplete: boolean }
   const navigation = useNavigation<any>();
   const lastPromptTime = React.useRef<number>(0);
 
+  // Hard rule: a user whose verification is "pending" or "approved" must NEVER
+  // be sent to / bounced through the Verification screen by this popup. Any
+  // status that isn't a definitive "needs verification" is treated as a no-op
+  // to eliminate the flicker where the app would briefly show the normal home
+  // screen and then jump back to Verification while user data was reloading.
+  const verificationStatus = (user as any)?.verificationStatus;
+  const isVerifiedOrPending =
+    !!(user as any)?.verified ||
+    verificationStatus === 'pending' ||
+    verificationStatus === 'approved' ||
+    verificationStatus === 'in_review';
+
   useEffect(() => {
     if (!token) return;
-    
-    const timer = setTimeout(() => {
-      const isVerifiedOrPending = (user as any)?.verified || (user as any)?.verificationStatus === 'pending' || (user as any)?.verificationStatus === 'approved';
-      
-      if (isVerifiedOrPending) return;
+    if (isVerifiedOrPending) return;
 
-      if ((user as any)?.needsVerification) {
+    if ((user as any)?.needsVerification) {
+      navigation.navigate('Verification');
+      return;
+    }
+
+    if ((user as any)?.profileIncomplete) {
+      navigation.navigate('ProfileSetup');
+      return;
+    }
+
+    if (user && isProfileComplete) {
+      const now = Date.now();
+      const fifteenMinutes = 15 * 60 * 1000;
+      if (now - lastPromptTime.current > fifteenMinutes) {
+        lastPromptTime.current = now;
         navigation.navigate('Verification');
-      } else if ((user as any)?.profileIncomplete) {
-        navigation.navigate('ProfileSetup');
-      } else if (user && isProfileComplete && !(user as any).verified && (user as any).verificationStatus !== 'pending') {
-        const now = Date.now();
-        const fifteenMinutes = 15 * 60 * 1000;
-        
-        if (now - lastPromptTime.current > fifteenMinutes) {
-          lastPromptTime.current = now;
-          navigation.navigate('Verification');
-        }
       }
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, [(user as any)?.needsVerification, (user as any)?.profileIncomplete, (user as any)?.verified, token, isProfileComplete]);
+    }
+  }, [
+    (user as any)?.needsVerification,
+    (user as any)?.profileIncomplete,
+    (user as any)?.verified,
+    verificationStatus,
+    isVerifiedOrPending,
+    token,
+    isProfileComplete,
+  ]);
 
   return null;
 }

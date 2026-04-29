@@ -280,6 +280,18 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Set when the user runs out of discovery cards. The "new people are
+  // waiting" cron uses this together with `lastDiscoveryWaitingNotifiedAt`
+  // to decide who to notify. Cleared by the cron after the notification
+  // is sent so the same user isn't pinged repeatedly.
+  discoveryStackExhaustedAt: {
+    type: Date,
+    default: null,
+  },
+  lastDiscoveryWaitingNotifiedAt: {
+    type: Date,
+    default: null,
+  },
   lookingFor: {
     type: String,
     enum: ['relationship', 'friendship', 'casual', 'networking', 'not_sure', 'not sure'],
