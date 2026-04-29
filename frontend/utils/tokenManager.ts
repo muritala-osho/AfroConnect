@@ -200,13 +200,11 @@ export const tokenManager = {
 
       const data = await response.json().catch(() => ({}));
 
-      // Only treat 401/403 as a real auth failure that invalidates the session.
-      const isAuthFailure =
-        response.status === 401 ||
-        response.status === 403 ||
-        data?.tokenRevoked === true;
-
-      if (isAuthFailure) {
+      // Only force the user out when the server explicitly tells us the
+      // session is dead (`tokenRevoked: true`). A bare 401/403 from a proxy,
+      // CDN, captive portal, or transient backend hiccup must NOT log them
+      // out — that's what was causing random sign-outs on relaunch.
+      if (data?.tokenRevoked === true) {
         await this.clearTokens();
         drainQueue(null);
         onSessionExpiredCallback?.();

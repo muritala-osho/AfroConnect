@@ -424,36 +424,36 @@ export default function SupportMessagesScreen({ navigation }: any) {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
           {(selectedTicket.messages || []).map((msg: any, i) => {
-            // Robust sender detection — match by my user id when available, otherwise
-            // fall back to role. Anything explicitly tagged as staff is rendered on the left.
-            const myId = (user as any)?.id || (user as any)?._id;
+            // Anything tagged as staff (admin, agent, or carrying an adminName)
+            // renders on the left. Everything else is treated as the current
+            // user and renders on the right. We use `alignSelf` directly on the
+            // bubble so layout works the same whether the parent ScrollView
+            // stretches its content or not.
             const isStaff = msg.role === 'admin' || msg.role === 'agent' || !!msg.adminName;
-            const isUser = !isStaff && (
-              (msg.senderId && myId && String(msg.senderId) === String(myId)) ||
-              msg.role === 'user' ||
-              (!msg.role && !msg.adminName)
-            );
+            const isUser = !isStaff;
             return (
-              <View key={i} style={[styles.messageRow, isUser ? styles.messageRowUser : styles.messageRowStaff]}>
-                <View style={[
+              <View
+                key={i}
+                style={[
                   styles.messageBubble,
+                  { alignSelf: isUser ? 'flex-end' : 'flex-start' },
                   isUser
                     ? [styles.bubbleUser, { backgroundColor: theme.primary }]
                     : [styles.bubbleStaff, { backgroundColor: theme.surface, borderColor: theme.border }],
-                ]}>
-                  {/* Sender name for staff messages */}
-                  {!isUser && (
-                    <Text style={[styles.senderLabel, { color: theme.primary }]}>
-                      {msg.senderName || msg.adminName || (msg.role === 'agent' ? 'Support Agent' : 'AfroConnect Support')}
-                    </Text>
-                  )}
-                  <Text style={[styles.messageText, { color: isUser ? '#fff' : theme.text }]}>
-                    {msg.content}
+                ]}
+              >
+                {/* Sender name for staff messages */}
+                {!isUser && (
+                  <Text style={[styles.senderLabel, { color: theme.primary }]}>
+                    {msg.senderName || msg.adminName || (msg.role === 'agent' ? 'Support Agent' : 'AfroConnect Support')}
                   </Text>
-                  <Text style={[styles.messageTime, { color: isUser ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
-                    {timeAgo(msg.timestamp)}
-                  </Text>
-                </View>
+                )}
+                <Text style={[styles.messageText, { color: isUser ? '#fff' : theme.text }]}>
+                  {msg.content}
+                </Text>
+                <Text style={[styles.messageTime, { color: isUser ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
+                  {timeAgo(msg.timestamp)}
+                </Text>
               </View>
             );
           })}

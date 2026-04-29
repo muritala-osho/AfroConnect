@@ -283,7 +283,13 @@ router.post(
         });
       }
 
-      const user = await User.findOne({ email }).select("+password");
+      // Fetch every field login needs in a single round-trip. Previously we
+      // ran TWO findOne/findById queries back-to-back (one for the password,
+      // one to re-read tokenVersion + push prefs), which doubled the Mongo
+      // latency on the critical login path.
+      const user = await User.findOne({ email }).select(
+        "+password +tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings"
+      );
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -340,14 +346,24 @@ router.post(
         });
       }
 
-      user.lastActive = Date.now();
-      user.onlineStatus = "online";
-      await user.save();
+      // The lastActive / onlineStatus update is purely a presence concern —
+      // it must NOT block the login response. Push it onto the next tick so
+      // the user gets their token immediately while Mongo persists in the
+      // background. Same DB cost, but it's now off the critical path.
+      const presenceUpdate = User.updateOne(
+        { _id: user._id },
+        { $set: { lastActive: Date.now(), onlineStatus: "online" } }
+      ).catch((err) =>
+        logger.warn("Login presence update failed (non-fatal):", err.message)
+      );
 
-      const userWithVersion = await User.findById(user._id).select('+tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings');
       const newSession = await createSession(user._id, req);
       const { sessionId, refreshToken } = newSession;
-      const token = generateToken(user._id, userWithVersion.tokenVersion || 0, sessionId);
+      const token = generateToken(user._id, user.tokenVersion || 0, sessionId);
+      // We intentionally don't await `presenceUpdate` — fire-and-forget.
+      void presenceUpdate;
+      // Keep a reference for the suspicious-login alert below.
+      const userWithVersion = user;
 
       // ── Suspicious login detection (fire-and-forget) ───────────────────────
       setImmediate(async () => {
