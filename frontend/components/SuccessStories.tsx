@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -266,23 +266,31 @@ export const SuccessStoriesList: React.FC<SuccessStoriesListProps> = ({
   const [stories, setStories] = useState<SuccessStory[]>(featured ? DUMMY_STORIES.filter(s => s.featured) : DUMMY_STORIES);
   const [loading, setLoading] = useState(true);
 
-  const fetchStories = useCallback(async () => {
-    try {
-      const endpoint = featured ? '/success-stories/featured' : '/success-stories';
-      const res = await api.get<{ stories: SuccessStory[] }>(endpoint);
-      if (res.success && res.data?.stories && res.data.stories.length > 0) {
-        setStories(res.data.stories);
-      }
-    } catch (error) {
-      logger.error('Failed to fetch stories:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [api, featured]);
+  // Hold api in a ref so the fetch effect can run on `featured` changes only.
+  // useApi() returns a new object on every render (it owns internal
+  // loading/error state) — putting it in the dep list caused a fetch loop.
+  const apiRef = useRef(api);
+  useEffect(() => { apiRef.current = api; }, [api]);
 
   useEffect(() => {
+    let cancelled = false;
+    const fetchStories = async () => {
+      try {
+        const endpoint = featured ? '/success-stories/featured' : '/success-stories';
+        const res = await apiRef.current.get<{ stories: SuccessStory[] }>(endpoint);
+        if (cancelled) return;
+        if (res.success && res.data?.stories && res.data.stories.length > 0) {
+          setStories(res.data.stories);
+        }
+      } catch (error) {
+        logger.error('Failed to fetch stories:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
     fetchStories();
-  }, [fetchStories]);
+    return () => { cancelled = true; };
+  }, [featured]);
 
   if (loading) {
     return (
@@ -341,10 +349,17 @@ export const SuccessStoriesStats: React.FC<StatsDisplayProps> = ({ compact = fal
   const api = useApi();
   const [stats, setStats] = useState<Stats | null>(null);
 
+  // Same loop-prevention pattern as the list above — read api through a ref
+  // and fetch exactly once on mount.
+  const apiRef = useRef(api);
+  useEffect(() => { apiRef.current = api; }, [api]);
+
   useEffect(() => {
+    let cancelled = false;
     const fetchStats = async () => {
       try {
-        const res = await api.get<{ stats: Stats }>('/success-stories/stats');
+        const res = await apiRef.current.get<{ stats: Stats }>('/success-stories/stats');
+        if (cancelled) return;
         if (res.success && res.data?.stats) {
           setStats(res.data.stats);
         }
@@ -353,7 +368,9 @@ export const SuccessStoriesStats: React.FC<StatsDisplayProps> = ({ compact = fal
       }
     };
     fetchStats();
-  }, [api]);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!stats) return null;
 
