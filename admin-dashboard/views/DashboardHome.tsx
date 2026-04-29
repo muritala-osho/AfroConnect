@@ -57,31 +57,27 @@ const DashboardHome: React.FC = () => {
     setError(null);
 
     try {
-      const [statsRes, activityRes, reportsRes, analyticsRes] = await Promise.allSettled([
-        adminApi.getStats(),
-        adminApi.getActivityMonitoring(),
-        adminApi.getReports('pending'),
+      // Two requests instead of four: the overview bundles stats + activity +
+      // badge counts + a pending-reports preview into one round-trip. Only the
+      // analytics chart (which depends on chartRange) stays separate.
+      const [overviewRes, analyticsRes] = await Promise.allSettled([
+        adminApi.getOverview(),
         adminApi.getAnalytics(chartRange),
       ]);
 
-      if (statsRes.status === 'fulfilled' && statsRes.value?.success) {
-        setStats(statsRes.value.stats);
+      if (overviewRes.status === 'fulfilled' && overviewRes.value?.success) {
+        const o = overviewRes.value;
+        if (o.stats)    setStats(o.stats);
+        if (o.activity) setActivity(o.activity);
+        if (Array.isArray(o.pendingReports)) setReportsUsers(o.pendingReports.slice(0, 5));
         hasLoadedRequiredData.current = true;
-      }
-      if (activityRes.status === 'fulfilled' && activityRes.value?.success) {
-        setActivity(activityRes.value.activity);
-        hasLoadedRequiredData.current = true;
-      }
-      if (reportsRes.status === 'fulfilled' && reportsRes.value?.success) {
-        setReportsUsers(reportsRes.value.reports?.slice(0, 5) || []);
       }
       if (analyticsRes.status === 'fulfilled' && analyticsRes.value?.success) {
         setDailyData(analyticsRes.value.analytics?.dailyData || []);
       }
 
       const hasRequiredData =
-        (statsRes.status === 'fulfilled' && statsRes.value?.success) ||
-        (activityRes.status === 'fulfilled' && activityRes.value?.success);
+        overviewRes.status === 'fulfilled' && overviewRes.value?.success;
 
       if (!hasRequiredData && !hasLoadedRequiredData.current) {
         setError('Unable to load live dashboard data. Please retry.');

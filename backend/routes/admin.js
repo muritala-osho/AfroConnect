@@ -109,32 +109,119 @@ router.post('/push-test', protect, isAdmin, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared computation helpers used by the per-endpoint routes AND the merged
+// /overview endpoint below. Centralising them means any caching, parallelism,
+// or schema changes only need to happen in one place.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const OVERVIEW_TTL_SECONDS = 30; // dashboards poll every 60s — 30s is plenty fresh
+
+async function computeBadgeCounts() {
+  const SupportTicket = require('../models/SupportTicket');
+  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const [reports, verifications, appeals, safetyBypasses, openTickets, unreadTickets] = await Promise.all([
+    Report.countDocuments({ status: 'pending' }),
+    User.countDocuments({ verificationStatus: 'pending' }),
+    User.countDocuments({ 'appeal.status': 'pending', isBanned: true }),
+    AuditLog.countDocuments({ action: 'SAFETY_WARNING_BYPASSED', createdAt: { $gte: since24h } }),
+    SupportTicket.countDocuments({ status: 'open' }).catch(() => 0),
+    SupportTicket.countDocuments({ status: 'open', unreadByAgent: { $gt: 0 } }).catch(() => 0),
+  ]);
+  return {
+    reports,
+    verifications,
+    appeals,
+    content: reports + safetyBypasses,
+    tickets: openTickets,
+    unreadTickets,
+  };
+}
+
+async function computeStats() {
+  // Was 7 sequential queries (each waiting for the previous) — easily ~300ms+
+  // on a healthy Mongo cluster, much worse on a slow link. Now they all run
+  // at once and the route finishes as soon as the slowest one returns.
+  const [
+    totalUsers,
+    verifiedUsers,
+    activeToday,
+    totalMatches,
+    totalMessages,
+    pendingReports,
+    bannedUsers,
+  ] = await Promise.all([
+    User.countDocuments(),
+    User.countDocuments({ verified: true }),
+    User.countDocuments({ lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }),
+    Match.countDocuments({ status: 'active' }),
+    Message.countDocuments(),
+    Report.countDocuments({ status: 'pending' }),
+    User.countDocuments({ banned: true }),
+  ]);
+  return { totalUsers, verifiedUsers, activeToday, totalMatches, totalMessages, pendingReports, bannedUsers };
+}
+
+async function computeActivity() {
+  const now = Date.now();
+  const last24h  = new Date(now - 24 * 60 * 60 * 1000);
+  const last7d   = new Date(now - 7  * 24 * 60 * 60 * 1000);
+  const lastHour = new Date(now - 60 * 60 * 1000);
+  const [active24h, active7d, onlineNow, messages24h] = await Promise.all([
+    User.countDocuments({ lastActive: { $gte: last24h } }),
+    User.countDocuments({ lastActive: { $gte: last7d } }),
+    User.countDocuments({ lastActive: { $gte: lastHour } }),
+    Message.countDocuments({ createdAt: { $gte: last24h } }),
+  ]);
+  return { active24h, active7d, onlineNow, messages24h };
+}
+
+// Generic cache-aside wrapper. Returns the cached value when fresh, otherwise
+// computes, stores, and returns. Logs hit/miss so production can be verified.
+async function withCache(key, ttl, compute) {
+  const cached = await redis.get(key);
+  if (cached) {
+    logger.log(`[AdminCache] HIT ${key}`);
+    return cached;
+  }
+  logger.log(`[AdminCache] MISS ${key}`);
+  const value = await compute();
+  await redis.set(key, value, ttl);
+  return value;
+}
+
 router.get('/badge-counts', protect, isAdmin, async (req, res) => {
   try {
-    const SupportTicket = require('../models/SupportTicket');
-    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const [reports, verifications, appeals, safetyBypasses, openTickets, unreadTickets] = await Promise.all([
-      Report.countDocuments({ status: 'pending' }),
-      User.countDocuments({ verificationStatus: 'pending' }),
-      User.countDocuments({ 'appeal.status': 'pending', isBanned: true }),
-      AuditLog.countDocuments({ action: 'SAFETY_WARNING_BYPASSED', createdAt: { $gte: since24h } }),
-      SupportTicket.countDocuments({ status: 'open' }).catch(() => 0),
-      SupportTicket.countDocuments({ status: 'open', unreadByAgent: { $gt: 0 } }).catch(() => 0),
-    ]);
-    const flaggedContent = reports + safetyBypasses;
-    res.json({
-      success: true,
-      counts: {
-        reports,
-        verifications,
-        appeals,
-        content: flaggedContent,
-        tickets: openTickets,
-        unreadTickets,
-      },
-    });
+    const counts = await withCache('admin:badge-counts', OVERVIEW_TTL_SECONDS, computeBadgeCounts);
+    res.json({ success: true, counts });
   } catch (error) {
     logger.error('Badge counts error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// Single round-trip that powers the entire dashboard overview. Replaces FOUR
+// separate requests (stats + activity + badge-counts + pending reports) that
+// the dashboard used to fire on mount and on every poll.
+router.get('/overview', protect, isAdmin, async (req, res) => {
+  try {
+    const [stats, activity, counts, pendingReports] = await Promise.all([
+      withCache('admin:stats',        OVERVIEW_TTL_SECONDS, computeStats),
+      withCache('admin:activity',     OVERVIEW_TTL_SECONDS, computeActivity),
+      withCache('admin:badge-counts', OVERVIEW_TTL_SECONDS, computeBadgeCounts),
+      withCache('admin:pending-reports-preview', OVERVIEW_TTL_SECONDS, async () => {
+        const reports = await Report.find({ status: 'pending' })
+          .populate('reporter',     'name email')
+          .populate('reportedUser', 'name email photos')
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .lean();
+        return reports;
+      }),
+    ]);
+    res.json({ success: true, stats, activity, counts, pendingReports });
+  } catch (error) {
+    logger.error('Overview error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1121,34 +1208,11 @@ router.get('/boosts-revenue', protect, isAdmin, async (req, res) => {
 
 router.get('/stats', protect, isAdmin, async (req, res) => {
   try {
-    const totalUsers = await User.countDocuments();
-    const verifiedUsers = await User.countDocuments({ verified: true });
-    const activeToday = await User.countDocuments({
-      lastActive: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-    });
-    const totalMatches = await Match.countDocuments({ status: 'active' });
-    const totalMessages = await Message.countDocuments();
-    const pendingReports = await Report.countDocuments({ status: 'pending' });
-    const bannedUsers = await User.countDocuments({ banned: true });
-
-    res.json({
-      success: true,
-      stats: {
-        totalUsers,
-        verifiedUsers,
-        activeToday,
-        totalMatches,
-        totalMessages,
-        pendingReports,
-        bannedUsers
-      }
-    });
+    const stats = await withCache('admin:stats', OVERVIEW_TTL_SECONDS, computeStats);
+    res.json({ success: true, stats });
   } catch (error) {
     logger.error('Get stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error'
-    });
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
@@ -1656,22 +1720,8 @@ router.get('/analytics', protect, isAdmin, async (req, res) => {
 
 router.get('/activity-monitoring', protect, isAdmin, async (req, res) => {
   try {
-    const now = new Date();
-    const last24h = new Date(now - 24 * 60 * 60 * 1000);
-    const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
-    const lastHour = new Date(now - 60 * 60 * 1000);
-
-    const [active24h, active7d, onlineNow, messages24h] = await Promise.all([
-      User.countDocuments({ lastActive: { $gte: last24h } }),
-      User.countDocuments({ lastActive: { $gte: last7d } }),
-      User.countDocuments({ lastActive: { $gte: lastHour } }),
-      Message.countDocuments({ createdAt: { $gte: last24h } }),
-    ]);
-
-    res.json({
-      success: true,
-      activity: { active24h, active7d, onlineNow, messages24h },
-    });
+    const activity = await withCache('admin:activity', OVERVIEW_TTL_SECONDS, computeActivity);
+    res.json({ success: true, activity });
   } catch (error) {
     logger.error('Activity monitoring error:', error);
     res.status(500).json({ success: false, message: 'Server error' });

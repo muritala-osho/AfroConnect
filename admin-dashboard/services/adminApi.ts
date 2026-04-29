@@ -169,6 +169,14 @@ export const adminApi = {
     return handleResponse(res);
   },
 
+  // One-shot dashboard payload: stats + activity + badge counts + a 5-row
+  // pending-reports preview, all in a single request. Replaces four separate
+  // round-trips that the dashboard used to fire on mount and on every poll.
+  getOverview: async () => {
+    const res = await fetchWithAuth(`${API_BASE}/admin/overview`);
+    return handleResponse(res);
+  },
+
   getPushVapidKey: async () => {
     const res = await fetchWithAuth(`${API_BASE}/admin/push-vapid-key`);
     return handleResponse(res);
