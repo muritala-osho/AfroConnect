@@ -140,6 +140,14 @@ export default function ChatDetailScreen({
   const [lastSeenDate, setLastSeenDate] = useState<Date | null>(null);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [messageSkip, setMessageSkip] = useState(0);
+  // True once the user has scrolled away from the latest message. Drives the
+  // floating "scroll to bottom" pill — we only show it while the user is
+  // actively reading older history.
+  const [showScrollToBottomFab, setShowScrollToBottomFab] = useState(false);
+  // How many new messages have arrived while the user was reading older
+  // history. Shown as a badge on the floating button and reset when the user
+  // taps it (or scrolls back to the bottom themselves).
+  const [historyUnreadCount, setHistoryUnreadCount] = useState(0);
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -722,14 +730,28 @@ export default function ChatDetailScreen({
       const senderId = typeof msg.sender === "string" ? msg.sender : msg.sender?._id;
       if (String(senderId) === String(myId)) return; // ignore own echo
 
+      let isDuplicate = false;
       setMessages((prev) => {
-        if (prev.some((m) => m._id === msg._id)) return prev;
+        if (prev.some((m) => m._id === msg._id)) {
+          isDuplicate = true;
+          return prev;
+        }
         return [...prev, msg];
       });
-      // Always scroll to the new incoming message so it's visible, matching
-      // WhatsApp's behaviour. The inverted list means offset 0 = newest message.
-      isNearBottomRef.current = true;
-      scrollToBottom(true);
+      if (isDuplicate) return;
+
+      // WhatsApp behaviour:
+      //  - If the user is already reading the bottom of the chat, auto-scroll
+      //    to the new message so they see it instantly.
+      //  - If the user has scrolled up to read older history, DO NOT yank
+      //    them down. Instead, bump the unread badge on the floating
+      //    "scroll to bottom" pill so they can tap it when they're ready.
+      if (isNearBottomRef.current) {
+        scrollToBottom(true);
+      } else {
+        setHistoryUnreadCount((c) => c + 1);
+        setShowScrollToBottomFab(true);
+      }
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
@@ -2705,13 +2727,24 @@ export default function ChatDetailScreen({
           }}
           onScroll={(e) => {
             const y = e.nativeEvent.contentOffset.y;
-            isNearBottomRef.current = y < 120;
+            const nearBottom = y < 120;
+            isNearBottomRef.current = nearBottom;
             // The first real user-driven scroll counts as "initial scroll
             // done" — after this point we stop force-snapping to the bottom
             // and only auto-follow when they're already near the latest
             // message. This is what lets users freely scroll up through
             // history without getting yanked back down.
             if (y > 120) initialScrollDoneRef.current = true;
+            // Show the floating "scroll to latest" pill once the user has
+            // scrolled noticeably away from the bottom; hide it (and clear
+            // the unread badge) the moment they scroll back to the latest
+            // message.
+            if (nearBottom) {
+              if (showScrollToBottomFab) setShowScrollToBottomFab(false);
+              if (historyUnreadCount > 0) setHistoryUnreadCount(0);
+            } else if (y > 240 && !showScrollToBottomFab) {
+              setShowScrollToBottomFab(true);
+            }
           }}
           scrollEventThrottle={100}
           onLayout={() => {
@@ -2763,6 +2796,43 @@ export default function ChatDetailScreen({
             </View>
           }
         />
+      )}
+
+      {/* Floating "scroll to latest message" pill — appears when the user has
+          scrolled up to read older history. Shows a badge with the number of
+          new messages that arrived while they were reading. Tapping it
+          jumps to the newest message and clears the badge. */}
+      {showScrollToBottomFab && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            historyUnreadCount > 0
+              ? `${historyUnreadCount} new message${historyUnreadCount === 1 ? "" : "s"}, scroll to latest`
+              : "Scroll to latest message"
+          }
+          onPress={() => {
+            isNearBottomRef.current = true;
+            setHistoryUnreadCount(0);
+            setShowScrollToBottomFab(false);
+            scrollToBottom(true);
+          }}
+          style={[
+            styles.scrollToBottomFab,
+            {
+              backgroundColor: isDark ? "rgba(30,30,40,0.95)" : "#FFFFFF",
+              borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+            },
+          ]}
+        >
+          <Feather name="chevron-down" size={22} color={isDark ? "#FFF" : theme.text} />
+          {historyUnreadCount > 0 && (
+            <View style={[styles.scrollToBottomBadge, { backgroundColor: theme.primary }]}>
+              <ThemedText style={styles.scrollToBottomBadgeText}>
+                {historyUnreadCount > 99 ? "99+" : String(historyUnreadCount)}
+              </ThemedText>
+            </View>
+          )}
+        </Pressable>
       )}
 
       {isOtherRecording && !isTyping && (
@@ -3208,6 +3278,39 @@ const styles = StyleSheet.create<any>({
   headerActions: { flexDirection: "row", alignItems: "center" },
   headerActionButton: { padding: 10, marginLeft: 4 },
   chatBackground: { flex: 1 },
+  scrollToBottomFab: {
+    position: "absolute",
+    right: 14,
+    bottom: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 5,
+  },
+  scrollToBottomBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scrollToBottomBadgeText: {
+    color: "#FFF",
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 13,
+  },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   messagesList: { paddingHorizontal: 12, paddingVertical: 16, flexGrow: 1 },
   dateHeaderContainer: { alignItems: "center", marginVertical: 16 },

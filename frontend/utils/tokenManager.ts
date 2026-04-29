@@ -23,6 +23,29 @@ function drainQueue(token: string | null) {
   refreshQueue = [];
 }
 
+// Keychain access options used for every SecureStore write. AFTER_FIRST_UNLOCK
+// keeps the token readable after the user unlocks the device once after boot,
+// which is what every "remember me" experience needs. Without it, iOS's
+// default WHEN_UNLOCKED makes the keychain unreadable from background tasks
+// or right after a quick wake — which we previously misread as "the user has
+// no refresh token", and silently logged them out.
+const SECURE_STORE_OPTIONS: SecureStore.SecureStoreOptions = {
+  keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+};
+
+// Read a SecureStore item without ever throwing. We need to distinguish
+// "the keychain returned null" (real logout) from "the keychain access
+// failed" (transient — device just woke up, iOS race condition, etc.). The
+// caller looks at .error to decide whether to treat the missing token as a
+// definitive logout or as something to retry later.
+async function safeGetItem(key: string): Promise<{ value: string | null; error: unknown | null }> {
+  try {
+    return { value: await SecureStore.getItemAsync(key), error: null };
+  } catch (e) {
+    return { value: null, error: e };
+  }
+}
+
 export function setOnSessionExpired(cb: (() => void) | null) {
   onSessionExpiredCallback = cb;
 }
@@ -81,20 +104,22 @@ function scheduleProactiveRefresh(token: string) {
 
 export const tokenManager = {
   async getAccessToken(): Promise<string | null> {
-    return SecureStore.getItemAsync(ACCESS_TOKEN_KEY);
+    const { value } = await safeGetItem(ACCESS_TOKEN_KEY);
+    return value;
   },
 
   async setAccessToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token);
+    await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, token, SECURE_STORE_OPTIONS);
     scheduleProactiveRefresh(token);
   },
 
   async getRefreshToken(): Promise<string | null> {
-    return SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+    const { value } = await safeGetItem(REFRESH_TOKEN_KEY);
+    return value;
   },
 
   async setRefreshToken(token: string): Promise<void> {
-    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token);
+    await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, token, SECURE_STORE_OPTIONS);
   },
 
   async clearTokens(): Promise<void> {
@@ -133,7 +158,18 @@ export const tokenManager = {
 
     isRefreshing = true;
     try {
-      const refreshToken = await this.getRefreshToken();
+      const { value: refreshToken, error: storageError } = await safeGetItem(REFRESH_TOKEN_KEY);
+      if (storageError) {
+        // Couldn't even read the keychain. This happens on iOS when the
+        // device just woke up, or during certain background-task races.
+        // Treat as transient — DO NOT log the user out. Schedule a retry so
+        // the app self-heals once the keychain is accessible again.
+        drainQueue(null);
+        proactiveRefreshTimer = setTimeout(() => {
+          tokenManager.refresh().catch(() => {});
+        }, 30 * 1000);
+        return null;
+      }
       if (!refreshToken) {
         // No refresh token at all = definitive logout state.
         await this.clearTokens();
