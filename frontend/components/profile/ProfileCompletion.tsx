@@ -252,10 +252,19 @@ export const ProfileCompletionBanner: React.FC<ProfileCompletionProps> = ({
   const [status, setStatus] = useState<CompletionStatus | null>(null);
   const [visible, setVisible] = useState(true);
 
+  // Hold the latest api in a ref so the effect can run ONCE on mount.
+  // Putting `api` in the dep list caused a fetch-loop (see notes on the Card
+  // above): useApi() returns a new object on every render because it owns
+  // internal loading/error state. Each fetch flipped that state and produced
+  // a fresh api object, which re-fired this effect — resulting in dozens of
+  // duplicate /profile-completion/status calls per second in production.
+  const apiRef = useRef(api);
+  useEffect(() => { apiRef.current = api; }, [api]);
+
   useEffect(() => {
     const fetchStatus = async () => {
       try {
-        const res = await api.get('/profile-completion/status');
+        const res = await apiRef.current.get('/profile-completion/status');
         if (res.success) {
           setStatus(res.data as any);
           if ((res.data as any).completionPercentage >= 90) {
@@ -267,7 +276,8 @@ export const ProfileCompletionBanner: React.FC<ProfileCompletionProps> = ({
       }
     };
     fetchStatus();
-  }, [api]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!visible || !status || status.completionPercentage >= 90) {
     return null;

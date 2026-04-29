@@ -9,6 +9,19 @@ import { tokenManager } from '@/utils/tokenManager';
 
 const getApiUrl = () => `${getApiBaseUrl()}/api`;
 
+// ─── In-flight request deduplication ──────────────────────────────────────
+// Module-level cache so it's shared across every component that calls
+// useApi(). If two parts of the app fire the EXACT same GET (same URL, same
+// auth token) at the same moment, the second caller waits on the first
+// caller's network promise instead of hitting the backend twice.
+//
+// This is a safety net for things like a parent and child component both
+// asking for the same data on mount, focus-effect refetches racing with
+// initial-render fetches, or accidental React effect-loops. It only applies
+// to GETs — methods with side-effects (POST/PUT/PATCH/DELETE) are never
+// deduped.
+const inflightGets = new Map<string, Promise<any>>();
+
 function getDeviceHeaders(): Record<string, string> {
   const osName = Device.osName || (Platform.OS === 'ios' ? 'iOS' : Platform.OS === 'android' ? 'Android' : 'Web');
   const osVersion = Device.osVersion || '';
@@ -145,10 +158,23 @@ export function useApi() {
       url = `${endpoint}?${queryString}`;
     }
 
-    return request<T>(url, {
+    // Coalesce identical in-flight GETs so a render loop or two components
+    // mounting at once can't hammer the backend with the same request.
+    const dedupeKey = `${url}::${authToken || ''}`;
+    const existing = inflightGets.get(dedupeKey);
+    if (existing) {
+      return existing as Promise<ApiResponse<T>>;
+    }
+
+    const promise = request<T>(url, {
       method: 'GET',
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    }).finally(() => {
+      inflightGets.delete(dedupeKey);
     });
+
+    inflightGets.set(dedupeKey, promise);
+    return promise;
   }, [request]);
 
   const post = useCallback(<T,>(endpoint: string, body: any, token?: string) => {
