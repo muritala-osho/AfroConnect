@@ -102,7 +102,6 @@ export default function SupportMessagesScreen({ navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
 
   const [replyText, setReplyText] = useState('');
-  const [sending, setSending] = useState(false);
 
   const scrollRef = useRef<ScrollView>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -210,10 +209,10 @@ export default function SupportMessagesScreen({ navigation }: any) {
     }
   };
 
-  const handleSendReply = async () => {
+  const handleSendReply = () => {
     if (!replyText.trim() || !selectedTicket) return;
-    setSending(true);
     const content = replyText.trim();
+    const ticketId = selectedTicket._id;
     setReplyText('');
 
     const optimisticMsg: TicketMessage = {
@@ -226,19 +225,25 @@ export default function SupportMessagesScreen({ navigation }: any) {
       prev ? { ...prev, messages: [...(prev.messages || []), optimisticMsg] } : prev
     );
 
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/api/support/reply`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ ticketId: selectedTicket._id, content }),
-      });
-      const data = await res.json();
-      if (data.success) setSelectedTicket(data.ticket);
-    } catch {
-      Alert.alert('Error', 'Could not send reply. Please try again.');
-    } finally {
-      setSending(false);
-    }
+    // Fire-and-forget: the optimistic bubble already gives "sent" feedback,
+    // so the user never waits on the network. We reconcile with the server
+    // payload when it arrives, but only if the user is still viewing the
+    // same ticket.
+    (async () => {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/support/reply`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ ticketId, content }),
+        });
+        const data = await res.json();
+        if (data.success && data.ticket) {
+          setSelectedTicket(prev => (prev && prev._id === ticketId ? data.ticket : prev));
+        }
+      } catch {
+        Alert.alert('Error', 'Could not send reply. Please try again.');
+      }
+    })();
   };
 
   const totalUnread = tickets.reduce((sum, t) => sum + (t.unreadByUser || 0), 0);
@@ -474,16 +479,13 @@ export default function SupportMessagesScreen({ navigation }: any) {
             />
             <Pressable
               onPress={handleSendReply}
-              disabled={!replyText.trim() || sending}
+              disabled={!replyText.trim()}
               style={[styles.sendButton, {
                 backgroundColor: theme.primary,
-                opacity: !replyText.trim() || sending ? 0.5 : 1,
+                opacity: !replyText.trim() ? 0.5 : 1,
               }]}
             >
-              {sending
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Ionicons name="send" size={18} color="#fff" />
-              }
+              <Ionicons name="send" size={18} color="#fff" />
             </Pressable>
           </View>
         )}

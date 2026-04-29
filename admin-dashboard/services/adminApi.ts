@@ -44,6 +44,8 @@ async function refreshAccessToken(): Promise<string | null> {
   try {
     const refreshToken = getRefreshToken();
     if (!refreshToken) {
+      // No refresh token at all — definitely not signed in. Trigger expiry
+      // so the UI shows the login screen instead of a half-broken state.
       drainWaiters(null);
       onSessionExpired?.();
       return null;
@@ -55,10 +57,13 @@ async function refreshAccessToken(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
 
-    // Network-level failure: keep tokens, let callers retry later.
+    // Only force the user out when the server tells us the session is dead.
+    // Anything else (rate limit, 5xx, network blip, malformed JSON) is treated
+    // as transient: keep the existing tokens, return null, and let the next
+    // request retry. This is what was logging users out on every page refresh.
     if (!res.ok) {
-      const isAuthFailure = res.status === 401 || res.status === 403;
-      if (isAuthFailure) {
+      const data = await res.json().catch(() => ({} as any));
+      if (data?.tokenRevoked === true) {
         clearToken();
         drainWaiters(null);
         onSessionExpired?.();
@@ -68,12 +73,11 @@ async function refreshAccessToken(): Promise<string | null> {
       return null;
     }
 
-    const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({} as any));
 
     if (!data.success || !data.token) {
-      clearToken();
+      // Server replied 200 but with no usable token — treat as transient.
       drainWaiters(null);
-      onSessionExpired?.();
       return null;
     }
 
@@ -123,11 +127,11 @@ async function fetchWithAuth(input: RequestInfo, init: RequestInit = {}): Promis
 
 const handleResponse = async (res: Response) => {
   const contentType = res.headers.get('content-type') || '';
+  // Note: 401 handling lives in fetchWithAuth + refreshAccessToken. We
+  // intentionally do NOT clear tokens or trigger session-expired here, so a
+  // single transient 401 on page load can't tear down the session before
+  // the silent-refresh flow has had a chance to run.
   if (!contentType.includes('application/json')) {
-    if (res.status === 401) {
-      clearToken();
-      onSessionExpired?.();
-    }
     const text = await res.text();
     if (!res.ok || !contentType.includes('json')) {
       throw new Error(
@@ -140,10 +144,6 @@ const handleResponse = async (res: Response) => {
   }
   const data = await res.json();
   if (!res.ok) {
-    if (res.status === 401) {
-      clearToken();
-      onSessionExpired?.();
-    }
     throw new Error(data.message || `Request failed with status ${res.status}`);
   }
   return data;
