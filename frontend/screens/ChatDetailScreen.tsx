@@ -326,6 +326,29 @@ export default function ChatDetailScreen({
   const inputRef = useRef<TextInput>(null);
   const flatListRef = useRef<FlashList<any>>(null);
   const isNearBottomRef = useRef(true);
+  // Tracks whether we've completed the first scroll-to-latest after the chat
+  // opened. Until this is true, every layout/content-size pass force-snaps to
+  // the newest message so the chat never opens on an older bubble.
+  const initialScrollDoneRef = useRef(false);
+  // Helper that reliably scrolls the inverted FlashList to the newest message
+  // (offset 0 in inverted = bottom of the screen). Uses requestAnimationFrame
+  // plus a few staggered retries to survive slow layout passes / FlashList's
+  // async measurement on lower-end devices and on web.
+  const scrollToBottom = useCallback((animated: boolean = true) => {
+    const doScroll = () => {
+      try {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated });
+      } catch {}
+    };
+    if (typeof requestAnimationFrame !== "undefined") {
+      requestAnimationFrame(doScroll);
+    } else {
+      doScroll();
+    }
+    setTimeout(doScroll, 80);
+    setTimeout(doScroll, 250);
+    setTimeout(doScroll, 600);
+  }, []);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle outgoing typing emits to once per 2s, and remember whether we
   // currently have an "I'm typing" state on the wire so we can send a final
@@ -410,8 +433,7 @@ export default function ChatDetailScreen({
       }).start();
       // When the keyboard opens the viewport shrinks — scroll to the newest
       // message so it isn't hidden behind the keyboard.
-      const scrollDelay = Platform.OS === "ios" ? (e.duration || 250) : 150;
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), scrollDelay);
+      if (isNearBottomRef.current) scrollToBottom(true);
     });
     const hideSub = Keyboard.addListener(hideEvent, (e) => {
       Animated.timing(inputPaddingAnim, {
@@ -429,7 +451,7 @@ export default function ChatDetailScreen({
     if (!vv) return;
     const handleResize = () => {
       const kbHeight = Math.max(0, window.innerHeight - vv.height);
-      if (kbHeight > 50) setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 100);
+      if (kbHeight > 50 && isNearBottomRef.current) scrollToBottom(true);
     };
     vv.addEventListener("resize", handleResize);
     vv.addEventListener("scroll", handleResize);
@@ -638,10 +660,13 @@ export default function ChatDetailScreen({
 
           put(`/chat/${mId}/read`, {}, token).catch(() => {});
 
-          // Scroll to the newest message (offset 0 = bottom with inverted list).
-          // Two delayed calls handle both fast and slow layout passes.
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 100);
-          setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: false }), 400);
+          // Force the chat to open on the newest message. We reset the
+          // "initial scroll done" flag so onContentSizeChange / onLayout will
+          // keep re-snapping to offset 0 (the bottom in an inverted list)
+          // until the latest message is actually on screen.
+          initialScrollDoneRef.current = false;
+          isNearBottomRef.current = true;
+          scrollToBottom(false);
         }
       }
     } catch (error) {
@@ -703,8 +728,8 @@ export default function ChatDetailScreen({
       });
       // Always scroll to the new incoming message so it's visible, matching
       // WhatsApp's behaviour. The inverted list means offset 0 = newest message.
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 80);
-      setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 250);
+      isNearBottomRef.current = true;
+      scrollToBottom(true);
 
       socketService.markMessagesRead({ chatId: matchId, userId: myId, messageId: msg._id });
       put(`/chat/${matchId}/read`, {}, token || "").catch(() => {});
@@ -939,10 +964,10 @@ export default function ChatDetailScreen({
     // away without waiting for the server response.
     setSending(false);
 
-    // Two scroll attempts: first fires right after React batches the state
-    // update, second is a safety net for slower devices / longer re-renders.
-    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 60);
-    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 200);
+    // After sending we always want the user to see their own message at the
+    // bottom — mark them as "at bottom" and run the robust scroll helper.
+    isNearBottomRef.current = true;
+    scrollToBottom(true);
 
     try {
       const response = await post<{ message: Message }>(
@@ -1261,7 +1286,8 @@ export default function ChatDetailScreen({
       ...(isVO ? { viewOnce: true } : {}),
     };
     setMessages((prev) => [...prev, tempMsg]);
-    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+    isNearBottomRef.current = true;
+    scrollToBottom(true);
 
     try {
       const uploadData = await uploadFn();
@@ -1637,7 +1663,8 @@ export default function ChatDetailScreen({
       status: "sending",
     };
     setMessages((prev) => [...prev, tempMsg]);
-    setTimeout(() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+    isNearBottomRef.current = true;
+    scrollToBottom(true);
     try {
       const ext = uri.split(".").pop()?.toLowerCase() || "m4a";
       const mimeMap: Record<string, string> = { m4a: "audio/m4a", mp4: "audio/mp4", caf: "audio/x-caf", wav: "audio/wav", "3gp": "audio/3gpp", aac: "audio/aac", webm: "audio/webm" };
@@ -2677,17 +2704,36 @@ export default function ChatDetailScreen({
             }, 300);
           }}
           onScroll={(e) => {
-            isNearBottomRef.current = e.nativeEvent.contentOffset.y < 120;
+            const y = e.nativeEvent.contentOffset.y;
+            isNearBottomRef.current = y < 120;
+            // The first real user-driven scroll counts as "initial scroll
+            // done" — after this point we stop force-snapping to the bottom
+            // and only auto-follow when they're already near the latest
+            // message. This is what lets users freely scroll up through
+            // history without getting yanked back down.
+            if (y > 120) initialScrollDoneRef.current = true;
           }}
           scrollEventThrottle={100}
+          onLayout={() => {
+            // Initial layout pass — make sure the chat opens on the newest
+            // message even if FlashList's first render measured before the
+            // messages were ready.
+            if (!initialScrollDoneRef.current) scrollToBottom(false);
+          }}
           onContentSizeChange={() => {
-            // Defensive: when the message list grows (new send/receive),
-            // make sure the latest message is visible if the user is at the
-            // bottom. The inverted list means offset 0 = newest message.
-            // We respect isNearBottomRef so we never hijack the scroll while
-            // the user is reading older history.
-            if (isNearBottomRef.current) {
-              flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            // Two cases:
+            //  1. The chat just opened and content finished laying out — we
+            //     force-snap to the newest message regardless of state so
+            //     the user never lands on an older bubble.
+            //  2. A new message arrived while the user is already at the
+            //     bottom — keep them at the bottom (WhatsApp behaviour).
+            if (!initialScrollDoneRef.current) {
+              scrollToBottom(false);
+              // Mark initial scroll done after a short delay so any
+              // remaining layout passes still snap correctly.
+              setTimeout(() => { initialScrollDoneRef.current = true; }, 800);
+            } else if (isNearBottomRef.current) {
+              scrollToBottom(true);
             }
           }}
           onEndReached={loadMoreMessages}
