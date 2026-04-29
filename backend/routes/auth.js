@@ -563,12 +563,26 @@ router.post("/logout", async (req, res) => {
   }
 });
 
-// Window during which a just-rotated previous refresh token is still accepted.
-// Long enough to absorb network retries and slow client-side persists, short
-// enough that a leaked refresh token becomes useless almost immediately after
-// its first use.
-const REFRESH_TOKEN_GRACE_MS = 60 * 1000;
-
+// Refresh-token rotation is intentionally disabled. The /refresh endpoint
+// validates the refresh token, issues a new short-lived access token, and
+// returns the SAME refresh token unchanged for the lifetime of the Session
+// (30 days, enforced by the Session TTL). Rotation was previously enabled
+// with a 60s grace window but caused random sign-outs whenever the rotated
+// token didn't make it back to the client (network blips, app backgrounding,
+// localStorage write races, parallel refreshes from two pages, etc).
+//
+// Security model without rotation:
+//   - Sessions are revocable server-side via Redis (`revoked:${sessionId}`)
+//     and via tokenVersion bumps on the User document.
+//   - Refresh tokens are sha256-hashed before storage, so a DB leak alone
+//     cannot impersonate a user.
+//   - Logout / "log out all devices" / password change all invalidate
+//     refresh tokens immediately by deleting the Session row or bumping
+//     tokenVersion.
+//   - Inactive sessions expire automatically via the Session TTL.
+// This matches the standard first-party mobile-app pattern used by Tinder,
+// Bumble, Hinge, and other dating apps where UX cost of rotation > the
+// marginal security benefit.
 router.post("/refresh", refreshLimiter, async (req, res) => {
   try {
     const { refreshToken: rawToken } = req.body;
@@ -578,17 +592,16 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
 
     const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
-    // Accept either the current hash or a recently-rotated previous hash that
-    // is still inside its grace window. This makes rotation safe against
-    // duplicate / racing requests without weakening the security model.
+    // Look up the session by the current refresh-token hash. We also still
+    // accept a previousRefreshTokenHash within its grace window so that any
+    // sessions left over from when rotation was enabled can finish draining
+    // without forcing those users to re-login.
     let session = await Session.findOne({ refreshTokenHash: hash });
-    let usedPreviousHash = false;
     if (!session) {
       session = await Session.findOne({
         previousRefreshTokenHash: hash,
         previousRefreshTokenExpiresAt: { $gt: new Date() },
       });
-      usedPreviousHash = !!session;
     }
 
     if (!session) {
@@ -607,33 +620,16 @@ router.post("/refresh", refreshLimiter, async (req, res) => {
       return res.status(401).json({ success: false, message: "Account unavailable", tokenRevoked: true });
     }
 
-    // If the caller used the still-valid previous hash (meaning they never
-    // got our last rotated token), don't rotate again — just hand back a new
-    // access token. The current refresh token already in the DB is the one
-    // we want them to keep using.
-    if (usedPreviousHash) {
-      session.lastActive = new Date();
-      await session.save();
-      const newAccessToken = generateToken(user._id, user.tokenVersion || 0, session.sessionId);
-      return res.json({ success: true, token: newAccessToken });
-    }
-
-    // Normal rotation path: issue a new refresh token, demote the current
-    // one to "previous" with a 60s grace window.
-    const { raw: newRefreshRaw, hash: newRefreshHash } = generateRefreshToken();
-    session.previousRefreshTokenHash = session.refreshTokenHash;
-    session.previousRefreshTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_GRACE_MS);
-    session.refreshTokenHash = newRefreshHash;
     session.lastActive = new Date();
     await session.save();
 
     const newAccessToken = generateToken(user._id, user.tokenVersion || 0, session.sessionId);
 
-    return res.json({
-      success: true,
-      token: newAccessToken,
-      refreshToken: newRefreshRaw,
-    });
+    // Note: we deliberately do NOT return a new refreshToken. The client
+    // keeps the same refresh token it already has for the life of the
+    // session. tokenManager.ts and adminApi.ts both handle a missing
+    // refreshToken in the response by leaving the stored one in place.
+    return res.json({ success: true, token: newAccessToken });
   } catch (error) {
     logger.error("Token refresh error:", error);
     res.status(500).json({ success: false, message: "Server error during token refresh" });
