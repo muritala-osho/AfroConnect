@@ -24,7 +24,11 @@
           "audio",
           "fetch",
           "remote-notification"
-        ]
+        ],
+        "NSCameraUsageDescription": "AfroConnect needs camera access for video calls and to take profile photos.",
+        "NSMicrophoneUsageDescription": "AfroConnect needs microphone access for voice and video calls and to record voice messages.",
+        "NSPhotoLibraryUsageDescription": "AfroConnect needs photo library access so you can choose profile photos.",
+        "NSPhotoLibraryAddUsageDescription": "AfroConnect needs permission to save photos to your gallery."
       },
       "entitlements": {
         "com.apple.developer.telephony.call-capability": "com.apple.developer.telephony.call-capability"
@@ -52,8 +56,14 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.WAKE_LOCK",
         "android.permission.MANAGE_OWN_CALLS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_PHONE_CALL",
