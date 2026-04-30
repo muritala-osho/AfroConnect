@@ -415,12 +415,20 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
         io.to(req.user._id.toString()).emit("match:first-message", firstMsgPayload);
         io.to(receiver.toString()).emit("match:first-message", firstMsgPayload);
       }
-      io.to(receiver.toString()).emit("chat:message-delivered", {
+      // FIX: emit "delivered" to the SENDER's user-room (not the receiver).
+      // The sender is the one who needs this event to update their tick from
+      // ✓ (sent) → ✓✓ (delivered). Previously this was emitted to the receiver,
+      // who has no use for it — so the sender's bubble was stuck on a single
+      // tick forever. We also emit to the matchId room as a belt-and-suspenders
+      // (covers the case where the sender has the chat thread open).
+      const deliveredPayload = {
         messageId: message._id,
         chatId: matchId,
         matchId: matchId.toString(),
         status: "delivered",
-      });
+      };
+      io.to(req.user._id.toString()).emit("chat:message-delivered", deliveredPayload);
+      io.to(matchId.toString()).emit("chat:message-delivered", deliveredPayload);
     }
 
     const onlineUsers = req.app.get("onlineUsers");
@@ -785,12 +793,20 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       const msgPayload = { message: msgJson, matchId: matchId.toString() };
       io.to(matchId.toString()).emit("chat:new-message", msgPayload);
       io.to(receiver.toString()).emit("chat:new-message", msgPayload);
-      io.to(receiver.toString()).emit("chat:message-delivered", {
+      // FIX: emit "delivered" to the SENDER's user-room (not the receiver).
+      // The sender is the one who needs this event to update their tick from
+      // ✓ (sent) → ✓✓ (delivered). Previously this was emitted to the receiver,
+      // who has no use for it — so the sender's bubble was stuck on a single
+      // tick forever. We also emit to the matchId room as a belt-and-suspenders
+      // (covers the case where the sender has the chat thread open).
+      const deliveredPayload = {
         messageId: message._id,
         chatId: matchId,
         matchId: matchId.toString(),
         status: "delivered",
-      });
+      };
+      io.to(req.user._id.toString()).emit("chat:message-delivered", deliveredPayload);
+      io.to(matchId.toString()).emit("chat:message-delivered", deliveredPayload);
     }
 
     const onlineUsers = req.app.get("onlineUsers");

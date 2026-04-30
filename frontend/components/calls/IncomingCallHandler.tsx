@@ -8,6 +8,7 @@ import {
   Animated,
   Platform,
   Vibration,
+  AppState,
 } from 'react-native';
 import { SafeImage } from '@/components/SafeImage';
 import { ThemedText } from '@/components/ThemedText';
@@ -144,7 +145,13 @@ export default function IncomingCallHandler() {
 
     const callerName = data.callerInfo?.name || 'Unknown';
     const hasVideo   = data.callData?.callType === 'video';
-    if (Platform.OS !== 'web') {
+    // Per product requirement: when the app is in the FOREGROUND, do not
+    // trigger the native CallKit / ConnectionService full-screen takeover —
+    // the in-app banner card (this Modal) is enough. The native screen is
+    // still required when the app is backgrounded or killed, otherwise the
+    // user has no way to know a call is coming in.
+    const isForeground = AppState.currentState === 'active';
+    if (Platform.OS !== 'web' && !isForeground) {
       displayIncomingCall(data.callerId, callerName, hasVideo);
     }
 

@@ -184,7 +184,13 @@
     }
     try {
       callType = type || 'voice';
-      client = AgoraRTC.createClient({ mode: 'rtc', codec: 'h264' });
+      // codec 'vp8' is Agora's recommended default for Communication mode and
+      // is universally supported across Android WebView and iOS WKWebView.
+      // Using 'h264' caused some Android WebViews to fail negotiation, which
+      // resulted in both sides going silent (no audio) after the receiver
+      // accepted the call. Voice-only calls do not transmit video, but the
+      // codec setting still drives the SDP negotiation path.
+      client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
       client.on('user-published', async function(user, mediaType) {
         await client.subscribe(user, mediaType);

@@ -74,26 +74,14 @@ router.get('/active', protect, async (req, res) => {
       status: 'active'
     }).lean();
 
+    // Show stories from ALL active matches (not just matches you've chatted
+    // with). A new match should be able to see your story right away — having
+    // to send a message first felt like a chicken-and-egg restriction.
     const matchedUserIds = matches.map(m =>
       m.users.find(id => id.toString() !== req.user._id.toString())
     ).filter(Boolean);
 
-    const matchIds = matches.map(m => m._id);
-    const matchesWithMessages = await Message.aggregate([
-      { $match: { matchId: { $in: matchIds } } },
-      { $group: { _id: '$matchId' } }
-    ]);
-    const matchIdsWithChat = new Set(matchesWithMessages.map(m => m._id.toString()));
-
-    const chattedUserIds = [];
-    for (const match of matches) {
-      if (matchIdsWithChat.has(match._id.toString())) {
-        const otherUserId = match.users.find(id => id.toString() !== req.user._id.toString());
-        if (otherUserId) chattedUserIds.push(otherUserId);
-      }
-    }
-
-    const allowedUserIds = [req.user._id, ...chattedUserIds];
+    const allowedUserIds = [req.user._id, ...matchedUserIds];
 
     const stories = await Story.find({
       user: { $in: allowedUserIds, $nin: allBlockedIds },
