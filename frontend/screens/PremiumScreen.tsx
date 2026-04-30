@@ -297,21 +297,45 @@ export default function PremiumScreen({ navigation }: any) {
           <View style={styles.heroSection}>
             <Animated.View style={[styles.heroGlow, glowStyle]}>
               <LinearGradient
-                colors={['transparent', 'rgba(255, 107, 107, 0.3)', 'transparent']}
+                colors={['transparent', 'rgba(255, 107, 107, 0.35)', 'rgba(255, 215, 0, 0.18)', 'transparent']}
                 style={styles.glowGradient}
               />
             </Animated.View>
-            
+
             <View style={styles.crownContainer}>
-              <LinearGradient colors={['#FFD700', '#FFA500']} style={styles.crownBg}>
-                <MaterialCommunityIcons name="crown" size={40} color="#FFF" />
+              <Animated.View style={[styles.crownGlow, glowStyle]} />
+              <LinearGradient
+                colors={['#FFE066', '#FFD700', '#FFA500', '#FF6B6B']}
+                style={styles.crownBg}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <MaterialCommunityIcons name="crown" size={44} color="#FFF" />
               </LinearGradient>
             </View>
-            
-            <Text style={styles.heroTitle}>Upgrade to Premium</Text>
+
+            <Text style={styles.heroEyebrow}>AFROCONNECT PREMIUM</Text>
+            <Text style={styles.heroTitle}>Stand Out.{'\n'}Get Noticed. Match Faster.</Text>
             <Text style={styles.heroSubtitle}>
-              Get unlimited access to all features and find your perfect match faster
+              Join the inner circle of the African diaspora's most‑loved dating app — and find your person, faster.
             </Text>
+
+            <View style={styles.statsRow}>
+              <View style={styles.statChip}>
+                <Text style={styles.statValue}>10×</Text>
+                <Text style={styles.statLabel}>more matches</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statChip}>
+                <Text style={styles.statValue}>3×</Text>
+                <Text style={styles.statLabel}>profile views</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statChip}>
+                <Text style={styles.statValue}>∞</Text>
+                <Text style={styles.statLabel}>daily likes</Text>
+              </View>
+            </View>
           </View>
 
           {isActive && (
@@ -321,32 +345,41 @@ export default function PremiumScreen({ navigation }: any) {
             </LinearGradient>
           )}
 
-          <Text style={styles.sectionLabel}>Choose Your Plan</Text>
-          
+          <Text style={styles.sectionLabel}>Pick the plan that fits you</Text>
+          <Text style={styles.sectionSub}>Cancel anytime. No surprises.</Text>
+
           <View style={styles.tiersContainer}>
             {PRICING_TIERS.map((tier) => {
               const isSelected = selectedTier.id === tier.id;
-              return (
+              const handlePress = () => {
+                setSelectedTier(tier);
+                if (Platform.OS !== 'web') {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
+                }
+              };
+
+              const innerCard = (
                 <TouchableOpacity
-                  key={tier.id}
-                  activeOpacity={0.8}
+                  activeOpacity={0.85}
                   style={[
                     styles.tierCard,
                     isSelected && styles.tierCardSelected,
+                    tier.popular && styles.tierCardPopularInner,
                   ]}
-                  onPress={() => {
-                    setSelectedTier(tier);
-                    if (Platform.OS !== 'web') {
-                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch (e) {}
-                    }
-                  }}
+                  onPress={handlePress}
                 >
                   {tier.popular && (
-                    <LinearGradient colors={['#FF6B6B', '#FF8E53']} style={styles.popularBadge}>
+                    <LinearGradient
+                      colors={['#FF6B6B', '#FF8E53', '#FFD700']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.popularBadge}
+                    >
+                      <MaterialCommunityIcons name="star" size={10} color="#FFF" style={{ marginRight: 4 }} />
                       <Text style={styles.popularBadgeText}>MOST POPULAR</Text>
                     </LinearGradient>
                   )}
-                  
+
                   <View style={styles.tierContent}>
                     <View style={styles.tierLeft}>
                       <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
@@ -364,11 +397,13 @@ export default function PremiumScreen({ navigation }: any) {
                           )}
                         </View>
                         <Text style={styles.tierInterval}>
-                          Billed {tier.interval === 'day' ? 'daily' : tier.interval === 'year' ? 'annually' : tier.interval + 'ly'}
+                          {tier.popular
+                            ? 'Best value · ' + (tier.interval === 'year' ? 'billed annually' : tier.interval === 'day' ? 'billed daily' : 'billed ' + tier.interval + 'ly')
+                            : 'Billed ' + (tier.interval === 'day' ? 'daily' : tier.interval === 'year' ? 'annually' : tier.interval + 'ly')}
                         </Text>
                       </View>
                     </View>
-                    
+
                     <View style={styles.tierRight}>
                       <Text style={[styles.tierPrice, isSelected && styles.tierPriceSelected]} numberOfLines={1} adjustsFontSizeToFit>
                         {pricesLoading ? '...' : getDisplayPrice(tier)}
@@ -378,11 +413,29 @@ export default function PremiumScreen({ navigation }: any) {
                   </View>
                 </TouchableOpacity>
               );
+
+              if (tier.popular) {
+                return (
+                  <View key={tier.id} style={styles.popularWrapper}>
+                    <Animated.View style={[styles.popularGlow, glowStyle]} />
+                    <LinearGradient
+                      colors={isSelected ? ['#FF6B6B', '#FFA500', '#FFD700'] : ['rgba(255,107,107,0.6)', 'rgba(255,165,0,0.6)', 'rgba(255,215,0,0.6)']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.popularBorderGradient}
+                    >
+                      {innerCard}
+                    </LinearGradient>
+                  </View>
+                );
+              }
+              return <View key={tier.id}>{innerCard}</View>;
             })}
           </View>
 
-          <Text style={styles.sectionLabel}>Premium Features</Text>
-          
+          <Text style={styles.sectionLabel}>Everything you unlock</Text>
+          <Text style={styles.sectionSub}>{PREMIUM_FEATURES.length} premium perks designed to get you matched.</Text>
+
           <View style={styles.featuresGrid}>
             {PREMIUM_FEATURES.map((feature, index) => (
               <View key={index} style={styles.featureItem}>
@@ -397,7 +450,22 @@ export default function PremiumScreen({ navigation }: any) {
             ))}
           </View>
 
-          <View style={{ height: 120 }} />
+          <View style={styles.trustRow}>
+            <View style={styles.trustItem}>
+              <MaterialCommunityIcons name="shield-check" size={16} color="#4CAF50" />
+              <Text style={styles.trustText}>Secure payment</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <MaterialCommunityIcons name="cancel" size={16} color="#FFD700" />
+              <Text style={styles.trustText}>Cancel anytime</Text>
+            </View>
+            <View style={styles.trustItem}>
+              <MaterialCommunityIcons name="lock-outline" size={16} color="#4FC3F7" />
+              <Text style={styles.trustText}>Private & safe</Text>
+            </View>
+          </View>
+
+          <View style={{ height: 140 }} />
         </ScrollView>
 
         <View style={[styles.bottomCta, { paddingBottom: Math.max(insets.bottom - 4, 0) }]}>
@@ -405,40 +473,52 @@ export default function PremiumScreen({ navigation }: any) {
             colors={['transparent', 'rgba(26, 26, 46, 0.95)', '#1a1a2e']}
             style={styles.bottomGradient}
           >
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.subscribeButton}
-              onPress={handleSubscribe}
-              disabled={processing || isActive}
-            >
-              <LinearGradient
-                colors={isActive ? ['#4CAF50', '#2E7D32'] : ['#FF6B6B', '#FF8E53']}
-                style={styles.subscribeGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+            {!isActive && selectedTier.savings && (
+              <View style={styles.ctaSavingsRow}>
+                <MaterialCommunityIcons name="tag-outline" size={13} color="#FFD700" />
+                <Text style={styles.ctaSavingsText}>
+                  {selectedTier.label} plan · {selectedTier.savings}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.subscribeWrap}>
+              <Animated.View style={[styles.subscribeGlow, glowStyle]} />
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={styles.subscribeButton}
+                onPress={handleSubscribe}
+                disabled={processing || isActive}
               >
-                {processing ? (
-                  <ActivityIndicator color="#FFF" size="small" />
-                ) : (
-                  <>
-                    <View style={styles.subscribeCopy}>
-                      <Text style={styles.subscribeText}>
-                        {isActive ? 'Already Premium' : 'Get Premium'}
-                      </Text>
-                      {!isActive && (
-                        <Text style={styles.subscribePrice} numberOfLines={1} adjustsFontSizeToFit>
-                          {pricesLoading ? '...' : `${getDisplayPrice(selectedTier)}/${selectedTier.interval}`}
+                <LinearGradient
+                  colors={isActive ? ['#4CAF50', '#2E7D32'] : ['#FF6B6B', '#FF8E53', '#FFA500']}
+                  style={styles.subscribeGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {processing ? (
+                    <ActivityIndicator color="#FFF" size="small" />
+                  ) : (
+                    <>
+                      <View style={styles.subscribeCopy}>
+                        <Text style={styles.subscribeText}>
+                          {isActive ? 'You’re Premium' : `Start Premium`}
                         </Text>
-                      )}
-                    </View>
-                    {!isActive && <Feather name="arrow-right" size={20} color="#FFF" />}
-                  </>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
-            
+                        {!isActive && (
+                          <Text style={styles.subscribePrice} numberOfLines={1} adjustsFontSizeToFit>
+                            {pricesLoading ? '...' : `· ${getDisplayPrice(selectedTier)}/${selectedTier.interval}`}
+                          </Text>
+                        )}
+                      </View>
+                      {!isActive && <Feather name="arrow-right" size={20} color="#FFF" />}
+                    </>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
             <Text style={styles.termsText}>
-              By subscribing, you agree to our Terms of Service. Cancel anytime.
+              Renews automatically. Cancel anytime in your store account.
             </Text>
 
             {Platform.OS !== 'web' && !isActive && (
@@ -495,47 +575,108 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 28,
+    marginTop: 4,
     position: 'relative',
   },
   heroGlow: {
     position: 'absolute',
-    top: -50,
-    width: 300,
-    height: 200,
+    top: -60,
+    width: 340,
+    height: 240,
   },
   glowGradient: {
     flex: 1,
-    borderRadius: 150,
+    borderRadius: 170,
   },
   crownContainer: {
-    marginBottom: 20,
+    marginBottom: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crownGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255, 215, 0, 0.35)',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 30,
   },
   crownBg: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 22,
+    elevation: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  heroEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFD700',
+    letterSpacing: 2.5,
+    marginBottom: 10,
+    textAlign: 'center',
   },
   heroTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 30,
+    fontWeight: '900',
     color: '#FFF',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+    letterSpacing: -0.5,
+    lineHeight: 36,
   },
   heroSubtitle: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
+    color: 'rgba(255,255,255,0.7)',
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     lineHeight: 22,
+    marginBottom: 22,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignSelf: 'stretch',
+  },
+  statChip: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FFD700',
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 2,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(255,255,255,0.1)',
   },
   activeBanner: {
     flexDirection: 'row',
@@ -551,53 +692,89 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sectionLabel: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 19,
+    fontWeight: '800',
     color: '#FFF',
-    marginBottom: 16,
-    marginTop: 10,
+    marginBottom: 4,
+    marginTop: 14,
+    letterSpacing: -0.3,
+  },
+  sectionSub: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 18,
   },
   tiersContainer: {
-    marginBottom: 24,
+    marginBottom: 28,
+    gap: 12,
   },
   tierCard: {
     backgroundColor: 'rgba(255,255,255,0.05)',
     borderRadius: 16,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.1)',
     padding: 16,
     position: 'relative',
     overflow: 'hidden',
-    marginBottom: 12,
   },
   tierCardSelected: {
     borderColor: '#FF6B6B',
-    backgroundColor: 'rgba(255, 107, 107, 0.1)',
+    backgroundColor: 'rgba(255, 107, 107, 0.12)',
+  },
+  tierCardPopularInner: {
+    backgroundColor: 'rgba(26, 18, 38, 0.85)',
+    borderWidth: 0,
+    paddingTop: 24,
+  },
+  popularWrapper: {
+    position: 'relative',
+  },
+  popularGlow: {
+    position: 'absolute',
+    top: -6,
+    left: -6,
+    right: -6,
+    bottom: -6,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 107, 107, 0.25)',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 18,
+  },
+  popularBorderGradient: {
+    borderRadius: 18,
+    padding: 2,
   },
   popularBadge: {
     position: 'absolute',
     top: 0,
     right: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderBottomLeftRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   popularBadgeText: {
     color: '#FFF',
     fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    letterSpacing: 0.8,
   },
   savingsBadge: {
-    backgroundColor: 'rgba(76, 175, 80, 0.25)',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(76, 175, 80, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.45)',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
   savingsBadgeText: {
-    color: '#4CAF50',
-    fontSize: 8,
+    color: '#66E07A',
+    fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
   tierContent: {
     flexDirection: 'row',
@@ -674,35 +851,60 @@ const styles = StyleSheet.create({
   featuresGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 24,
+    marginBottom: 20,
     justifyContent: 'space-between',
   },
   featureItem: {
-    width: '48%',
+    width: '48.5%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
     padding: 12,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   featureIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   featureDesc: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255,255,255,0.45)',
     marginTop: 2,
+    lineHeight: 13,
   },
   featureText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 12.5,
+    fontWeight: '700',
     color: '#FFF',
+  },
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    marginTop: 6,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  trustItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  trustText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.65)',
+    fontWeight: '600',
   },
   bottomCta: {
     position: 'absolute',
@@ -711,20 +913,61 @@ const styles = StyleSheet.create({
     right: 0,
   },
   bottomGradient: {
-    paddingTop: 30,
+    paddingTop: 34,
     paddingBottom: 24,
     paddingHorizontal: 20,
   },
-  subscribeButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
+  ctaSavingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 0, 0.35)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignSelf: 'center',
+  },
+  ctaSavingsText: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  subscribeWrap: {
+    position: 'relative',
     marginBottom: 12,
+  },
+  subscribeGlow: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 107, 107, 0.35)',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 22,
+  },
+  subscribeButton: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    elevation: 8,
   },
   subscribeGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 18,
+    paddingVertical: 19,
     paddingHorizontal: 22,
   },
   subscribeCopy: {
@@ -733,24 +976,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     marginRight: 10,
   },
   subscribeText: {
     color: '#FFF',
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   subscribePrice: {
     color: '#FFF',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     opacity: 0.95,
   },
   termsText: {
     textAlign: 'center',
     fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
+    lineHeight: 16,
   },
   restoreButton: {
     alignSelf: 'center',
