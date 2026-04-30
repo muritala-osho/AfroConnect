@@ -62,7 +62,12 @@ router.get('/nearby-users', protect, discoveryLimiter, async (req, res) => {
       });
     }
 
-    searchRadius = Math.max(1, Math.min(100, searchRadius));
+    // Free users are capped at 50km on radar (matches the discovery deck cap
+    // in `/users/nearby`). Premium users can scan up to 100km.
+    const radarUser = await User.findById(req.user.id).select('premium');
+    const isPremiumRadar = !!radarUser?.premium?.isActive;
+    const radarMaxKm = isPremiumRadar ? 100 : 50;
+    searchRadius = Math.max(1, Math.min(radarMaxKm, searchRadius));
 
     const currentUser = await User.findById(req.user.id).select('swipedRight swipedLeft blockedUsers');
     const blockedUserIds = currentUser?.blockedUsers || [];

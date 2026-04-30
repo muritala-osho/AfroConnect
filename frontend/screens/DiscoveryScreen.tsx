@@ -456,11 +456,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (discoveryType === 'local' && Number.isFinite(storedLat) && Number.isFinite(storedLng)) {
         params.lat = storedLat;
         params.lng = storedLng;
-        // Match the radar feed (1-100km) so anyone visible on radar can
-        // also surface in the discovery deck. Free users were previously
-        // capped at 50km, which silently hid radar contacts beyond that.
-        const rawMax = user.preferences?.maxDistance || 100;
-        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 100);
+        // Free users are capped at 50km, premium users can go up to their
+        // preferred max distance. The backend enforces the same cap, so this
+        // is mainly for cache-key stability.
+        const rawMax = user.preferences?.maxDistance || 50;
+        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 50);
       } else if (discoveryType === 'global') {
         params.global = true;
         if (selectedCountry) {
