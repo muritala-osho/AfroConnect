@@ -38,13 +38,13 @@ function generateUUID(): string {
   });
 }
 
-export function initCallKeep(appName: string = 'AfroConnect') {
+export async function initCallKeep(appName: string = 'AfroConnect') {
   if (_initialized || Platform.OS === 'web') return;
   const CK = loadCallKeep();
   if (!CK) return;
 
   try {
-    CK.setup({
+    await CK.setup({
       ios: {
         appName,
         supportsVideo: true,
@@ -53,13 +53,20 @@ export function initCallKeep(appName: string = 'AfroConnect') {
         includesCallsInRecents: true,
       },
       android: {
-        alertTitle: 'Phone account permissions required',
+        alertTitle: 'Permissions required',
         alertDescription:
-          'AfroConnect needs access to manage phone accounts to show incoming calls.',
+          'AfroConnect needs permission to show incoming calls on your screen.',
         cancelButton: 'Cancel',
         okButton: 'Allow',
         additionalPermissions: [],
-        selfManaged: false,
+        // selfManaged:true → AfroConnect draws its own incoming-call UI via a
+        // full-screen-intent notification (the standard pattern for VoIP apps
+        // like WhatsApp/Telegram). With selfManaged:false, ConnectionService
+        // routes the call through the system telecom stack, which requires
+        // the user to manually enable a "Phone account" in Settings →
+        // Calling Accounts before any incoming UI appears — almost no one
+        // does this, so the call screen never showed when the app was killed.
+        selfManaged: true,
         foregroundService: {
           channelId: 'calls',
           channelName: 'Incoming Calls',
@@ -125,16 +132,16 @@ export function removeCallKeepListeners() {
   } catch {}
 }
 
-export function displayIncomingCall(
+export async function displayIncomingCall(
   callerId: string,
   callerName: string,
   hasVideo: boolean = false,
-): string {
+): Promise<string> {
   if (Platform.OS === 'web') return '';
   const CK = loadCallKeep();
   if (!CK) return '';
 
-  if (!_initialized) initCallKeep();
+  if (!_initialized) await initCallKeep();
 
   const uuid = generateUUID();
   uuidMap.set(callerId, uuid);

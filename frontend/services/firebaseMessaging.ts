@@ -69,8 +69,12 @@ export function registerFirebaseBackgroundHandler() {
 
     if (!callerId) return;
 
-    initCallKeep('AfroConnect');
-    displayIncomingCall(callerId, callerName, callType === 'video');
+    try {
+      await initCallKeep('AfroConnect');
+      await displayIncomingCall(callerId, callerName, callType === 'video');
+    } catch (err) {
+      logger.error('[FCM] Failed to show CallKeep incoming UI:', err);
+    }
 
     (global as any).__pendingVoipCall = {
       callerId,

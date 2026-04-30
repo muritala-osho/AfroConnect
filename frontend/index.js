@@ -19,10 +19,10 @@ if (Platform.OS === 'android') {
     return async (taskData) => {
       try {
         const { displayIncomingCall, initCallKeep } = require('@/services/callkeep');
-        initCallKeep('AfroConnect');
+        await initCallKeep('AfroConnect');
         const { callerId, callerName, callType } = taskData || {};
         if (callerId) {
-          displayIncomingCall(callerId, callerName || 'Unknown', callType === 'video');
+          await displayIncomingCall(callerId, callerName || 'Unknown', callType === 'video');
           global.__pendingVoipCall = {
             callerId,
             callerName: callerName || 'Unknown',
