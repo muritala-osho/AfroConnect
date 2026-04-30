@@ -1,0 +1,200 @@
+/**
+ * notifeeService.ts
+ *
+ * Handles Android MessagingStyle push notifications with:
+ *  - Circular sender avatar (fetched as bitmap by Notifee)
+ *  - Inline "Reply" action so the user can respond from the notification shade
+ *  - "Mark as Read" action to dismiss without opening the app
+ *
+ * Architecture:
+ *  1. Backend sends a data-only FCM message (type='message') in addition to the
+ *     regular Expo push notification.
+ *  2. The Firebase background handler (firebaseMessaging.ts) intercepts the
+ *     data-only message and calls displayMessageNotification() here.
+ *  3. Notifee renders a MessagingStyle notification on Android; iOS is handled
+ *     by the regular Expo push (which shows on the lock screen via APNs).
+ *  4. When the user taps "Reply", Notifee fires onBackgroundEvent here, which
+ *     reads the typed text, calls POST /api/chat/inline-reply, and then
+ *     updates the notification to show "Message sent".
+ *
+ * This file is safe to import on iOS — all paths that call Notifee APIs are
+ * guarded with Platform.OS === 'android'.
+ */
+
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+let _notifee: any = null;
+let _EventType: any = null;
+let _AndroidImportance: any = null;
+let _AndroidStyle: any = null;
+
+function isExpoGo(): boolean {
+  return Constants.appOwnership === 'expo';
+}
+
+function getNotifee() {
+  if (isExpoGo()) return null;
+  if (_notifee) return _notifee;
+  try {
+    const mod = require('@notifee/react-native');
+    _notifee = mod.default;
+    _EventType = mod.EventType;
+    _AndroidImportance = mod.AndroidImportance;
+    _AndroidStyle = mod.AndroidStyle;
+    return _notifee;
+  } catch {
+    return null;
+  }
+}
+
+const CHANNEL_ID = 'afroconnect_messages';
+
+async function ensureChannel() {
+  const notifee = getNotifee();
+  if (!notifee) return;
+  await notifee.createChannel({
+    id: CHANNEL_ID,
+    name: 'Messages',
+    importance: _AndroidImportance?.HIGH ?? 4,
+    vibration: true,
+    sound: 'default',
+  });
+}
+
+/**
+ * Display a MessagingStyle notification for a new chat message.
+ *
+ * @param matchId     MongoDB match ID — used as the notification group ID so
+ *                    multiple messages from the same conversation are threaded.
+ * @param messageId   MongoDB message ID — used as the unique notification ID
+ *                    for this message bubble.
+ * @param senderName  Display name to show in the notification header.
+ * @param senderPhoto HTTPS URL of the sender's avatar (may be empty).
+ * @param body        Message preview text.
+ */
+export async function displayMessageNotification({
+  matchId,
+  messageId,
+  senderName,
+  senderPhoto,
+  body,
+}: {
+  matchId: string;
+  messageId: string;
+  senderName: string;
+  senderPhoto: string;
+  body: string;
+}) {
+  if (Platform.OS !== 'android') return;
+  const notifee = getNotifee();
+  if (!notifee) return;
+
+  await ensureChannel();
+
+  await notifee.displayNotification({
+    id: `msg_${matchId}`,
+    title: senderName,
+    body,
+    android: {
+      channelId: CHANNEL_ID,
+      importance: _AndroidImportance?.HIGH ?? 4,
+      style: {
+        type: _AndroidStyle?.MESSAGING ?? 1,
+        person: {
+          name: senderName,
+          icon: senderPhoto || undefined,
+        },
+        messages: [
+          {
+            text: body,
+            timestamp: Date.now(),
+            person: {
+              name: senderName,
+              icon: senderPhoto || undefined,
+            },
+          },
+        ],
+      },
+      largeIcon: senderPhoto || undefined,
+      circularLargeIcon: true,
+      pressAction: {
+        id: 'open_chat',
+        launchActivity: 'default',
+      },
+      actions: [
+        {
+          title: '💬 Reply',
+          pressAction: { id: 'reply', launchActivity: 'default' },
+          input: {
+            allowFreeFormInput: true,
+            placeholder: 'Type a reply…',
+          },
+        },
+        {
+          title: '✓ Mark as Read',
+          pressAction: { id: 'mark_read' },
+        },
+      ],
+      data: {
+        matchId,
+        messageId,
+        senderName,
+        type: 'message',
+      },
+    },
+  });
+}
+
+/**
+ * Register the Notifee background event handler.
+ *
+ * Must be called before registerRootComponent in index.js.
+ * Handles the "Reply" inline action when the app is in background/killed state.
+ */
+export function registerNotifeeBackgroundHandler() {
+  if (Platform.OS !== 'android') return;
+  const notifee = getNotifee();
+  if (!notifee || !_EventType) return;
+
+  notifee.onBackgroundEvent(async ({ type, detail }: any) => {
+    const { notification, pressAction, input } = detail;
+    const data = notification?.android?.data ?? notification?.data ?? {};
+    const matchId = data?.matchId;
+    const notifId = `msg_${matchId}`;
+
+    if (type === _EventType.ACTION_PRESS && pressAction?.id === 'reply' && input && matchId) {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const { getApiBaseUrl } = require('../constants/config');
+
+        const authToken = await AsyncStorage.getItem('auth_token');
+        if (!authToken) return;
+
+        const apiUrl = getApiBaseUrl();
+        await fetch(`${apiUrl}/api/chat/inline-reply`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ matchId, text: input }),
+        });
+
+        await notifee.cancelNotification(notifId);
+      } catch {
+        // swallow — do not crash the headless handler
+      }
+      return;
+    }
+
+    if (type === _EventType.ACTION_PRESS && pressAction?.id === 'mark_read') {
+      await notifee.cancelNotification(notifId).catch(() => {});
+      return;
+    }
+
+    if (type === _EventType.DISMISSED) {
+      await notifee.cancelNotification(notifId).catch(() => {});
+    }
+  });
+}

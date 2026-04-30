@@ -126,4 +126,38 @@ async function sendCallDataMessage(fcmToken, { callerId, callerName, callerPhoto
   });
 }
 
-module.exports = { sendFcmDataMessage, sendCallDataMessage };
+/**
+ * Sends a data-only FCM message for a chat message to an Android device.
+ * This wakes the app's background handler (setBackgroundMessageHandler) which
+ * then displays a MessagingStyle notification with the sender's avatar and an
+ * inline "Reply" action — no big-picture expansion, just a clean thumbnail.
+ *
+ * iOS does NOT fire setBackgroundMessageHandler for data-only messages (APNs
+ * delivers them with content-available which only wakes the app when unlocked).
+ * So we send this alongside the regular Expo push; the iOS Expo push provides
+ * the lock-screen display while the Android data message drives the notifee UI.
+ *
+ * @param {string} fcmToken
+ * @param {object} params
+ * @param {string} params.matchId
+ * @param {string} params.messageId
+ * @param {string} params.senderId
+ * @param {string} params.senderName
+ * @param {string} params.senderPhoto  HTTPS URL or ''
+ * @param {string} params.body         message preview text
+ * @param {number} params.badge        unread count
+ */
+async function sendMessageDataMessage(fcmToken, { matchId, messageId, senderId, senderName, senderPhoto, body, badge } = {}) {
+  return sendFcmDataMessage(fcmToken, {
+    type:        'message',
+    matchId:     matchId     || '',
+    messageId:   messageId   || '',
+    senderId:    senderId    || '',
+    senderName:  senderName  || '',
+    senderPhoto: senderPhoto || '',
+    body:        body        || '',
+    badge:       String(badge ?? 0),
+  });
+}
+
+module.exports = { sendFcmDataMessage, sendCallDataMessage, sendMessageDataMessage };

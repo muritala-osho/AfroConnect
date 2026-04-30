@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => {
+  handleNotification: async (notification) => {
     try {
       const prefsRaw = await AsyncStorage.getItem('notificationPreferences');
       const prefs = prefsRaw ? JSON.parse(prefsRaw) : {};
@@ -17,6 +17,22 @@ Notifications.setNotificationHandler({
           shouldShowAlert: false,
           shouldPlaySound: false,
           shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
+      // On Android, suppress the Expo push display for chat messages because
+      // Notifee already rendered a MessagingStyle notification via the data-only
+      // FCM path. Showing both would result in duplicate notifications.
+      if (
+        Platform.OS === 'android' &&
+        notification?.request?.content?.data?.type === 'message'
+      ) {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: true,
           shouldShowBanner: false,
           shouldShowList: false,
         };
@@ -193,6 +209,35 @@ export async function registerForPushNotificationsAsync(authTokenOverride?: stri
     logger.error('[Notifications] ❌ Unexpected error during token setup:', error?.message || error);
   }
 
+  // ── Register Firebase (FCM) device token so the backend can send data-only
+  //    messages that trigger MessagingStyle notifications on Android. ──────────
+  if (Platform.OS === 'android') {
+    try {
+      const { requestFCMPermissionAndGetToken } = require('./firebaseMessaging');
+      const fcmToken = await requestFCMPermissionAndGetToken();
+      if (fcmToken) {
+        const authToken = authTokenOverride || await AsyncStorage.getItem('auth_token');
+        const { getApiBaseUrl } = require('../constants/config');
+        const apiUrl = getApiBaseUrl();
+        const res = await fetch(`${apiUrl}/api/notifications/register-fcm-token`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({ fcmToken }),
+        });
+        if (res.ok) {
+          logger.log('[Notifications] ✅ FCM token registered with backend.');
+        } else {
+          logger.warn('[Notifications] ⚠️  FCM token registration failed:', res.status);
+        }
+      }
+    } catch (fcmErr: any) {
+      logger.warn('[Notifications] ⚠️  FCM token registration error:', fcmErr?.message || fcmErr);
+    }
+  }
+
   logger.log('[Notifications] ─────────────────────────────────────────────\n');
   return token;
 }
@@ -285,22 +330,48 @@ export function setupNotificationListeners(
   onNotificationResponse: (response: any) => void
 ) {
   logger.log('[Notifications] Setting up notification listeners…');
+  const cleanups: (() => void)[] = [];
+
   try {
     const receivedSubscription = Notifications.addNotificationReceivedListener((notification) => {
       logger.log('[Notifications] 📩 Notification received in foreground:', JSON.stringify(notification?.request?.content));
       onNotificationReceived(notification);
     });
+    cleanups.push(() => receivedSubscription.remove());
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
       logger.log('[Notifications] 👆 User tapped notification:', JSON.stringify(response?.notification?.request?.content?.data));
       onNotificationResponse(response);
     });
+    cleanups.push(() => responseSubscription.remove());
+
+    // On Android, also listen for foreground Firebase data-only messages so we
+    // can display a MessagingStyle notification when the user is in a different
+    // screen (the real-time socket already updates the chat if the screen is open).
+    if (Platform.OS === 'android') {
+      try {
+        const { onForegroundMessage } = require('./firebaseMessaging');
+        const { displayMessageNotification } = require('./notifeeService');
+        const unsubFcm = onForegroundMessage((message: any) => {
+          const data = message?.data;
+          if (data?.type === 'message') {
+            displayMessageNotification({
+              matchId:     data.matchId    || '',
+              messageId:   data.messageId  || '',
+              senderName:  data.senderName || 'New message',
+              senderPhoto: data.senderPhoto || '',
+              body:        data.body       || '',
+            }).catch(() => {});
+          }
+        });
+        if (typeof unsubFcm === 'function') cleanups.push(unsubFcm);
+      } catch (fcmErr) {
+        logger.warn('[Notifications] ⚠️  Could not attach foreground FCM listener:', fcmErr);
+      }
+    }
 
     logger.log('[Notifications] ✅ Listeners active.');
-    return () => {
-      receivedSubscription.remove();
-      responseSubscription.remove();
-    };
+    return () => cleanups.forEach(fn => fn());
   } catch (error) {
     logger.error('[Notifications] ❌ Failed to set up listeners:', error);
     return () => {};

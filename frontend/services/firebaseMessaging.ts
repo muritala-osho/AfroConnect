@@ -59,6 +59,24 @@ export function registerFirebaseBackgroundHandler() {
     const data = remoteMessage?.data;
     logger.log('[FCM] Background/killed message received:', data);
 
+    // ── Chat message: show a MessagingStyle notification via Notifee ──────────
+    if (data?.type === 'message') {
+      try {
+        const { displayMessageNotification } = require('./notifeeService');
+        await displayMessageNotification({
+          matchId:     data.matchId    || '',
+          messageId:   data.messageId  || '',
+          senderName:  data.senderName || 'New message',
+          senderPhoto: data.senderPhoto || '',
+          body:        data.body       || '',
+        });
+      } catch (err) {
+        logger.error('[FCM] Failed to show MessagingStyle notification:', err);
+      }
+      return;
+    }
+
+    // ── VoIP call: show native incoming-call UI via CallKeep ─────────────────
     if (data?.type !== 'call' && data?.type !== 'voice_call' && data?.type !== 'video_call') {
       return;
     }

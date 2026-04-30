@@ -457,8 +457,9 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
     if (!isReceiverOnline) {
       try {
         const { sendSmartNotification } = require("../utils/pushNotifications");
+        const { sendMessageDataMessage } = require("../utils/fcmPush");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled muteSettings notificationPreferences",
+          "pushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences",
         );
         const senderName = req.user.name || "Someone";
         let notifBody = content || "";
@@ -478,19 +479,28 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
           req.user.profilePicture ||
           "";
 
+        // Send Android data-only FCM message so the background handler can
+        // display a MessagingStyle notification with the sender's avatar and an
+        // inline Reply button (no big-picture expansion). Sent in parallel with
+        // the regular Expo push which covers iOS and acts as a fallback.
+        if (rcvUser?.fcmToken) {
+          sendMessageDataMessage(rcvUser.fcmToken, {
+            matchId:     matchId.toString(),
+            messageId:   message._id.toString(),
+            senderId:    req.user._id.toString(),
+            senderName,
+            senderPhoto,
+            body:        notifBody,
+            badge:       totalUnread,
+          }).catch(() => {});
+        }
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            // NOTE: richContent.image is intentionally omitted here.
-            // Expo maps richContent.image → FCM notification.image, which
-            // Android renders as BigPictureStyle — showing the sender's full
-            // photo as a large expanded banner inside the notification shade.
-            // The sender's photo is passed in data.senderPhoto so the app can
-            // display it as a small largeIcon thumbnail when it processes the
-            // notification, without triggering the big-picture expansion.
             data: {
               type: "message",
               screen: "ChatDetail",
@@ -868,8 +878,9 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
     if (!isReceiverOnline) {
       try {
         const { sendSmartNotification } = require("../utils/pushNotifications");
+        const { sendMessageDataMessage } = require("../utils/fcmPush");
         const rcvUser = await User.findById(receiver).select(
-          "pushToken pushNotificationsEnabled muteSettings notificationPreferences",
+          "pushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences",
         );
         const senderName = req.user.name || "Someone";
         let notifBody = content || "";
@@ -889,19 +900,24 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
           req.user.profilePicture ||
           "";
 
+        if (rcvUser?.fcmToken) {
+          sendMessageDataMessage(rcvUser.fcmToken, {
+            matchId:     matchId.toString(),
+            messageId:   message._id.toString(),
+            senderId:    req.user._id.toString(),
+            senderName,
+            senderPhoto,
+            body:        notifBody,
+            badge:       totalUnread,
+          }).catch(() => {});
+        }
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            // NOTE: richContent.image is intentionally omitted here.
-            // Expo maps richContent.image → FCM notification.image, which
-            // Android renders as BigPictureStyle — showing the sender's full
-            // photo as a large expanded banner inside the notification shade.
-            // The sender's photo is passed in data.senderPhoto so the app can
-            // display it as a small largeIcon thumbnail when it processes the
-            // notification, without triggering the big-picture expansion.
             data: {
               type: "message",
               screen: "ChatDetail",
@@ -1165,6 +1181,59 @@ router.post('/messages/:messageId/stop-live-location', protect, async (req, res)
     res.json({ success: true });
   } catch (error) {
     console.error('Stop live location error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/chat/inline-reply
+ *
+ * Called by the Android notifee background event handler when the user taps
+ * the "Reply" action on a MessagingStyle notification and types a reply in the
+ * notification shade. Creates the message and emits it via socket just like a
+ * normal send, without requiring the app to be in the foreground.
+ *
+ * Body: { matchId, text }
+ */
+router.post('/inline-reply', protect, async (req, res) => {
+  const { matchId, text } = req.body;
+  const senderId = req.user._id;
+
+  if (!matchId || !text || typeof text !== 'string' || !text.trim()) {
+    return res.status(400).json({ success: false, message: 'matchId and text are required' });
+  }
+
+  try {
+    const match = await Match.findById(matchId);
+    if (!match) return res.status(404).json({ success: false, message: 'Match not found' });
+
+    const participants = match.users.map(u => u.toString());
+    if (!participants.includes(senderId.toString())) {
+      return res.status(403).json({ success: false, message: 'Not a participant' });
+    }
+
+    const receiver = participants.find(u => u !== senderId.toString());
+
+    const message = await Message.create({
+      matchId,
+      sender: senderId,
+      receiver,
+      content: text.trim(),
+      type: 'text',
+      seen: false,
+    });
+
+    const io = req.app.get('io');
+    if (io) {
+      const populated = await Message.findById(message._id)
+        .populate('sender', 'name photos profilePicture')
+        .lean();
+      io.to(matchId.toString()).emit('chat:message', populated);
+    }
+
+    res.status(201).json({ success: true, message });
+  } catch (err) {
+    console.error('[chat/inline-reply] error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

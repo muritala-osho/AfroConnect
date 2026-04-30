@@ -10,6 +10,14 @@ if (Platform.OS !== 'web') {
   registerFirebaseBackgroundHandler();
 }
 
+// Notifee background event handler MUST be registered before registerRootComponent.
+// It fires when the user interacts with a notification action (e.g. inline Reply,
+// Mark as Read) while the app is in background/killed state.
+import { registerNotifeeBackgroundHandler } from "@/services/notifeeService";
+if (Platform.OS === 'android') {
+  registerNotifeeBackgroundHandler();
+}
+
 import App from "@/App";
 
 registerRootComponent(App);
