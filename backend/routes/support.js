@@ -635,15 +635,22 @@ router.get('/my-messages', protect, async (req, res) => {
       .sort({ updatedAt: -1 })
       .limit(20);
     const messages = tickets.flatMap(t =>
-      t.messages.map(m => ({
-        id: m._id,
-        ticketId: t._id,
-        subject: t.subject,
-        message: m.content,
-        isFromAdmin: m.role === 'admin' || m.role === 'agent',
-        adminName: m.senderName || m.adminName,
-        createdAt: m.timestamp,
-      }))
+      t.messages.map(m => {
+        const isFromAdmin = m.role === 'admin' || m.role === 'agent';
+        return {
+          id: m._id,
+          ticketId: t._id,
+          subject: t.subject,
+          message: m.content,
+          isFromAdmin,
+          // Only populate adminName for staff messages — populating it for user
+          // messages caused the chat UI to mis-render the user's own replies as
+          // staff replies (left-aligned), since the bubble renderer treats any
+          // message with a non-empty adminName as staff.
+          adminName: isFromAdmin ? (m.senderName || m.adminName) : undefined,
+          createdAt: m.timestamp,
+        };
+      })
     );
     res.json({ success: true, messages });
   } catch (error) {

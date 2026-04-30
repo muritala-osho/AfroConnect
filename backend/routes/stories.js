@@ -15,6 +15,32 @@ const { sendSmartNotification } = require('../utils/pushNotifications');
 const STORY_ACTIVE_TTL = 30;   // seconds — active feed refreshes quickly
 const STORY_USER_TTL   = 60;   // seconds — single-user story list
 
+/**
+ * Invalidate the `stories:active:*` cache for every user that has an active
+ * match with `ownerUserId`, plus the owner's own cache. Without this, a brand
+ * new story would not appear in matched users' feeds until the 30s TTL
+ * expires (they were stuck reading their own stale, empty cache).
+ */
+async function invalidateMatchedActiveStoryCaches(ownerUserId) {
+  try {
+    const ownerKey = `stories:active:${ownerUserId}`;
+    const matches = await Match.find({
+      users: ownerUserId,
+      status: 'active',
+    }).select('users').lean();
+
+    const matchedIds = matches
+      .map(m => (m.users || []).find(id => String(id) !== String(ownerUserId)))
+      .filter(Boolean)
+      .map(id => String(id));
+
+    const keys = [ownerKey, ...matchedIds.map(id => `stories:active:${id}`)];
+    await Promise.all(keys.map(k => redis.del(k)));
+  } catch (e) {
+    console.error('[Stories] Cache invalidation error:', e?.message || e);
+  }
+}
+
 router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), async (req, res) => {
   try {
     const { type, content, textContent, backgroundColor, mediaUrl, thumbnail, durationHours } = req.body;
@@ -44,7 +70,7 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
     await story.populate('user', 'name photos');
 
     await Promise.all([
-      redis.del(`stories:active:${req.user._id}`),
+      invalidateMatchedActiveStoryCaches(req.user._id),
       redis.del(`stories:mine:${req.user._id}`),
     ]);
 
@@ -665,7 +691,7 @@ router.delete('/:storyId', protect, async (req, res) => {
     await story.deleteOne();
 
     await Promise.all([
-      redis.del(`stories:active:${req.user._id}`),
+      invalidateMatchedActiveStoryCaches(req.user._id),
       redis.del(`stories:mine:${req.user._id}`),
       redis.del(`stories:user:${req.user._id}:viewer:${req.user._id}`),
     ]);

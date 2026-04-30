@@ -35,6 +35,7 @@ interface TicketMessage {
   role: 'user' | 'admin' | 'agent';
   content: string;
   senderName?: string;
+  senderId?: string;
   adminName?: string;
   timestamp: string;
 }
@@ -219,6 +220,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
       role: 'user',
       content,
       senderName: (user as any)?.name || 'You',
+      senderId: (user as any)?._id || (user as any)?.id,
       timestamp: new Date().toISOString(),
     };
     setSelectedTicket(prev =>
@@ -424,13 +426,23 @@ export default function SupportMessagesScreen({ navigation }: any) {
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
         >
           {(selectedTicket.messages || []).map((msg: any, i) => {
-            // Anything tagged as staff (admin, agent, or carrying an adminName)
-            // renders on the left. Everything else is treated as the current
-            // user and renders on the right. We use `alignSelf` directly on the
-            // bubble so layout works the same whether the parent ScrollView
-            // stretches its content or not.
-            const isStaff = msg.role === 'admin' || msg.role === 'agent' || !!msg.adminName;
-            const isUser = !isStaff;
+            // Decide LEFT vs RIGHT robustly.
+            //
+            //  1. Primary, unambiguous check: if `senderId` is present and
+            //     matches the current user, the message is mine → RIGHT.
+            //     This is immune to any legacy `adminName` field that older
+            //     versions of the backend used to populate even on user
+            //     messages (which previously caused user replies to flip to
+            //     the LEFT side, making it look like the admin had replied).
+            //  2. Otherwise (e.g. optimistic messages with no senderId yet,
+            //     or very old tickets without a senderId at all), fall back
+            //     to role + adminName.
+            const myId = (user as any)?._id || (user as any)?.id;
+            const senderId = msg.senderId ? String(msg.senderId) : null;
+            const isUser = senderId
+              ? senderId === String(myId)
+              : msg.role === 'user';
+            const isStaff = !isUser;
             return (
               <View
                 key={i}
