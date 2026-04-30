@@ -262,23 +262,52 @@ export default function IncomingCallHandler() {
     setupCallKeepListeners({
       onAnswer: (callerId) => {
         logger.log('[CallKeep] Native answer pressed — callerId:', callerId);
-        const call = incomingCallRef.current;
-        if (!call) return;
+
+        /* Cold-start path: the user pressed "Answer" on the native
+         * CallKit / ConnectionService screen before the app had time to mount
+         * IncomingCallHandler and process global.__pendingVoipCall through the
+         * socket useEffect. incomingCallRef.current is null at this point, so
+         * fall back to the global pending call data directly. */
+        let call = incomingCallRef.current;
+        if (!call) {
+          const pending = (global as any).__pendingVoipCall;
+          if (pending) {
+            call = {
+              callerId:   pending.callerId,
+              callerInfo: { name: pending.callerName ?? 'Unknown', photo: '' },
+              callData:   { callType: pending.callType ?? 'voice', ...pending.callData },
+            };
+            (global as any).__pendingVoipCall = null;
+          }
+        }
+
+        if (!call) {
+          logger.warn('[CallKeep] onAnswer: no call data — cannot navigate.');
+          return;
+        }
 
         stopRingtone();
 
-        socketService.acceptCall({ callerId: call.callerId, callData: call.callData });
+        /* Use onConnect so that if the socket hasn't connected yet on cold
+         * start we still deliver the accept once the connection is ready. */
+        const doAccept = () =>
+          socketService.acceptCall({ callerId: call!.callerId, callData: call!.callData });
+        if (socketService.isConnected()) {
+          doAccept();
+        } else {
+          socketService.onConnect(doAccept);
+        }
         setCallActive(call.callerId);
 
         const callTypeFromData = call.callData?.callType === 'video' ? 'video' : 'voice';
         setActiveCall({
-          userId: call.callerId,
-          userName: call.callerInfo?.name || 'Unknown',
-          userPhoto: call.callerInfo?.photo,
+          userId:     call.callerId,
+          userName:   call.callerInfo?.name || 'Unknown',
+          userPhoto:  call.callerInfo?.photo,
           isIncoming: true,
           callStatus: 'connected',
-          callType: callTypeFromData,
-          duration: 0,
+          callType:   callTypeFromData,
+          duration:   0,
         });
 
         setIsVisible(false);
@@ -296,7 +325,15 @@ export default function IncomingCallHandler() {
       },
       onEnd: (callerId) => {
         logger.log('[CallKeep] Native end/decline pressed — callerId:', callerId);
-        const call = incomingCallRef.current;
+        /* Also check global pending call on cold start for decline */
+        const call = incomingCallRef.current ?? (() => {
+          const pending = (global as any).__pendingVoipCall;
+          if (pending) {
+            (global as any).__pendingVoipCall = null;
+            return { callerId: pending.callerId } as any;
+          }
+          return null;
+        })();
         if (!call) return;
         stopRingtone();
         socketService.declineCall({ callerId: call.callerId });
@@ -307,6 +344,23 @@ export default function IncomingCallHandler() {
     return () => {
       removeCallKeepListeners();
     };
+  }, []);
+
+  /* ── Early cold-start pending VoIP call (before auth loads) ── */
+  /* This effect runs once on mount — before the socket useEffect (which is
+   * gated on auth loading). By populating incomingCallRef immediately we
+   * ensure the CallKeep onAnswer handler has call data available even if the
+   * native "Answer" button was pressed the moment the app opened. */
+  useEffect(() => {
+    const pending = (global as any).__pendingVoipCall;
+    if (!pending || incomingCallRef.current) return;
+    showCallUI({
+      callerId:   pending.callerId,
+      callerInfo: { name: pending.callerName ?? 'Unknown', photo: '' },
+      callData:   { callType: pending.callType ?? 'voice', ...pending.callData },
+    });
+    (global as any).__pendingVoipCall = null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* ── Socket listeners ── */
@@ -377,15 +431,9 @@ export default function IncomingCallHandler() {
     socketService.on('call:ended', handleCallEnded);
     socketService.on('call:declined', handleCallDeclined);
 
-    const pendingVoip = (global as any).__pendingVoipCall;
-    if (pendingVoip) {
-      (global as any).__pendingVoipCall = null;
-      handleIncomingCall({
-        callerId: pendingVoip.callerId,
-        callerInfo: { name: pendingVoip.callerName, photo: '' },
-        callData: { callType: pendingVoip.callType, ...pendingVoip.callData },
-      });
-    }
+    /* Note: global.__pendingVoipCall is consumed by the early cold-start
+     * effect (useEffect([], [])) which runs before this auth-gated effect.
+     * No need to re-check it here. */
 
     return () => {
       socketService.off('call:incoming');
@@ -411,7 +459,19 @@ export default function IncomingCallHandler() {
       // so CallKit/ConnectionService transitions cleanly into "in call".
       if (callerId) setCallActive(callerId);
       dismissModal();
-      socketService.acceptCall({ callerId: data.callerId, callData: data.callData });
+
+      /* On cold-start the socket may not be connected yet — use onConnect so
+       * the accept is delivered reliably once the connection is established.
+       * Without this the caller never receives the accept and both sides
+       * remain silent (the caller is still waiting in "ringing" state while
+       * the callee's VoiceCallScreen tries to join Agora alone). */
+      const acceptPayload = { callerId: data.callerId, callData: data.callData };
+      if (socketService.isConnected()) {
+        socketService.acceptCall(acceptPayload);
+      } else {
+        socketService.onConnect(() => socketService.acceptCall(acceptPayload));
+      }
+
       setActiveCall({
         userId:     data.callerId,
         userName:   data.callerName || 'Unknown',
