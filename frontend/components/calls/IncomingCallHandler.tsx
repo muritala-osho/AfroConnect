@@ -91,12 +91,16 @@ export default function IncomingCallHandler() {
         await s.unloadAsync().catch(() => {});
       }
     } catch {}
+    /* Use speaker (default) routing here, NOT earpiece. Setting
+     * playThroughEarpieceAndroid: true puts the system into MODE_IN_CALL,
+     * which blocks the WebView WebRTC mic and silences both sides of voice
+     * calls after accept. The call screen manages its own audio mode. */
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        playThroughEarpieceAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
     } catch {}
   }, []);

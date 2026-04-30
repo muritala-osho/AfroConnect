@@ -726,7 +726,21 @@ export default function VideoCallScreen() {
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
     });
+    /* Cold-start armor: when the user answers a video call from a push
+     * notification while the app was killed, the original caller may have
+     * already given up (their `pendingCall` expires after 35s on the
+     * backend) by the time we cold-launch. The backend then bounces a
+     * `call:ended` to us — which used to dismiss the call screen the
+     * moment it finished mounting. Give the join pipeline a brief window
+     * to actually connect both sides before honouring `call:ended`. */
+    const coldStartAccept = !!callAccepted;
+    const acceptArmedAt = Date.now();
     socketService.onCallEnded(async () => {
+      const withinGrace = coldStartAccept && Date.now() - acceptArmedAt < 8000;
+      if (withinGrace && !hasRemoteVideo) {
+        logger.log("[VideoCall] Ignoring stale call:ended during cold-start join window");
+        return;
+      }
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
       else if (!isExpoGo) { try { engineRef.current?.leaveChannel(); } catch {} }
@@ -877,24 +891,39 @@ export default function VideoCallScreen() {
             />
           )}
 
-          {/* Local self-view — the `key` swap forces a clean remount of the
-              native SurfaceView when we transition from full-screen (no remote
-              yet) to PiP (remote joined). Without it, the underlying Android
-              Surface can keep its old dimensions and the PiP renders blank,
-              which is exactly the "I don't see myself in the box" symptom
-              after accepting an incoming video call. */}
-          {showVideo && !isCameraOff && (
+          {/* Local self-view — render TWO stable mounts (fullscreen and PiP)
+              and toggle visibility instead of swapping keys.
+              
+              Why not a single view with style swap?
+                Android SurfaceView's z-order (`zOrderMediaOverlay`) is set
+                ONCE when the view is attached to the window — changing the
+                prop later has no effect. And remounting via `key` change
+                detaches the Agora capture from the surface; on the callee
+                side that left the PiP blank after accept ("I can't see
+                myself"). Two separate, never-remounted SurfaceViews fix
+                both: the PiP is created with z-order overlay from the start
+                so it always sits above the remote view. */}
+          {showVideo && !isCameraOff && !(isConnected && hasRemoteVideo) && (
             <RtcSurfaceView
-              key={isConnected && hasRemoteVideo ? "local-pip" : "local-fs"}
               canvas={{
                 uid: 0,
                 sourceType: VideoSourceType.VideoSourceCamera,
                 renderMode: RenderModeType.RenderModeHidden,
                 mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
               }}
-              style={isConnected && hasRemoteVideo ? s.localPip : StyleSheet.absoluteFillObject}
-              zOrderMediaOverlay={isConnected && hasRemoteVideo}
-              zOrderOnTop={isConnected && hasRemoteVideo}
+              style={StyleSheet.absoluteFillObject}
+            />
+          )}
+          {showVideo && !isCameraOff && isConnected && hasRemoteVideo && (
+            <RtcSurfaceView
+              canvas={{
+                uid: 0,
+                sourceType: VideoSourceType.VideoSourceCamera,
+                renderMode: RenderModeType.RenderModeHidden,
+                mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
+              }}
+              style={s.localPip}
+              zOrderMediaOverlay
             />
           )}
 

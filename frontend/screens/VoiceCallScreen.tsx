@@ -189,7 +189,11 @@ export default function VoiceCallScreen() {
   );
   const [activeCallData, setActiveCallData] = useState<any>(incomingCallData || null);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+  /* Speaker is ON by default. Earpiece mode (playThroughEarpieceAndroid:true)
+   * forces Android into MODE_IN_CALL, which prevents the WebView WebRTC
+   * pipeline from accessing the microphone — both sides go silent. The user
+   * can switch to earpiece via the in-call control if they want. */
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [webviewReady, setWebviewReady] = useState(false);
 
   /* ── Animated values ── */
@@ -233,13 +237,20 @@ export default function VoiceCallScreen() {
         await snd.unloadAsync().catch(() => {});
       }
     } catch {}
-    /* Reset audio session so mic is available for the call */
+    /* Reset audio session so mic is available for the call.
+     *
+     * IMPORTANT: keep `playThroughEarpieceAndroid: false` here. Setting it to
+     * true switches the system into MODE_IN_CALL, which prevents the WebView's
+     * WebRTC pipeline from accessing the microphone — the AgoraRTC mic track
+     * fails silently and BOTH sides go mute after accept. The user can
+     * explicitly toggle the speaker via the in-call control which sets the
+     * mode for the duration of the toggle. */
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
-        playThroughEarpieceAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
     } catch {}
   }, []);
@@ -559,7 +570,20 @@ export default function VoiceCallScreen() {
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
     });
+    /* Cold-start armor: when the user accepts a voice call from a push
+     * notification while the app was killed, the original caller's
+     * pending-call may have already expired by the time we cold-launch.
+     * The backend then bounces a `call:ended` to us — which used to
+     * dismiss the screen the moment it mounted. Give the WebView + Agora
+     * join pipeline a brief window before honouring `call:ended`. */
+    const coldStartAccept = !!callAccepted;
+    const acceptArmedAt = Date.now();
     socketService.onCallEnded(async () => {
+      const withinGrace = coldStartAccept && Date.now() - acceptArmedAt < 8000;
+      if (withinGrace && !agoraJoined.current) {
+        logger.log("[VoiceCall] Ignoring stale call:ended during cold-start join window");
+        return;
+      }
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
       else sendToWebView({ action: "leave" });
