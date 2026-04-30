@@ -278,7 +278,7 @@ async function setupAndroidChannels() {
     name: 'Incoming Calls',
     importance: Notifications.AndroidImportance.MAX,
     vibrationPattern: [0, 1000, 500, 1000, 500, 1000],
-    lightColor: '#4CAF50',
+    lightColor: '#10B981',
     sound: 'default',
     bypassDnd: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
