@@ -484,17 +484,13 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            // Show the sender's avatar beside the lock-screen notification.
-            //  - Android (FCM v1): Expo translates `richContent.image` to
-            //    `notification.image`, rendered as the big-picture / expanded
-            //    large icon by the system notification UI.
-            //  - iOS (APNs): paired with `mutableContent: true`, the iOS
-            //    Notification Service Extension downloads the image and
-            //    attaches it (requires the build to ship a service extension;
-            //    without one, iOS quietly falls back to a plain notification).
-            ...(senderPhoto && senderPhoto.startsWith("https://")
-              ? { richContent: { image: senderPhoto }, mutableContent: true }
-              : {}),
+            // NOTE: richContent.image is intentionally omitted here.
+            // Expo maps richContent.image → FCM notification.image, which
+            // Android renders as BigPictureStyle — showing the sender's full
+            // photo as a large expanded banner inside the notification shade.
+            // The sender's photo is passed in data.senderPhoto so the app can
+            // display it as a small largeIcon thumbnail when it processes the
+            // notification, without triggering the big-picture expansion.
             data: {
               type: "message",
               screen: "ChatDetail",
@@ -899,17 +895,13 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            // Show the sender's avatar beside the lock-screen notification.
-            //  - Android (FCM v1): Expo translates `richContent.image` to
-            //    `notification.image`, rendered as the big-picture / expanded
-            //    large icon by the system notification UI.
-            //  - iOS (APNs): paired with `mutableContent: true`, the iOS
-            //    Notification Service Extension downloads the image and
-            //    attaches it (requires the build to ship a service extension;
-            //    without one, iOS quietly falls back to a plain notification).
-            ...(senderPhoto && senderPhoto.startsWith("https://")
-              ? { richContent: { image: senderPhoto }, mutableContent: true }
-              : {}),
+            // NOTE: richContent.image is intentionally omitted here.
+            // Expo maps richContent.image → FCM notification.image, which
+            // Android renders as BigPictureStyle — showing the sender's full
+            // photo as a large expanded banner inside the notification shade.
+            // The sender's photo is passed in data.senderPhoto so the app can
+            // display it as a small largeIcon thumbnail when it processes the
+            // notification, without triggering the big-picture expansion.
             data: {
               type: "message",
               screen: "ChatDetail",
