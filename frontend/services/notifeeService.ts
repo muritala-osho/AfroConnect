@@ -189,6 +189,25 @@ export function registerNotifeeBackgroundHandler() {
     }
 
     if (type === _EventType.ACTION_PRESS && pressAction?.id === 'mark_read') {
+      if (matchId) {
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const { getApiBaseUrl } = require('../constants/config');
+          const authToken = await AsyncStorage.getItem('auth_token');
+          if (authToken) {
+            const apiUrl = getApiBaseUrl();
+            await fetch(`${apiUrl}/api/chat/${matchId}/read`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+              },
+            });
+          }
+        } catch {
+          // swallow — do not crash the headless handler
+        }
+      }
       await notifee.cancelNotification(notifId).catch(() => {});
       return;
     }

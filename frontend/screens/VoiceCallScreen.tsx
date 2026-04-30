@@ -195,6 +195,7 @@ export default function VoiceCallScreen() {
    * can switch to earpiece via the in-call control if they want. */
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
   const [webviewReady, setWebviewReady] = useState(false);
+  const webviewReadyRef = useRef(false);
 
   /* ── Animated values ── */
   const fadeAnim    = useRef(new Animated.Value(0)).current;
@@ -347,17 +348,21 @@ export default function VoiceCallScreen() {
         callType: "voice",
       };
 
-      /* webViewRef is set the moment the component renders, but the WebView's
-       * JavaScript message listener (window.addEventListener('message', …))
-       * isn't registered until the page actually loads. Posting before that
-       * silently drops the message — the SDK never joins, both sides go silent
-       * after accept. Always queue and let the webviewReady effect flush it. */
+      /* Queue the join message so the webviewReady effect can flush it if the
+       * WebView hasn't loaded yet. If the WebView is already ready, send
+       * immediately using webviewReadyRef — a plain ref that is always current
+       * regardless of when this callback closure was captured. This prevents a
+       * stale-closure bug: socket handlers (onCallAccepted etc.) are registered
+       * once on mount and capture the initial joinAgoraVoice; by the time the
+       * remote side accepts, the WebView has already loaded but the stale
+       * closure still sees webviewReady===false and silently drops the message. */
       pendingJoinRef.current = msg;
-      if (webviewReady && webViewRef.current) {
+      if (webviewReadyRef.current && webViewRef.current) {
         webViewRef.current.postMessage(JSON.stringify(msg));
+        pendingJoinRef.current = null;
       }
     },
-    [isIncoming, authToken, get, requestMicPermission, webviewReady],
+    [isIncoming, authToken, get, requestMicPermission],
   );
 
   /* ── End call ── */
@@ -759,8 +764,8 @@ export default function VoiceCallScreen() {
               event?.nativeEvent?.grant?.(event.nativeEvent.resources);
             } catch {}
           }}
-          onLoad={() => setWebviewReady(true)}
-          onLoadEnd={() => setWebviewReady(true)}
+          onLoad={() => { webviewReadyRef.current = true; setWebviewReady(true); }}
+          onLoadEnd={() => { webviewReadyRef.current = true; setWebviewReady(true); }}
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);
