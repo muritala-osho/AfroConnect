@@ -268,21 +268,18 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Please verify your email first' });
     }
 
-    // Face verification gate — enforced in production only (same pattern as
-    // the email-verification gate above so test accounts can use discovery
-    // during development without completing the face-verification flow).
-    // We re-fetch from DB to prevent any client-side bypass (the JWT payload
-    // only carries tokenVersion, not isFaceVerified).
-    if (process.env.NODE_ENV === 'production') {
-      const gateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus');
-      if (!gateUser || !gateUser.isFaceVerified || gateUser.verificationStatus !== 'approved') {
-        return res.status(403).json({
-          success: false,
-          message: 'Face verification required',
-          verificationRequired: true,
-          verificationStatus: gateUser?.verificationStatus || 'not_requested',
-        });
-      }
+    // Face verification gate — enforced in all environments.
+    // We re-fetch the user's verification state from DB to prevent any
+    // client-side bypass (the JWT payload only carries tokenVersion, not
+    // isFaceVerified, so an attacker cannot craft a token to bypass this).
+    const gateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus');
+    if (!gateUser || !gateUser.isFaceVerified || gateUser.verificationStatus !== 'approved') {
+      return res.status(403).json({
+        success: false,
+        message: 'Face verification required',
+        verificationRequired: true,
+        verificationStatus: gateUser?.verificationStatus || 'not_requested',
+      });
     }
 
     const cursor = req.query.cursor ? String(req.query.cursor) : null;
@@ -512,11 +509,29 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       ];
     }
 
+    // ── Discovery debug log — remove once the empty-results issue is resolved ──
+    const debugInfo = {
+      userId: req.user.id,
+      effectiveLat,
+      effectiveLng,
+      maxDist,
+      ageRange: [minAgeFilter, maxAgeFilter],
+      gender: query.gender ?? 'any',
+      onlineOnly: wantOnlineOnly,
+      verifiedOnly: wantVerifiedOnly,
+      isGlobal,
+      hasOrigin,
+      excludedCount: excludedIds.length,
+    };
+    logger.log('[Discovery:debug]', JSON.stringify(debugInfo));
+    // ── end debug log ──
+
     const queryStart = Date.now();
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
     const queryMs = Date.now() - queryStart;
+    logger.log(`[Discovery:debug] DB returned ${users.length} users before distance post-filter`);
 
     users = users.map(user => {
       const userObj = user.toObject();

@@ -155,6 +155,82 @@ export async function displayMessageNotification({
   });
 }
 
+const MISSED_CALLS_CHANNEL_ID = 'afroconnect_missed_calls';
+
+async function ensureMissedCallsChannel() {
+  const notifee = getNotifee();
+  if (!notifee) return;
+  await notifee.createChannel({
+    id: MISSED_CALLS_CHANNEL_ID,
+    name: 'Missed Calls',
+    importance: _AndroidImportance?.HIGH ?? 4,
+    vibration: true,
+    sound: 'default',
+  });
+}
+
+/**
+ * Display a styled "Missed call from X" notification on Android.
+ *
+ * Shows the caller's circular photo, the AfroConnect logo badge,
+ * and a "Call Back" action button. Called from IncomingCallHandler
+ * when call:ended fires while the call was still ringing (unanswered).
+ */
+export async function displayMissedCallNotification({
+  callerId,
+  callerName,
+  callerPhoto,
+  callType,
+}: {
+  callerId: string;
+  callerName: string;
+  callerPhoto: string;
+  callType: string;
+}) {
+  if (Platform.OS !== 'android') return;
+  const notifee = getNotifee();
+  if (!notifee) return;
+
+  await ensureMissedCallsChannel();
+
+  const isVideo = callType === 'video';
+
+  await notifee.displayNotification({
+    id: `missed_${callerId}`,
+    title: `Missed ${isVideo ? 'video' : 'voice'} call`,
+    body: `from ${callerName}`,
+    android: {
+      channelId: MISSED_CALLS_CHANNEL_ID,
+      importance: _AndroidImportance?.HIGH ?? 4,
+      smallIcon: 'ic_notification',
+      color: '#10B981',
+      largeIcon: callerPhoto || undefined,
+      circularLargeIcon: true,
+      pressAction: {
+        id: 'open_chat',
+        launchActivity: 'default',
+      },
+      actions: [
+        {
+          title: '📞 Call Back',
+          pressAction: { id: 'call_back', launchActivity: 'default' },
+        },
+      ],
+      data: {
+        callerId,
+        callerName,
+        callerPhoto,
+        callType,
+        type: 'missed_call',
+        screen: 'ChatDetail',
+        senderId: callerId,
+        senderName: callerName,
+        senderPhoto: callerPhoto,
+      },
+    },
+  });
+}
+
 /**
  * Register the Notifee background event handler.
  *
@@ -223,6 +299,17 @@ export function registerNotifeeBackgroundHandler() {
 
     if (type === _EventType.DISMISSED) {
       await notifee.cancelNotification(notifId).catch(() => {});
+    }
+
+    /* "Call Back" button on missed-call notifications.
+     * We can only cancel the notification here — actual navigation to the
+     * call screen must happen in the foreground via the notification tap
+     * (launchActivity: 'default' opens the app and handleNotificationResponse
+     * reads the data.type === 'missed_call' to navigate to ChatDetail). */
+    if (type === _EventType.ACTION_PRESS && pressAction?.id === 'call_back') {
+      const missedData = notification?.android?.data ?? notification?.data ?? {};
+      const missedNotifId = `missed_${missedData?.callerId}`;
+      await notifee.cancelNotification(missedNotifId).catch(() => {});
     }
   });
 }

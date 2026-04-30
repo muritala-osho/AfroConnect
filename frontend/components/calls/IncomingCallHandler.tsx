@@ -31,6 +31,7 @@ import {
   removeCallKeepListeners,
   setCallActive,
 } from '@/services/callkeep';
+import { displayMissedCallNotification } from '@/services/notifeeService';
 
 interface IncomingCallData {
   callData: any;
@@ -415,6 +416,20 @@ export default function IncomingCallHandler() {
       const cId = call?.callerId || data?.endedBy || data?.callerId;
       if (call) reportCallEnded(call.callerId);
       await dismissCallNotifications(cId);
+
+      /* If the call was never answered (we were still ringing when the caller
+       * hung up), show a styled "Missed call from X" notification with a
+       * "Call Back" button. The backend's sendMissedCallPush covers the killed
+       * app case; this covers the foreground/background socket path. */
+      if (call) {
+        displayMissedCallNotification({
+          callerId:    call.callerId,
+          callerName:  call.callerInfo?.name || 'Unknown',
+          callerPhoto: call.callerInfo?.photo || '',
+          callType:    call.callData?.callType || 'voice',
+        }).catch(() => {});
+      }
+
       dismissModal();
     };
 
@@ -490,6 +505,16 @@ export default function IncomingCallHandler() {
         callerId:     data.callerId,
         callAccepted: true,
       });
+    } else if (data?.type === 'missed_call') {
+      /* Tapping the missed-call notification (or the "Call Back" button) opens
+       * the chat so the user can start a new call from there. */
+      const senderId = data.callerId || data.senderId;
+      if (!senderId) return;
+      navigation.navigate('ChatDetail', {
+        userId:    senderId,
+        userName:  data.callerName || data.senderName || 'Chat',
+        userPhoto: data.callerPhoto || data.senderPhoto || '',
+      } as any);
     } else if (data?.type === 'message') {
       const senderId = data.senderId || data.userId;
       if (!senderId) return;
