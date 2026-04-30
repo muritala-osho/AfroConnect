@@ -543,6 +543,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
   const fetchConversationsRef = useRef<((search?: string, isRefresh?: boolean) => Promise<void>) | null>(null);
   const fetchCallHistoryRef = useRef<(() => Promise<void>) | null>(null);
   const fetchMyStoriesRef = useRef<(() => Promise<boolean>) | null>(null);
+  const fetchStoriesRef = useRef<(() => Promise<StoryUser[]>) | null>(null);
   const loadLocalSettingsRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
@@ -683,6 +684,7 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
     }
     return [];
   }, [token, get, user?.id]);
+  useEffect(() => { fetchStoriesRef.current = fetchStories; }, [fetchStories]);
 
   const fetchCallHistory = useCallback(async () => {
     if (!token) return;
@@ -893,18 +895,49 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
       );
     };
 
+    // Real-time stories: when a matched user posts (or deletes) a story, the
+    // backend pushes a `story:new` / `story:deleted` event to every matched
+    // user's user-room. The cache for our `/stories/active` key has already
+    // been invalidated server-side, so we just refetch the canonical list and
+    // the new tile pops in (or disappears) without the user needing to pull
+    // to refresh.
+    const handleStoryNew = (data: { ownerId?: string }) => {
+      // Refetch the active feed (other people's stories).
+      fetchStoriesRef.current?.().then((fresh) => {
+        if (fresh) setStoryUsers(fresh);
+      }).catch(() => {});
+      // If the new story is OURS (e.g. posted from another device), also
+      // refresh the "Your Story" indicator so the plus badge updates.
+      if (data?.ownerId && String(data.ownerId) === String(user?.id || "")) {
+        fetchMyStoriesRef.current?.().catch(() => {});
+      }
+    };
+
+    const handleStoryDeleted = (data: { ownerId?: string }) => {
+      fetchStoriesRef.current?.().then((fresh) => {
+        if (fresh) setStoryUsers(fresh);
+      }).catch(() => {});
+      if (data?.ownerId && String(data.ownerId) === String(user?.id || "")) {
+        fetchMyStoriesRef.current?.().catch(() => {});
+      }
+    };
+
     if (socketService && typeof socketService.on === "function") {
       socketService.on("user:status", handleUserStatus);
       socketService.on("user:verified", handleUserVerified);
+      socketService.on("story:new", handleStoryNew);
+      socketService.on("story:deleted", handleStoryDeleted);
     }
 
     return () => {
       if (socketService && typeof socketService.off === "function") {
         socketService.off("user:status", handleUserStatus);
         socketService.off("user:verified", handleUserVerified);
+        socketService.off("story:new", handleStoryNew);
+        socketService.off("story:deleted", handleStoryDeleted);
       }
     };
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     const handleNewMessage = (data: any) => {

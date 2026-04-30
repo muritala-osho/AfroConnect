@@ -565,6 +565,50 @@ io.on('connection', (socket) => {
         socket.join(socket.userId);
         updateUserOnlineStatus(socket.userId, 'online');
         emitUserStatusIfAllowed(socket.userId, true);
+
+        // ── Tick progression: deliver-on-reconnect ────────────────────────
+        // When a user comes online, any messages addressed TO them that are
+        // still in `sent` state (single tick on the sender's screen) should
+        // immediately bump to `delivered` (double tick). This is what makes
+        // the second tick mean "actually reached the recipient's device"
+        // rather than just "the server saved it".
+        //
+        // Scope: only the most recent unread inbox so this stays fast even
+        // for users with long histories.
+        (async () => {
+          try {
+            const Message = require('./models/Message');
+            const pending = await Message
+              .find({ receiver: socket.userId, status: 'sent', seen: false })
+              .sort({ createdAt: -1 })
+              .limit(200)
+              .select('_id sender matchId')
+              .lean();
+            if (!pending.length) return;
+
+            const ids = pending.map(m => m._id);
+            await Message.updateMany(
+              { _id: { $in: ids } },
+              { $set: { status: 'delivered', deliveredAt: new Date() } }
+            );
+
+            // Notify each unique sender (one event per message so the
+            // sender's bubble can be matched 1:1 by messageId).
+            for (const m of pending) {
+              const senderId = m.sender ? m.sender.toString() : null;
+              if (!senderId) continue;
+              const payload = {
+                messageId: m._id,
+                chatId: m.matchId,
+                matchId: m.matchId ? m.matchId.toString() : undefined,
+                status: 'delivered',
+              };
+              io.to(senderId).emit('chat:message-delivered', payload);
+            }
+          } catch (e) {
+            logger.error('[Connect] deliver-on-reconnect flush failed:', e?.message || e);
+          }
+        })();
       }
     } catch (err) {
       // Token invalid — socket connects but is not authenticated
@@ -606,7 +650,12 @@ io.on('connection', (socket) => {
       senderId: socket.userId, // always use server-verified identity
       _id: data._id || data.id || Date.now().toString(),
       createdAt: data.createdAt || new Date().toISOString(),
-      status: 'delivered'
+      // Start as `sent` (single tick). The recipient's client / device
+      // connection determines when it bumps to `delivered` (double tick).
+      // Previously this was hard-coded to 'delivered' which made every
+      // socket-sent message skip the "sent" state and broke the visual
+      // progression on the sender's bubble.
+      status: 'sent'
     };
     io.to(data.chatId).emit('chat:new-message', messageData);
     if (data.receiverId) {

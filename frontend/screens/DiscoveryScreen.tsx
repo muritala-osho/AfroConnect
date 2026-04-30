@@ -36,6 +36,7 @@ import { Feather } from "@expo/vector-icons";
 import { getPhotoSource } from "@/utils/photos";
 import { useApi } from "@/hooks/useApi";
 import { getApiBaseUrl } from "@/constants/config";
+import socketService from "@/services/socket";
 import * as Haptics from 'expo-haptics';
 import * as Location from 'expo-location';
 import {
@@ -197,6 +198,40 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
+
+  // Real-time verification updates. The backend emits `user:verified` to
+  // (a) the user that just got approved, so they can flip from "pending" to
+  // the discovery deck without needing to background+foreground the app, and
+  // (b) it ALSO invalidates the global `discovery:*` cache so any matched-area
+  // viewer who reloads sees the newly verified person right away. To make
+  // step (b) feel real-time too, we also reload our own deck on any verified
+  // event — that way the freshly-approved user pops in within a few seconds
+  // without the viewer having to swipe / pull.
+  useEffect(() => {
+    const handleUserVerified = (data: { userId?: string; verified?: boolean }) => {
+      const isMe = data?.userId && String(data.userId) === String(user?.id || '');
+      if (isMe) {
+        setFaceGateStatus('approved');
+        // Pull fresh user object so AuthContext flips isFaceVerified=true and
+        // any other screen that reads `user.verified` updates immediately.
+        fetchUser().catch(() => {});
+      }
+      // Re-check the gate (cheap server call) and then silently reload the
+      // deck — works for both "I just got verified" and "someone else did".
+      checkFaceGate();
+      loadPotentialMatchesRef.current?.(true);
+    };
+
+    if (socketService && typeof socketService.on === 'function') {
+      socketService.on('user:verified', handleUserVerified);
+    }
+    return () => {
+      if (socketService && typeof socketService.off === 'function') {
+        socketService.off('user:verified', handleUserVerified);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
   // ─────────────────────────────────────────────────────────────────────────
 
   const [users, setUsers] = useState<DiscoverUser[]>([]);

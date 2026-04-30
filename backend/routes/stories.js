@@ -21,23 +21,50 @@ const STORY_USER_TTL   = 60;   // seconds — single-user story list
  * new story would not appear in matched users' feeds until the 30s TTL
  * expires (they were stuck reading their own stale, empty cache).
  */
+async function getMatchedUserIds(ownerUserId) {
+  const matches = await Match.find({
+    users: ownerUserId,
+    status: 'active',
+  }).select('users').lean();
+
+  return matches
+    .map(m => (m.users || []).find(id => String(id) !== String(ownerUserId)))
+    .filter(Boolean)
+    .map(id => String(id));
+}
+
 async function invalidateMatchedActiveStoryCaches(ownerUserId) {
   try {
     const ownerKey = `stories:active:${ownerUserId}`;
-    const matches = await Match.find({
-      users: ownerUserId,
-      status: 'active',
-    }).select('users').lean();
-
-    const matchedIds = matches
-      .map(m => (m.users || []).find(id => String(id) !== String(ownerUserId)))
-      .filter(Boolean)
-      .map(id => String(id));
-
+    const matchedIds = await getMatchedUserIds(ownerUserId);
     const keys = [ownerKey, ...matchedIds.map(id => `stories:active:${id}`)];
     await Promise.all(keys.map(k => redis.del(k)));
   } catch (e) {
     console.error('[Stories] Cache invalidation error:', e?.message || e);
+  }
+}
+
+/**
+ * Push a real-time story event to every matched user (and the owner) so their
+ * UI can update instantly without waiting for the next focus / poll. Used for
+ * `story:new` (after a story is created) and `story:deleted` (after removal).
+ *
+ * The payload shape is intentionally small — clients are expected to refetch
+ * `/stories/active` (the cache will already be invalidated by the caller) so
+ * they get the canonical, privacy-filtered list rather than trusting whatever
+ * we put on the wire here.
+ */
+async function emitStoryEventToMatched(io, ownerUserId, event, payload) {
+  if (!io) return;
+  try {
+    const ownerId = String(ownerUserId);
+    const matchedIds = await getMatchedUserIds(ownerUserId);
+    const targetIds = new Set([ownerId, ...matchedIds]);
+    for (const uid of targetIds) {
+      io.to(uid).emit(event, payload);
+    }
+  } catch (e) {
+    console.error('[Stories] Real-time emit error:', e?.message || e);
   }
 }
 
@@ -73,6 +100,18 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
       invalidateMatchedActiveStoryCaches(req.user._id),
       redis.del(`stories:mine:${req.user._id}`),
     ]);
+
+    // Push the new story to every matched user in real time. The cache for
+    // each matched user has already been invalidated above, so when their
+    // client receives the event and refetches /stories/active it will see the
+    // fresh list — no waiting for the 30s TTL to expire.
+    const io = req.app.get('io');
+    await emitStoryEventToMatched(io, req.user._id, 'story:new', {
+      storyId: story._id.toString(),
+      ownerId: req.user._id.toString(),
+      type: story.type,
+      createdAt: story.createdAt,
+    });
 
     res.status(201).json({ success: true, story });
   } catch (error) {
@@ -695,6 +734,14 @@ router.delete('/:storyId', protect, async (req, res) => {
       redis.del(`stories:mine:${req.user._id}`),
       redis.del(`stories:user:${req.user._id}:viewer:${req.user._id}`),
     ]);
+
+    // Notify matched users so their UI removes the story tile in real time
+    // (e.g. if the owner had only one story and it's now gone).
+    const io = req.app.get('io');
+    await emitStoryEventToMatched(io, req.user._id, 'story:deleted', {
+      storyId: req.params.storyId,
+      ownerId: req.user._id.toString(),
+    });
 
     res.json({ success: true, message: 'Story deleted' });
   } catch (error) {

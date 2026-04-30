@@ -744,6 +744,10 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
     user.verificationRejectionReason = null;
     await user.save();
     await redis.del(`profile:me:${user._id}`);
+    // Wipe every discoverer's cached `/users/nearby` result so the newly
+    // approved user becomes visible to others within seconds rather than
+    // waiting up to 2 minutes for the per-key TTL to expire.
+    await redis.delPattern('discovery:*');
 
     await logAudit(req, 'APPROVE_VERIFICATION', 'VERIFICATION', 'medium', user, `ID verification approved for ${user.name}`);
 
