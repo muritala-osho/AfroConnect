@@ -472,7 +472,11 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
         const totalUnread = await Message.countDocuments({ receiver, seen: false });
 
-        const senderPhoto = req.user.photos?.[0] || req.user.profilePicture || "";
+        const firstPhoto = req.user.photos?.[0];
+        const senderPhoto =
+          (typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url) ||
+          req.user.profilePicture ||
+          "";
 
         await sendSmartNotification(
           rcvUser,
@@ -883,7 +887,11 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
 
         const totalUnread = await Message.countDocuments({ receiver, seen: false });
 
-        const senderPhoto = req.user.photos?.[0] || req.user.profilePicture || "";
+        const firstPhoto = req.user.photos?.[0];
+        const senderPhoto =
+          (typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url) ||
+          req.user.profilePicture ||
+          "";
 
         await sendSmartNotification(
           rcvUser,

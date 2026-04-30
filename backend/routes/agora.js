@@ -73,7 +73,15 @@ router.post('/call/initiate', protect, callTokenLimiter, async (req, res) => {
     }
     
     const channelName = `c${String(req.user._id).slice(-8)}${String(targetUserId).slice(-8)}${Date.now().toString(36)}`;
-    const uid = Math.floor(Math.random() * 100000);
+    // IMPORTANT: build the token with uid=0 (Agora's "wildcard" UID).
+    // A token issued for uid=0 can be used by ANY client that joins with
+    // uid=0, and the Agora server will then assign each joiner its own
+    // unique server-side UID. Previously we issued a token bound to a
+    // random UID and shipped both sides the same callData; if the
+    // receiver's secondary `/agora/token` fetch ever failed, both sides
+    // fell back to joining with the same UID, the server kicked one out,
+    // and both ends went silent. uid=0 makes that race impossible.
+    const uid = 0;
 
     const isPremium = req.user.premium?.isActive;
     const FREE_CALL_SECONDS = 300;
