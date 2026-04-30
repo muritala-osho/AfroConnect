@@ -58,6 +58,7 @@ const PREMIUM_FEATURES = [
   { icon: 'earth', text: 'Global Discovery', color: '#2196F3', desc: 'Match worldwide by country' },
   { icon: 'phone', text: 'Unlimited Calls', color: '#00BCD4', desc: 'Voice & video without limits' },
   { icon: 'eye-check', text: 'Story Viewer Details', color: '#E91E63', desc: 'See who viewed your stories' },
+  { icon: 'clock-check-outline', text: 'Seen-At Timestamps', color: '#4FC3F7', desc: 'See exactly when your messages were read' },
   { icon: 'filter-variant', text: 'Advanced Filters', color: '#795548', desc: 'Refine your matches' },
   { icon: 'shield-star', text: 'Premium Badge', color: '#FFD700', desc: 'Exclusive animated profile badge' },
   { icon: 'map-marker-radius', text: 'No Distance Limits', color: '#3F51B5', desc: 'See matches everywhere' },

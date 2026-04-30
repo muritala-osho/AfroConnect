@@ -20,6 +20,7 @@ const PREMIUM_FEATURES = {
   noAds: true,
   advancedFilters: true,
   readReceipts: true,
+  seenAtTimestamp: true,
   priorityMatches: true,
   incognitoMode: true
 };
@@ -33,6 +34,7 @@ const FREE_FEATURES = {
   noAds: false,
   advancedFilters: false,
   readReceipts: false,
+  seenAtTimestamp: false,
   priorityMatches: false,
   incognitoMode: false
 };

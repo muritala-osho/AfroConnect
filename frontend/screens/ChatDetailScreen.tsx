@@ -112,6 +112,7 @@ export default function ChatDetailScreen({
   const { get, post, put, patch } = useApi();
 
   const myId = useMemo(() => (user as any)?._id || user?.id || "", [user]);
+  const isPremium = !!user?.premium?.isActive;
 
   const [message, setMessage] = useState("");
   const [hasMessage, setHasMessage] = useState(false);
@@ -2672,7 +2673,7 @@ export default function ChatDetailScreen({
                           fontStyle: "italic",
                         }}
                       >
-                        Seen{item.seenAt ? ` at ${formatTime(item.seenAt)}` : ""}
+                        Seen{isPremium && item.seenAt ? ` at ${formatTime(item.seenAt)}` : ""}
                       </ThemedText>
                     )}
                   </View>
@@ -2706,7 +2707,7 @@ export default function ChatDetailScreen({
         </View>
       );
     },
-    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, failedGifLoads, gifReloadKey, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds, lastSeenOwnMessageId],
+    [myId, theme, isDark, userPhoto, handleMessageLongPress, handleSwipeReply, playingAudioId, audioProgress, failedThumbnails, failedGifLoads, gifReloadKey, chatBubbleStyle, highlightedMessageId, scrollToMessage, openedViewOnceIds, lastSeenOwnMessageId, isPremium],
   );
 
   const keyExtractor = useCallback((item: EnrichedMessage) => item._id, []);
