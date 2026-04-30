@@ -456,8 +456,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (discoveryType === 'local' && Number.isFinite(storedLat) && Number.isFinite(storedLng)) {
         params.lat = storedLat;
         params.lng = storedLng;
-        const rawMax = user.preferences?.maxDistance || 50;
-        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 50);
+        // Match the radar feed (1-100km) so anyone visible on radar can
+        // also surface in the discovery deck. Free users were previously
+        // capped at 50km, which silently hid radar contacts beyond that.
+        const rawMax = user.preferences?.maxDistance || 100;
+        params.maxDistance = user.premium?.isActive ? rawMax : Math.min(rawMax, 100);
       } else if (discoveryType === 'global') {
         params.global = true;
         if (selectedCountry) {
@@ -486,12 +489,13 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (prefs?.showVerifiedOnly) params.verifiedOnly = 'true';
       if (prefs?.onlineNow) params.onlineOnly = 'true';
 
-      const lifestyle = (user as any).lifestyle;
-      if (lifestyle?.lookingFor) params.lookingFor = lifestyle.lookingFor;
-      if (lifestyle?.religion) params.religion = lifestyle.religion;
-      if (prefs?.smoking) params.smoking = prefs.smoking;
-      if (prefs?.drinking) params.drinking = prefs.drinking;
-      if (prefs?.wantsKids != null) params.wantsKids = String(prefs.wantsKids);
+      // Lifestyle filters (lookingFor, religion, smoking, drinking, wantsKids)
+      // are intentionally NOT auto-applied here. They were silently narrowing
+      // the discovery pool to a fraction of what the radar shows — e.g., a
+      // user with `lookingFor: long-term` would never see anyone who hadn't
+      // filled in the same field. The user can still apply these as opt-in
+      // filters via the discovery filter modal; otherwise we mirror the
+      // radar's behaviour and let any visible nearby user surface.
 
       const response = await api.get<{ success: boolean; users: any[] }>('/users/nearby', params, token);
       logger.log('API Response Success:', response.success);

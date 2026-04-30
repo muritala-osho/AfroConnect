@@ -338,14 +338,14 @@ export default function ChatDetailScreen({
   // opened. Until this is true, every layout/content-size pass force-snaps to
   // the newest message so the chat never opens on an older bubble.
   const initialScrollDoneRef = useRef(false);
-  // Helper that reliably scrolls the inverted FlashList to the newest message
-  // (offset 0 in inverted = bottom of the screen). Uses requestAnimationFrame
-  // plus a few staggered retries to survive slow layout passes / FlashList's
-  // async measurement on lower-end devices and on web.
+  // Helper that reliably scrolls the FlashList to the newest message at the
+  // bottom of the chat (chronological list — newest is the last item). Uses
+  // requestAnimationFrame plus a few staggered retries to survive slow layout
+  // passes / FlashList's async measurement on lower-end devices and on web.
   const scrollToBottom = useCallback((animated: boolean = true) => {
     const doScroll = () => {
       try {
-        flatListRef.current?.scrollToOffset({ offset: 0, animated });
+        flatListRef.current?.scrollToEnd({ animated });
       } catch {}
     };
     if (typeof requestAnimationFrame !== "undefined") {
@@ -670,8 +670,8 @@ export default function ChatDetailScreen({
 
           // Force the chat to open on the newest message. We reset the
           // "initial scroll done" flag so onContentSizeChange / onLayout will
-          // keep re-snapping to offset 0 (the bottom in an inverted list)
-          // until the latest message is actually on screen.
+          // keep re-snapping to the end of the list (newest message at the
+          // bottom) until the latest message is actually on screen.
           initialScrollDoneRef.current = false;
           isNearBottomRef.current = true;
           scrollToBottom(false);
@@ -2099,10 +2099,6 @@ export default function ChatDetailScreen({
     }));
   }, [messages]);
 
-  const invertedMessages = useMemo(
-    () => [...enrichedMessages].reverse(),
-    [enrichedMessages],
-  );
 
   // Identify the last own message that has been seen — we only render the
   // "Seen at HH:MM" caption on this single message to avoid noisy footers
@@ -2129,11 +2125,10 @@ export default function ChatDetailScreen({
   const scrollToMessage = useCallback((messageId: string) => {
     const originalIndex = enrichedMessages.findIndex(m => m._id === messageId);
     if (originalIndex === -1) return;
-    const invertedIndex = enrichedMessages.length - 1 - originalIndex;
     try {
-      flatListRef.current?.scrollToIndex({ index: invertedIndex, animated: true, viewPosition: 0.5 });
+      flatListRef.current?.scrollToIndex({ index: originalIndex, animated: true, viewPosition: 0.5 });
     } catch {
-      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      flatListRef.current?.scrollToEnd({ animated: true });
     }
     if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
     setHighlightedMessageId(messageId);
@@ -2711,30 +2706,36 @@ export default function ChatDetailScreen({
       ) : (
         <FlashList
           ref={flatListRef}
-          data={invertedMessages}
+          data={enrichedMessages}
           keyExtractor={keyExtractor}
           renderItem={renderMessage}
           extraData={[playingAudioId, audioProgress, highlightedMessageId, openedViewOnceIds]}
           contentContainerStyle={styles.messagesList}
           showsVerticalScrollIndicator={false}
-          inverted
           estimatedItemSize={80}
           initialNumToRender={20}
-          onScrollToIndexFailed={(info) => {
+          maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 0.2, startRenderingFromBottom: true }}
+          onScrollToIndexFailed={(info: { index: number; highestMeasuredFrameIndex?: number; averageItemLength?: number }) => {
             setTimeout(() => {
               flatListRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
             }, 300);
           }}
           onScroll={(e) => {
-            const y = e.nativeEvent.contentOffset.y;
-            const nearBottom = y < 120;
+            const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+            const distanceFromBottom = Math.max(
+              0,
+              contentSize.height - (contentOffset.y + layoutMeasurement.height),
+            );
+            const distanceFromTop = contentOffset.y;
+            const nearBottom = distanceFromBottom < 120;
             isNearBottomRef.current = nearBottom;
-            // The first real user-driven scroll counts as "initial scroll
-            // done" — after this point we stop force-snapping to the bottom
-            // and only auto-follow when they're already near the latest
-            // message. This is what lets users freely scroll up through
-            // history without getting yanked back down.
-            if (y > 120) initialScrollDoneRef.current = true;
+            // The first real user-driven scroll AWAY from the bottom counts
+            // as "initial scroll done" — after this point we stop force-
+            // snapping to the bottom and only auto-follow when they're
+            // already near the latest message. This is what lets users
+            // freely scroll up through history without getting yanked back
+            // down.
+            if (distanceFromBottom > 120) initialScrollDoneRef.current = true;
             // Show the floating "scroll to latest" pill once the user has
             // scrolled noticeably away from the bottom; hide it (and clear
             // the unread badge) the moment they scroll back to the latest
@@ -2742,8 +2743,13 @@ export default function ChatDetailScreen({
             if (nearBottom) {
               if (showScrollToBottomFab) setShowScrollToBottomFab(false);
               if (historyUnreadCount > 0) setHistoryUnreadCount(0);
-            } else if (y > 240 && !showScrollToBottomFab) {
+            } else if (distanceFromBottom > 240 && !showScrollToBottomFab) {
               setShowScrollToBottomFab(true);
+            }
+            // Load older messages when the user scrolls near the top of
+            // the chronological list (oldest message at top).
+            if (distanceFromTop < 120 && hasMoreMessages && !loadingMore) {
+              loadMoreMessages();
             }
           }}
           scrollEventThrottle={100}
@@ -2769,9 +2775,7 @@ export default function ChatDetailScreen({
               scrollToBottom(true);
             }
           }}
-          onEndReached={loadMoreMessages}
-          onEndReachedThreshold={0.1}
-          ListFooterComponent={
+          ListHeaderComponent={
             loadingMore ? (
               <View style={{ paddingVertical: 12, alignItems: "center" }}>
                 <ActivityIndicator size="small" color={theme.primary} />

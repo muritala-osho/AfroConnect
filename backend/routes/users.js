@@ -437,7 +437,10 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     }
 
     const isPremium = currentUser.premium?.isActive;
-    const FREE_MAX_DISTANCE_KM = 50;
+    // Aligned with the radar feed (`/radar/nearby-users`) which lets free
+    // users scan up to 100km. Keeping the two caps in sync ensures any user
+    // visible on the radar is also reachable from the swipe deck.
+    const FREE_MAX_DISTANCE_KM = 100;
 
     const rawMaxDist = normaliseMaxDistanceKm(
       maxDistance ? parseInt(maxDistance, 10) : currentUser.preferences?.maxDistance,
