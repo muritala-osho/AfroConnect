@@ -6,8 +6,20 @@ uri = "file://attached_assets/generated_images/verification_screen_mockup.png"
 type = "image"
 title = "generated_image"
 
+[[generated]]
+id = "Ah-Ezaz69DTVLBGWUPFDr"
+uri = "file://attached_assets/generated_images/afroconnect_chat_mockup.png"
+type = "image"
+title = "afroconnect chat mockup"
+
 [[outputs]]
 id = "c8kuVbaREpRs7VAGVkU1N"
 uri = "file://attached_assets/generated_images/verification_screen_mockup.png"
 type = "image"
 title = "AfroConnect Verification Screen — UI Mockup"
+
+[[outputs]]
+id = "HSugfoKZUVmKLmXXCQsch"
+uri = "file://attached_assets/generated_images/afroconnect_chat_mockup.png"
+type = "image"
+title = "AfroConnect chat between two users"
