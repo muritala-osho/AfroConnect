@@ -343,19 +343,20 @@ export default function ChatDetailScreen({
   // requestAnimationFrame plus a few staggered retries to survive slow layout
   // passes / FlashList's async measurement on lower-end devices and on web.
   const scrollToBottom = useCallback((animated: boolean = true) => {
+    // Two-phase scroll: one immediate rAF (for the common case where layout
+    // is already settled) and one short backstop at 250ms (for FlashList's
+    // async measurement on slower devices). The previous 4-stage staggered
+    // version (80/250/600ms) caused visible "jitter" on Android during
+    // rapid message bursts because each timeout would re-snap the list.
     const doScroll = () => {
-      try {
-        flatListRef.current?.scrollToEnd({ animated });
-      } catch {}
+      try { flatListRef.current?.scrollToEnd({ animated }); } catch {}
     };
     if (typeof requestAnimationFrame !== "undefined") {
       requestAnimationFrame(doScroll);
     } else {
       doScroll();
     }
-    setTimeout(doScroll, 80);
     setTimeout(doScroll, 250);
-    setTimeout(doScroll, 600);
   }, []);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Throttle outgoing typing emits to once per 2s, and remember whether we
@@ -2090,9 +2091,24 @@ export default function ChatDetailScreen({
   type EnrichedMessage = Message & { _showDateHeader: boolean };
 
   const enrichedMessages = useMemo<EnrichedMessage[]>(() => {
-    const sorted = [...messages].sort(
-      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    // Fast path: messages from the API and from optimistic-append are already
+    // in chronological order. Skip the sort unless we actually find an item
+    // out of order (paranoid safety net for socket race conditions).
+    let needsSort = false;
+    for (let i = 1; i < messages.length; i++) {
+      if (
+        new Date(messages[i].createdAt).getTime() <
+        new Date(messages[i - 1].createdAt).getTime()
+      ) {
+        needsSort = true;
+        break;
+      }
+    }
+    const sorted = needsSort
+      ? [...messages].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        )
+      : messages;
     return sorted.map((msg, index) => ({
       ...msg,
       _showDateHeader: shouldShowDateHeader(msg, index > 0 ? sorted[index - 1] : null),
@@ -2714,6 +2730,18 @@ export default function ChatDetailScreen({
           showsVerticalScrollIndicator={false}
           estimatedItemSize={80}
           initialNumToRender={20}
+          // Tell FlashList how to recycle items by content type. Without this,
+          // a text-bubble row may try to recycle a slot that previously held a
+          // tall image/voice row, causing visible layout shifts ("jumping")
+          // during fast scrolling. Grouping by type lets the recycler reuse
+          // similarly-sized cells.
+          getItemType={(item: EnrichedMessage) => {
+            if (item.type === 'system' || item.type === 'call') return 'system';
+            if (item.type === 'image' || item.type === 'video') return 'media';
+            if (item.type === 'audio') return 'audio';
+            if (item.type === 'gif')   return 'gif';
+            return 'text';
+          }}
           maintainVisibleContentPosition={{ autoscrollToBottomThreshold: 0.2, startRenderingFromBottom: true }}
           onScrollToIndexFailed={(info: { index: number; highestMeasuredFrameIndex?: number; averageItemLength?: number }) => {
             setTimeout(() => {

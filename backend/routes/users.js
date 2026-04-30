@@ -541,23 +541,43 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     users = users.slice(offset, offset + limit);
     const nextCursor = offset + limit < totalAvailable ? String(offset + limit) : null;
 
+    // Premium-only feature: free users see only a coarse distance bucket
+    // (e.g. "< 5 km", "5–15 km") rather than the exact figure, matching the
+    // frontend's "Upgrade to see exact distance" copy. Without this, a
+    // technically-savvy user could read the precise km value out of the raw
+    // API response even though the UI hides it.
+    const isPremiumViewer = !!req.user.premium?.isActive;
+    const bucketDistance = (km) => {
+      if (km == null || isNaN(km)) return null;
+      if (km < 5)  return { bucket: '< 5 km',   max: 5   };
+      if (km < 15) return { bucket: '5–15 km',  max: 15  };
+      if (km < 50) return { bucket: '15–50 km', max: 50  };
+      return                 { bucket: '50+ km',  max: 100 };
+    };
+
     users = users.map(user => {
       const privacy = user.privacySettings || {};
       const isOnline = user.onlineStatus === 'online' || user.online;
-      const distanceVisible = true;
 
       const visiblePhotos = (user.photos || []).filter(p => !p.privacy || p.privacy === 'public');
 
       // eslint-disable-next-line no-unused-vars
-      const { scoreBreakdown, ...userWithoutBreakdown } = user;
+      const { scoreBreakdown, distance: rawDistance, ...userWithoutBreakdown } = user;
+      const distancePayload = isPremiumViewer
+        ? rawDistance
+        : bucketDistance(rawDistance)?.max ?? null;
+      const distanceLabel = isPremiumViewer
+        ? null
+        : bucketDistance(rawDistance)?.bucket ?? null;
 
       return {
         ...userWithoutBreakdown,
+        distance: distancePayload,
+        distanceLabel,
         photos: visiblePhotos,
         age: privacy.hideAge ? null : user.age,
         online: privacy.showOnlineStatus === false ? null : isOnline,
         onlineStatus: privacy.showOnlineStatus === false ? null : user.onlineStatus,
-        distance: distanceVisible ? user.distance : null,
         lastActive: privacy.showLastActive === false ? null : user.lastActive,
       };
     });
