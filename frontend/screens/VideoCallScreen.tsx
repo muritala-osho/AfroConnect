@@ -327,6 +327,14 @@ export default function VideoCallScreen() {
 
       engine.enableVideo();
       engine.enableAudio();
+      // Make sure local video capture is actually turned on. enableVideo() is
+      // not always enough on the receiving side — without this the local
+      // RtcSurfaceView (uid:0) renders an empty surface and the user sees the
+      // remote person full-screen but no self-view PiP.
+      try { engine.enableLocalVideo(true); } catch {}
+      try { engine.enableLocalAudio(true); } catch {}
+      try { engine.muteLocalVideoStream(false); } catch {}
+      try { engine.muteLocalAudioStream(false); } catch {}
       engine.setDefaultAudioRouteToSpeakerphone(true);
 
       engine.setVideoEncoderConfiguration({
@@ -384,6 +392,15 @@ export default function VideoCallScreen() {
   const joinAgoraVideo = useCallback(
     async (callDataObj: any) => {
       if (agoraJoined.current) return;
+
+      // Camera + mic permission MUST be granted before initEngine kicks the
+      // capture pipeline, otherwise startPreview() opens an empty surface and
+      // the local self-view PiP renders blank.
+      if (Platform.OS !== "web") {
+        const ok = await ensureCallPermissions(true);
+        if (!ok) return;
+      }
+
       agoraJoined.current = true;
 
       if (Platform.OS === "web" || isExpoGo || !createAgoraRtcEngine) {
@@ -392,6 +409,16 @@ export default function VideoCallScreen() {
       }
 
       if (!engineRef.current) initEngine(callDataObj);
+
+      // Defensive: even if the engine already existed, make sure local capture
+      // is on before joining (covers re-join after a previous engine release).
+      try {
+        engineRef.current?.enableLocalVideo(true);
+        engineRef.current?.enableLocalAudio(true);
+        engineRef.current?.muteLocalVideoStream(false);
+        engineRef.current?.muteLocalAudioStream(false);
+        engineRef.current?.startPreview();
+      } catch {}
 
       let joinToken = callDataObj.token;
       let joinUid   = callDataObj.uid || 0;
@@ -850,9 +877,15 @@ export default function VideoCallScreen() {
             />
           )}
 
-          {/* Local self-view */}
+          {/* Local self-view — the `key` swap forces a clean remount of the
+              native SurfaceView when we transition from full-screen (no remote
+              yet) to PiP (remote joined). Without it, the underlying Android
+              Surface can keep its old dimensions and the PiP renders blank,
+              which is exactly the "I don't see myself in the box" symptom
+              after accepting an incoming video call. */}
           {showVideo && !isCameraOff && (
             <RtcSurfaceView
+              key={isConnected && hasRemoteVideo ? "local-pip" : "local-fs"}
               canvas={{
                 uid: 0,
                 sourceType: VideoSourceType.VideoSourceCamera,
@@ -860,6 +893,8 @@ export default function VideoCallScreen() {
                 mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
               }}
               style={isConnected && hasRemoteVideo ? s.localPip : StyleSheet.absoluteFillObject}
+              zOrderMediaOverlay={isConnected && hasRemoteVideo}
+              zOrderOnTop={isConnected && hasRemoteVideo}
             />
           )}
 

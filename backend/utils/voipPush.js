@@ -50,7 +50,7 @@ function getProvider() {
  * @param {string} payload.callType   - 'voice' | 'video'
  * @param {object} payload.callData   - Raw call data from Agora / socket
  */
-async function sendVoipPush(voipToken, { callerId, callerName, callType, callData } = {}) {
+async function sendVoipPush(voipToken, { callerId, callerName, callerPhoto, callType, callData } = {}) {
   if (!voipToken) {
     logger.warn('[VoIP Push] No VoIP token provided — skipping.');
     return;
@@ -73,7 +73,7 @@ async function sendVoipPush(voipToken, { callerId, callerName, callType, callDat
   notification.priority    = 10;
   notification.pushType    = 'voip';
   notification.expiry      = Math.floor(Date.now() / 1000) + 30;
-  notification.payload     = { callerId, callerName, callType, callData };
+  notification.payload     = { callerId, callerName, callerPhoto, callType, callData };
 
   try {
     const result = await provider.send(notification, voipToken);

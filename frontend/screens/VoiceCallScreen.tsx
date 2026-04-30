@@ -336,14 +336,17 @@ export default function VoiceCallScreen() {
         callType: "voice",
       };
 
-      /* If WebView already loaded, send now; otherwise queue for onLoad */
-      if (webViewRef.current) {
+      /* webViewRef is set the moment the component renders, but the WebView's
+       * JavaScript message listener (window.addEventListener('message', …))
+       * isn't registered until the page actually loads. Posting before that
+       * silently drops the message — the SDK never joins, both sides go silent
+       * after accept. Always queue and let the webviewReady effect flush it. */
+      pendingJoinRef.current = msg;
+      if (webviewReady && webViewRef.current) {
         webViewRef.current.postMessage(JSON.stringify(msg));
-      } else {
-        pendingJoinRef.current = msg;
       }
     },
-    [isIncoming, authToken, get, requestMicPermission],
+    [isIncoming, authToken, get, requestMicPermission, webviewReady],
   );
 
   /* ── End call ── */
@@ -711,13 +714,29 @@ export default function VoiceCallScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: agoraUrl }}
-          style={{ width: 0, height: 0, position: "absolute" }}
+          /* A 1×1 transparent webview keeps the WebRTC media pipeline alive on
+           * Android — a 0×0 view can have its layer skipped, silently muting
+           * audio after the user accepts the call. We keep it visually hidden
+           * via opacity:0. */
+          style={{ width: 1, height: 1, position: "absolute", opacity: 0, top: 0, left: 0 }}
+          originWhitelist={["*"]}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
           mediaCapturePermissionGrantType="grant"
+          mixedContentMode="always"
           javaScriptEnabled
           domStorageEnabled
+          /* Android: WebView denies getUserMedia by default. Without this the
+           * mic is never granted, so AgoraRTC.createMicrophoneAudioTrack()
+           * fails silently and neither side hears anything. Grant exactly
+           * what the page is asking for (mic for voice, mic+camera for video). */
+          onPermissionRequest={(event: any) => {
+            try {
+              event?.nativeEvent?.grant?.(event.nativeEvent.resources);
+            } catch {}
+          }}
           onLoad={() => setWebviewReady(true)}
+          onLoadEnd={() => setWebviewReady(true)}
           onMessage={(e) => {
             try {
               const d = JSON.parse(e.nativeEvent.data);

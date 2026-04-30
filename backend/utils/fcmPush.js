@@ -79,8 +79,23 @@ async function sendFcmDataMessage(fcmToken, data) {
       token: fcmToken,
       data: stringData,
       android: {
+        // priority:'high' tells FCM to deliver immediately and bypass Doze for
+        // a short window — required to wake a killed app for an incoming call.
         priority: 'high',
+        // 30s TTL: if we can't reach the device within the ring window, drop
+        // the message rather than ringing later when the call is already over.
         ttl: 30000,
+        // collapseKey makes a 2nd ring from the same caller replace the 1st in
+        // the FCM queue rather than queueing two rings.
+        collapseKey: `call_${data.callerId || 'unknown'}`,
+      },
+      // APNs config is for fallback only — the real iOS killed-app wake comes
+      // from the separate VoIP push in voipPush.js.
+      apns: {
+        headers: {
+          'apns-priority': '10',
+          'apns-push-type': 'alert',
+        },
       },
     });
     logger.log('[FCM] ✅ Data message sent:', result);
@@ -100,13 +115,14 @@ async function sendFcmDataMessage(fcmToken, data) {
  * @param {string} params.callType  'voice' | 'video'
  * @param {object} params.callData
  */
-async function sendCallDataMessage(fcmToken, { callerId, callerName, callType, callData } = {}) {
+async function sendCallDataMessage(fcmToken, { callerId, callerName, callerPhoto, callType, callData } = {}) {
   return sendFcmDataMessage(fcmToken, {
-    type:       'call',
-    callerId:   callerId   || '',
-    callerName: callerName || '',
-    callType:   callType   || 'voice',
-    callData:   callData   || {},
+    type:        'call',
+    callerId:    callerId    || '',
+    callerName:  callerName  || '',
+    callerPhoto: callerPhoto || '',
+    callType:    callType    || 'voice',
+    callData:    callData    || {},
   });
 }
 

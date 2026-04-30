@@ -639,19 +639,46 @@ io.on('connection', (socket) => {
         filter._id = data.messageId;
       }
 
+      const seenAt = new Date();
       await Message.updateMany(filter, {
-        $set: { seen: true, seenAt: new Date(), status: 'seen' }
+        $set: { seen: true, seenAt, status: 'seen' }
       });
+
+      // Resolve the OTHER participant of this chat so we can deliver the read
+      // receipt directly to their user-room. Without this, the receipt only
+      // reaches sockets currently joined to the `chatId` room — and the sender
+      // may not be in that room (e.g. they backgrounded the chat or are on a
+      // different screen). That makes the "Seen at …" caption never appear.
+      const seenAtIso = seenAt.toISOString();
+      const payload = {
+        chatId:    data.chatId,
+        matchId:   data.chatId,
+        userId:    socket.userId,
+        readBy:    socket.userId,
+        messageId: data.messageId,
+        readAt:    seenAtIso,
+        seenAt:    seenAtIso,
+      };
+
+      io.to(data.chatId).emit('chat:message-read', payload);
+
+      try {
+        const Match = require('./models/Match');
+        const match = await Match.findById(data.chatId).select('users').lean();
+        if (match?.users?.length) {
+          for (const uid of match.users) {
+            const uidStr = uid.toString();
+            if (uidStr !== socket.userId) {
+              io.to(uidStr).emit('chat:message-read', payload);
+            }
+          }
+        }
+      } catch (innerErr) {
+        logger.error('Error broadcasting read receipt to sender room:', innerErr);
+      }
     } catch (err) {
       logger.error('Error marking messages as read:', err);
     }
-
-    io.to(data.chatId).emit('chat:message-read', {
-      chatId: data.chatId,
-      userId: socket.userId,
-      messageId: data.messageId,
-      readAt: new Date().toISOString()
-    });
   };
 
   socket.on('chat:mark-read', handleMarkRead);
@@ -885,6 +912,8 @@ io.on('connection', (socket) => {
           );
           const callerName = callerInfo?.name || 'Someone';
 
+          const callerPhoto = callerInfo?.photo || '';
+
           // 1) iOS — VoIP (PushKit) push: wakes the app even when killed and triggers native CallKit UI
           if (targetUser?.voipPushToken) {
             try {
@@ -892,6 +921,7 @@ io.on('connection', (socket) => {
               await sendVoipPush(targetUser.voipPushToken, {
                 callerId,
                 callerName,
+                callerPhoto,
                 callType,
                 callData,
               });
@@ -908,6 +938,7 @@ io.on('connection', (socket) => {
               await sendCallDataMessage(targetUser.fcmToken, {
                 callerId,
                 callerName,
+                callerPhoto,
                 callType,
                 callData,
               });

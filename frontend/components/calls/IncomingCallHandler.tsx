@@ -320,9 +320,24 @@ export default function IncomingCallHandler() {
     if (data?.type === 'call') {
       await stopRingtone();
       const callerId = data.callerId;
-      if (callerId) reportCallEnded(callerId);
+      // IMPORTANT: do NOT call reportCallEnded() here. That tells CallKeep /
+      // CallKit the call has terminated, which fires the `endCall` listener
+      // and emits `call:end` to the backend — the backend then bounces a
+      // `call:ended` event back to us, and the call screen gets dismissed
+      // the moment it finishes mounting. Mark the call as ANSWERED instead
+      // so CallKit/ConnectionService transitions cleanly into "in call".
+      if (callerId) setCallActive(callerId);
       dismissModal();
       socketService.acceptCall({ callerId: data.callerId, callData: data.callData });
+      setActiveCall({
+        userId:     data.callerId,
+        userName:   data.callerName || 'Unknown',
+        userPhoto:  data.callerPhoto || '',
+        isIncoming: true,
+        callStatus: 'connected',
+        callType:   data.callType === 'video' ? 'video' : 'voice',
+        duration:   0,
+      });
       navigation.navigate(data.callType === 'video' ? 'VideoCall' : 'VoiceCall', {
         userId:       data.callerId,
         userName:     data.callerName,
