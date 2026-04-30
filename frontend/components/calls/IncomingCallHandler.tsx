@@ -137,6 +137,62 @@ export default function IncomingCallHandler() {
     });
   }, [slideAnim, opacityAnim]);
 
+  /* ── dismiss any presented "Incoming call" notifications for this caller
+   *    (used by socket call:ended/declined listeners AND by the auto-dismiss
+   *    timeout below, so the lock-screen banner is replaced cleanly). ── */
+  const dismissCallNotificationsForCaller = useCallback(async (callerId?: string) => {
+    try {
+      const presented = await Notifications.getPresentedNotificationsAsync();
+      await Promise.all(
+        presented
+          .filter((n) => {
+            const d: any = n.request?.content?.data || {};
+            if (d.type !== 'call') return false;
+            if (callerId && d.callerId && d.callerId !== callerId) return false;
+            return true;
+          })
+          .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+      );
+    } catch (err) {
+      logger.warn('[Notifications] dismiss call notifications failed:', err);
+    }
+  }, []);
+
+  /* ── present a local "Missed {voice|video} call from {name}" notification
+   *    on the callee's own device. Used when the auto-dismiss timer fires
+   *    (the callee never answered) so the lock-screen "Incoming call…" banner
+   *    is replaced by an actionable missed-call entry that survives even if
+   *    the backend's missed-call push is delayed or lost in transit. ── */
+  const presentLocalMissedCallNotification = useCallback(
+    async (data: IncomingCallData) => {
+      try {
+        const callerName = data.callerInfo?.name || 'Unknown';
+        const callType = data.callData?.callType || 'audio';
+        const isVideo = callType === 'video';
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: `Missed ${isVideo ? 'video' : 'voice'} call`,
+            body: `from ${callerName}`,
+            data: {
+              type: 'missed_call',
+              screen: 'ChatDetail',
+              callerId: data.callerId,
+              senderId: data.callerId,
+              senderName: callerName,
+              senderPhoto: data.callerInfo?.photo || '',
+              callType,
+            },
+            sound: 'default',
+          },
+          trigger: null,
+        });
+      } catch (err) {
+        logger.warn('[Notifications] present local missed-call failed:', err);
+      }
+    },
+    [],
+  );
+
   const showCallUI = useCallback(async (data: IncomingCallData) => {
     setIncomingCall(data);
     setIsVisible(true);
@@ -180,8 +236,24 @@ export default function IncomingCallHandler() {
       reportCallEnded(data.callerId);
       socketService.missedCall?.({ targetUserId: data.callerId, callType: data.callData?.callType || 'audio' });
       dismissModal();
+      // Replace the "Incoming call…" lock-screen banner with a "Missed call
+      // from X" notification on THIS device. Without this, the callee's
+      // original ringing notification just disappeared silently and no
+      // lock-screen entry replaced it (the backend's missed-call push only
+      // fires for the *caller*'s timeout, not the callee's).
+      await dismissCallNotificationsForCaller(data.callerId);
+      await presentLocalMissedCallNotification(data);
     }, AUTO_DISMISS_MS);
-  }, [playRingtone, slideAnim, opacityAnim, pulseAnim, stopRingtone, dismissModal]);
+  }, [
+    playRingtone,
+    slideAnim,
+    opacityAnim,
+    pulseAnim,
+    stopRingtone,
+    dismissModal,
+    dismissCallNotificationsForCaller,
+    presentLocalMissedCallNotification,
+  ]);
 
   /* ── CallKeep native UI event listeners ── */
   useEffect(() => {

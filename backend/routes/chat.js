@@ -452,19 +452,32 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
         const totalUnread = await Message.countDocuments({ receiver, seen: false });
 
+        const senderPhoto = req.user.photos?.[0] || req.user.profilePicture || "";
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
             badge: totalUnread,
+            // Show the sender's avatar beside the lock-screen notification.
+            //  - Android (FCM v1): Expo translates `richContent.image` to
+            //    `notification.image`, rendered as the big-picture / expanded
+            //    large icon by the system notification UI.
+            //  - iOS (APNs): paired with `mutableContent: true`, the iOS
+            //    Notification Service Extension downloads the image and
+            //    attaches it (requires the build to ship a service extension;
+            //    without one, iOS quietly falls back to a plain notification).
+            ...(senderPhoto && senderPhoto.startsWith("https://")
+              ? { richContent: { image: senderPhoto }, mutableContent: true }
+              : {}),
             data: {
               type: "message",
               screen: "ChatDetail",
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
               senderName,
-              senderPhoto: req.user.photos?.[0] || req.user.profilePicture || "",
+              senderPhoto,
             },
           },
           "message",
@@ -830,19 +843,32 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
 
         const totalUnread = await Message.countDocuments({ receiver, seen: false });
 
+        const senderPhoto = req.user.photos?.[0] || req.user.profilePicture || "";
+
         await sendSmartNotification(
           rcvUser,
           {
             title: senderName,
             body: notifBody,
             badge: totalUnread,
+            // Show the sender's avatar beside the lock-screen notification.
+            //  - Android (FCM v1): Expo translates `richContent.image` to
+            //    `notification.image`, rendered as the big-picture / expanded
+            //    large icon by the system notification UI.
+            //  - iOS (APNs): paired with `mutableContent: true`, the iOS
+            //    Notification Service Extension downloads the image and
+            //    attaches it (requires the build to ship a service extension;
+            //    without one, iOS quietly falls back to a plain notification).
+            ...(senderPhoto && senderPhoto.startsWith("https://")
+              ? { richContent: { image: senderPhoto }, mutableContent: true }
+              : {}),
             data: {
               type: "message",
               screen: "ChatDetail",
               matchId: matchId.toString(),
               senderId: req.user._id.toString(),
               senderName,
-              senderPhoto: req.user.photos?.[0] || req.user.profilePicture || "",
+              senderPhoto,
             },
           },
           "message",

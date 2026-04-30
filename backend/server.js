@@ -846,6 +846,12 @@ io.on('connection', (socket) => {
         {
           title: notifTitle,
           body: notifBody,
+          // Show the caller's avatar beside the lock-screen "Missed call" push
+          // (same Android FCM image / iOS service-extension pipeline as chat
+          // pushes — see backend/utils/pushNotifications.js for full details).
+          ...(callerPhoto && callerPhoto.startsWith('https://')
+            ? { richContent: { image: callerPhoto }, mutableContent: true }
+            : {}),
           data: {
             type: 'call',
             screen: 'ChatDetail',

@@ -58,11 +58,21 @@ async function checkPushReceipts(ticketIdMap) {
   }
 }
 
-async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge, userId, type }) {
+async function sendExpoPushNotification(pushToken, { title, body, data, priority, sound, channelId, ttl, badge, userId, type, richContent, mutableContent, categoryIdentifier }) {
   if (!Expo.isExpoPushToken(pushToken)) {
     logger.warn(`[Push] Invalid Expo push token — skipping: ${pushToken}`);
     logPush({ pushToken, title, body, data, userId, type, status: 'failed', errorMessage: 'Invalid Expo push token' }).catch(() => {});
     return null;
+  }
+
+  // Sanitize richContent.image — Expo / FCM / APNs require an HTTPS URL.
+  // If it isn't HTTPS, drop it to avoid silent push delivery failures.
+  let safeRichContent;
+  if (richContent && typeof richContent.image === 'string') {
+    const img = richContent.image.trim();
+    if (img.startsWith('https://')) {
+      safeRichContent = { image: img };
+    }
   }
 
   const message = {
@@ -75,6 +85,17 @@ async function sendExpoPushNotification(pushToken, { title, body, data, priority
     channelId: channelId || 'default',
     ...(ttl !== undefined ? { ttl } : {}),
     ...(badge !== undefined ? { badge } : {}),
+    // Rich notification fields:
+    //  - `richContent.image` is translated by Expo to FCM `notification.image`
+    //    (Android shows it as the big-picture/large-icon expansion) and to
+    //    iOS APNs attachment (requires the app to ship a Notification Service
+    //    Extension; without one, iOS falls back to a plain notification).
+    //  - `mutableContent: true` is required for the iOS service-extension hook
+    //    to fire so the image can be downloaded & attached on-device.
+    //  - `categoryIdentifier` lets iOS group rich messages under a category.
+    ...(safeRichContent ? { richContent: safeRichContent } : {}),
+    ...(mutableContent !== undefined ? { mutableContent } : {}),
+    ...(categoryIdentifier ? { categoryIdentifier } : {}),
   };
 
   try {
@@ -252,6 +273,11 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     channelId: payload.channelId || channelMap[type] || 'default',
     ttl: ttlMap[type] ?? 86400,
     ...(payload.badge !== undefined ? { badge: payload.badge } : {}),
+    ...(payload.richContent ? { richContent: payload.richContent } : {}),
+    ...(payload.mutableContent !== undefined ? { mutableContent: payload.mutableContent } : {}),
+    ...(payload.categoryIdentifier ? { categoryIdentifier: payload.categoryIdentifier } : {}),
+    userId,
+    type,
   });
 
   return true;
