@@ -976,6 +976,7 @@ io.on('connection', (socket) => {
           const callerPhoto = callerInfo?.photo || '';
 
           // 1) iOS — VoIP (PushKit) push: wakes the app even when killed and triggers native CallKit UI
+          let sentVoip = false;
           if (targetUser?.voipPushToken) {
             try {
               const { sendVoipPush } = require('./utils/voipPush');
@@ -986,6 +987,7 @@ io.on('connection', (socket) => {
                 callType,
                 callData,
               });
+              sentVoip = true;
             } catch (voipErr) {
               logger.error('[VoIP Push] Error:', voipErr?.message || voipErr);
             }
@@ -993,6 +995,7 @@ io.on('connection', (socket) => {
 
           // 2) Android — FCM data-only message: wakes killed app → Firebase background
           //    handler calls CallKeep.displayIncomingCall() → native ConnectionService UI
+          let sentFcmData = false;
           if (targetUser?.fcmToken) {
             try {
               const { sendCallDataMessage } = require('./utils/fcmPush');
@@ -1003,30 +1006,38 @@ io.on('connection', (socket) => {
                 callType,
                 callData,
               });
+              sentFcmData = true;
             } catch (fcmErr) {
               logger.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
             }
           }
 
-          // 3) Regular Expo push (covers Android and iOS as fallback)
-          const { sendSmartNotification } = require('./utils/pushNotifications');
-          await sendSmartNotification(
-            targetUser,
-            {
-              title: `Incoming ${callType} call`,
-              body: `${callerName} is calling you...`,
-              data: {
-                type: 'call',
-                callerId,
-                callType,
-                callData,
-                callerName,
-                callerPhoto: callerInfo?.photo || '',
+          // 3) Regular Expo push — only used as a true fallback when neither the
+          //    iOS VoIP push nor the Android FCM data message could be sent.
+          //    When either native channel fires, the user already sees the native
+          //    call screen (CallKit / ConnectionService). Sending a regular
+          //    visible notification on top of that creates a confusing double
+          //    notification — the banner appearing alongside the call screen.
+          if (!sentVoip && !sentFcmData && targetUser?.pushToken) {
+            const { sendSmartNotification } = require('./utils/pushNotifications');
+            await sendSmartNotification(
+              targetUser,
+              {
+                title: `Incoming ${callType} call`,
+                body: `${callerName} is calling you...`,
+                data: {
+                  type: 'call',
+                  callerId,
+                  callType,
+                  callData,
+                  callerName,
+                  callerPhoto: callerInfo?.photo || '',
+                },
               },
-            },
-            notifType,
-            callerId,
-          );
+              notifType,
+              callerId,
+            );
+          }
         } catch (err) {
           logger.error('Failed to send call push notification:', err);
         }
