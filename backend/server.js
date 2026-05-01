@@ -885,11 +885,11 @@ io.on('connection', (socket) => {
         title: notifTitle,
         body: notifBody,
         data: {
-          type: 'call',
+          type: 'missed_call',
           screen: 'ChatDetail',
-          senderId: callerId.toString(),
-          senderName: callerName,
-          senderPhoto: callerPhoto,
+          callerId: callerId.toString(),
+          callerName: callerName,
+          callerPhoto: callerPhoto,
           callType,
         },
       });
@@ -907,11 +907,12 @@ io.on('connection', (socket) => {
             ? { richContent: { image: callerPhoto }, mutableContent: true }
             : {}),
           data: {
-            type: 'call',
+            type: 'missed_call',
             screen: 'ChatDetail',
-            senderId: callerId.toString(),
-            senderName: callerName,
-            senderPhoto: callerPhoto,
+            callerId: callerId.toString(),
+            callerName: callerName,
+            callerPhoto: callerPhoto,
+            callType,
           },
         },
         'message',
@@ -1146,6 +1147,21 @@ io.on('connection', (socket) => {
         sendMissedCallPush(socket.userId, targetUserId, callType || 'audio').catch((e) =>
           logger.error('[MissedCallPush] error:', e?.message || e)
         );
+
+        // Send a high-priority "cancel_call" FCM data message so that Android
+        // wakes the callee's killed app background handler, which then calls
+        // reportCallEnded() to dismiss the stale CallKeep / ConnectionService
+        // incoming-call notification. Without this, the native call UI stays
+        // visible indefinitely even after the caller has hung up.
+        try {
+          const { sendCancelCallDataMessage } = require('./utils/fcmPush');
+          const callee = await User.findById(targetUserId).select('fcmToken');
+          if (callee?.fcmToken) {
+            await sendCancelCallDataMessage(callee.fcmToken, { callerId: socket.userId });
+          }
+        } catch (cancelErr) {
+          logger.error('[CancelCallFCM] error:', cancelErr?.message || cancelErr);
+        }
       }
     }
   });
@@ -1173,6 +1189,17 @@ io.on('connection', (socket) => {
       sendMissedCallPush(socket.userId, targetUserId, callType || 'audio').catch((e) =>
         logger.error('[MissedCallPush] error:', e?.message || e)
       );
+
+      // Also dismiss any stale CallKeep notification on the callee's device
+      try {
+        const { sendCancelCallDataMessage } = require('./utils/fcmPush');
+        const callee = await User.findById(targetUserId).select('fcmToken');
+        if (callee?.fcmToken) {
+          await sendCancelCallDataMessage(callee.fcmToken, { callerId: socket.userId });
+        }
+      } catch (cancelErr) {
+        logger.error('[CancelCallFCM/missed] error:', cancelErr?.message || cancelErr);
+      }
     }
   });
 

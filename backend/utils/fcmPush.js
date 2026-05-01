@@ -127,6 +127,23 @@ async function sendCallDataMessage(fcmToken, { callerId, callerName, callerPhoto
 }
 
 /**
+ * Sends a high-priority FCM DATA message to dismiss a stale CallKeep
+ * incoming-call notification when the caller cancels before the callee answers.
+ * The Firebase background handler on the callee's device calls reportCallEnded()
+ * which removes the native ConnectionService / CallKit call UI.
+ *
+ * @param {string} fcmToken
+ * @param {object} params
+ * @param {string} params.callerId
+ */
+async function sendCancelCallDataMessage(fcmToken, { callerId } = {}) {
+  return sendFcmDataMessage(fcmToken, {
+    type:     'cancel_call',
+    callerId: callerId || '',
+  });
+}
+
+/**
  * Sends a data-only FCM message for a chat message to an Android device.
  * This wakes the app's background handler (setBackgroundMessageHandler) which
  * then displays a MessagingStyle notification with the sender's avatar and an
@@ -160,4 +177,4 @@ async function sendMessageDataMessage(fcmToken, { matchId, messageId, senderId, 
   });
 }
 
-module.exports = { sendFcmDataMessage, sendCallDataMessage, sendMessageDataMessage };
+module.exports = { sendFcmDataMessage, sendCallDataMessage, sendCancelCallDataMessage, sendMessageDataMessage };

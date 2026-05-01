@@ -76,6 +76,28 @@ export function registerFirebaseBackgroundHandler() {
       return;
     }
 
+    // ── Cancel call: dismiss stale CallKeep / ConnectionService call UI ──────
+    // The backend sends this when the caller hangs up before the callee answers,
+    // so the native incoming-call screen on the callee's locked/killed device is
+    // removed and the user isn't taken into a dead call if they tap "Answer".
+    if (data?.type === 'cancel_call') {
+      const cancelCallerId = data.callerId || data.caller_id;
+      try {
+        const { reportCallEnded } = require('./callkeep');
+        if (cancelCallerId) {
+          await reportCallEnded(cancelCallerId);
+        }
+      } catch (err) {
+        logger.warn('[FCM] Failed to dismiss CallKeep on cancel_call:', err);
+      }
+      // Clear any pending cold-start call data so the app doesn't navigate to
+      // the call screen when it eventually opens.
+      if ((global as any).__pendingVoipCall) {
+        (global as any).__pendingVoipCall = null;
+      }
+      return;
+    }
+
     // ── VoIP call: show native incoming-call UI via CallKeep ─────────────────
     if (data?.type !== 'call' && data?.type !== 'voice_call' && data?.type !== 'video_call') {
       return;
