@@ -199,8 +199,8 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
       {/* About modal */}
       {showAbout && (
         <Modal visible={showAbout} animationType="slide" transparent={false}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, backgroundColor: theme.background }}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: theme.background }}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
               <View style={{ padding: 20, paddingTop: insets.top + 20 }}>
                 <Pressable onPress={() => setShowAbout(false)} style={{ alignSelf: "flex-end", padding: 10 }}>
                   <Ionicons name="close" size={30} color={theme.text} />
