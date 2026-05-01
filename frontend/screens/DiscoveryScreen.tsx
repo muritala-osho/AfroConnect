@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal, TextInput } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import Animated, { 
   useAnimatedStyle, 
@@ -272,6 +272,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const [passportActive, setPassportActive] = useState(false);
   const [passportCity, setPassportCity] = useState('');
   const [showPassportModal, setShowPassportModal] = useState(false);
+  const [passportSearch, setPassportSearch] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countries, setCountries] = useState<string[]>([]);
@@ -2070,7 +2071,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           visible={showPassportModal}
           transparent
           animationType="slide"
-          onRequestClose={() => setShowPassportModal(false)}
+          onRequestClose={() => { setShowPassportModal(false); setPassportSearch(''); }}
         >
           <View style={styles.passportModalOverlay}>
             <View style={[styles.passportModalContent, { backgroundColor: theme.surface }]}>
@@ -2078,12 +2079,29 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 <ThemedText style={[styles.passportModalTitle, { color: theme.text }]}>
                   Passport - Choose a City
                 </ThemedText>
-                <Pressable onPress={() => setShowPassportModal(false)}>
+                <Pressable onPress={() => { setShowPassportModal(false); setPassportSearch(''); }}>
                   <Feather name="x" size={24} color={theme.text} />
                 </Pressable>
               </View>
-              <ScrollView style={styles.passportCityList}>
-                {PASSPORT_CITIES.map((city) => (
+              <View style={[styles.passportSearchContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Feather name="search" size={16} color={theme.textSecondary} style={styles.passportSearchIcon} />
+                <TextInput
+                  style={[styles.passportSearchInput, { color: theme.text }]}
+                  placeholder="Search cities..."
+                  placeholderTextColor={theme.textSecondary}
+                  value={passportSearch}
+                  onChangeText={setPassportSearch}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  clearButtonMode="while-editing"
+                />
+              </View>
+              <ScrollView style={styles.passportCityList} keyboardShouldPersistTaps="handled">
+                {PASSPORT_CITIES.filter((city) => {
+                  if (!passportSearch.trim()) return true;
+                  const q = passportSearch.toLowerCase();
+                  return city.name.toLowerCase().includes(q) || city.country.toLowerCase().includes(q);
+                }).map((city) => (
                   <Pressable
                     key={city.name}
                     style={[
@@ -2091,7 +2109,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                       { borderBottomColor: theme.border },
                       passportCity === city.name && { backgroundColor: theme.primary + '15' }
                     ]}
-                    onPress={() => handleSelectPassportCity(city)}
+                    onPress={() => { handleSelectPassportCity(city); setPassportSearch(''); }}
                   >
                     <View>
                       <ThemedText style={[styles.passportCityName, { color: theme.text }]}>{city.name}</ThemedText>
@@ -3109,6 +3127,24 @@ const styles = StyleSheet.create({
   passportModalTitle: {
     fontSize: 20,
     fontWeight: '700',
+  },
+  passportSearchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 8,
+  },
+  passportSearchIcon: {
+    marginRight: 8,
+  },
+  passportSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    paddingVertical: 0,
   },
   passportCityList: {
     paddingHorizontal: Spacing.lg,
