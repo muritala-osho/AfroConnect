@@ -1463,7 +1463,6 @@ export default function ChatsScreen({ navigation }: ChatsScreenProps) {
                   .filter(
                     (s) =>
                       s.id !== user?.id &&
-                      s.name !== user?.name &&
                       s.name !== "Your Story",
                   )
                   .map((storyUser) => {

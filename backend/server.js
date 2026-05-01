@@ -868,7 +868,12 @@ io.on('connection', (socket) => {
       ]);
       if (!receiver) return;
       const callerName = caller?.name || 'Someone';
-      const callerPhoto = caller?.photos?.[0] || caller?.profilePicture || '';
+      /* photos[0] may be a photo object {url, _id, ...} or a plain string URL
+       * depending on how the User model stores them — extract the string safely. */
+      const rawPhoto = caller?.photos?.[0];
+      const callerPhoto = (typeof rawPhoto === 'string' ? rawPhoto : rawPhoto?.url || rawPhoto?.uri || '')
+        || caller?.profilePicture
+        || '';
       const isVideo = callType === 'video';
       const notifTitle = `Missed ${isVideo ? 'video' : 'voice'} call from ${callerName}`;
       const notifBody = `Tap to call back`;

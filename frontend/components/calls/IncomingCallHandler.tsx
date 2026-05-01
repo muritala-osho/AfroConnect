@@ -524,6 +524,8 @@ export default function IncomingCallHandler() {
         userPhoto: data.senderPhoto || data.userPhoto || '',
         matchId:   data.matchId,
       } as any);
+    } else if (data?.type === 'story') {
+      navigation.navigate('ChatsTab' as any);
     } else if (data?.type === 'match') {
       navigation.navigate('Discovery');
     }

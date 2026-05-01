@@ -113,6 +113,49 @@ router.post('/', protect, uploadLimiter, validate(schemas.stories.createStory), 
       createdAt: story.createdAt,
     });
 
+    // Send a push notification to every matched user so they know a new story
+    // is available even when their app is backgrounded or killed.
+    try {
+      const poster = await User.findById(req.user._id).select('name photos profilePicture');
+      const posterName = poster?.name || 'Someone';
+      const rawPosterPhoto = poster?.photos?.[0];
+      const posterPhoto = (typeof rawPosterPhoto === 'string' ? rawPosterPhoto : rawPosterPhoto?.url || '') || poster?.profilePicture || '';
+      const matchedIds = await getMatchedUserIds(req.user._id);
+
+      if (matchedIds.length > 0) {
+        const matchedUsers = await User.find({ _id: { $in: matchedIds } })
+          .select('pushToken pushNotificationsEnabled muteSettings notificationPreferences');
+
+        await Promise.all(matchedUsers.map(async (matchedUser) => {
+          try {
+            await sendSmartNotification(
+              matchedUser,
+              {
+                title: posterName,
+                body: `posted a new ${type === 'video' ? 'video' : type === 'text' ? 'text' : 'photo'} story`,
+                ...(posterPhoto && posterPhoto.startsWith('https://')
+                  ? { richContent: { image: posterPhoto }, mutableContent: true }
+                  : {}),
+                data: {
+                  type: 'story',
+                  screen: 'ChatsTab',
+                  senderId: req.user._id.toString(),
+                  senderName: posterName,
+                  senderPhoto: posterPhoto,
+                },
+              },
+              'story',
+              req.user._id.toString(),
+            );
+          } catch (pushErr) {
+            console.error('[Stories] Push to matched user failed:', pushErr?.message || pushErr);
+          }
+        }));
+      }
+    } catch (pushErr) {
+      console.error('[Stories] Matched user push notifications failed:', pushErr?.message || pushErr);
+    }
+
     res.status(201).json({ success: true, story });
   } catch (error) {
     console.error('Create story error:', error);
