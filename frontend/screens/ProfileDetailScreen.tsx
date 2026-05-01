@@ -1067,25 +1067,20 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   actionBtnCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderWidth: 2.5,
   },
   passBtn: {
     borderColor: '#FF6B6B',
-    backgroundColor: '#FF6B6B08',
+    backgroundColor: '#FF6B6B20',
   },
   likeBtn: {
     borderColor: '#4CAF50',
-    backgroundColor: '#4CAF5008',
+    backgroundColor: '#4CAF5020',
   },
   likeBtnActive: {
     backgroundColor: '#4CAF50',
@@ -1093,7 +1088,7 @@ const styles = StyleSheet.create({
   },
   superLikeBtn: {
     borderColor: '#FFB800',
-    backgroundColor: '#FFB80008',
+    backgroundColor: '#FFB80020',
   },
   messageBtn: {
     flex: 1,
