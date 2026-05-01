@@ -129,12 +129,18 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
           const scoreB = b.compatibilityScore || 0;
           return scoreB - scoreA;
         });
+        setCurrentIndex(0);
+        setCurrentPhotoIndex(0);
         setPotentialMatches(mappedUsers);
       } else {
+        setCurrentIndex(0);
+        setCurrentPhotoIndex(0);
         setPotentialMatches([]);
       }
     } catch (error) {
       logger.error("Error loading potential matches:", error);
+      setCurrentIndex(0);
+      setCurrentPhotoIndex(0);
       setPotentialMatches([]);
     } finally {
       setLoading(false);
@@ -170,6 +176,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
     }
 
     if (currentIndex < potentialMatches.length - 1) {
+      setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
       loadPotentialMatches();
@@ -214,6 +221,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
     }
 
     if (currentIndex < potentialMatches.length - 1) {
+      setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
       loadPotentialMatches();
@@ -279,9 +287,10 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
     }
 
     if (currentIndex < potentialMatches.length - 1) {
+      setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
-      navigation.goBack();
+      loadPotentialMatches();
     }
   };
 
@@ -306,6 +315,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
               }, token);
               Alert.alert('Reported', 'Thank you. We will review this profile.');
               if (currentIndex < potentialMatches.length - 1) {
+                setCurrentPhotoIndex(0);
                 setCurrentIndex(currentIndex + 1);
               } else {
                 loadPotentialMatches();
