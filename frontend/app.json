@@ -81,6 +81,8 @@
     "plugins": [
       "./plugins/withCallKeep",
       "./plugins/withFirebaseManifestFix",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
       "@notifee/react-native",
       [
         "expo-splash-screen",
