@@ -658,13 +658,13 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             reportStackExhausted();
           }
         } else {
-          setUsers(filteredUsers);
-          setCurrentIndex(0);
-
-          // Persist the batch so the next cold-open renders the deck instantly.
-          // Both free and premium users benefit from the cache.
           if (filteredUsers.length > 0) {
+            // Got fresh users not yet seen — update the deck.
+            setUsers(filteredUsers);
+            setCurrentIndex(0);
             stackExhaustedReportedRef.current = false;
+
+            // Persist the batch so the next cold-open renders the deck instantly.
             AsyncStorage.setItem(
               DISCOVERY_CACHE_KEY,
               JSON.stringify({
@@ -674,24 +674,35 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                 selectedCountry,
               }),
             ).catch(() => {});
+
+            // Warm the image cache for the first few cards so they appear
+            // instantly the moment the user arrives at them.
+            try {
+              const upcomingPhotos = filteredUsers
+                .slice(0, 3)
+                .map((u: any) => u.photos?.[0])
+                .filter(Boolean) as string[];
+              if (upcomingPhotos.length > 0) {
+                Image.prefetch(upcomingPhotos).catch(() => {});
+              }
+            } catch {}
+          } else if (!silent) {
+            // Empty result on a primary fetch with no cached fallback — the
+            // stack is genuinely exhausted so clear the deck and notify.
+            // Also reset seenUserIds so the same profiles can show again
+            // if the user refreshes (avoids an infinite empty state when
+            // the total pool is small, e.g. during testing).
+            seenUserIds.current.clear();
+            setUsers([]);
+            setCurrentIndex(0);
+            reportStackExhausted();
           } else {
-            // Empty result on a primary fetch = stack is exhausted.
+            // silent + empty: the backend returned only already-seen users.
+            // Cached cards are still visible — do NOT wipe the deck.
+            // Just flag the stack exhausted in the background so the cron
+            // can push a "new people nearby" notification later.
             reportStackExhausted();
           }
-
-          // Warm the image cache for the first few cards so they appear
-          // instantly the moment the user arrives at them. expo-image
-          // already caches on display, but pre-warming the next 3 photos
-          // removes any hint of a fade-in for fast swipers.
-          try {
-            const upcomingPhotos = filteredUsers
-              .slice(0, 3)
-              .map((u: any) => u.photos?.[0])
-              .filter(Boolean) as string[];
-            if (upcomingPhotos.length > 0) {
-              Image.prefetch(upcomingPhotos).catch(() => {});
-            }
-          } catch {}
         }
       } else if (!append) {
         setUsers([]);
