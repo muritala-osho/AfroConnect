@@ -57,7 +57,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const themeOptions: { value: ThemeMode; label: string; icon: string }[] = [
     { value: 'light', label: 'Light', icon: 'sun' },
     { value: 'dark', label: 'Dark', icon: 'moon' },
-    { value: 'grey', label: 'Grey', icon: 'cloud' },
     { value: 'system', label: 'System', icon: 'monitor' },
   ];
 
@@ -494,11 +493,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             icon="info" 
             label="Terms of Service" 
             onPress={() => navigation.navigate('Legal', { type: 'terms' })} 
-          />
-          <SettingItem 
-            icon="users" 
-            label="Community Guidelines" 
-            onPress={() => navigation.navigate('Legal', { type: 'community' })} 
           />
         </View>
 
