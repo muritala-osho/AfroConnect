@@ -688,14 +688,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             } catch {}
           } else if (!silent) {
             // Empty result on a primary fetch with no cached fallback — the
-            // stack is genuinely exhausted so clear the deck and notify.
-            // Also reset seenUserIds so the same profiles can show again
-            // if the user refreshes (avoids an infinite empty state when
-            // the total pool is small, e.g. during testing).
+            // stack is genuinely exhausted. Clear seenUserIds so the same
+            // profiles can recycle (critical when the pool is small, e.g.
+            // during testing with only 1–2 users). Then auto-retry once so
+            // the deck repopulates immediately instead of showing "no users".
             seenUserIds.current.clear();
-            setUsers([]);
-            setCurrentIndex(0);
             reportStackExhausted();
+            // Small delay so the state flush settles before the next fetch.
+            setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
           } else {
             // silent + empty: the backend returned only already-seen users.
             // Cached cards are still visible — do NOT wipe the deck.
@@ -705,8 +705,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           }
         }
       } else if (!append) {
-        setUsers([]);
+        seenUserIds.current.clear();
         reportStackExhausted();
+        setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
       }
     } catch (error: any) {
       // The backend discovery gate returns 403 when the requesting user hasn't
