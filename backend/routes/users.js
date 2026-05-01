@@ -455,8 +455,13 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     // send them on this request (e.g. silent radar refresh).
     if (effectiveLat == null || effectiveLng == null) {
       const stored = currentUser?.location;
-      const storedLat = stored?.coordinates?.coordinates?.[1] ?? stored?.lat ?? null;
-      const storedLng = stored?.coordinates?.coordinates?.[0] ?? stored?.lng ?? null;
+      // stored.coordinates is an Array [lng, lat] for GeoJSON Points —
+      // NOT an object, so we index directly. The previous read of
+      // stored?.coordinates?.coordinates?.[1] always returned undefined
+      // (arrays have no `.coordinates` property) and prevented the fallback
+      // from ever finding GeoJSON-formatted profile locations.
+      const storedLat = stored?.coordinates?.[1] ?? stored?.lat ?? null;
+      const storedLng = stored?.coordinates?.[0] ?? stored?.lng ?? null;
       if (storedLat != null && storedLng != null) {
         effectiveLat = storedLat;
         effectiveLng = storedLng;
@@ -490,15 +495,18 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       }
     } else if (hasOrigin) {
       // Use the 2dsphere index when origin coordinates are available.
-      // $geoWithin / $centerSphere uses the index and only returns docs
-      // with valid GeoJSON Point coordinates within the search radius.
+      // Query the top-level `location` field (GeoJSON Point) so MongoDB can
+      // use the 2dsphere index that is defined on `location`. Querying the
+      // sub-field `location.coordinates` (a raw array) bypasses the index and
+      // caused the spherical containment check to silently fail for profiles
+      // that store their location in proper GeoJSON format.
       // Legacy users with only flat lat/lng are matched via the second
       // branch of $or so they aren't dropped.
       const radiusKm = Math.max(1, Math.min(maxDist * 2, 20000));
       const radiusInRadians = radiusKm / 6371;
       query.$or = [
         {
-          'location.coordinates': {
+          location: {
             $geoWithin: { $centerSphere: [[effectiveLng, effectiveLat], radiusInRadians] }
           }
         },
