@@ -481,8 +481,9 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
         // Send Android data-only FCM message so the background handler can
         // display a MessagingStyle notification with the sender's avatar and an
-        // inline Reply button (no big-picture expansion). Sent in parallel with
-        // the regular Expo push which covers iOS and acts as a fallback.
+        // inline Reply button and Mark as Read button via Notifee.
+        // If the user has an FCM token (Android), skip the regular Expo push to
+        // avoid showing a duplicate plain notification without action buttons.
         if (rcvUser?.fcmToken) {
           sendMessageDataMessage(rcvUser.fcmToken, {
             matchId:     matchId.toString(),
@@ -493,26 +494,27 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
             body:        notifBody,
             badge:       totalUnread,
           }).catch(() => {});
-        }
-
-        await sendSmartNotification(
-          rcvUser,
-          {
-            title: senderName,
-            body: notifBody,
-            badge: totalUnread,
-            data: {
-              type: "message",
-              screen: "ChatDetail",
-              matchId: matchId.toString(),
-              senderId: req.user._id.toString(),
-              senderName,
-              senderPhoto,
+        } else {
+          // No FCM token — iOS or fallback: send regular Expo push notification
+          await sendSmartNotification(
+            rcvUser,
+            {
+              title: senderName,
+              body: notifBody,
+              badge: totalUnread,
+              data: {
+                type: "message",
+                screen: "ChatDetail",
+                matchId: matchId.toString(),
+                senderId: req.user._id.toString(),
+                senderName,
+                senderPhoto,
+              },
             },
-          },
-          "message",
-          req.user._id.toString(),
-        );
+            "message",
+            req.user._id.toString(),
+          );
+        }
       } catch (err) {
         logger.error("Failed to send message push notification:", err);
       }
@@ -909,26 +911,27 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
             body:        notifBody,
             badge:       totalUnread,
           }).catch(() => {});
-        }
-
-        await sendSmartNotification(
-          rcvUser,
-          {
-            title: senderName,
-            body: notifBody,
-            badge: totalUnread,
-            data: {
-              type: "message",
-              screen: "ChatDetail",
-              matchId: matchId.toString(),
-              senderId: req.user._id.toString(),
-              senderName,
-              senderPhoto,
+        } else {
+          // No FCM token — iOS or fallback: send regular Expo push notification
+          await sendSmartNotification(
+            rcvUser,
+            {
+              title: senderName,
+              body: notifBody,
+              badge: totalUnread,
+              data: {
+                type: "message",
+                screen: "ChatDetail",
+                matchId: matchId.toString(),
+                senderId: req.user._id.toString(),
+                senderName,
+                senderPhoto,
+              },
             },
-          },
-          "message",
-          req.user._id.toString(),
-        );
+            "message",
+            req.user._id.toString(),
+          );
+        }
       } catch (err) {
         logger.error("Failed to send push notification:", err);
       }
