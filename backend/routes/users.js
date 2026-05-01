@@ -517,29 +517,52 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       ];
     }
 
-    // ── Discovery debug log — remove once the empty-results issue is resolved ──
-    const debugInfo = {
-      userId: req.user.id,
-      effectiveLat,
-      effectiveLng,
-      maxDist,
-      ageRange: [minAgeFilter, maxAgeFilter],
-      gender: query.gender ?? 'any',
-      onlineOnly: wantOnlineOnly,
-      verifiedOnly: wantVerifiedOnly,
-      isGlobal,
-      hasOrigin,
-      excludedCount: excludedIds.length,
-    };
-    logger.log('[Discovery:debug]', JSON.stringify(debugInfo));
-    // ── end debug log ──
+    // ─── DIAGNOSTIC BLOCK — shows every variable that influences what the
+    //     DB query sees.  Do NOT remove until the root cause is confirmed. ───
+    const radiusKmForLog  = hasOrigin && !isGlobal
+      ? Math.max(1, Math.min(maxDist * 2, 20000))
+      : null;
+    const radiusRadForLog = radiusKmForLog != null ? (radiusKmForLog / 6371) : null;
+    logger.log('[DISCOVERY:DIAG] ── request params ──');
+    logger.log('[DISCOVERY:DIAG]   raw lat/lng from client:', lat, lng);
+    logger.log('[DISCOVERY:DIAG]   effectiveLat:', effectiveLat, '  effectiveLng:', effectiveLng);
+    logger.log('[DISCOVERY:DIAG]   hasOrigin:', hasOrigin);
+    logger.log('[DISCOVERY:DIAG]   isGlobal:', isGlobal, '  isPassportOrTravel:', isPassportOrTravel);
+    logger.log('[DISCOVERY:DIAG]   maxDist (km, after cap):', maxDist);
+    logger.log('[DISCOVERY:DIAG]   radiusKm sent to $geoWithin:', radiusKmForLog, '(= maxDist * 2)');
+    logger.log('[DISCOVERY:DIAG]   radiusInRadians:', radiusRadForLog);
+    logger.log('[DISCOVERY:DIAG]   ageRange:', [minAgeFilter, maxAgeFilter]);
+    logger.log('[DISCOVERY:DIAG]   gender filter:', JSON.stringify(query.gender ?? 'ANY'));
+    logger.log('[DISCOVERY:DIAG]   onlineOnly:', wantOnlineOnly, '  verifiedOnly:', wantVerifiedOnly);
+    logger.log('[DISCOVERY:DIAG]   excludedIds count:', excludedIds.length);
+    if (hasOrigin && !isGlobal) {
+      logger.log('[DISCOVERY:DIAG]   geoWithin query:', JSON.stringify(query.$or?.[0]));
+      logger.log('[DISCOVERY:DIAG]   secondOrBranch:', JSON.stringify(query.$or?.[1]));
+    }
+    logger.log('[DISCOVERY:DIAG]   full mongo query (no $or):', JSON.stringify({
+      ...query,
+      $or: undefined,
+      _id: '<excluded list>'
+    }));
+    // ── end diagnostic block ──
 
     const queryStart = Date.now();
     let users = await User.find(query)
       .select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire')
       .limit(200);
     const queryMs = Date.now() - queryStart;
-    logger.log(`[Discovery:debug] DB returned ${users.length} users before distance post-filter`);
+    logger.log(`[DISCOVERY:DIAG] DB returned ${users.length} users BEFORE distance post-filter (queryMs=${queryMs})`);
+    if (users.length === 0) {
+      logger.log('[DISCOVERY:DIAG]   ↑ DB returned 0 — if effectiveLat/Lng are 0,0 that is the bug (Gulf of Guinea search)');
+    } else {
+      const sample = users.slice(0, 3).map(u => ({
+        id: u._id,
+        name: u.name,
+        coords: u.location?.coordinates,
+        locType: u.location?.type,
+      }));
+      logger.log('[DISCOVERY:DIAG]   sample users from DB:', JSON.stringify(sample));
+    }
 
     users = users.map(user => {
       const userObj = user.toObject();
@@ -557,7 +580,13 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     });
 
     if (!isGlobal && !isPassportOrTravel && hasOrigin) {
+      const beforeFilter = users.length;
       users = users.filter(u => u.distance == null || u.distance <= maxDist);
+      logger.log(`[DISCOVERY:DIAG] after distance post-filter: ${users.length} (removed ${beforeFilter - users.length} — distance > ${maxDist}km or null)`);
+      const nullDistCount = users.filter(u => u.distance == null).length;
+      if (nullDistCount > 0) {
+        logger.log(`[DISCOVERY:DIAG]   WARNING: ${nullDistCount} users have distance=null (likely coords=[0,0] in DB). They pass the filter!`);
+      }
     }
 
     users.sort((a, b) => b.score - a.score);
