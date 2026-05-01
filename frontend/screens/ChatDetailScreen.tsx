@@ -56,6 +56,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ScreenCapture from "expo-screen-capture";
 import { useFocusEffect } from "@react-navigation/native";
 import { setChatScreenOpen } from "@/contexts/UnreadContext";
+import { clearConversationThread } from "@/services/notifeeService";
 import { VerificationBadge } from "@/components/VerificationBadge";
 import SwipeableMessage from "@/components/chat/SwipeableMessage";
 import ChatHeader from "@/components/chat/ChatHeader";
@@ -720,6 +721,7 @@ export default function ChatDetailScreen({
     DeviceEventEmitter.emit("chat:read-local", matchId);
     socketService.joinChat(matchId);
     socketService.markMessagesRead({ chatId: matchId, userId: myId });
+    clearConversationThread(matchId);
 
     const handleNewMessage = (data: any) => {
       const msg = data.message || data;
