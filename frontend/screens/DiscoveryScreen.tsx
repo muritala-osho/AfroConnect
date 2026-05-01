@@ -485,10 +485,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       // this keeps the cache key stable and lets distance be computed on the
       // first load instead of the silent stored-coord fallback.
       const loc: any = user.location || {};
+      // GeoJSON stores coordinates as [lng, lat]; also support legacy flat fields.
       const storedLat = loc.lat ?? loc.coordinates?.coordinates?.[1] ?? loc.coordinates?.[1];
       const storedLng = loc.lng ?? loc.coordinates?.coordinates?.[0] ?? loc.coordinates?.[0];
+      // Reject [0, 0] — it is the Mongoose default for users who never shared
+      // their GPS. Number.isFinite(0) is true, so without this guard the
+      // request would search near the Gulf of Guinea and return zero users.
+      const hasValidCoords =
+        Number.isFinite(storedLat) &&
+        Number.isFinite(storedLng) &&
+        !(storedLat === 0 && storedLng === 0);
 
-      if (discoveryType === 'local' && Number.isFinite(storedLat) && Number.isFinite(storedLng)) {
+      if (discoveryType === 'local' && hasValidCoords) {
         params.lat = storedLat;
         params.lng = storedLng;
         // Free users are capped at 50km, premium users can go up to their
@@ -678,7 +686,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (!silent) setLoading(false);
       if (append) prefetchInFlightRef.current = false;
     }
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry, reportStackExhausted]);
+  // user.location is GeoJSON { type, coordinates: [lng, lat], city, country } —
+  // it has NO flat .lat / .lng fields, so those would always be undefined and
+  // location changes would never re-create this callback. Use the actual
+  // array values instead.
+  }, [user?.id, token, user?.location?.coordinates?.[1], user?.location?.coordinates?.[0], user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.interests, user?.gender, selectedCountry, reportStackExhausted]);
 
   // Keep stable refs in sync with latest values — zero cost, runs after each render.
   useEffect(() => { loadPotentialMatchesRef.current = loadPotentialMatches; }, [loadPotentialMatches]);
@@ -699,8 +711,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     const prefs = user?.preferences as any;
     const lifestyle = (user as any)?.lifestyle;
     const currentPrefs = JSON.stringify({
-      lat: user?.location?.lat,
-      lng: user?.location?.lng,
+      lat: user?.location?.coordinates?.[1],
+      lng: user?.location?.coordinates?.[0],
       maxDistance: prefs?.maxDistance,
       ageMin: prefs?.ageRange?.min,
       ageMax: prefs?.ageRange?.max,
@@ -765,7 +777,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // identity changes when their own deps change, which would cause this effect
   // to re-fire and trigger duplicate API calls. We reach them via stable refs.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, token, user?.location?.lat, user?.location?.lng, user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, discoveryType, selectedCountry]);
+  }, [user?.id, token, user?.location?.coordinates?.[1], user?.location?.coordinates?.[0], user?.preferences?.maxDistance, user?.preferences?.ageRange?.min, user?.preferences?.ageRange?.max, user?.gender, discoveryType, selectedCountry]);
 
   const radarIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isAnimatingRef = useRef(false);

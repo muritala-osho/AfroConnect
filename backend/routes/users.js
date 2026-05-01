@@ -39,6 +39,13 @@ function normaliseLocationUpdate(location, livingIn) {
   if (
     Number.isFinite(numericLat) &&
     Number.isFinite(numericLng) &&
+    // Reject "null island" — [0, 0] is the Mongoose default for users who
+    // have never set their location. Storing it makes them appear to be in
+    // the Gulf of Guinea and causes them to show up (or be hidden) in
+    // discovery searches centered near [0, 0]. We treat the exact zero-pair
+    // as "no location provided" so the coordinates field is left unset and
+    // the Mongoose default is NOT written back to the document.
+    !(numericLat === 0 && numericLng === 0) &&
     numericLat >= -90 &&
     numericLat <= 90 &&
     numericLng >= -180 &&
@@ -455,11 +462,6 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     // send them on this request (e.g. silent radar refresh).
     if (effectiveLat == null || effectiveLng == null) {
       const stored = currentUser?.location;
-      // stored.coordinates is an Array [lng, lat] for GeoJSON Points —
-      // NOT an object, so we index directly. The previous read of
-      // stored?.coordinates?.coordinates?.[1] always returned undefined
-      // (arrays have no `.coordinates` property) and prevented the fallback
-      // from ever finding GeoJSON-formatted profile locations.
       const storedLat = stored?.coordinates?.[1] ?? stored?.lat ?? null;
       const storedLng = stored?.coordinates?.[0] ?? stored?.lng ?? null;
       if (storedLat != null && storedLng != null) {
@@ -467,6 +469,17 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
         effectiveLng = storedLng;
       }
     }
+
+    // Treat the exact [0, 0] coordinate pair as "no location" — it is the
+    // Mongoose default written to every new user document before they share
+    // GPS. Searching from [0, 0] targets the Gulf of Guinea and returns zero
+    // real users, while Number.isFinite(0) would otherwise pass the guard
+    // below and silently serve an empty deck with no error shown.
+    if (effectiveLat === 0 && effectiveLng === 0) {
+      effectiveLat = null;
+      effectiveLng = null;
+    }
+
     const hasOrigin = effectiveLat != null && effectiveLng != null;
 
     // Gate: a user who is not using Global discovery and has no usable origin
@@ -495,26 +508,20 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       }
     } else if (hasOrigin) {
       // Use the 2dsphere index when origin coordinates are available.
-      // Query the top-level `location` field (GeoJSON Point) so MongoDB can
-      // use the 2dsphere index that is defined on `location`. Querying the
-      // sub-field `location.coordinates` (a raw array) bypasses the index and
-      // caused the spherical containment check to silently fail for profiles
-      // that store their location in proper GeoJSON format.
-      // Legacy users with only flat lat/lng are matched via the second
-      // branch of $or so they aren't dropped.
+      // Query the top-level `location` field (GeoJSON Point) so MongoDB uses
+      // the 2dsphere index defined on `location`. Querying the sub-field
+      // `location.coordinates` directly bypasses that index.
       const radiusKm = Math.max(1, Math.min(maxDist * 2, 20000));
       const radiusInRadians = radiusKm / 6371;
-      query.$or = [
-        {
-          location: {
-            $geoWithin: { $centerSphere: [[effectiveLng, effectiveLat], radiusInRadians] }
-          }
-        },
-        {
-          'location.lat': { $exists: true },
-          'location.coordinates': { $exists: false }
-        }
-      ];
+      query.location = {
+        $geoWithin: { $centerSphere: [[effectiveLng, effectiveLat], radiusInRadians] }
+      };
+      // Exclude users whose coordinates are still the Mongoose default [0, 0]
+      // (i.e. they are in the Gulf of Guinea). The $geoWithin above would
+      // only include them when the search origin is also [0, 0] — which we
+      // now prevent — but adding an explicit $ne here means they can never
+      // leak into any results, even under edge-case coordinate rounding.
+      query['location.coordinates'] = { $ne: [0, 0] };
     }
 
     // ─── DIAGNOSTIC BLOCK — shows every variable that influences what the
@@ -581,12 +588,10 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
 
     if (!isGlobal && !isPassportOrTravel && hasOrigin) {
       const beforeFilter = users.length;
-      users = users.filter(u => u.distance == null || u.distance <= maxDist);
+      // Require a real computed distance; users whose distance is null have
+      // invalid/default coordinates ([0,0]) and must not appear in local results.
+      users = users.filter(u => u.distance != null && u.distance <= maxDist);
       logger.log(`[DISCOVERY:DIAG] after distance post-filter: ${users.length} (removed ${beforeFilter - users.length} — distance > ${maxDist}km or null)`);
-      const nullDistCount = users.filter(u => u.distance == null).length;
-      if (nullDistCount > 0) {
-        logger.log(`[DISCOVERY:DIAG]   WARNING: ${nullDistCount} users have distance=null (likely coords=[0,0] in DB). They pass the filter!`);
-      }
     }
 
     users.sort((a, b) => b.score - a.score);
@@ -641,7 +646,12 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     logger.log(`[DISCOVERY] Returning ${users.length}/${totalAvailable} users (global=${isGlobal}, country=${countryFilter || 'all'}, maxDist=${maxDist}km, premium=${!!isPremium}, queryMs=${queryMs}, totalMs=${totalMs}, offset=${offset})`);
 
     const payload = { users, nextCursor };
-    await redis.set(cacheKey, payload, 120);
+    // Don't lock in an empty result for the full TTL — the deck could fill up
+    // within seconds if a nearby user comes online or updates their location.
+    // Cache non-empty pages for 120 s; empty pages get only 15 s so the client
+    // retries quickly without hammering the DB on every swipe.
+    const cacheTtl = users.length > 0 ? 120 : 15;
+    await redis.set(cacheKey, payload, cacheTtl);
 
     if (resolveInflight) resolveInflight(payload);
     if (inflightCacheKey) {
