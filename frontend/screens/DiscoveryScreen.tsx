@@ -642,7 +642,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           return Math.random() - 0.5;
         });
         
-        const filteredUsers = usersWithSimilarity.filter(u => !seenUserIds.current.has(u.id));
+        // For append loads: filter out users already in the deck to avoid
+        // duplicates. For primary (non-append) loads the server already
+        // excludes swiped users, so applying seenUserIds here would wrongly
+        // hide people who were only in the previous cache — causing the "open
+        // app → see card → card vanishes" bug on every cold open.
+        const filteredUsers = append
+          ? usersWithSimilarity.filter(u => !seenUserIds.current.has(u.id))
+          : usersWithSimilarity;
         filteredUsers.forEach(u => seenUserIds.current.add(u.id));
 
         if (append) {
