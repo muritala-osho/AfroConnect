@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Platform, Dimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
@@ -48,6 +48,20 @@ interface PotentialMatch {
   gender?: string;
 }
 
+function mapUser(u: any): PotentialMatch {
+  return {
+    id: u._id || u.id,
+    name: u.name || 'Unknown',
+    age: u.age || 25,
+    bio: u.bio || '',
+    photos: u.photos || [],
+    interests: u.interests || [],
+    location: u.location,
+    distance: typeof u.distance === 'number' ? u.distance : 0,
+    gender: u.gender || 'unknown',
+  };
+}
+
 export default function SwipeScreen({ navigation }: SwipeScreenProps) {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -57,6 +71,12 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+
+  const prefetchedBatch = useRef<PotentialMatch[] | null>(null);
+  const prefetchedNextCursor = useRef<string | null>(null);
+  const isPrefetching = useRef(false);
+  const prefetchSession = useRef(0);
 
   const handleTap = (evt: any) => {
     const currentProfile = potentialMatches[currentIndex];
@@ -76,35 +96,40 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
     }
   };
 
+  const buildParams = useCallback((): Record<string, any> => {
+    const params: Record<string, any> = {};
+    if (user?.location?.lat && user?.location?.lng) {
+      params.lat = user.location.lat;
+      params.lng = user.location.lng;
+      params.maxDistance = user?.preferences?.maxDistance || 50;
+    }
+    if (user?.preferences?.ageRange) {
+      params.minAge = user.preferences.ageRange.min;
+      params.maxAge = user.preferences.ageRange.max;
+    }
+    const userGender = user?.gender?.toLowerCase();
+    if (userGender === 'male') params.genders = 'female';
+    else if (userGender === 'female') params.genders = 'male';
+    return params;
+  }, [user?.location, user?.preferences, user?.gender]);
+
   const loadPotentialMatches = useCallback(async () => {
     if (!user?.id || !token) {
       setLoading(false);
       return;
     }
-    
+
+    prefetchSession.current += 1;
+    prefetchedBatch.current = null;
+    prefetchedNextCursor.current = null;
+    isPrefetching.current = false;
+
     setLoading(true);
     try {
-      const params: Record<string, any> = {};
-
-      if (user.location?.lat && user.location?.lng) {
-        params.lat = user.location.lat;
-        params.lng = user.location.lng;
-        params.maxDistance = user.preferences?.maxDistance || 50;
-      }
-
-      if (user.preferences?.ageRange) {
-        params.minAge = user.preferences.ageRange.min;
-        params.maxAge = user.preferences.ageRange.max;
-      }
-
-      const userGender = user.gender?.toLowerCase();
-      if (userGender === 'male') {
-        params.genders = 'female';
-      } else if (userGender === 'female') {
-        params.genders = 'male';
-      }
-
-      const response = await api.get<{ success: boolean; users: any[] }>('/users/nearby', params, token);
+      const params = buildParams();
+      const response = await api.get<{ success: boolean; users: any[]; nextCursor: string | null }>(
+        '/users/nearby', params, token
+      );
 
       logger.log("Nearby Users Response:", response);
       const usersData = response.data as any;
@@ -112,44 +137,91 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       logger.log("Extracted Users:", users.length);
 
       if (response.success && users.length > 0) {
-        const mappedUsers = users.map((u: any) => ({
-          id: u._id || u.id,
-          name: u.name || 'Unknown',
-          age: u.age || 25,
-          bio: u.bio || '',
-          photos: u.photos || [],
-          interests: u.interests || [],
-          location: u.location,
-          distance: typeof u.distance === 'number' ? u.distance : 0,
-          gender: u.gender || 'unknown',
-        }));
-
-        mappedUsers.sort((a: any, b: any) => {
-          const scoreA = a.compatibilityScore || 0;
-          const scoreB = b.compatibilityScore || 0;
-          return scoreB - scoreA;
-        });
+        const mappedUsers = users.map(mapUser);
+        mappedUsers.sort((a: any, b: any) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0));
         setCurrentIndex(0);
         setCurrentPhotoIndex(0);
+        setNextCursor(usersData?.nextCursor || null);
         setPotentialMatches(mappedUsers);
       } else {
         setCurrentIndex(0);
         setCurrentPhotoIndex(0);
+        setNextCursor(null);
         setPotentialMatches([]);
       }
     } catch (error) {
       logger.error("Error loading potential matches:", error);
       setCurrentIndex(0);
       setCurrentPhotoIndex(0);
+      setNextCursor(null);
       setPotentialMatches([]);
     } finally {
       setLoading(false);
     }
-  }, [user?.id, token, api, user?.location, user?.preferences, user?.gender]);
+  }, [user?.id, token, api, buildParams]);
 
   useEffect(() => {
     loadPotentialMatches();
   }, [loadPotentialMatches]);
+
+  const prefetchNextBatch = useCallback(async (cursor: string) => {
+    if (isPrefetching.current || !user?.id || !token) return;
+    isPrefetching.current = true;
+    const sessionAtStart = prefetchSession.current;
+    try {
+      const params = { ...buildParams(), cursor };
+      logger.log('[PREFETCH] Starting background fetch, cursor:', cursor);
+      const response = await api.get<{ success: boolean; users: any[]; nextCursor: string | null }>(
+        '/users/nearby', params, token
+      );
+      if (prefetchSession.current !== sessionAtStart) {
+        logger.log('[PREFETCH] Stale session — discarding result');
+        return;
+      }
+      const usersData = response.data as any;
+      const users = (usersData?.users || []).map(mapUser);
+      users.sort((a: any, b: any) => (b.compatibilityScore || 0) - (a.compatibilityScore || 0));
+      prefetchedBatch.current = users;
+      prefetchedNextCursor.current = usersData?.nextCursor || null;
+      logger.log(`[PREFETCH] Ready — ${users.length} profiles buffered`);
+    } catch (error) {
+      logger.error('[PREFETCH] Background fetch failed:', error);
+      prefetchedBatch.current = null;
+      prefetchedNextCursor.current = null;
+    } finally {
+      isPrefetching.current = false;
+    }
+  }, [user?.id, token, api, buildParams]);
+
+  const advanceBatch = useCallback(async () => {
+    if (prefetchedBatch.current !== null) {
+      const batch = prefetchedBatch.current;
+      const cursor = prefetchedNextCursor.current;
+      prefetchedBatch.current = null;
+      prefetchedNextCursor.current = null;
+      isPrefetching.current = false;
+      setCurrentIndex(0);
+      setCurrentPhotoIndex(0);
+      setNextCursor(cursor);
+      setPotentialMatches(batch);
+      logger.log(`[PREFETCH] Swapped in ${batch.length} buffered profiles instantly`);
+    } else {
+      logger.log('[PREFETCH] Buffer not ready — falling back to full load');
+      loadPotentialMatches();
+    }
+  }, [loadPotentialMatches]);
+
+  useEffect(() => {
+    if (
+      nextCursor &&
+      potentialMatches.length > 0 &&
+      currentIndex >= Math.floor(potentialMatches.length / 2) &&
+      !isPrefetching.current &&
+      prefetchedBatch.current === null
+    ) {
+      prefetchNextBatch(nextCursor);
+    }
+  }, [currentIndex, potentialMatches.length, nextCursor, prefetchNextBatch]);
 
   const triggerHaptic = async (style: Haptics.ImpactFeedbackStyle) => {
     if (Platform.OS !== 'web') {
@@ -179,7 +251,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
-      loadPotentialMatches();
+      advanceBatch();
     }
   };
 
@@ -224,7 +296,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
-      loadPotentialMatches();
+      advanceBatch();
     }
   };
 
@@ -290,7 +362,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
       setCurrentPhotoIndex(0);
       setCurrentIndex(currentIndex + 1);
     } else {
-      loadPotentialMatches();
+      advanceBatch();
     }
   };
 
@@ -318,7 +390,7 @@ export default function SwipeScreen({ navigation }: SwipeScreenProps) {
                 setCurrentPhotoIndex(0);
                 setCurrentIndex(currentIndex + 1);
               } else {
-                loadPotentialMatches();
+                advanceBatch();
               }
             } catch {
               Alert.alert('Error', 'Could not submit report. Please try again.');
