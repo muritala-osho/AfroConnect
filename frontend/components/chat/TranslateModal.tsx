@@ -61,11 +61,11 @@ export default function TranslateModal({
 }: Props) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
-        <View style={styles.modalOverlay}>
+      <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior="padding"
+          keyboardVerticalOffset={Platform.OS === 'android' ? 24 : 0}
+        >
           <View style={[styles.translateModal, { backgroundColor: theme.background }]}>
             <View style={styles.translateHeader}>
               <ThemedText style={[styles.translateTitle, { color: theme.text }]}>
@@ -155,6 +155,7 @@ export default function TranslateModal({
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   style={{ marginBottom: 10 }}
                   contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
                 >
@@ -222,8 +223,8 @@ export default function TranslateModal({
               </View>
             )}
           </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
