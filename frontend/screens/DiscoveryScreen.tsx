@@ -1894,7 +1894,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser && !showPassportModal && !showSecondChance && !showCountryPicker) {
+    const isPremium = !!user?.premium?.isActive;
     return (
       <GestureHandlerRootView style={styles.container}>
         <ThemedView style={[styles.container, styles.centerContent]}>
@@ -1930,6 +1931,49 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               >
                 <Feather name="target" size={18} color={theme.primary} />
                 <ThemedText style={[styles.loveRadarButtonText, { color: theme.primary }]}>{t('openLoveRadar')}</ThemedText>
+              </Pressable>
+            </View>
+
+            <View style={styles.emptyExtraOptions}>
+              <Pressable
+                style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={openSecondChance}
+              >
+                <View style={[styles.emptyOptionIcon, { backgroundColor: '#4CAF5018' }]}>
+                  <Feather name="rotate-ccw" size={20} color="#4CAF50" />
+                </View>
+                <View style={styles.emptyOptionText}>
+                  <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Second Chance</ThemedText>
+                  <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Revisit people you passed on</ThemedText>
+                </View>
+              </Pressable>
+
+              <Pressable
+                style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={() => handleDiscoveryTypeChange('global')}
+              >
+                <View style={[styles.emptyOptionIcon, { backgroundColor: theme.primary + '18' }]}>
+                  <Feather name="globe" size={20} color={theme.primary} />
+                </View>
+                <View style={styles.emptyOptionText}>
+                  <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Global Mode</ThemedText>
+                  <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Discover people worldwide</ThemedText>
+                </View>
+                {!isPremium && <Feather name="lock" size={14} color={theme.textSecondary} />}
+              </Pressable>
+
+              <Pressable
+                style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                onPress={handlePassportPress}
+              >
+                <View style={[styles.emptyOptionIcon, { backgroundColor: '#FFB80018' }]}>
+                  <Feather name="map-pin" size={20} color="#FFB800" />
+                </View>
+                <View style={styles.emptyOptionText}>
+                  <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Passport</ThemedText>
+                  <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Match in any city worldwide</ThemedText>
+                </View>
+                {!isPremium && <Feather name="lock" size={14} color={theme.textSecondary} />}
               </Pressable>
             </View>
 
@@ -2132,7 +2176,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           </View>
         </Modal>
 
-        <View style={styles.cardWrapper}>
+        {currentUser && <View style={styles.cardWrapper}>
           {nextUser && (
             <View style={[styles.profileCard, styles.stackedCard]}>
               {nextPhotoSource ? (
@@ -2258,9 +2302,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               </View>
             </Animated.View>
           </GestureDetector>
-        </View>
+        </View>}
 
-        <View style={[styles.actionRow, { paddingBottom: insets.bottom + 8 }]}>
+        {currentUser && <View style={[styles.actionRow, { paddingBottom: insets.bottom + 8 }]}>
           <Animated.View style={rewindButtonStyle}>
             <Pressable
               style={[styles.rewindButton, { backgroundColor: isDark ? '#1e1e1e' : '#FFF' }, userHistory.current.length === 0 && styles.disabledButton]}
@@ -2330,7 +2374,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           >
             <Feather name="zap" size={24} color="#a033ff" />
           </Pressable>
-        </View>
+        </View>}
 
         {newUserFound && (
           <Animated.View 
@@ -2596,6 +2640,38 @@ const styles = StyleSheet.create({
   },
   emptySettingsText: {
     ...Typography.body,
+  },
+  emptyExtraOptions: {
+    width: "100%",
+    gap: Spacing.sm,
+    marginBottom: Spacing.lg,
+  },
+  emptyOptionCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+  },
+  emptyOptionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyOptionText: {
+    flex: 1,
+  },
+  emptyOptionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  emptyOptionDesc: {
+    fontSize: 13,
+    marginTop: 2,
   },
   refreshButton: {
     flexDirection: "row",
