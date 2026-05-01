@@ -1073,7 +1073,7 @@ io.on('connection', (socket) => {
   // Call declined
   socket.on('call:decline', async (data) => {
     const { callerId, callType } = data;
-    if (callerId) {
+    if (callerId && socket.userId) {
       await saveCallMessage(callerId, socket.userId, callType || 'audio', 'declined');
 
       // Clear pending call on both sides
@@ -1113,7 +1113,7 @@ io.on('connection', (socket) => {
   // Call ended
   socket.on('call:end', async (data) => {
     const { targetUserId, callType, duration, wasAnswered } = data;
-    if (targetUserId) {
+    if (targetUserId && socket.userId) {
       const callerId = socket.userId;
       
       if (wasAnswered && duration) {
