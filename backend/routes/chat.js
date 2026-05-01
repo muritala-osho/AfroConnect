@@ -501,11 +501,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            // senderPhoto shown as the square thumbnail on the right side of
-            // the Android notification (FCM notification.image). Must be HTTPS.
-            ...(senderPhoto && senderPhoto.startsWith("https://")
-              ? { richContent: { image: senderPhoto } }
-              : {}),
             data: {
               type: "message",
               screen: "ChatDetail",
@@ -923,9 +918,6 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
             title: senderName,
             body: notifBody,
             badge: totalUnread,
-            ...(senderPhoto && senderPhoto.startsWith("https://")
-              ? { richContent: { image: senderPhoto } }
-              : {}),
             data: {
               type: "message",
               screen: "ChatDetail",
