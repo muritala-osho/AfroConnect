@@ -279,8 +279,14 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     // We re-fetch the user's verification state from DB to prevent any
     // client-side bypass (the JWT payload only carries tokenVersion, not
     // isFaceVerified, so an attacker cannot craft a token to bypass this).
-    const gateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus');
+    const gateUser = await User.findById(req.user._id).select('isFaceVerified verificationStatus verified');
     if (!gateUser || !gateUser.isFaceVerified || gateUser.verificationStatus !== 'approved') {
+      logger.log(
+        `[DISCOVERY:GATE] Blocked userId=${req.user._id}` +
+        ` isFaceVerified=${gateUser?.isFaceVerified}` +
+        ` verificationStatus=${gateUser?.verificationStatus}` +
+        ` verified=${gateUser?.verified}`
+      );
       return res.status(403).json({
         success: false,
         message: 'Face verification required',

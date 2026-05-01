@@ -470,14 +470,20 @@ router.put('/verifications/:userId', protect, isAdmin, async (req, res) => {
 
     if (action === 'approve') {
       user.verified = true;
+      user.isFaceVerified = true;
       user.verificationStatus = 'approved';
+      user.verificationApprovedAt = user.verificationApprovedAt || new Date();
+      user.verificationRejectionReason = null;
     } else {
       user.verificationStatus = 'rejected';
+      user.isFaceVerified = false;
       user.verificationPhoto = null;
     }
     
     await user.save();
     await redis.del(`profile:me:${user._id}`);
+    // Clear all discovery caches so the newly approved user surfaces immediately
+    await redis.delPattern('discovery:*');
     res.json({ success: true, message: `Verification ${action}d`, user });
   } catch (error) {
     logger.error('Update verification error:', error);

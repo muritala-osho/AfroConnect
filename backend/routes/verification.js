@@ -146,11 +146,12 @@ router.post(
 router.get('/status', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .select('verified verificationStatus verificationRequestDate verificationApprovedAt verificationRejectionReason');
+      .select('verified isFaceVerified verificationStatus verificationRequestDate verificationApprovedAt verificationRejectionReason');
     res.json({
       success: true,
       data: {
         verified:         user.verified || false,
+        isFaceVerified:   user.isFaceVerified || false,
         status:           user.verificationStatus || 'not_requested',
         requestDate:      user.verificationRequestDate || null,
         approvedAt:       user.verificationApprovedAt || null,

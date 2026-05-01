@@ -134,7 +134,18 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // status fetch returned and snapped the gate UI back into place.
   const seedGateFromUser = (u: any): FaceGateStatus => {
     if (!u) return 'loading';
-    if (u.verified || u.verificationStatus === 'approved') return 'approved';
+    // The backend discovery gate requires BOTH isFaceVerified=true AND
+    // verificationStatus='approved'. Checking only `verified` is insufficient —
+    // users approved via the older admin route had verified=true but isFaceVerified
+    // was never set, causing the gate to block them while the frontend showed the
+    // deck, resulting in silently empty results.
+    const isFaceVerified = u.isFaceVerified === true;
+    const isStatusApproved = u.verificationStatus === 'approved';
+    if (isFaceVerified && isStatusApproved) return 'approved';
+    // Legacy fallback: if isFaceVerified is not yet present on the cached user
+    // object (old client cache) but all other signals say approved, treat as
+    // approved and let the server-side gate be the authoritative check.
+    if (u.isFaceVerified === undefined && (u.verified || isStatusApproved)) return 'approved';
     if (u.verificationStatus === 'pending' || u.verificationStatus === 'in_review') return 'pending';
     if (u.verificationStatus === 'rejected') return 'rejected';
     return 'not_requested';
@@ -172,8 +183,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       });
       const data = await res.json();
       if (data?.success && data?.data) {
-        const { verified, status } = data.data;
-        if (verified && status === 'approved') {
+        const { verified, isFaceVerified, status } = data.data;
+        // The backend discovery gate requires isFaceVerified=true AND
+        // verificationStatus='approved'. Mirror that exact condition here.
+        if (isFaceVerified && status === 'approved') {
+          setFaceGateStatus('approved');
+        } else if (!isFaceVerified && verified && status === 'approved') {
+          // Edge case: approved in DB but isFaceVerified not yet backfilled.
+          // Still grant gate access — the migration will fix the flag momentarily.
           setFaceGateStatus('approved');
         } else if (status) {
           setFaceGateStatus(status as FaceGateStatus);
@@ -680,7 +697,23 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setUsers([]);
         reportStackExhausted();
       }
-    } catch (error) {
+    } catch (error: any) {
+      // The backend discovery gate returns 403 when the requesting user hasn't
+      // completed face verification. useApi throws on non-2xx responses, so we
+      // detect it here from the error message and set the gate state accordingly
+      // rather than silently leaving the deck empty with no explanation.
+      const msg: string = error?.message || '';
+      const isVerificationGateError =
+        msg.toLowerCase().includes('face verification') ||
+        msg.toLowerCase().includes('verification required');
+      if (isVerificationGateError) {
+        logger.log('[DISCOVERY] Backend returned face-verification gate — updating gate status');
+        setFaceGateStatus('not_requested');
+        setUsers([]);
+        if (!silent) setLoading(false);
+        if (append) prefetchInFlightRef.current = false;
+        return;
+      }
       logger.error("[DISCOVERY] Error loading nearby users:", error);
     } finally {
       if (!silent) setLoading(false);

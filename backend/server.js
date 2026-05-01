@@ -340,6 +340,30 @@ if (connectionString && (connectionString.startsWith('mongodb://') || connection
           } catch (idxErr) {
             logger.log('TTL index check skipped:', idxErr.message);
           }
+
+          // ── Backfill migration: isFaceVerified ────────────────────────────
+          // Users approved via the older PUT /admin/verifications/:userId route
+          // had verified=true and verificationStatus='approved' set, but the
+          // isFaceVerified flag was never written. The discovery gate requires
+          // isFaceVerified=true, so those users were completely blocked from
+          // seeing the discovery deck. This one-time migration corrects that.
+          try {
+            const backfillResult = await User.updateMany(
+              {
+                verified: true,
+                verificationStatus: 'approved',
+                $or: [{ isFaceVerified: { $exists: false } }, { isFaceVerified: false }],
+              },
+              { $set: { isFaceVerified: true } }
+            );
+            if (backfillResult.modifiedCount > 0) {
+              logger.log(`🔧 [Migration] Backfilled isFaceVerified=true for ${backfillResult.modifiedCount} approved users`);
+            }
+          } catch (backfillErr) {
+            logger.error('isFaceVerified backfill migration failed:', backfillErr.message);
+          }
+          // ── End backfill migration ─────────────────────────────────────────
+
         } catch (migrationErr) {
           logger.log('Migration check skipped:', migrationErr.message);
         }
