@@ -12,7 +12,9 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Pressable
+  Pressable,
+  ActivityIndicator,
+  Keyboard
 } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -71,6 +73,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [challengeToken, setChallengeToken] = useState("");
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [challengeLoading, setChallengeLoading] = useState(false);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
   const fetchSupportChallenge = useCallback(async () => {
     if (token) return;
@@ -739,50 +742,59 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 <ThemedText style={{ fontWeight: '600', color: theme.text }}>Cancel</ThemedText>
               </Pressable>
               <Pressable
-                style={{ flex: 2, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: contactMessage.trim() ? theme.primary : theme.border, flexDirection: 'row', gap: 8 }}
+                style={{ flex: 2, height: 50, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: (contactMessage.trim() && !contactSubmitting) ? theme.primary : theme.border, flexDirection: 'row', gap: 8 }}
+                disabled={contactSubmitting || !contactMessage.trim()}
                 onPress={async () => {
-                  if (contactMessage.trim()) {
-                    if (!token && (!challengeToken || !challengeAnswer.trim())) {
-                      Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
-                      return;
+                  if (!contactMessage.trim()) return;
+                  if (!token && (!challengeToken || !challengeAnswer.trim())) {
+                    Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
+                    return;
+                  }
+                  Keyboard.dismiss();
+                  setContactSubmitting(true);
+                  try {
+                    const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        ...(token ? { Authorization: `Bearer ${token}` } : {})
+                      },
+                      body: JSON.stringify({
+                        name: user?.name || 'User',
+                        email: user?.email || '',
+                        message: contactMessage.trim(),
+                        userId: user?.id,
+                        ...(!token ? {
+                          challengeToken,
+                          challengeAnswer: challengeAnswer.trim()
+                        } : {})
+                      })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                      Alert.alert("Message Sent", "We'll get back to you as soon as possible!");
+                      setContactMessage("");
+                      setChallengeAnswer("");
+                      setContactModalVisible(false);
+                    } else {
+                      Alert.alert("Error", data.message || "Failed to send message");
+                      if (data.requiresChallenge) fetchSupportChallenge();
                     }
-                    try {
-                      const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Accept': 'application/json',
-                          ...(token ? { Authorization: `Bearer ${token}` } : {})
-                        },
-                        body: JSON.stringify({
-                          name: user?.name || 'User',
-                          email: user?.email || '',
-                          message: contactMessage.trim(),
-                          userId: user?.id,
-                          ...(!token ? {
-                            challengeToken,
-                            challengeAnswer: challengeAnswer.trim()
-                          } : {})
-                        })
-                      });
-                      const data = await response.json();
-                      if (data.success) {
-                        Alert.alert("Message Sent", "We'll get back to you as soon as possible!");
-                        setContactMessage("");
-                        setChallengeAnswer("");
-                        setContactModalVisible(false);
-                      } else {
-                        Alert.alert("Error", data.message || "Failed to send message");
-                        if (data.requiresChallenge) fetchSupportChallenge();
-                      }
-                    } catch (e) {
-                      Alert.alert("Error", "Network error. Please try again.");
-                    }
+                  } catch (e) {
+                    Alert.alert("Error", "Network error. Please try again.");
+                  } finally {
+                    setContactSubmitting(false);
                   }
                 }}
               >
-                <Feather name="send" size={16} color="#FFF" />
-                <ThemedText style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Send Message</ThemedText>
+                {contactSubmitting
+                  ? <ActivityIndicator size="small" color="#FFF" />
+                  : <>
+                      <Feather name="send" size={16} color="#FFF" />
+                      <ThemedText style={{ color: '#FFF', fontWeight: '700', fontSize: 15 }}>Send Message</ThemedText>
+                    </>
+                }
               </Pressable>
             </View>
           </View>

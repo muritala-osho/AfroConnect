@@ -36,38 +36,6 @@ const SOCIAL_LINKS = [
     color: "#000000",
     bg: "#00000010",
   },
-  {
-    name: "Facebook",
-    handle: "AfroConnect",
-    url: "https://facebook.com/afroconnect",
-    icon: "logo-facebook",
-    color: "#1877F2",
-    bg: "#1877F215",
-  },
-  {
-    name: "YouTube",
-    handle: "AfroConnect",
-    url: "https://youtube.com/@afroconnect",
-    icon: "logo-youtube",
-    color: "#FF0000",
-    bg: "#FF000015",
-  },
-  {
-    name: "LinkedIn",
-    handle: "AfroConnect",
-    url: "https://linkedin.com/company/afroconnect",
-    icon: "logo-linkedin",
-    color: "#0A66C2",
-    bg: "#0A66C215",
-  },
-  {
-    name: "Website",
-    handle: "afroconnect.app",
-    url: "https://afroconnect.app",
-    icon: "globe-outline",
-    color: "#4A90D9",
-    bg: "#4A90D915",
-  },
 ];
 
 export default function SocialMediaScreen({ navigation }: any) {

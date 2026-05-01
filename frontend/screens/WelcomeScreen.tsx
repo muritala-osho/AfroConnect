@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { View, StyleSheet, Image, Pressable, Animated, Dimensions, Linking, ScrollView, TextInput, Alert, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { View, StyleSheet, Image, Pressable, Animated, Dimensions, Linking, ScrollView, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "@/navigation/RootNavigator";
@@ -44,6 +44,7 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
   const [challengeToken, setChallengeToken] = useState("");
   const [challengeAnswer, setChallengeAnswer] = useState("");
   const [challengeLoading, setChallengeLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -105,6 +106,8 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
       Alert.alert("Security Check", "Please answer the security challenge before sending your message.");
       return;
     }
+    Keyboard.dismiss();
+    setSubmitting(true);
     try {
       const response = await fetch(`${getApiBaseUrl()}/api/support/contact`, {
         method: "POST",
@@ -128,6 +131,8 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
       }
     } catch {
       Alert.alert("Error", "Something went wrong.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -231,7 +236,6 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
                 <View style={styles.socialRow}>
                   <Pressable onPress={() => openSocial("https://instagram.com/afro.connect1")}><Ionicons name="logo-instagram" size={32} color={theme.primary} /></Pressable>
                   <Pressable onPress={() => openSocial("https://twitter.com/afroconnect")}><Ionicons name="logo-twitter" size={32} color={theme.primary} /></Pressable>
-                  <Pressable onPress={() => openSocial("https://linkedin.com/company/afroconnect")}><Ionicons name="logo-linkedin" size={32} color={theme.primary} /></Pressable>
                   <Pressable onPress={() => openSocial("https://tiktok.com/@afroconnect1")}><Ionicons name="logo-tiktok" size={32} color={theme.primary} /></Pressable>
                 </View>
 
@@ -257,8 +261,15 @@ export default function WelcomeScreen({ navigation }: WelcomeScreenProps) {
                     </Pressable>
                   </View>
                 </View>
-                <Pressable style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={handleContactSubmit}>
-                  <ThemedText style={styles.primaryButtonText}>Send Message</ThemedText>
+                <Pressable
+                  style={[styles.primaryButton, { backgroundColor: submitting ? theme.border : theme.primary, opacity: submitting ? 0.8 : 1 }]}
+                  onPress={handleContactSubmit}
+                  disabled={submitting}
+                >
+                  {submitting
+                    ? <ActivityIndicator size="small" color="#FFF" />
+                    : <ThemedText style={styles.primaryButtonText}>Send Message</ThemedText>
+                  }
                 </Pressable>
               </View>
             </ScrollView>
