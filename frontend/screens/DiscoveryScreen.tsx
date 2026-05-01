@@ -2387,21 +2387,30 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
                     const photoSrc = photo ? (typeof photo === 'string' ? { uri: photo } : photo.url ? { uri: photo.url } : null) : null;
                     return (
                       <View key={profile._id} style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, marginBottom: 10, backgroundColor: theme.surface }}>
-                        {photoSrc ? (
-                          <Image source={photoSrc} style={{ width: 60, height: 60, borderRadius: 30 }} contentFit="cover" />
-                        ) : (
-                          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }}>
-                            <Feather name="user" size={28} color={theme.textSecondary} />
-                          </View>
-                        )}
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <ThemedText style={{ fontSize: 16, fontWeight: '600', color: theme.text }}>{profile.name}, {profile.age}</ThemedText>
-                          {profile.sharedInterests?.length > 0 && (
-                            <ThemedText style={{ fontSize: 12, color: theme.primary, marginTop: 2 }}>
-                              {profile.sharedInterests.slice(0, 3).join(' · ')}
-                            </ThemedText>
+                        <Pressable
+                          style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+                          onPress={() => {
+                            setSecondChanceProfiles(prev => prev.filter(p => p._id !== profile._id));
+                            setShowSecondChance(false);
+                            navigation.navigate('ProfileDetail', { userId: profile._id });
+                          }}
+                        >
+                          {photoSrc ? (
+                            <Image source={photoSrc} style={{ width: 60, height: 60, borderRadius: 30 }} contentFit="cover" />
+                          ) : (
+                            <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.backgroundSecondary, justifyContent: 'center', alignItems: 'center' }}>
+                              <Feather name="user" size={28} color={theme.textSecondary} />
+                            </View>
                           )}
-                        </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <ThemedText style={{ fontSize: 16, fontWeight: '600', color: theme.text }}>{profile.name}, {profile.age}</ThemedText>
+                            {profile.sharedInterests?.length > 0 && (
+                              <ThemedText style={{ fontSize: 12, color: theme.primary, marginTop: 2 }}>
+                                {profile.sharedInterests.slice(0, 3).join(' · ')}
+                              </ThemedText>
+                            )}
+                          </View>
+                        </Pressable>
                         <Pressable
                           onPress={() => handleSecondChancePass(profile)}
                           style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.textSecondary, justifyContent: 'center', alignItems: 'center', marginRight: 8 }}
