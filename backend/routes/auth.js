@@ -287,8 +287,11 @@ router.post(
       // ran TWO findOne/findById queries back-to-back (one for the password,
       // one to re-read tokenVersion + push prefs), which doubled the Mongo
       // latency on the critical login path.
+      // NOTE: Only use +prefix here for schema-excluded fields (password, tokenVersion).
+      // Listing regular fields like pushToken without a prefix creates an inclusive
+      // MongoDB projection that silently drops isAdmin and all other fields.
       const user = await User.findOne({ email }).select(
-        "+password +tokenVersion pushToken pushNotificationsEnabled notificationPreferences muteSettings"
+        "+password +tokenVersion"
       );
       if (!user) {
         return res.status(401).json({
