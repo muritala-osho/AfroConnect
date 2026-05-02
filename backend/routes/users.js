@@ -261,11 +261,23 @@ router.get('/countries', protect, async (req, res) => {
       return res.json({ success: true, countries: cached, fromCache: true });
     }
 
-    const countries = await User.distinct('location.country', {
-      'location.country': { $exists: true, $nin: [null, ''] },
-      banned: { $ne: true },
-      suspended: { $ne: true }
-    });
+    // Collect countries from BOTH location.country and liveLocation.country.
+    // autoUpdateProfileLocation defaults to false, so many users only have
+    // their country in liveLocation (the GPS-ping field), not in location
+    // (the profile field). Merging both ensures the picker shows every
+    // country where real users actually are.
+    const baseFilter = { banned: { $ne: true }, suspended: { $ne: true } };
+    const [profileCountries, liveCountries] = await Promise.all([
+      User.distinct('location.country', {
+        ...baseFilter,
+        'location.country': { $exists: true, $nin: [null, ''] },
+      }),
+      User.distinct('liveLocation.country', {
+        ...baseFilter,
+        'liveLocation.country': { $exists: true, $nin: [null, ''] },
+      }),
+    ]);
+    const allCountries = [...new Set([...profileCountries, ...liveCountries])];
 
     // Normalise known country-name variants so the picker shows one canonical
     // entry per country regardless of which geocoding API stored the name.
@@ -284,7 +296,7 @@ router.get('/countries', protect, async (req, res) => {
 
     const seen = new Set();
     const normalised = [];
-    for (const c of countries) {
+    for (const c of allCountries) {
       if (!c || !c.trim()) continue;
       const canonical = CANONICAL[c.trim().toLowerCase()] || c.trim();
       if (!seen.has(canonical.toLowerCase())) {
@@ -601,9 +613,15 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
         const key = countryFilter.trim().toLowerCase();
         const aliases = COUNTRY_ALIASES[key] || [countryFilter];
         const escaped = aliases.map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        query['location.country'] = {
-          $in: escaped.map(e => new RegExp(`^${e}$`, 'i'))
-        };
+        const countryRegexes = escaped.map(e => new RegExp(`^${e}$`, 'i'));
+        // Match users whose country appears in EITHER their profile location
+        // OR their live location. autoUpdateProfileLocation defaults to false,
+        // so many users only have the country in liveLocation (the GPS-ping
+        // field) and would be invisible if we only checked location.country.
+        query.$or = [
+          { 'location.country':     { $in: countryRegexes } },
+          { 'liveLocation.country': { $in: countryRegexes } },
+        ];
       }
     } else if (hasOrigin) {
       // Use the 2dsphere index when origin coordinates are available.
