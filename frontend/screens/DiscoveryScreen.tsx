@@ -287,6 +287,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   const blendShownIds = useRef<Set<string>>(new Set());
   const seenUserIds = useRef<Set<string>>(new Set());
   const userHistory = useRef<DiscoverUser[]>([]);
+  // Tracks whether we have already done the one automatic retry for the current
+  // discovery session (country + mode combination). Prevents the empty-state
+  // from entering an infinite re-fetch loop when a specific country or passport
+  // location genuinely has no visible users.
+  const hasAutoRetriedRef = useRef(false);
 
   // Stable refs that always point to the latest callback / primitive value.
   // Using refs instead of putting functions in useEffect dep arrays prevents
@@ -695,15 +700,19 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               }
             } catch {}
           } else if (!silent) {
-            // Empty result on a primary fetch with no cached fallback — the
-            // stack is genuinely exhausted. Clear seenUserIds so the same
-            // profiles can recycle (critical when the pool is small, e.g.
-            // during testing with only 1–2 users). Then auto-retry once so
-            // the deck repopulates immediately instead of showing "no users".
+            // Empty result on a primary fetch with no cached fallback.
+            // Clear seenUserIds so the same profiles can recycle (critical
+            // when the pool is small). Auto-retry ONCE per session so the
+            // deck repopulates immediately — but stop after that so a
+            // specific-country or passport search that has genuinely no
+            // visible users doesn't loop forever showing an empty spinner.
             seenUserIds.current.clear();
             reportStackExhausted();
-            // Small delay so the state flush settles before the next fetch.
-            setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
+            if (!hasAutoRetriedRef.current) {
+              hasAutoRetriedRef.current = true;
+              // Small delay so the state flush settles before the next fetch.
+              setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
+            }
           } else {
             // silent + empty: the backend returned only already-seen users.
             // Cached cards are still visible — do NOT wipe the deck.
@@ -715,7 +724,10 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       } else if (!append) {
         seenUserIds.current.clear();
         reportStackExhausted();
-        setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
+        if (!hasAutoRetriedRef.current) {
+          hasAutoRetriedRef.current = true;
+          setTimeout(() => loadPotentialMatchesRef.current?.(), 800);
+        }
       }
     } catch (error: any) {
       // The backend discovery gate returns 403 when the requesting user hasn't
@@ -904,6 +916,8 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       setShowCountryPicker(true);
       return;
     }
+    // Switching back to local — give this fresh session a clean retry slot.
+    hasAutoRetriedRef.current = false;
     setDiscoveryType(type);
     setSelectedCountry(null);
     setUsers([]);
@@ -912,6 +926,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   };
 
   const handleSelectCountry = (country: string | null) => {
+    // Reset the retry guard so the new selection always gets its one
+    // automatic retry chance before the empty state settles.
+    hasAutoRetriedRef.current = false;
     setSelectedCountry(country);
     setShowCountryPicker(false);
     setDiscoveryType('global');
