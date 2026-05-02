@@ -69,6 +69,8 @@
   var callType = 'voice';
   var currentFacingMode = 'user';
   var hasRemoteStream = false;
+  /* Remembered so we can re-apply routing when a remote audio track starts */
+  var speakerOn = true;
 
   /* ── Layout: local video fills screen when alone, shrinks to PiP when remote is live ── */
   function updateVideoLayout() {
@@ -196,6 +198,10 @@
         await client.subscribe(user, mediaType);
         if (mediaType === 'audio') {
           user.audioTrack && user.audioTrack.play();
+          /* Re-apply speaker routing now that we have a real audio track.
+           * setSpeaker() is a no-op if remoteUsers is empty; calling it here
+           * ensures it runs after subscribe/play when the track is live. */
+          setSpeaker(speakerOn);
           postToNative({ type: 'remote-user-joined', uid: user.uid });
         }
         if (mediaType === 'video' && callType === 'video') {
@@ -379,17 +385,34 @@
     }
   }
 
-  /* ── Speaker routing via audio output ── */
+  /* ── Speaker routing via audio output ──
+   * On Android WebView, getPlaybackDevices() often returns empty labels, so
+   * label-matching is unreliable. We still try, but always fall back to the
+   * first available device. The real speaker/earpiece routing on Android is
+   * controlled by the React Native side via Audio.setAudioModeAsync; this
+   * function is the WebRTC-layer complement that sets playback on the track
+   * objects themselves (works correctly on iOS / desktop browsers). */
   async function setSpeaker(on) {
+    speakerOn = on; /* Remember for re-application when new tracks arrive */
     try {
       var devices = await AgoraRTC.getPlaybackDevices();
       if (!devices || devices.length === 0) return;
-      var speaker = devices.find(function(d) {
-        return on
-          ? (d.label.toLowerCase().includes('speaker') || d.label.toLowerCase().includes('phone'))
-          : (d.label.toLowerCase().includes('earpiece') || d.label.toLowerCase().includes('receiver'));
-      });
-      var target = speaker || devices[0];
+      var target = null;
+      if (on) {
+        /* Prefer any device whose label suggests loudspeaker */
+        target = devices.find(function(d) {
+          var l = (d.label || '').toLowerCase();
+          return l.includes('speaker') || l.includes('phone') || l.includes('built') || l.includes('default');
+        });
+      } else {
+        /* Prefer earpiece / receiver */
+        target = devices.find(function(d) {
+          var l = (d.label || '').toLowerCase();
+          return l.includes('earpiece') || l.includes('receiver') || l.includes('ear');
+        });
+      }
+      /* Fall back to first device if label matching finds nothing */
+      if (!target) target = devices[0];
       if (client) {
         client.remoteUsers.forEach(function(u) {
           if (u.audioTrack) {

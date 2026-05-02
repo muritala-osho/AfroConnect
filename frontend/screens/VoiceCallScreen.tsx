@@ -213,6 +213,8 @@ export default function VoiceCallScreen() {
   const pendingJoinRef    = useRef<object | null>(null);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
+  /* Always-current speaker state — avoids stale-closure issues in onMessage */
+  const isSpeakerOnRef    = useRef(true);
 
   const duration = activeCall?.duration || 0;
 
@@ -458,6 +460,7 @@ export default function VoiceCallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = !isSpeakerOn;
     setIsSpeakerOn(next);
+    isSpeakerOnRef.current = next;
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -743,11 +746,11 @@ export default function VoiceCallScreen() {
         <WebView
           ref={webViewRef}
           source={{ uri: agoraUrl }}
-          /* A 1×1 transparent webview keeps the WebRTC media pipeline alive on
-           * Android — a 0×0 view can have its layer skipped, silently muting
-           * audio after the user accepts the call. We keep it visually hidden
-           * via opacity:0. */
-          style={{ width: 1, height: 1, position: "absolute", opacity: 0, top: 0, left: 0 }}
+          /* A small transparent webview keeps the WebRTC media pipeline alive
+           * on Android — a 0×0 view can have its layer skipped by the
+           * compositor, silently muting audio. 4×4 is safely non-zero but
+           * invisible via opacity:0. */
+          style={{ width: 4, height: 4, position: "absolute", opacity: 0, top: 0, left: 0 }}
           originWhitelist={["*"]}
           allowsInlineMediaPlayback
           mediaPlaybackRequiresUserAction={false}
@@ -771,9 +774,26 @@ export default function VoiceCallScreen() {
               const d = JSON.parse(e.nativeEvent.data);
               if (d.type === "sdk-ready") logger.log("Voice: Agora SDK ready");
               if (d.type === "joined") logger.log("Voice joined:", d.uid);
+              if (d.type === "remote-user-joined") {
+                logger.log("Voice: remote audio started, uid:", d.uid);
+                /* Re-apply audio routing now that the remote track is live.
+                 * The earlier sendToWebView({ action: "speaker" }) fires when
+                 * callStatus becomes "connected", but at that moment
+                 * client.remoteUsers is still empty so setSpeaker is a no-op.
+                 * This second pass (triggered by the track appearing) is what
+                 * actually routes audio to the speaker on Android. */
+                Audio.setAudioModeAsync({
+                  allowsRecordingIOS: true,
+                  playsInSilentModeIOS: true,
+                  staysActiveInBackground: true,
+                  playThroughEarpieceAndroid: !isSpeakerOnRef.current,
+                }).catch(() => {});
+                sendToWebView({ action: "speaker", on: isSpeakerOnRef.current });
+              }
               if (d.type === "remote-user-left") {
                 if (callStatusRef.current === "connected") handleEndCall();
               }
+              if (d.type === "connectionState") logger.log("Voice connection state:", d.state);
               if (d.type === "error") logger.warn("Voice WebView error:", d.message);
             } catch {}
           }}
