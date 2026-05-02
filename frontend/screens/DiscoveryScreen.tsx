@@ -315,6 +315,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // location genuinely has no visible users.
   const hasAutoRetriedRef = useRef(false);
 
+  // Hard rate-limit: loadPotentialMatches may not be called more than once
+  // every 3 seconds regardless of what triggers it (GPS coord ticks, user
+  // object re-fetches, etc.). This is the last line of defence against the
+  // 1-call-per-second loop seen when location updates drive rapid useEffect
+  // re-fires while the country filter returns 0 users.
+  const lastLoadCallMsRef = useRef(0);
+  const LOAD_COOLDOWN_MS = 3000;
+
   // Stable refs that always point to the latest callback / primitive value.
   // Using refs instead of putting functions in useEffect dep arrays prevents
   // spurious re-runs caused by useCallback identity changes.
@@ -533,6 +541,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       logger.log('[DISCOVERY] loadPotentialMatches skipped - face gate not approved');
       return;
     }
+
+    // Hard rate-limit: skip if the last successful call was < 3 s ago.
+    // Prevents the 1-call-per-second loop that occurs when GPS coord updates
+    // change currentPrefs on every tick and re-fire the discovery useEffect
+    // while the country filter is returning 0 results.
+    const now = Date.now();
+    if (!append && now - lastLoadCallMsRef.current < LOAD_COOLDOWN_MS) {
+      logger.log('[DISCOVERY] loadPotentialMatches rate-limited, skipping');
+      return;
+    }
+    if (!append) lastLoadCallMsRef.current = now;
 
     logger.log('[DISCOVERY] loadPotentialMatches starting...');
     try {
@@ -1582,8 +1601,22 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       }
       
       if (responseData?.isMatch) {
+        // Use the full animated MatchPopup screen (same as regular likes),
+        // with isSuperLike=true so it can style itself differently.
         setTimeout(() => {
-          showAlert("It's a Match!", `You and ${targetUser.name} both super liked each other!`, [{ text: 'Start Chatting', style: 'default', onPress: () => navigation.navigate("ChatDetail", { userId: targetUser.id, userName: targetUser.name }) }], 'heart');
+          navigation.navigate('MatchPopup', {
+            currentUser: {
+              id: user!.id,
+              name: user!.name,
+              photos: user!.photos || [],
+            },
+            matchedUser: {
+              id: targetUser.id,
+              name: targetUser.name,
+              photos: targetUser.photos || [],
+            },
+            isSuperLike: true,
+          });
         }, 600);
       } else {
         setTimeout(() => {
