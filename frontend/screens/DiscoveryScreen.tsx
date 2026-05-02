@@ -250,6 +250,43 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── Real-time match notification for the user who liked first ─────────────
+  // When user A likes user B and B later likes A back, the backend emits
+  // `match:new` to A's socket. This listener shows the MatchPopup on A's
+  // device — mirroring what B already sees from the HTTP response.
+  useEffect(() => {
+    const handleMatchNew = (data: {
+      matchId?: string;
+      matchedUser?: { id: string; name: string; photos: string[] };
+      isSuperLike?: boolean;
+    }) => {
+      if (!data?.matchedUser || !user) return;
+      navigation.navigate('MatchPopup', {
+        currentUser: {
+          id: user.id,
+          name: user.name,
+          photos: user.photos || [],
+        },
+        matchedUser: {
+          id: data.matchedUser.id,
+          name: data.matchedUser.name,
+          photos: data.matchedUser.photos || [],
+        },
+        isSuperLike: data.isSuperLike ?? false,
+      });
+    };
+
+    if (socketService && typeof socketService.on === 'function') {
+      socketService.on('match:new', handleMatchNew);
+    }
+    return () => {
+      if (socketService && typeof socketService.off === 'function') {
+        socketService.off('match:new', handleMatchNew);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // ── Foreground-return poll ────────────────────────────────────────────────
   // When the user's verification is pending and they switch back to the app
   // from the background, automatically re-check the gate status. This means

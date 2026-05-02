@@ -101,6 +101,27 @@ router.post('/request', protect, async (req, res) => {
         }
       }
 
+      // Notify the user who liked FIRST via socket so their MatchPopup
+      // appears in real-time without them needing to reload the app.
+      try {
+        const io = req.app.get('io');
+        if (io) {
+          const currentUserDoc = await User.findById(req.user._id).select('name photos');
+          io.to(receiverId.toString()).emit('match:new', {
+            matchId: match?._id?.toString(),
+            matchedUser: {
+              id: req.user._id.toString(),
+              name: currentUserDoc?.name || 'Someone',
+              photos: currentUserDoc?.photos || [],
+            },
+            isSuperLike: false,
+          });
+          logger.log('[MATCH] Emitted match:new to user', receiverId);
+        }
+      } catch (socketErr) {
+        logger.error('[MATCH] Failed to emit match:new socket event:', socketErr);
+      }
+
       return res.status(200).json({ 
         success: true, 
         isMatch: true,
