@@ -75,8 +75,10 @@ export default function PremiumScreen({ navigation }: any) {
   const [restoring, setRestoring] = useState(false);
   const [isActive, setIsActive] = useState(false);
   const [iapReady, setIapReady] = useState(false);
-  const [storePrices, setStorePrices] = useState<Record<string, { localizedPrice: string; currency: string }>>({});
-  const [pricesLoading, setPricesLoading] = useState(false);
+  const [storePrices, setStorePrices] = useState<Record<string, { localizedPrice: string; currency: string; priceAmountMicros?: string }>>({});
+  const [pricesLoading, setPricesLoading] = useState(true);
+  const [pricesError, setPricesError] = useState(false);
+  const [pricesFromStore, setPricesFromStore] = useState(false);
 
   const cardScale = useSharedValue(1);
   const glowOpacity = useSharedValue(0.5);
@@ -103,8 +105,56 @@ export default function PremiumScreen({ navigation }: any) {
     };
   }, [token]);
 
+  // Load cached prices from AsyncStorage immediately so the UI shows
+  // local-currency prices before the live IAP fetch completes.
+  useEffect(() => {
+    iapService.loadCachedPrices().then((cached) => {
+      if (Object.keys(cached).length > 0) {
+        setStorePrices(cached);
+        setPricesFromStore(true);
+        setPricesLoading(false);
+      }
+    });
+  }, []);
+
+  const applyStorePrices = (subs: any[]) => {
+    if (!subs || subs.length === 0) return false;
+    const priceMap: Record<string, { localizedPrice: string; currency: string; priceAmountMicros?: string }> = {};
+    subs.forEach((sub) => {
+      priceMap[sub.productId] = {
+        localizedPrice: sub.localizedPrice,
+        currency: sub.currency,
+        priceAmountMicros: sub.priceAmountMicros,
+      };
+    });
+    if (Object.keys(priceMap).length > 0) {
+      setStorePrices(priceMap);
+      setPricesFromStore(true);
+      setPricesError(false);
+      return true;
+    }
+    return false;
+  };
+
+  const retryPrices = async () => {
+    if (!iapReady) return;
+    setPricesError(false);
+    setPricesLoading(true);
+    try {
+      const subs = await iapService.getSubscriptions();
+      if (!applyStorePrices(subs)) setPricesError(true);
+    } catch {
+      setPricesError(true);
+    } finally {
+      setPricesLoading(false);
+    }
+  };
+
   const initIAP = async () => {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      setPricesLoading(false);
+      return;
+    }
     const available = await iapService.loadIAP();
     setIapReady(available);
 
@@ -112,20 +162,10 @@ export default function PremiumScreen({ navigation }: any) {
       try {
         setPricesLoading(true);
         const subs = await iapService.getSubscriptions();
-        if (subs && subs.length > 0) {
-          const priceMap: Record<string, { localizedPrice: string; currency: string }> = {};
-          subs.forEach((sub) => {
-            priceMap[sub.productId] = {
-              localizedPrice: sub.localizedPrice,
-              currency: sub.currency,
-            };
-          });
-          if (Object.keys(priceMap).length > 0) {
-            setStorePrices(priceMap);
-          }
-        }
+        if (!applyStorePrices(subs)) setPricesError(true);
       } catch (e) {
         logger.log('Failed to load store prices:', e);
+        setPricesError(true);
       } finally {
         setPricesLoading(false);
       }
@@ -194,6 +234,22 @@ export default function PremiumScreen({ navigation }: any) {
     const stored = storePrices[tier.id];
     if (stored?.localizedPrice) return stored.localizedPrice;
     return formatPrice(tier.amount, tier.currency);
+  };
+
+  // Compute savings % from actual store priceAmountMicros so the label
+  // is accurate in every currency, not just the hardcoded USD baseline.
+  const getDynamicSavings = (tier: PriceTier): string | undefined => {
+    const dailyMicros = Number(storePrices[iapService.PRODUCT_IDS.DAILY]?.priceAmountMicros || 0);
+    const targetMicros = Number(storePrices[tier.id]?.priceAmountMicros || 0);
+    // If we have live micros data use it, otherwise fall back to hardcoded label
+    if (dailyMicros > 0 && targetMicros > 0 && tier.interval !== 'day') {
+      const daysMap: Record<string, number> = { week: 7, month: 30, year: 365 };
+      const days = daysMap[tier.interval] ?? 1;
+      const fullPrice = dailyMicros * days;
+      const pct = Math.round(((fullPrice - targetMicros) / fullPrice) * 100);
+      return pct > 0 ? `Save ${pct}%` : undefined;
+    }
+    return tier.savings;
   };
 
   const handleRestore = async () => {
@@ -390,9 +446,9 @@ export default function PremiumScreen({ navigation }: any) {
                           <Text style={[styles.tierLabel, isSelected && styles.tierLabelSelected]} numberOfLines={1}>
                             {tier.label}
                           </Text>
-                          {tier.savings && (
+                          {getDynamicSavings(tier) && (
                             <View style={styles.savingsBadge}>
-                              <Text style={styles.savingsBadgeText}>{tier.savings}</Text>
+                              <Text style={styles.savingsBadgeText}>{getDynamicSavings(tier)}</Text>
                             </View>
                           )}
                         </View>
@@ -432,6 +488,22 @@ export default function PremiumScreen({ navigation }: any) {
               return <View key={tier.id}>{innerCard}</View>;
             })}
           </View>
+
+          {/* Price source indicator */}
+          {pricesFromStore && !pricesError && !pricesLoading && (
+            <View style={styles.priceSourceRow}>
+              <MaterialCommunityIcons name="store-check-outline" size={13} color="rgba(255,255,255,0.4)" />
+              <Text style={styles.priceSourceText}>Prices shown in your local currency via {Platform.OS === 'ios' ? 'App Store' : 'Google Play'}</Text>
+            </View>
+          )}
+
+          {/* Retry row when live prices failed to load */}
+          {pricesError && !pricesLoading && iapReady && (
+            <TouchableOpacity style={styles.retryRow} onPress={retryPrices} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="refresh" size={13} color="#FFD700" />
+              <Text style={styles.retryText}>Couldn't load prices · Tap to retry</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.sectionLabel}>Everything you unlock</Text>
           <Text style={styles.sectionSub}>{PREMIUM_FEATURES.length} premium perks designed to get you matched.</Text>
@@ -1010,5 +1082,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
     textDecorationLine: 'underline',
+  },
+  priceSourceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  priceSourceText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center',
+  },
+  retryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+    alignSelf: 'center',
+  },
+  retryText: {
+    fontSize: 12,
+    color: '#FFD700',
+    fontWeight: '600',
   },
 });

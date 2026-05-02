@@ -33,10 +33,23 @@ export interface NormalizedPrice {
   basePlanId?: string;
 }
 
+const PRICE_CACHE_KEY = 'iap_price_cache_v2';
+
 let iapModule: any = null;
+let asyncStorageModule: any = null;
 let isIAPAvailable = false;
 let cachedSubscriptions: any[] = [];
 let cachedPrices: Record<string, NormalizedPrice> = {};
+
+const getAsyncStorage = async () => {
+  if (asyncStorageModule) return asyncStorageModule;
+  try {
+    asyncStorageModule = (await import('@react-native-async-storage/async-storage')).default;
+    return asyncStorageModule;
+  } catch {
+    return null;
+  }
+};
 
 const loadIAP = async () => {
   if (Platform.OS === 'web') return false;
@@ -85,11 +98,22 @@ function extractAndroidPrice(sub: any): NormalizedPrice | null {
 function extractIOSPrice(sub: any): NormalizedPrice | null {
   const localizedPrice = sub.localizedPrice || sub.price;
   if (!localizedPrice) return null;
+
+  // Compute micros from the numeric price string so savings can be calculated
+  let priceAmountMicros: string | undefined;
+  const numericPrice = sub.price ?? sub.priceAmountMicros;
+  if (numericPrice != null) {
+    const parsed = parseFloat(String(numericPrice));
+    if (!isNaN(parsed) && parsed > 0) {
+      priceAmountMicros = String(Math.round(parsed * 1_000_000));
+    }
+  }
+
   return {
     productId: sub.productId,
     localizedPrice: String(localizedPrice),
     currency: sub.currency || 'USD',
-    priceAmountMicros: undefined,
+    priceAmountMicros,
   };
 }
 
@@ -109,10 +133,43 @@ const getSubscriptions = async (): Promise<NormalizedPrice[]> => {
       }
     });
     cachedPrices = priceMap;
+
+    // Persist to AsyncStorage so next launch is instant
+    try {
+      const storage = await getAsyncStorage();
+      if (storage && Object.keys(priceMap).length > 0) {
+        await storage.setItem(
+          PRICE_CACHE_KEY,
+          JSON.stringify({ prices: priceMap, ts: Date.now() }),
+        );
+      }
+    } catch (cacheError) {
+      logger.log('Failed to cache IAP prices:', cacheError);
+    }
+
     return Object.values(priceMap);
   } catch (error) {
     logger.log('Failed to get subscriptions:', error);
     return [];
+  }
+};
+
+/**
+ * Load prices from AsyncStorage immediately (before IAP initialises)
+ * so the screen can show local-currency prices on first render.
+ */
+const loadCachedPrices = async (): Promise<Record<string, NormalizedPrice>> => {
+  try {
+    const storage = await getAsyncStorage();
+    if (!storage) return {};
+    const raw = await storage.getItem(PRICE_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    // Treat cache as stale after 24 hours (prices rarely change)
+    if (Date.now() - (parsed.ts || 0) > 24 * 60 * 60 * 1000) return {};
+    return parsed.prices || {};
+  } catch {
+    return {};
   }
 };
 
@@ -193,7 +250,6 @@ const restorePurchases = async (): Promise<{ receipt: string | null; productId: 
     const history = await iapModule.getPurchaseHistory();
     if (!Array.isArray(history) || history.length === 0) return { receipt: null, productId: null };
 
-    // Find the most recent premium subscription purchase
     const premiumPurchases = history
       .filter((p: any) => p.productId?.startsWith('afroconnect_premium'))
       .sort((a: any, b: any) => Number(b.transactionDate || 0) - Number(a.transactionDate || 0));
@@ -213,6 +269,7 @@ export const iapService = {
   PRODUCT_IDS,
   SUBSCRIPTION_SKUS,
   loadIAP,
+  loadCachedPrices,
   getSubscriptions,
   getCachedPrice,
   requestSubscription,
