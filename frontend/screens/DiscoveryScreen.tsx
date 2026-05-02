@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal, TextInput } from "react-native";
+import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal, TextInput, AppState } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import Animated, { 
   useAnimatedStyle, 
@@ -249,6 +249,28 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // ── Foreground-return poll ────────────────────────────────────────────────
+  // When the user's verification is pending and they switch back to the app
+  // from the background, automatically re-check the gate status. This means
+  // a user who gets approved while the app is backgrounded will see the
+  // discovery deck appear the moment they re-open the app — no tap required.
+  useEffect(() => {
+    const appStateRef = { prev: AppState.currentState };
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const wasBackground =
+        appStateRef.prev === 'background' || appStateRef.prev === 'inactive';
+      const isNowActive = nextState === 'active';
+      if (wasBackground && isNowActive && faceGateStatusRef.current === 'pending') {
+        checkFaceGate();
+        fetchUser().catch(() => {});
+      }
+      appStateRef.prev = nextState;
+    });
+    return () => subscription.remove();
+  // checkFaceGate and fetchUser are stable callbacks — no need to list them.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // ─────────────────────────────────────────────────────────────────────────
 
   const [users, setUsers] = useState<DiscoverUser[]>([]);
