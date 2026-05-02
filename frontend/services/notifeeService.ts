@@ -514,9 +514,10 @@ export function registerNotifeeBackgroundHandler() {
     // Mark the call as pre-answered so IncomingCallHandler skips the in-app
     // ringing UI and navigates directly to the call screen on cold start.
     if (type === _EventType.ACTION_PRESS && pressAction?.id === 'answer_call') {
-      const callerId   = data?.callerId;
-      const callerName = data?.callerName || 'Unknown';
-      const callType   = data?.callType   || 'voice';
+      const callerId    = data?.callerId;
+      const callerName  = data?.callerName  || 'Unknown';
+      const callerPhoto = data?.callerPhoto || '';
+      const callType    = data?.callType    || 'voice';
       let callData: any = {};
       try { callData = data?.callData ? JSON.parse(data.callData) : {}; } catch {}
 
@@ -524,6 +525,7 @@ export function registerNotifeeBackgroundHandler() {
         (global as any).__pendingVoipCall = {
           callerId,
           callerName,
+          callerPhoto,
           callType,
           callData,
           answeredFromNotification: true,

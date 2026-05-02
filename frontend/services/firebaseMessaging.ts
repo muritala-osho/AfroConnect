@@ -129,6 +129,7 @@ export function registerFirebaseBackgroundHandler() {
     (global as any).__pendingVoipCall = {
       callerId,
       callerName,
+      callerPhoto,
       callType,
       callData,
     };

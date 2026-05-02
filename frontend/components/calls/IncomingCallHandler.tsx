@@ -275,7 +275,7 @@ export default function IncomingCallHandler() {
           if (pending) {
             call = {
               callerId:   pending.callerId,
-              callerInfo: { name: pending.callerName ?? 'Unknown', photo: '' },
+              callerInfo: { name: pending.callerName ?? 'Unknown', photo: pending.callerPhoto ?? '' },
               callData:   { callType: pending.callType ?? 'voice', ...pending.callData },
             };
             (global as any).__pendingVoipCall = null;
@@ -366,6 +366,7 @@ export default function IncomingCallHandler() {
       // User already pressed "Answer" — accept immediately on cold start.
       const callTypeFromData = pending.callType === 'video' ? 'video' : 'voice';
       const callData = { callType: pending.callType ?? 'voice', ...pending.callData };
+      const photo = pending.callerPhoto ?? '';
 
       stopRingtone();
 
@@ -380,7 +381,7 @@ export default function IncomingCallHandler() {
       setActiveCall({
         userId:     pending.callerId,
         userName:   pending.callerName ?? 'Unknown',
-        userPhoto:  '',
+        userPhoto:  photo,
         isIncoming: true,
         callStatus: 'connected',
         callType:   callTypeFromData,
@@ -390,7 +391,7 @@ export default function IncomingCallHandler() {
       navigation.navigate(callTypeFromData === 'video' ? 'VideoCall' : 'VoiceCall', {
         userId:       pending.callerId,
         userName:     pending.callerName ?? 'Unknown',
-        userPhoto:    '',
+        userPhoto:    photo,
         isIncoming:   true,
         callData,
         callerId:     pending.callerId,
@@ -401,7 +402,7 @@ export default function IncomingCallHandler() {
 
     showCallUI({
       callerId:   pending.callerId,
-      callerInfo: { name: pending.callerName ?? 'Unknown', photo: '' },
+      callerInfo: { name: pending.callerName ?? 'Unknown', photo: pending.callerPhoto ?? '' },
       callData:   { callType: pending.callType ?? 'voice', ...pending.callData },
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps

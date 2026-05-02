@@ -2097,168 +2097,42 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // ─── End daily limit gate ─────────────────────────────────────────────────
 
   if (!currentUser && !showPassportModal && !showSecondChance && !showCountryPicker) {
-    const isPremium = !!user?.premium?.isActive;
-
-    // Context-aware title + subtitle + primary CTA based on current mode
-    const isPassportEmpty  = passportActive;
-    const isGlobalCountry  = discoveryType === 'global' && !!selectedCountry;
-    const isGlobalAll      = discoveryType === 'global' && !selectedCountry;
-
-    const emptyTitle = isPassportEmpty
-      ? `No one in ${passportCity} yet`
-      : isGlobalCountry
-        ? `No one from ${selectedCountry} yet`
-        : isGlobalAll
-          ? 'No profiles worldwide right now'
-          : t('noMoreProfiles');
-
-    const emptySubtitle = isPassportEmpty
-      ? 'Not enough people here yet. Try a different city or switch back to local discovery.'
-      : isGlobalCountry
-        ? `No profiles found from ${selectedCountry}. Try All Countries or pick a different one.`
-        : isGlobalAll
-          ? 'The global pool is empty right now. Check back soon or try local discovery.'
-          : t('noMoreProfilesDescription');
-
     return (
       <GestureHandlerRootView style={styles.container}>
         <ThemedView style={[styles.container, styles.centerContent]}>
           <View style={styles.emptyStateContainer}>
             <View style={styles.emptyIconContainer}>
               <View style={[styles.emptyIconCircle, { backgroundColor: theme.primary + '20' }]}>
-                <Feather
-                  name={isPassportEmpty ? 'map-pin' : isGlobalCountry || isGlobalAll ? 'globe' : 'users'}
-                  size={48}
-                  color={theme.primary}
-                />
+                <Feather name="users" size={48} color={theme.primary} />
               </View>
             </View>
 
             <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
-              {emptyTitle}
+              {t('noMoreProfiles')}
             </ThemedText>
             <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-              {emptySubtitle}
+              {t('noMoreProfilesDescription')}
             </ThemedText>
 
             <View style={styles.emptyButtonsContainer}>
-              {/* Passport empty: primary CTA is "Change City" */}
-              {isPassportEmpty ? (
-                <Pressable
-                  style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
-                  onPress={() => setShowPassportModal(true)}
-                >
-                  <Feather name="map-pin" size={18} color="#FFF" />
-                  <ThemedText style={styles.emptyRefreshButtonText}>Change City</ThemedText>
-                </Pressable>
-              ) : isGlobalCountry ? (
-                /* Global + specific country empty: primary CTA is "All Countries" */
-                <Pressable
-                  style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
-                  onPress={() => {
-                    hasAutoRetriedRef.current = false;
-                    setSelectedCountry(null);
-                    setUsers([]);
-                    setLoading(true);
-                  }}
-                >
-                  <Feather name="globe" size={18} color="#FFF" />
-                  <ThemedText style={styles.emptyRefreshButtonText}>Show All Countries</ThemedText>
-                </Pressable>
-              ) : (
-                /* Default: Refresh */
-                <Pressable
-                  style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
-                  onPress={() => {
-                    hasAutoRetriedRef.current = false;
-                    setLoading(true);
-                    loadPotentialMatchesRef.current?.();
-                  }}
-                >
-                  <Feather name="refresh-cw" size={18} color="#FFF" />
-                  <ThemedText style={styles.emptyRefreshButtonText}>{t('refresh')}</ThemedText>
-                </Pressable>
-              )}
-
-              {/* Secondary CTA: change country picker when in global+country, otherwise Love Radar */}
-              {isGlobalCountry ? (
-                <Pressable
-                  style={[styles.loveRadarButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
-                  onPress={() => { fetchCountries(); setShowCountryPicker(true); }}
-                >
-                  <Feather name="edit-2" size={18} color={theme.primary} />
-                  <ThemedText style={[styles.loveRadarButtonText, { color: theme.primary }]}>Pick Another Country</ThemedText>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[styles.loveRadarButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
-                  onPress={() => navigation.navigate("LoveRadar")}
-                >
-                  <Feather name="target" size={18} color={theme.primary} />
-                  <ThemedText style={[styles.loveRadarButtonText, { color: theme.primary }]}>{t('openLoveRadar')}</ThemedText>
-                </Pressable>
-              )}
-            </View>
-
-            <View style={styles.emptyExtraOptions}>
               <Pressable
-                style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={openSecondChance}
+                style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
+                onPress={() => {
+                  hasAutoRetriedRef.current = false;
+                  setLoading(true);
+                  loadPotentialMatchesRef.current?.();
+                }}
               >
-                <View style={[styles.emptyOptionIcon, { backgroundColor: '#4CAF5018' }]}>
-                  <Feather name="rotate-ccw" size={20} color="#4CAF50" />
-                </View>
-                <View style={styles.emptyOptionText}>
-                  <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Second Chance</ThemedText>
-                  <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Revisit people you passed on</ThemedText>
-                </View>
+                <Feather name="refresh-cw" size={18} color="#FFF" />
+                <ThemedText style={styles.emptyRefreshButtonText}>{t('refresh')}</ThemedText>
               </Pressable>
 
-              {/* Show "Switch to Local" when in any global/passport mode, otherwise show Global Mode */}
-              {(isPassportEmpty || isGlobalCountry || isGlobalAll) ? (
-                <Pressable
-                  style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => {
-                    if (isPassportEmpty) handleClearPassport();
-                    else handleDiscoveryTypeChange('local');
-                  }}
-                >
-                  <View style={[styles.emptyOptionIcon, { backgroundColor: theme.primary + '18' }]}>
-                    <Feather name="map-pin" size={20} color={theme.primary} />
-                  </View>
-                  <View style={styles.emptyOptionText}>
-                    <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Switch to Local</ThemedText>
-                    <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Discover people near you</ThemedText>
-                  </View>
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => handleDiscoveryTypeChange('global')}
-                >
-                  <View style={[styles.emptyOptionIcon, { backgroundColor: theme.primary + '18' }]}>
-                    <Feather name="globe" size={20} color={theme.primary} />
-                  </View>
-                  <View style={styles.emptyOptionText}>
-                    <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Global Mode</ThemedText>
-                    <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Discover people worldwide</ThemedText>
-                  </View>
-                  {!isPremium && <Feather name="lock" size={14} color={theme.textSecondary} />}
-                </Pressable>
-              )}
-
               <Pressable
-                style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                onPress={handlePassportPress}
+                style={[styles.loveRadarButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.primary }]}
+                onPress={() => navigation.navigate("LoveRadar")}
               >
-                <View style={[styles.emptyOptionIcon, { backgroundColor: '#FFB80018' }]}>
-                  <Feather name="map-pin" size={20} color="#FFB800" />
-                </View>
-                <View style={styles.emptyOptionText}>
-                  <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Passport</ThemedText>
-                  <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Match in any city worldwide</ThemedText>
-                </View>
-                {!isPremium && <Feather name="lock" size={14} color={theme.textSecondary} />}
+                <Feather name="target" size={18} color={theme.primary} />
+                <ThemedText style={[styles.loveRadarButtonText, { color: theme.primary }]}>{t('openLoveRadar')}</ThemedText>
               </Pressable>
             </View>
 

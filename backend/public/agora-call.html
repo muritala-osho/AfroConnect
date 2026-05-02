@@ -236,11 +236,20 @@
         postToNative({ type: 'networkQuality', level: worst });
       });
 
+      /* 'speech_standard' (32 kHz, 1 ch, 48 kbps) keeps AEC/ANS/AGC active.
+       * 'music_standard' disables ANS and AGC in Agora 4.x and is designed
+       * for music streaming — not voice calls. 'high_quality' (48 kHz, 128 kbps)
+       * is used for video calls where richer audio is worthwhile.
+       * bypassWebAudio: true skips the Web Audio API processing pipeline, which
+       * on some Android WebViews conflicts with the hardware AEC and can cause
+       * mic capture to produce silence. */
+      var isVoiceCall = (type === 'voice');
       var audioConfig = {
-        encoderConfig: 'music_standard',
+        encoderConfig: isVoiceCall ? 'speech_standard' : 'high_quality',
         AEC: true,
         ANS: true,
         AGC: true,
+        bypassWebAudio: isVoiceCall,
       };
 
       /* High-quality video config — 720p @ 30fps, 2.5 Mbps max */
