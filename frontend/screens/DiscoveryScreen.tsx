@@ -352,6 +352,17 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
   // location genuinely has no visible users.
   const hasAutoRetriedRef = useRef(false);
 
+  // Session-only search expansion. Values here are added to the user's stored
+  // preferences when building the /users/nearby request params, but are NEVER
+  // saved back to the profile. Reset whenever the user changes mode or city.
+  const searchExpansionRef = useRef({ ageExpand: 0, distanceExpand: 0 });
+  const [searchExpanded, setSearchExpanded] = useState(false);
+
+  // Set true when the backend returns a daily-swipe-limit 403. Shows an
+  // in-screen upgrade gate. User can dismiss it to keep browsing (but the
+  // next right-swipe will hit the gate again until tomorrow).
+  const [dailyLimitReached, setDailyLimitReached] = useState(false);
+
   // Hard rate-limit: loadPotentialMatches may not be called more than once
   // every 3 seconds regardless of what triggers it (GPS coord ticks, user
   // object re-fetches, etc.). This is the last line of defence against the
@@ -634,6 +645,19 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       if (prefs?.ageRange) {
         params.minAge = Number(prefs.ageRange.min);
         params.maxAge = Number(prefs.ageRange.max);
+      }
+
+      // Apply session-only search expansion (does NOT modify stored prefs).
+      // Only meaningful in local mode — global/passport already search widely.
+      const exp = searchExpansionRef.current;
+      if (discoveryType === 'local' && !passportActive) {
+        if (exp.ageExpand > 0 && params.minAge !== undefined) {
+          params.minAge = Math.max(18, (params.minAge as number) - exp.ageExpand);
+          params.maxAge = Math.min(100, (params.maxAge as number) + exp.ageExpand);
+        }
+        if (exp.distanceExpand > 0 && params.maxDistance !== undefined) {
+          params.maxDistance = (params.maxDistance as number) + exp.distanceExpand;
+        }
       }
 
       const userGender = user.gender?.toLowerCase();
@@ -1014,11 +1038,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       setShowCountryPicker(true);
       return;
     }
-    // Switching back to local — reset retry guard so the fresh session gets
-    // its one automatic retry chance. Do NOT call loadPotentialMatches() here
-    // directly: the stale closure would use the old discoveryType. The
-    // useEffect below detects the state change and fires the correct load.
+    // Switching back to local — reset all session-scoped state so the fresh
+    // session gets its own retry slot and a clean search expansion.
     hasAutoRetriedRef.current = false;
+    searchExpansionRef.current = { ageExpand: 0, distanceExpand: 0 };
+    setSearchExpanded(false);
+    setDailyLimitReached(false);
     setDiscoveryType(type);
     setSelectedCountry(null);
     setUsers([]);
@@ -1171,8 +1196,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setPassportActive(true);
         setPassportCity(city.name);
         setShowPassportModal(false);
-        // Reset retry guard so this fresh passport session gets its auto-retry slot.
+        // Reset all session-scoped state for the new passport city.
         hasAutoRetriedRef.current = false;
+        searchExpansionRef.current = { ageExpand: 0, distanceExpand: 0 };
+        setSearchExpanded(false);
+        setDailyLimitReached(false);
         setLoading(true);
         // Use the ref so we always call the most-current callback, then alert.
         loadPotentialMatchesRef.current?.();
@@ -1195,8 +1223,11 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
         setPassportActive(false);
         setPassportCity('');
         setShowPassportModal(false);
-        // Reset retry guard so the fresh local session gets its auto-retry slot.
+        // Reset all session-scoped state when returning to local discovery.
         hasAutoRetriedRef.current = false;
+        searchExpansionRef.current = { ageExpand: 0, distanceExpand: 0 };
+        setSearchExpanded(false);
+        setDailyLimitReached(false);
         showAlert('Passport Cleared', 'You\'re back to discovering people near you.', [{ text: 'OK', style: 'default' }], 'map-pin');
         setLoading(true);
         loadPotentialMatchesRef.current?.();
@@ -1391,15 +1422,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     } catch (error: any) {
       const errMsg = error?.message || error?.response?.data?.message || '';
       if (errMsg.toLowerCase().includes('daily swipe limit') || errMsg.toLowerCase().includes('swipe limit')) {
-        showAlert(
-          'Out of Likes',
-          "You've used all 10 daily likes. Upgrade to Premium for unlimited likes!",
-          [
-            { text: 'Not Now', style: 'cancel' },
-            { text: 'Upgrade', style: 'default', onPress: () => navigation.navigate('Premium') },
-          ],
-          'heart'
-        );
+        // Show the in-screen gate so the user sees a clear upgrade prompt
+        // instead of just a dismissible alert.
+        setDailyLimitReached(true);
       } else if (errMsg.includes('already sent')) {
         showAlert('Already Sent', `You've already sent a request to ${targetUser.name}`, [{ text: 'OK', style: 'default' }], 'info');
       } else {
@@ -2035,6 +2060,68 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     );
   }
 
+  // ─── Daily like-limit gate ───────────────────────────────────────────────
+  if (dailyLimitReached && !showPassportModal && !showSecondChance && !showCountryPicker) {
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const msLeft = midnight.getTime() - now.getTime();
+    const hoursLeft = Math.floor(msLeft / 3_600_000);
+    const minsLeft  = Math.floor((msLeft % 3_600_000) / 60_000);
+    const resetLabel = hoursLeft > 0 ? `${hoursLeft}h ${minsLeft}m` : `${minsLeft} min`;
+
+    return (
+      <GestureHandlerRootView style={styles.container}>
+        <ThemedView style={[styles.container, styles.centerContent]}>
+          <View style={styles.emptyStateContainer}>
+            <View style={styles.emptyIconContainer}>
+              <View style={[styles.emptyIconCircle, { backgroundColor: '#FF4D4D20' }]}>
+                <Feather name="heart" size={48} color="#FF4D4D" />
+              </View>
+            </View>
+
+            <ThemedText style={[styles.emptyTitle, { color: theme.text }]}>
+              Out of Likes for Today
+            </ThemedText>
+            <ThemedText style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
+              You've used all 10 daily likes. Free likes reset in {resetLabel}.{'\n'}Upgrade to Premium for unlimited likes every day.
+            </ThemedText>
+
+            <View style={styles.emptyButtonsContainer}>
+              <Pressable
+                style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
+                onPress={() => navigation.navigate('Premium' as any)}
+              >
+                <Feather name="star" size={18} color="#FFF" />
+                <ThemedText style={styles.emptyRefreshButtonText}>Upgrade to Premium</ThemedText>
+              </Pressable>
+
+              <Pressable
+                style={[styles.loveRadarButton, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
+                onPress={() => setDailyLimitReached(false)}
+              >
+                <Feather name="eye" size={18} color={theme.textSecondary} />
+                <ThemedText style={[styles.loveRadarButtonText, { color: theme.textSecondary }]}>Keep Browsing</ThemedText>
+              </Pressable>
+            </View>
+
+            <View style={[styles.emptyOptionCard, { backgroundColor: '#FFF3E022', borderColor: '#FFB80040', marginTop: 8 }]}>
+              <View style={[styles.emptyOptionIcon, { backgroundColor: '#FFB80018' }]}>
+                <Feather name="info" size={20} color="#FFB800" />
+              </View>
+              <View style={styles.emptyOptionText}>
+                <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>Premium perks</ThemedText>
+                <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>Unlimited likes · Global discovery · See who liked you · Passport</ThemedText>
+              </View>
+            </View>
+          </View>
+          <AlertComponent />
+        </ThemedView>
+      </GestureHandlerRootView>
+    );
+  }
+  // ─── End daily limit gate ─────────────────────────────────────────────────
+
   if (!currentUser && !showPassportModal && !showSecondChance && !showCountryPicker) {
     const isPremium = !!user?.premium?.isActive;
 
@@ -2140,6 +2227,84 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             </View>
 
             <View style={styles.emptyExtraOptions}>
+              {/* ── Expand your search (local mode only, session-only) ───────── */}
+              {!isPassportEmpty && !isGlobalCountry && !isGlobalAll && (
+                <View style={[styles.emptyOptionCard, {
+                  backgroundColor: searchExpanded ? theme.primary + '12' : '#FFF3E022',
+                  borderColor: searchExpanded ? theme.primary + '60' : '#FFB80050',
+                }]}>
+                  <View style={[styles.emptyOptionIcon, { backgroundColor: searchExpanded ? theme.primary + '20' : '#FFB80018' }]}>
+                    <Feather name="search" size={20} color={searchExpanded ? theme.primary : '#FFB800'} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText style={[styles.emptyOptionTitle, { color: theme.text }]}>
+                      {searchExpanded ? 'Search expanded' : 'Expand your search'}
+                    </ThemedText>
+                    {searchExpanded ? (
+                      <>
+                        <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>
+                          {searchExpansionRef.current.ageExpand > 0
+                            ? `Ages ${Math.max(18, (user?.preferences?.ageRange?.min ?? 18) - searchExpansionRef.current.ageExpand)}–${Math.min(100, (user?.preferences?.ageRange?.max ?? 50) + searchExpansionRef.current.ageExpand)}`
+                            : ''}
+                          {searchExpansionRef.current.ageExpand > 0 && searchExpansionRef.current.distanceExpand > 0 ? ' · ' : ''}
+                          {searchExpansionRef.current.distanceExpand > 0
+                            ? `+${searchExpansionRef.current.distanceExpand}km range`
+                            : ''}
+                        </ThemedText>
+                        <Pressable
+                          onPress={() => {
+                            searchExpansionRef.current = { ageExpand: 0, distanceExpand: 0 };
+                            setSearchExpanded(false);
+                            hasAutoRetriedRef.current = false;
+                            setLoading(true);
+                            loadPotentialMatchesRef.current?.();
+                          }}
+                        >
+                          <ThemedText style={{ color: '#FF4D4D', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+                            Reset to original filters
+                          </ThemedText>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <>
+                        <ThemedText style={[styles.emptyOptionDesc, { color: theme.textSecondary }]}>
+                          Widen age range or distance to find more people nearby
+                        </ThemedText>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                          <Pressable
+                            style={{ backgroundColor: '#FFB800', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+                            onPress={() => {
+                              searchExpansionRef.current.ageExpand = (searchExpansionRef.current.ageExpand || 0) + 5;
+                              setSearchExpanded(true);
+                              hasAutoRetriedRef.current = false;
+                              setLoading(true);
+                              loadPotentialMatchesRef.current?.();
+                            }}
+                          >
+                            <ThemedText style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>+5 yrs age</ThemedText>
+                          </Pressable>
+                          {user?.premium?.isActive && (
+                            <Pressable
+                              style={{ backgroundColor: '#FFB800', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}
+                              onPress={() => {
+                                searchExpansionRef.current.distanceExpand = (searchExpansionRef.current.distanceExpand || 0) + 25;
+                                setSearchExpanded(true);
+                                hasAutoRetriedRef.current = false;
+                                setLoading(true);
+                                loadPotentialMatchesRef.current?.();
+                              }}
+                            >
+                              <ThemedText style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>+25km distance</ThemedText>
+                            </Pressable>
+                          )}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                </View>
+              )}
+              {/* ── End expand search ─────────────────────────────────────── */}
+
               <Pressable
                 style={[styles.emptyOptionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={openSecondChance}
@@ -2279,6 +2444,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             </Pressable>
             <Pressable onPress={() => {
               hasAutoRetriedRef.current = false;
+              searchExpansionRef.current = { ageExpand: 0, distanceExpand: 0 };
+              setSearchExpanded(false);
+              setDailyLimitReached(false);
               setDiscoveryType('local');
               setSelectedCountry(null);
               setUsers([]);
