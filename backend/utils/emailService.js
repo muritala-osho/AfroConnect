@@ -127,7 +127,7 @@ const getOTPEmailTemplate = (userName, otpCode) => emailShell(`
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hello ${userName || 'there'}! 👋
+        Hello ${escapeHtml(userName) || 'there'}! 👋
       </h2>
       <p style="margin: 0 0 28px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         We received a request to verify your email address.
@@ -176,7 +176,7 @@ const getWelcomeEmailTemplate = (userName) => emailShell(`
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hi ${userName}! 👋
+        Hi ${escapeHtml(userName)}! 👋
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         We're thrilled to have you join our community! AfroConnect is more than just a dating
@@ -215,7 +215,7 @@ const getPasswordResetEmailTemplate = (userName, resetLink) => emailShell(`
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hi ${userName},
+        Hi ${escapeHtml(userName)},
       </h2>
       <p style="margin: 0 0 24px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         We received a request to reset your password.
@@ -259,12 +259,12 @@ const getBanNotificationTemplate = (userName, reason) => emailShell(`
   </tr>
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Your AfroConnect account has been suspended due to a violation of our Community Guidelines.
       </p>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
-        <strong>Reason:</strong> ${reason || 'Violation of community guidelines'}
+        <strong>Reason:</strong> ${escapeHtml(reason) || 'Violation of community guidelines'}
       </p>
       <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
                   padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
@@ -286,7 +286,7 @@ const getUnbanNotificationTemplate = (userName) => emailShell(`
   ${emailHeader("You're Back! 🎉")}
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Great news! Your appeal has been approved and your account has been restored.
         You can now log back into AfroConnect.
@@ -323,14 +323,14 @@ const getAppealDecisionTemplate = (userName, approved, adminResponse) => {
     </tr>
     <tr>
       <td style="padding: 48px 40px;">
-        <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+        <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
         <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
           Your appeal has been reviewed by our team. Here is their decision:
         </p>
         <div style="background-color: ${noteBg}; border-left: 4px solid ${noteBorder};
                     padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
           <p style="margin: 0; color: ${noteText}; font-size: 14px; line-height: 1.7;">
-            ${adminResponse || (approved
+            ${escapeHtml(adminResponse) || (approved
               ? 'Your appeal has been approved. Your account has been restored.'
               : 'Your appeal has been reviewed. Please review our Community Guidelines for next steps.'
             )}
@@ -441,7 +441,7 @@ const getVerificationApprovedTemplate = (userName) => emailShell(`
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Congratulations, ${userName}! 🎉
+        Congratulations, ${escapeHtml(userName)}! 🎉
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Your ID verification has been reviewed and approved by our team.
@@ -473,7 +473,7 @@ const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
   </tr>
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Thank you for submitting your verification request. Unfortunately, after reviewing your
         submission, our team was unable to approve it at this time.
@@ -481,7 +481,7 @@ const getVerificationRejectedTemplate = (userName, reason) => emailShell(`
       <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
                   padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.6;">
-          <strong>Reason:</strong> ${reason || 'The submitted photos did not meet our verification requirements.'}
+          <strong>Reason:</strong> ${escapeHtml(reason) || 'The submitted photos did not meet our verification requirements.'}
         </p>
       </div>
       <h3 style="margin: 28px 0 12px 0; color: #1a1a1a; font-size: 16px;">How to reapply successfully:</h3>
@@ -510,7 +510,7 @@ const getWarningEmailTemplate = (userName, reason) => emailShell(`
   </tr>
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Our moderation team has reviewed a report related to your account and issued an official
         warning for behaviour that violates our Community Guidelines.
@@ -518,7 +518,7 @@ const getWarningEmailTemplate = (userName, reason) => emailShell(`
       <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
                   padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.6;">
-          <strong>Reason:</strong> ${reason || 'Behaviour that violates AfroConnect Community Guidelines.'}
+          <strong>Reason:</strong> ${escapeHtml(reason) || 'Behaviour that violates AfroConnect Community Guidelines.'}
         </p>
       </div>
       <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
@@ -543,7 +543,7 @@ const getSuspensionEmailTemplate = (userName, reason, durationDays) => emailShel
   </tr>
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Following a review of your account, your access to AfroConnect has been
         temporarily suspended for <strong>${durationDays || 7} day${durationDays !== 1 ? 's' : ''}</strong>.
@@ -551,7 +551,7 @@ const getSuspensionEmailTemplate = (userName, reason, durationDays) => emailShel
       <div style="background-color: #FFF9E6; border-left: 4px solid #F59E0B;
                   padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 0; color: #92400E; font-size: 14px; line-height: 1.6;">
-          <strong>Reason:</strong> ${reason || 'Repeated violation of AfroConnect Community Guidelines.'}
+          <strong>Reason:</strong> ${escapeHtml(reason) || 'Repeated violation of AfroConnect Community Guidelines.'}
         </p>
       </div>
       <p style="margin: 16px 0; color: #555555; font-size: 15px; line-height: 1.7;">
@@ -577,7 +577,7 @@ const getVerificationRevokedTemplate = (userName, reason) => emailShell(`
   </tr>
   <tr>
     <td style="padding: 48px 40px;">
-      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${userName},</h2>
+      <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px;">Hi ${escapeHtml(userName)},</h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         We're writing to let you know that your verified badge on AfroConnect has been removed
         following a review by our trust &amp; safety team.
@@ -585,7 +585,7 @@ const getVerificationRevokedTemplate = (userName, reason) => emailShell(`
       <div style="background-color: #FEF2F2; border-left: 4px solid #DC2626;
                   padding: 14px 18px; margin: 20px 0; border-radius: 6px;">
         <p style="margin: 0; color: #991B1B; font-size: 14px; line-height: 1.6;">
-          <strong>Reason:</strong> ${reason || 'Your verification no longer meets our community standards.'}
+          <strong>Reason:</strong> ${escapeHtml(reason) || 'Your verification no longer meets our community standards.'}
         </p>
       </div>
       <p style="margin: 20px 0; color: #555555; font-size: 15px; line-height: 1.7;">
@@ -683,7 +683,7 @@ const getSuspensionLiftedTemplate = (userName) => emailShell(`
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hi ${userName},
+        Hi ${escapeHtml(userName)},
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Great news — your temporary suspension period has ended and your AfroConnect account
@@ -731,7 +731,7 @@ const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
       ${matchPhoto ? `
       <div style="margin: 0 auto 24px auto; width: 100px; height: 100px; border-radius: 50%;
                   overflow: hidden; border: 4px solid ${BRAND.primary}; display: inline-block;">
-        <img src="${matchPhoto}" alt="${matchName}" width="100" height="100"
+        <img src="${escapeHtml(matchPhoto)}" alt="${escapeHtml(matchName)}" width="100" height="100"
              style="object-fit: cover; width: 100%; height: 100%;" />
       </div>` : `
       <div style="margin: 0 auto 24px auto; width: 100px; height: 100px; border-radius: 50%;
@@ -739,10 +739,10 @@ const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
                   display: inline-flex; align-items: center; justify-content: center;
                   font-size: 48px; line-height: 100px;">💚</div>`}
       <h2 style="margin: 0 0 12px 0; color: #1a1a1a; font-size: 24px; font-weight: 700;">
-        Hi ${userName}! 👋
+        Hi ${escapeHtml(userName)}! 👋
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 17px; line-height: 1.7;">
-        You and <strong style="color: ${BRAND.primary};">${matchName}</strong> have matched on AfroConnect!
+        You and <strong style="color: ${BRAND.primary};">${escapeHtml(matchName)}</strong> have matched on AfroConnect!
         Don't leave them waiting — say hello first and start the conversation.
       </p>
       <div style="background-color: ${BRAND.primaryLight}; border-radius: 12px;
@@ -757,7 +757,7 @@ const getNewMatchTemplate = (userName, matchName, matchPhoto) => emailShell(`
            background: linear-gradient(135deg, ${BRAND.gradientStart} 0%, ${BRAND.gradientEnd} 100%);
            color: #ffffff; text-decoration: none; padding: 16px 42px;
            border-radius: 32px; font-size: 16px; font-weight: 700; letter-spacing: 0.3px;">
-          Message ${matchName} →
+          Message ${escapeHtml(matchName)} →
         </a>
       </div>
     </td>
@@ -784,7 +784,7 @@ const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => email
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hi ${userName},
+        Hi ${escapeHtml(userName)},
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
         Our support team has replied to your ticket${ticketSubject ? ` regarding <strong>&ldquo;${escapeHtml(ticketSubject)}&rdquo;</strong>` : ''}.
@@ -795,7 +795,7 @@ const getSupportReplyTemplate = (userName, replyContent, ticketSubject) => email
         <p style="margin: 0 0 10px 0; color: #AAAAAA; font-size: 11px; font-weight: 700;
                    text-transform: uppercase; letter-spacing: 1px;">AfroConnect Support</p>
         <p style="margin: 0; color: #333333; font-size: 15px; line-height: 1.8; white-space: pre-wrap;">
-          ${replyContent}
+          ${escapeHtml(replyContent)}
         </p>
       </div>
       <p style="margin: 20px 0; color: #555555; font-size: 15px; line-height: 1.7;">
@@ -834,10 +834,10 @@ const getRenewalReminderTemplate = (userName, planName, renewalDate, daysLeft) =
   <tr>
     <td style="padding: 48px 40px;">
       <h2 style="margin: 0 0 16px 0; color: #1a1a1a; font-size: 22px; font-weight: 700;">
-        Hi ${userName},
+        Hi ${escapeHtml(userName)},
       </h2>
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
-        Just a heads-up — your <strong style="color: ${BRAND.primary};">${planName} subscription</strong>
+        Just a heads-up — your <strong style="color: ${BRAND.primary};">${escapeHtml(planName)} subscription</strong>
         is set to automatically renew in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>
         on <strong>${renewalDate}</strong>.
       </p>
@@ -880,7 +880,7 @@ const sendRenewalReminderEmail = async (email, userName, planName, renewalDate, 
 };
 
 const getInactivityTemplate = (userName) => emailShell(`
-  ${emailHeader('We miss you, ' + userName + '! 👋', 'New people are waiting to connect with you')}
+  ${emailHeader('We miss you, ' + escapeHtml(userName) + '! 👋', 'New people are waiting to connect with you')}
   <tr>
     <td style="padding: 48px 40px; text-align: center;">
       <p style="margin: 0 0 20px 0; color: #555555; font-size: 16px; line-height: 1.7;">
