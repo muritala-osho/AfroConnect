@@ -230,11 +230,36 @@ router.get('/countries', protect, async (req, res) => {
       suspended: { $ne: true }
     });
 
-    const filtered = countries.filter(c => c && c.trim() !== '').sort();
+    // Normalise known country-name variants so the picker shows one canonical
+    // entry per country regardless of which geocoding API stored the name.
+    const CANONICAL = {
+      'turkey':          'Türkiye',
+      'czech republic':  'Czechia',
+      "côte d'ivoire":   'Ivory Coast',
+      "cote d'ivoire":   'Ivory Coast',
+      'cabo verde':      'Cape Verde',
+      'macedonia':       'North Macedonia',
+      'burma':           'Myanmar',
+      'swaziland':       'Eswatini',
+      'democratic republic of congo': 'DR Congo',
+      'drc':             'DR Congo',
+    };
+
+    const seen = new Set();
+    const normalised = [];
+    for (const c of countries) {
+      if (!c || !c.trim()) continue;
+      const canonical = CANONICAL[c.trim().toLowerCase()] || c.trim();
+      if (!seen.has(canonical.toLowerCase())) {
+        seen.add(canonical.toLowerCase());
+        normalised.push(canonical);
+      }
+    }
+    normalised.sort();
 
     res.json({
       success: true,
-      countries: filtered
+      countries: normalised
     });
   } catch (error) {
     logger.error('Countries list error:', error);
@@ -510,7 +535,38 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
 
     if (isGlobal) {
       if (countryFilter) {
-        query['location.country'] = { $regex: new RegExp(countryFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') };
+        // Some countries have multiple accepted names (e.g. Turkey / Türkiye,
+        // Czech Republic / Czechia, Ivory Coast / Côte d'Ivoire). Different
+        // geocoding providers and different app versions store different
+        // variants. Build a list of all known aliases and match any of them
+        // so a user selecting "Turkey" sees profiles stored as "Türkiye" too.
+        const COUNTRY_ALIASES = {
+          'turkey':          ['Turkey', 'Türkiye'],
+          'türkiye':         ['Turkey', 'Türkiye'],
+          'czech republic':  ['Czech Republic', 'Czechia'],
+          'czechia':         ['Czech Republic', 'Czechia'],
+          'ivory coast':     ['Ivory Coast', "Côte d'Ivoire", "Cote d'Ivoire"],
+          "côte d'ivoire":   ['Ivory Coast', "Côte d'Ivoire", "Cote d'Ivoire"],
+          "cote d'ivoire":   ['Ivory Coast', "Côte d'Ivoire", "Cote d'Ivoire"],
+          'cape verde':      ['Cape Verde', 'Cabo Verde'],
+          'cabo verde':      ['Cape Verde', 'Cabo Verde'],
+          'north macedonia': ['North Macedonia', 'Macedonia'],
+          'macedonia':       ['North Macedonia', 'Macedonia'],
+          'myanmar':         ['Myanmar', 'Burma'],
+          'burma':           ['Myanmar', 'Burma'],
+          'eswatini':        ['Eswatini', 'Swaziland'],
+          'swaziland':       ['Eswatini', 'Swaziland'],
+          'dr congo':        ['DR Congo', 'Democratic Republic of Congo', 'DRC'],
+          'democratic republic of congo': ['DR Congo', 'Democratic Republic of Congo', 'DRC'],
+          'drc':             ['DR Congo', 'Democratic Republic of Congo', 'DRC'],
+          'congo':           ['Congo', 'Republic of Congo'],
+        };
+        const key = countryFilter.trim().toLowerCase();
+        const aliases = COUNTRY_ALIASES[key] || [countryFilter];
+        const escaped = aliases.map(a => a.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        query['location.country'] = {
+          $in: escaped.map(e => new RegExp(`^${e}$`, 'i'))
+        };
       }
     } else if (hasOrigin) {
       // Use the 2dsphere index when origin coordinates are available.

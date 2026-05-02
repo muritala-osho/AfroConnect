@@ -133,8 +133,8 @@ export const PASSPORT_CITIES = [
   { name: 'Manama', lat: 26.2285, lng: 50.5860, country: 'Bahrain' },
   { name: 'Beirut', lat: 33.8938, lng: 35.5018, country: 'Lebanon' },
   { name: 'Amman', lat: 31.9454, lng: 35.9284, country: 'Jordan' },
-  { name: 'Istanbul', lat: 41.0082, lng: 28.9784, country: 'Turkey' },
-  { name: 'Ankara', lat: 39.9334, lng: 32.8597, country: 'Turkey' },
+  { name: 'Istanbul', lat: 41.0082, lng: 28.9784, country: 'Türkiye' },
+  { name: 'Ankara', lat: 39.9334, lng: 32.8597, country: 'Türkiye' },
   { name: 'Tel Aviv', lat: 32.0853, lng: 34.7818, country: 'Israel' },
   // Asia
   { name: 'Tokyo', lat: 35.6762, lng: 139.6503, country: 'Japan' },
