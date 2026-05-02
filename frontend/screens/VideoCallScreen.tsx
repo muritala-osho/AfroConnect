@@ -209,6 +209,7 @@ export default function VideoCallScreen() {
   const [networkQuality, setNetworkQuality] = useState(0);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [engineReady,   setEngineReady]    = useState(false);
+  const [isSwapped,     setIsSwapped]      = useState(false);
 
   /* ── Animated values ── */
   const fadeAnim      = useRef(new Animated.Value(0)).current;
@@ -219,42 +220,77 @@ export default function VideoCallScreen() {
   const endBtnScale   = useRef(new Animated.Value(1)).current;
 
   /* ── Draggable self-view PiP ── */
-  const PIP_W      = 110;
-  const PIP_H      = 150;
-  const PIP_MARGIN = 16;
+  const PIP_W           = 110;
+  const PIP_H           = 150;
+  const PIP_MARGIN      = 16;
+  const SWAP_THRESHOLD  = 8; // px — movement below this = tap → swap
+
   // Initial position: bottom-right corner (mirrors the old static style)
   const pipPos = useRef(new Animated.ValueXY({
     x: SW - PIP_W - PIP_MARGIN,
     y: SH - PIP_H - 200,
   })).current;
 
+  // Scale flash played when the user taps the PiP to swap
+  const pipScaleAnim = useRef(new Animated.Value(1)).current;
+
+  // Whether the current touch moved enough to count as a drag (not a tap)
+  const pipMoved = useRef(false);
+
+  // Stable ref so the PanResponder closure can always call the latest toggleSwap
+  const toggleSwapRef = useRef<() => void>(() => {});
+
+  const toggleSwap = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Animated.sequence([
+      Animated.timing(pipScaleAnim, { toValue: 0.90, duration: 70,  useNativeDriver: false }),
+      Animated.timing(pipScaleAnim, { toValue: 1,    duration: 120, useNativeDriver: false }),
+    ]).start();
+    setIsSwapped(prev => !prev);
+  }, [pipScaleAnim]);
+
+  // Keep the ref current whenever the callback identity changes
+  useEffect(() => { toggleSwapRef.current = toggleSwap; }, [toggleSwap]);
+
   const pipPan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder:  () => true,
       onPanResponderGrant: () => {
-        // Capture the current position as offset so the drag delta starts at 0
+        pipMoved.current = false;
+        // Capture current position as offset so dx/dy start at 0
         pipPos.setOffset({
           x: (pipPos.x as any)._value,
           y: (pipPos.y as any)._value,
         });
         pipPos.setValue({ x: 0, y: 0 });
       },
-      onPanResponderMove: Animated.event(
-        [null, { dx: pipPos.x, dy: pipPos.y }],
-        { useNativeDriver: false },
-      ),
+      onPanResponderMove: (_, gs) => {
+        if (
+          Math.abs(gs.dx) > SWAP_THRESHOLD ||
+          Math.abs(gs.dy) > SWAP_THRESHOLD
+        ) {
+          pipMoved.current = true;
+        }
+        // Directly set animated value — equivalent to Animated.event dx/dy mapping
+        pipPos.setValue({ x: gs.dx, y: gs.dy });
+      },
       onPanResponderRelease: () => {
         pipPos.flattenOffset();
+        if (!pipMoved.current) {
+          // Short tap — swap the streams
+          toggleSwapRef.current();
+          return;
+        }
+        // Drag released — snap to nearest corner
         const x = (pipPos.x as any)._value;
         const y = (pipPos.y as any)._value;
-        // Snap to whichever corner the centre of the PiP is closest to
         const snapX = x + PIP_W / 2 < SW / 2
           ? PIP_MARGIN
           : SW - PIP_W - PIP_MARGIN;
         const snapY = y + PIP_H / 2 < SH / 2
-          ? 70 + PIP_MARGIN          // keep below the top header
-          : SH - PIP_H - 210;       // keep above the bottom controls
+          ? 70 + PIP_MARGIN
+          : SH - PIP_H - 210;
         Animated.spring(pipPos, {
           toValue: { x: snapX, y: snapY },
           useNativeDriver: false,
@@ -928,8 +964,8 @@ export default function VideoCallScreen() {
       {nativeVideo && engineReady && RtcSurfaceView && (
 
         <>
-          {/* Remote video — full-screen, shown when connected and remote joined */}
-          {isConnected && hasRemoteVideo && remoteUid !== null && (
+          {/* Remote video — full-screen when NOT swapped */}
+          {isConnected && hasRemoteVideo && remoteUid !== null && !isSwapped && (
             <RtcSurfaceView
               canvas={{
                 uid: remoteUid,
@@ -941,7 +977,7 @@ export default function VideoCallScreen() {
 
           {/* Local self-view — render TWO stable mounts (fullscreen and PiP)
               and toggle visibility instead of swapping keys.
-              
+
               Why not a single view with style swap?
                 Android SurfaceView's z-order (`zOrderMediaOverlay`) is set
                 ONCE when the view is attached to the window — changing the
@@ -950,9 +986,17 @@ export default function VideoCallScreen() {
                 side that left the PiP blank after accept ("I can't see
                 myself"). Two separate, never-remounted SurfaceViews fix
                 both: the PiP is created with z-order overlay from the start
-                so it always sits above the remote view. */}
-          {/* Full-screen local view while waiting for remote to join */}
-          {showVideo && !isCameraOff && !(isConnected && hasRemoteVideo) && (
+                so it always sits above the remote view.
+
+              Swap logic:
+                isSwapped=false (default) → remote full-screen, local PiP
+                isSwapped=true  (tapped)  → local full-screen, remote PiP  */}
+
+          {/* Local full-screen:
+              • while waiting for remote to join (original behaviour), OR
+              • when the user swapped so local fills the background           */}
+          {showVideo && !isCameraOff &&
+            (!(isConnected && hasRemoteVideo) || isSwapped) && (
             <RtcSurfaceView
               canvas={{
                 uid: 0,
@@ -964,28 +1008,61 @@ export default function VideoCallScreen() {
             />
           )}
 
-          {/* Draggable self-view PiP — shown once remote video is live */}
+          {/* Draggable PiP — shown once remote is live.
+              • Not swapped → shows local camera (uid 0)
+              • Swapped     → shows remote stream (uid remoteUid)
+              Tap the PiP to toggle swap; drag to reposition.
+              A key on the inner RtcSurfaceView forces it to remount with
+              the correct uid when the swap changes, while the outer
+              Animated.View (with zOrderMediaOverlay) stays stable so the
+              z-order overlay is preserved across the swap.               */}
           {isConnected && hasRemoteVideo && (
             <Animated.View
-              style={[s.localPip, { left: pipPos.x, top: pipPos.y }]}
+              style={[
+                s.localPip,
+                { left: pipPos.x, top: pipPos.y, transform: [{ scale: pipScaleAnim }] },
+              ]}
               {...pipPan.panHandlers}
             >
-              {showVideo && !isCameraOff ? (
-                <RtcSurfaceView
-                  canvas={{
-                    uid: 0,
-                    sourceType: VideoSourceType.VideoSourceCamera,
-                    renderMode: RenderModeType.RenderModeHidden,
-                    mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
-                  }}
-                  style={StyleSheet.absoluteFillObject}
-                  zOrderMediaOverlay
-                />
+              {/* Camera video inside the PiP */}
+              {isSwapped ? (
+                /* Swapped: remote stream fills the PiP */
+                remoteUid !== null ? (
+                  <RtcSurfaceView
+                    key="pip-remote"
+                    canvas={{
+                      uid: remoteUid,
+                      renderMode: RenderModeType.RenderModeHidden,
+                    }}
+                    style={StyleSheet.absoluteFillObject}
+                    zOrderMediaOverlay
+                  />
+                ) : null
               ) : (
-                <View style={[StyleSheet.absoluteFillObject, s.camOffPip]}>
-                  <Ionicons name="videocam-off" size={18} color="rgba(255,255,255,0.5)" />
-                </View>
+                /* Default: local camera in the PiP */
+                showVideo && !isCameraOff ? (
+                  <RtcSurfaceView
+                    key="pip-local"
+                    canvas={{
+                      uid: 0,
+                      sourceType: VideoSourceType.VideoSourceCamera,
+                      renderMode: RenderModeType.RenderModeHidden,
+                      mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
+                    }}
+                    style={StyleSheet.absoluteFillObject}
+                    zOrderMediaOverlay
+                  />
+                ) : (
+                  <View style={[StyleSheet.absoluteFillObject, s.camOffPip]}>
+                    <Ionicons name="videocam-off" size={18} color="rgba(255,255,255,0.5)" />
+                  </View>
+                )
               )}
+
+              {/* Swap-hint icon — subtle indicator that the PiP is tappable */}
+              <View style={s.pipSwapHint} pointerEvents="none">
+                <Ionicons name="swap-horizontal" size={13} color="rgba(255,255,255,0.70)" />
+              </View>
             </Animated.View>
           )}
         </>
@@ -1285,5 +1362,13 @@ const s = StyleSheet.create({
     backgroundColor: "#111",
     alignItems: "center",
     justifyContent: "center",
+  },
+  pipSwapHint: {
+    position: "absolute",
+    top: 5,
+    right: 5,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    borderRadius: 8,
+    padding: 2,
   },
 });
