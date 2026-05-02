@@ -227,7 +227,12 @@ router.patch('/location', protect, async (req, res) => {
       { new: true }
     ).select('-password -resetPasswordToken -resetPasswordExpire -verificationOTP -verificationOTPExpire');
 
-    await redis.del(`profile:me:${req.user.id}`);
+    // Invalidate all location-dependent caches — country may have changed.
+    await Promise.all([
+      redis.del('countries:list'),
+      redis.delPattern('discovery:*'),
+      redis.del(`profile:me:${req.user.id}`),
+    ]).catch(() => {});
 
     res.json({
       success: true,

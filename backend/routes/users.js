@@ -10,6 +10,32 @@ const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
 const { discoveryLimiter } = require('../middleware/rateLimiter');
 
+// Cache key for the countries list endpoint.
+const COUNTRIES_CACHE_KEY = 'countries:list';
+const COUNTRIES_CACHE_TTL = 5 * 60; // 5 minutes
+
+/**
+ * Invalidate all location-dependent caches.
+ * Called whenever a user's country / coordinates change so that:
+ *  - The global countries picker shows the new country immediately.
+ *  - Discovery results for all searching users reflect the new location.
+ * Both operations are fire-and-forget — a cache miss is far better than
+ * serving stale data, and failures are silent so they never block the
+ * location-update response.
+ */
+async function invalidateLocationCaches(userId) {
+  try {
+    await Promise.all([
+      redis.del(COUNTRIES_CACHE_KEY),
+      redis.delPattern('discovery:*'),
+      redis.del(`profile:me:${userId}`),
+    ]);
+    logger.log(`[Cache] Location caches invalidated for user ${userId}`);
+  } catch (err) {
+    logger.warn('[Cache] Location cache invalidation error (non-fatal):', err?.message);
+  }
+}
+
 function parseLivingIn(livingIn) {
   if (!livingIn || typeof livingIn !== 'string') return {};
   const parts = livingIn.split(',').map(part => part.trim()).filter(Boolean);
@@ -164,7 +190,11 @@ router.put('/me', protect, require('../middleware/validate')(require('../validat
     });
 
     await user.save();
-    await redis.del(`profile:me:${req.user._id}`);
+
+    // Invalidate location-dependent caches whenever the profile is saved.
+    // If the location field wasn't in this update the cost is just a few
+    // no-op Redis DELs — cheap compared to ever serving a stale countries list.
+    await invalidateLocationCaches(req.user._id);
 
     res.json({ 
       success: true, 
@@ -224,6 +254,13 @@ router.get('/search', protect, async (req, res) => {
 
 router.get('/countries', protect, async (req, res) => {
   try {
+    // Serve from cache when available — invalidated any time a user's
+    // location.country changes so the picker is always up to date.
+    const cached = await redis.get(COUNTRIES_CACHE_KEY);
+    if (cached) {
+      return res.json({ success: true, countries: cached, fromCache: true });
+    }
+
     const countries = await User.distinct('location.country', {
       'location.country': { $exists: true, $nin: [null, ''] },
       banned: { $ne: true },
@@ -257,10 +294,10 @@ router.get('/countries', protect, async (req, res) => {
     }
     normalised.sort();
 
-    res.json({
-      success: true,
-      countries: normalised
-    });
+    // Cache the result — invalidated on any location.country update.
+    await redis.set(COUNTRIES_CACHE_KEY, normalised, COUNTRIES_CACHE_TTL);
+
+    res.json({ success: true, countries: normalised });
   } catch (error) {
     logger.error('Countries list error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -1029,7 +1066,8 @@ router.put('/me/live-location', protect, async (req, res) => {
 
     await user.save();
 
-    try { await redis.del(`profile:me:${user._id}`); } catch (_) {}
+    // Invalidate location caches — country may have changed.
+    await invalidateLocationCaches(user._id);
 
     res.json({
       success: true,
@@ -1079,6 +1117,8 @@ router.post('/me/locations', protect, async (req, res) => {
 
     user.additionalLocations.push({ name: name.trim(), lat, lng, city, country });
     await user.save();
+    // A new country may have appeared — bust the countries list cache.
+    await invalidateLocationCaches(req.user.id);
     res.json({ success: true, locations: user.additionalLocations });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -1135,6 +1175,8 @@ router.post('/passport-location', protect, async (req, res) => {
       isActive: true
     };
     await user.save();
+    // Passport changes the effective country for discovery — clear caches.
+    await invalidateLocationCaches(req.user._id);
     res.json({ success: true, message: `Passport set to ${city || 'selected location'}`, passportLocation: user.passportLocation });
   } catch (error) {
     logger.error('Passport location error:', error);
