@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { getApiBaseUrl } from '@/constants/config';
 import { useAuth } from '@/hooks/useAuth';
+import { useUnread } from '@/contexts/UnreadContext';
 
 
 interface TicketMessage {
@@ -90,6 +91,7 @@ function timeAgo(iso: string): string {
 export default function SupportMessagesScreen({ navigation }: any) {
   const { theme } = useTheme();
   const { token, user } = useAuth();
+  const { refreshNotifCount } = useUnread();
 
   const [screen, setScreen] = useState<Screen>('list');
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -150,6 +152,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
 
   useEffect(() => {
     fetchTickets();
+    refreshNotifCount();
   }, []);
 
   useEffect(() => {
@@ -172,6 +175,7 @@ export default function SupportMessagesScreen({ navigation }: any) {
     setSelectedTicket(ticket);
     setScreen('thread');
     await fetchThread(ticket._id);
+    refreshNotifCount();
   };
 
   const handleCreateTicket = async () => {
