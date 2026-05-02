@@ -68,6 +68,19 @@ const adminLimiter = rateLimit({
   }
 });
 
+const adminEmailLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => (req.user ? req.user._id.toString() : null) || req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown',
+  validate: { trustProxy: false, xForwardedForHeader: false },
+  message: {
+    success: false,
+    message: 'Too many email actions. Please wait 30 minutes before sending more emails to users.'
+  }
+});
+
 const apiLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 120,
@@ -162,6 +175,7 @@ module.exports = {
   resetPasswordLimiter,
   refreshLimiter,
   adminLimiter,
+  adminEmailLimiter,
   uploadLimiter,
   messageLimiter,
   swipeLimiter,

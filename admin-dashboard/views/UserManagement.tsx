@@ -4,7 +4,7 @@ import {
   MapPin, Calendar, History, ShieldAlert, Award, Heart,
   Briefcase, GraduationCap, Camera, Tag, Cigarette, Wine,
   Loader2, RefreshCw, Download, ChevronLeft, ChevronRight,
-  Trash2, PauseCircle, PlayCircle, AlertCircle,
+  Trash2, PauseCircle, PlayCircle, AlertCircle, Crown, Gift,
 } from 'lucide-react';
 import { adminApi } from '../services/adminApi';
 import PermissionGuard from '../components/PermissionGuard';
@@ -34,6 +34,12 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
   const [confirmModal, setConfirmModal] = useState<{ user: any; type: 'ban' | 'unban' | 'delete' | 'suspend' | 'unsuspend' } | null>(null);
   const [suspendDays, setSuspendDays] = useState(7);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  const [premiumActionLoading, setPremiumActionLoading] = useState<'grant' | 'revoke' | null>(null);
+  const [showGrantForm, setShowGrantForm] = useState(false);
+  const [grantDuration, setGrantDuration] = useState(30);
+  const [grantReason, setGrantReason] = useState('');
+  const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
+  const [revokeReason, setRevokeReason] = useState('');
 
   const fetchUsers = useCallback(async (silent = false) => {
     if (!silent) { setLoading(true); setError(null); }
@@ -210,6 +216,53 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
     else if (type === 'suspend') await handleSuspendToggle(user, true);
     else if (type === 'unsuspend') await handleSuspendToggle(user, false);
     else if (type === 'delete') await handleDelete(user);
+  };
+
+  const handleGrantPremium = async () => {
+    if (!selectedUser || !grantDuration || grantDuration < 1) return;
+    setPremiumActionLoading('grant');
+    try {
+      const res = await adminApi.grantPremium(selectedUser._id, {
+        durationDays: grantDuration,
+        reason: grantReason.trim() || undefined,
+      });
+      if (res?.success) {
+        const updated = { ...selectedUser, premium: { ...selectedUser.premium, isActive: true, source: 'admin' } };
+        setSelectedUser(updated);
+        setUsers(prev => prev.map(u => u._id === selectedUser._id ? updated : u));
+        setShowGrantForm(false);
+        setGrantReason('');
+        showToast?.(`Premium granted to ${selectedUser.name || selectedUser.email} for ${grantDuration} days.`, 'success');
+      } else {
+        showToast?.(res?.message || 'Failed to grant premium.', 'error');
+      }
+    } catch (err: any) {
+      showToast?.(err?.message || 'Failed to grant premium.', 'error');
+    } finally {
+      setPremiumActionLoading(null);
+    }
+  };
+
+  const handleRevokePremium = async () => {
+    if (!selectedUser) return;
+    setPremiumActionLoading('revoke');
+    try {
+      const res = await adminApi.revokePremium(selectedUser._id, revokeReason.trim() || undefined);
+      if (res?.success) {
+        const updated = { ...selectedUser, premium: { ...selectedUser.premium, isActive: false } };
+        setSelectedUser(updated);
+        setUsers(prev => prev.map(u => u._id === selectedUser._id ? updated : u));
+        setShowRevokeConfirm(false);
+        setRevokeReason('');
+        showToast?.(`Premium revoked for ${selectedUser.name || selectedUser.email}.`, 'success');
+      } else {
+        showToast?.(res?.message || 'Failed to revoke premium.', 'error');
+      }
+    } catch (err: any) {
+      showToast?.(err?.message || 'Failed to revoke premium.', 'error');
+    } finally {
+      setPremiumActionLoading(null);
+    }
   };
 
   const exportCSV = () => {
@@ -780,7 +833,6 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                       {[
                         { label: 'Last Active', value: selectedUser.lastActive ? new Date(selectedUser.lastActive).toLocaleString() : '—' },
                         { label: 'Joined', value: selectedUser.createdAt ? new Date(selectedUser.createdAt).toLocaleDateString() : '—' },
-                        { label: 'Premium', value: selectedUser.premium?.isActive ? 'Active' : 'Free' },
                         { label: 'Online Now', value: selectedUser.online ? 'Yes' : 'No' },
                       ].map(item => (
                         <div key={item.label} className="p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl">
@@ -789,6 +841,121 @@ const UserManagement: React.FC<UserManagementProps> = ({ showToast }) => {
                         </div>
                       ))}
                     </div>
+
+                    {/* Premium management */}
+                    <div className={`p-5 rounded-2xl border ${selectedUser.premium?.isActive ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20' : 'bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-700'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Crown size={14} className={selectedUser.premium?.isActive ? 'text-amber-500' : 'text-slate-400'} />
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Premium</p>
+                        </div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${selectedUser.premium?.isActive ? 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-gray-200 dark:bg-slate-700 text-slate-500'}`}>
+                          {selectedUser.premium?.isActive ? `Active · ${selectedUser.premium?.source || 'unknown'}` : 'Free'}
+                        </span>
+                      </div>
+
+                      {selectedUser.premium?.isActive && selectedUser.premium?.expiresAt && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                          Expires {new Date(selectedUser.premium.expiresAt).toLocaleDateString()}
+                        </p>
+                      )}
+
+                      {!showGrantForm && !showRevokeConfirm && (
+                        <div className="flex gap-2">
+                          {!selectedUser.premium?.isActive && (
+                            <button
+                              onClick={() => { setShowGrantForm(true); setShowRevokeConfirm(false); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white"
+                            >
+                              <Gift size={12} /> Grant Premium
+                            </button>
+                          )}
+                          {selectedUser.premium?.isActive && selectedUser.premium?.source === 'admin' && (
+                            <button
+                              onClick={() => { setShowRevokeConfirm(true); setShowGrantForm(false); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white"
+                            >
+                              <Trash2 size={12} /> Revoke
+                            </button>
+                          )}
+                          {selectedUser.premium?.isActive && selectedUser.premium?.source !== 'admin' && (
+                            <p className="text-[10px] text-slate-400">Store subscription — manage via Apple/Google.</p>
+                          )}
+                        </div>
+                      )}
+
+                      {showGrantForm && (
+                        <div className="space-y-3 mt-2">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Duration</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[7, 30, 90, 180, 365].map(d => (
+                                <button
+                                  key={d}
+                                  onClick={() => setGrantDuration(d)}
+                                  className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${grantDuration === d ? 'bg-teal-500 text-white border-teal-500' : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600 text-gray-700 dark:text-slate-200'}`}
+                                >
+                                  {d === 7 ? '1 wk' : d === 30 ? '1 mo' : d === 90 ? '3 mo' : d === 180 ? '6 mo' : '1 yr'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <input
+                            type="text"
+                            value={grantReason}
+                            onChange={(e) => setGrantReason(e.target.value)}
+                            placeholder="Reason (optional)"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-xs text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-teal-400"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setShowGrantForm(false); setGrantReason(''); }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleGrantPremium}
+                              disabled={premiumActionLoading === 'grant' || !grantDuration}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50"
+                            >
+                              {premiumActionLoading === 'grant' ? <Loader2 size={12} className="animate-spin" /> : <Gift size={12} />}
+                              Grant {grantDuration}d
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showRevokeConfirm && (
+                        <div className="space-y-3 mt-2">
+                          <input
+                            type="text"
+                            value={revokeReason}
+                            onChange={(e) => setRevokeReason(e.target.value)}
+                            placeholder="Reason for revoke (optional)"
+                            className="w-full px-3 py-2 bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-xl text-xs text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-rose-400"
+                            autoFocus
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => { setShowRevokeConfirm(false); setRevokeReason(''); }}
+                              className="px-3 py-1.5 rounded-xl text-xs font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={handleRevokePremium}
+                              disabled={premiumActionLoading === 'revoke'}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-500 hover:bg-rose-600 text-white disabled:opacity-50"
+                            >
+                              {premiumActionLoading === 'revoke' ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                              Confirm Revoke
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="p-5 bg-gray-50 dark:bg-slate-800 rounded-2xl">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">User ID</p>
                       <p className="text-xs font-mono text-slate-500 break-all">{selectedUser._id}</p>

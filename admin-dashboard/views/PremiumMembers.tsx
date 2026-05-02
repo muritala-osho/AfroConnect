@@ -144,15 +144,16 @@ const PremiumMembers: React.FC = () => {
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [search, source, status, autoRenew]);
 
-  const handleRevoke = async (m: PremiumMember) => {
+  const [revokeTarget, setRevokeTarget] = useState<PremiumMember | null>(null);
+
+  const handleRevoke = async (m: PremiumMember, reason?: string) => {
     if (m.premium?.source && m.premium.source !== 'admin') {
       setToast({ kind: 'error', text: `Can't revoke a ${m.premium.source} subscription. Use the store cancel flow.` });
       return;
     }
-    if (!window.confirm(`Revoke premium for ${m.name || m.email}?`)) return;
     try {
       setRevokingId(m._id);
-      const res = await adminApi.revokePremium(m._id);
+      const res = await adminApi.revokePremium(m._id, reason?.trim() || undefined);
       if (res?.success) {
         setToast({ kind: 'success', text: 'Premium revoked.' });
         fetchData(true);
@@ -435,7 +436,7 @@ const PremiumMembers: React.FC = () => {
                             </button>
                             {(!m.premium?.source || m.premium?.source === 'admin') && (
                               <button
-                                onClick={() => handleRevoke(m)}
+                                onClick={() => setRevokeTarget(m)}
                                 disabled={revokingId === m._id}
                                 title="Revoke admin-granted premium"
                                 className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 disabled:opacity-40"
@@ -564,6 +565,18 @@ const PremiumMembers: React.FC = () => {
             fetchData(true);
           }}
           onError={(msg) => setToast({ kind: 'error', text: msg })}
+        />
+      )}
+
+      {revokeTarget && (
+        <RevokePremiumModal
+          member={revokeTarget}
+          revoking={revokingId === revokeTarget._id}
+          onClose={() => setRevokeTarget(null)}
+          onConfirm={(reason) => {
+            handleRevoke(revokeTarget, reason);
+            setRevokeTarget(null);
+          }}
         />
       )}
     </div>
@@ -788,6 +801,76 @@ const GrantPremiumModal: React.FC<{
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
             Grant Premium for {duration}d
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RevokePremiumModal: React.FC<{
+  member: PremiumMember;
+  revoking: boolean;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}> = ({ member, revoking, onClose, onConfirm }) => {
+  const [reason, setReason] = useState('');
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-5 border-b border-gray-100 dark:border-slate-800 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-rose-100 dark:bg-rose-500/10 text-rose-500">
+              <Trash2 size={18} />
+            </div>
+            <div>
+              <h2 className="text-lg font-black dark:text-white">Revoke Premium</h2>
+              <p className="text-xs text-gray-500 dark:text-slate-400">
+                {member.name || member.email}
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-600 dark:text-slate-300">
+            This will immediately remove admin-granted premium access for this user. Store subscriptions (Apple/Google) are not affected.
+          </p>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Reason (optional, for audit log)</p>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Trial ended, abuse, manual correction…"
+              className="w-full px-3 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:border-rose-400"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        <div className="p-5 border-t border-gray-100 dark:border-slate-800 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-sm font-bold text-gray-600 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm(reason)}
+            disabled={revoking}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-rose-500 hover:bg-rose-600 text-white disabled:opacity-50"
+          >
+            {revoking ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            Revoke Premium
           </button>
         </div>
       </div>

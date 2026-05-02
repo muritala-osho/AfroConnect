@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
+const { adminEmailLimiter } = require('../middleware/rateLimiter');
 const User = require('../models/User');
 const Report = require('../models/Report');
 const Match = require('../models/Match');
@@ -250,7 +251,7 @@ router.get('/reports', protect, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/reports/:reportId/resolve', protect, isAdmin, async (req, res) => {
+router.put('/reports/:reportId/resolve', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const { action, notes } = req.body; // action: 'dismiss', 'warn', 'suspend', 'ban'
     
@@ -388,7 +389,7 @@ router.get('/users', protect, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/users/:userId/ban', protect, isAdmin, async (req, res) => {
+router.put('/users/:userId/ban', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const { banned, reason } = req.body;
     
@@ -559,7 +560,7 @@ router.get('/appeals', protect, isAdmin, async (req, res) => {
   }
 });
 
-router.put('/appeals/:userId', protect, isAdmin, async (req, res) => {
+router.put('/appeals/:userId', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const { action, adminResponse } = req.body; // action: 'approve', 'reject'
     
@@ -680,7 +681,7 @@ router.get('/verifications', protect, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/revoke-verification/:userId', protect, isAdmin, verificationController.revokeVerification);
+router.post('/revoke-verification/:userId', protect, isAdmin, adminEmailLimiter, verificationController.revokeVerification);
 
 router.get('/users/:userId/notifications', protect, isAdmin, async (req, res) => {
   try {
@@ -735,7 +736,7 @@ router.get('/users/:userId/notifications', protect, isAdmin, async (req, res) =>
   }
 });
 
-router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) => {
+router.put('/verifications/:userId/approve', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const user = await User.findById(req.params.userId);
     if (!user) {
@@ -805,7 +806,7 @@ router.put('/verifications/:userId/approve', protect, isAdmin, async (req, res) 
   }
 });
 
-router.put('/verifications/:userId/reject', protect, isAdmin, async (req, res) => {
+router.put('/verifications/:userId/reject', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const { reason } = req.body;
     const user = await User.findById(req.params.userId);
@@ -1821,7 +1822,7 @@ router.get('/support-tickets', protect, isAdmin, async (req, res) => {
   }
 });
 
-router.post('/support-tickets/:ticketId/reply', protect, isAdmin, async (req, res) => {
+router.post('/support-tickets/:ticketId/reply', protect, isAdmin, adminEmailLimiter, async (req, res) => {
   try {
     const { content } = req.body;
     if (!content || !content.trim()) {
