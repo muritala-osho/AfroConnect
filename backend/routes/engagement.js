@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router  = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
@@ -23,7 +24,7 @@ router.post('/notification-opened', protect, async (req, res) => {
 
     res.json({ success: true, message: 'Engagement recorded', hour: hourUTC });
   } catch (err) {
-    console.error('Engagement tracking error:', err.message);
+    logger.error('Engagement tracking error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -37,7 +38,7 @@ router.get('/my-stats', protect, async (req, res) => {
       notifications: summary,
     });
   } catch (err) {
-    console.error('Engagement stats error:', err.message);
+    logger.error('Engagement stats error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -72,7 +73,7 @@ router.get('/admin/churn-overview', protect, async (req, res) => {
       lastUpdated: new Date(),
     });
   } catch (err) {
-    console.error('Churn overview error:', err.message);
+    logger.error('Churn overview error:', err.message);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

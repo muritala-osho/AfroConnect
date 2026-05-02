@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { QuizQuestion, UserQuizResponse } = require('../models/CompatibilityQuiz');
@@ -13,7 +14,7 @@ router.get('/questions', protect, async (req, res) => {
       questions
     });
   } catch (error) {
-    console.error('Get quiz questions error:', error);
+    logger.error('Get quiz questions error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch questions' });
   }
 });
@@ -30,7 +31,7 @@ router.get('/responses', protect, async (req, res) => {
       totalQuestions: userResponse?.totalQuestions || 0
     });
   } catch (error) {
-    console.error('Get quiz responses error:', error);
+    logger.error('Get quiz responses error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch responses' });
   }
 });
@@ -123,7 +124,7 @@ router.post('/submit', protect, async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error('Submit quiz error:', error);
+    logger.error('Submit quiz error:', error);
     res.status(500).json({ success: false, message: 'Failed to submit quiz' });
   }
 });
@@ -244,7 +245,7 @@ router.get('/compatibility/:userId', protect, async (req, res) => {
       questionsCompared: myResponseMap.size
     });
   } catch (error) {
-    console.error('Calculate compatibility error:', error);
+    logger.error('Calculate compatibility error:', error);
     res.status(500).json({ success: false, message: 'Failed to calculate compatibility' });
   }
 });
@@ -451,7 +452,7 @@ router.post('/seed', protect, async (req, res) => {
       count: defaultQuestions.length
     });
   } catch (error) {
-    console.error('Seed quiz error:', error);
+    logger.error('Seed quiz error:', error);
     res.status(500).json({ success: false, message: 'Failed to seed questions' });
   }
 });

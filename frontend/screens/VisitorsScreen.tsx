@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { View, StyleSheet, ScrollView, Dimensions, ActivityIndicator, Pressable, Platform, Modal, Text } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Ionicons } from "@expo/vector-icons";

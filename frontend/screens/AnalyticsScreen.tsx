@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { 
   View, 
   StyleSheet, 

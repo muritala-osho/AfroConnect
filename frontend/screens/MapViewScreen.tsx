@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";

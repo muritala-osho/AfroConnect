@@ -1,5 +1,6 @@
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const CallHistory = require('../models/CallHistory');
@@ -52,7 +53,7 @@ const createCallMessage = async (callerId, receiverId, callType, callStatus, dur
     
     return message;
   } catch (error) {
-    console.error('Create call message error:', error);
+    logger.error('Create call message error:', error);
     return null;
   }
 };
@@ -71,7 +72,7 @@ router.post('/initiate', protect, async (req, res) => {
 
     res.status(201).json({ success: true, callHistory });
   } catch (error) {
-    console.error('Initiate call error:', error);
+    logger.error('Initiate call error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -92,7 +93,7 @@ router.post('/decline', protect, async (req, res) => {
 
     res.status(201).json({ success: true, callHistory });
   } catch (error) {
-    console.error('Decline call error:', error);
+    logger.error('Decline call error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -113,7 +114,7 @@ router.post('/missed', protect, async (req, res) => {
 
     res.status(201).json({ success: true, callHistory });
   } catch (error) {
-    console.error('Missed call error:', error);
+    logger.error('Missed call error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

@@ -10,6 +10,7 @@
  */
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
@@ -79,7 +80,7 @@ async function emailAdmin(subject, body) {
       }),
     });
   } catch (err) {
-    console.error('[Support] Admin email failed (non-critical):', err.message);
+    logger.error('[Support] Admin email failed (non-critical):', err.message);
   }
 }
 
@@ -94,7 +95,7 @@ async function pushToUser(userId, title, body, data = {}) {
       await sendSmartNotification(user, { title, body, data, channelId: 'support' }, 'support');
     }
   } catch (err) {
-    console.error('[Support] Push to user failed (non-critical):', err.message);
+    logger.error('[Support] Push to user failed (non-critical):', err.message);
   }
 }
 
@@ -116,7 +117,7 @@ async function pushToStaff(ticket, title, body) {
       }
     }
   } catch (err) {
-    console.error('[Support] Push to staff failed (non-critical):', err.message);
+    logger.error('[Support] Push to staff failed (non-critical):', err.message);
   }
 }
 
@@ -340,13 +341,13 @@ router.post('/ticket', supportTicketLimiter, async (req, res) => {
           { screen: 'Support', ticketId: ticket._id.toString() }
         );
       } catch (botErr) {
-        console.error('[SupportBot] Auto-reply failed (non-critical):', botErr.message);
+        logger.error('[SupportBot] Auto-reply failed (non-critical):', botErr.message);
       }
     });
 
     res.json({ success: true, ticketId: ticket._id, message: "Ticket created. We'll reply within 24 hours." });
   } catch (error) {
-    console.error('[Support] Create ticket error:', error);
+    logger.error('[Support] Create ticket error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -368,7 +369,7 @@ router.get('/user', protect, async (req, res) => {
       .limit(50);
     res.json({ success: true, tickets });
   } catch (error) {
-    console.error('[Support] Get user tickets error:', error);
+    logger.error('[Support] Get user tickets error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -398,7 +399,7 @@ router.get('/ticket/:id', protect, async (req, res) => {
 
     res.json({ success: true, ticket });
   } catch (error) {
-    console.error('[Support] Get ticket error:', error);
+    logger.error('[Support] Get ticket error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -416,7 +417,7 @@ router.get('/unread', protect, async (req, res) => {
     const count = result[0]?.total || 0;
     res.json({ success: true, count });
   } catch (error) {
-    console.error('[Support] Unread count error:', error);
+    logger.error('[Support] Unread count error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -475,7 +476,7 @@ router.post('/reply', protect, async (req, res) => {
             await sendSupportReplyEmail(ticketUser.email, ticketUser.name, content.trim(), ticket.subject);
           }
         } catch (e) {
-          console.error('[Support] Reply email failed (non-critical):', e.message);
+          logger.error('[Support] Reply email failed (non-critical):', e.message);
         }
       }
     } else {
@@ -487,7 +488,7 @@ router.post('/reply', protect, async (req, res) => {
     await ticket.save();
     res.json({ success: true, ticket });
   } catch (error) {
-    console.error('[Support] Reply error:', error);
+    logger.error('[Support] Reply error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -516,7 +517,7 @@ router.get('/all', protect, isAdminOrAgent, async (req, res) => {
 
     res.json({ success: true, tickets, total });
   } catch (error) {
-    console.error('[Support] Get all tickets error:', error);
+    logger.error('[Support] Get all tickets error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -556,7 +557,7 @@ router.patch('/status', protect, isAdminOrAgent, async (req, res) => {
 
     res.json({ success: true, ticket });
   } catch (error) {
-    console.error('[Support] Update status error:', error);
+    logger.error('[Support] Update status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -595,7 +596,7 @@ router.patch('/assign', protect, isAdmin, async (req, res) => {
     const populated = await SupportTicket.findById(ticket._id).populate('assignedTo', 'name email');
     res.json({ success: true, ticket: populated });
   } catch (error) {
-    console.error('[Support] Assign error:', error);
+    logger.error('[Support] Assign error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -612,7 +613,7 @@ router.get('/agents', protect, isAdmin, async (req, res) => {
     }).select('name email isSupportAgent isAdmin');
     res.json({ success: true, agents });
   } catch (error) {
-    console.error('[Support] Get agents error:', error);
+    logger.error('[Support] Get agents error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

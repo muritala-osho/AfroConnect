@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
@@ -49,7 +50,7 @@ router.post('/user', protect, async (req, res) => {
       data: muteData
     });
   } catch (error) {
-    console.error('Mute user error:', error);
+    logger.error('Mute user error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -80,7 +81,7 @@ router.delete('/user/:userId', protect, async (req, res) => {
       message: 'User unmuted successfully'
     });
   } catch (error) {
-    console.error('Unmute user error:', error);
+    logger.error('Unmute user error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -105,7 +106,7 @@ router.get('/muted-users', protect, async (req, res) => {
       data: user.muteSettings.mutedUsers
     });
   } catch (error) {
-    console.error('Get muted users error:', error);
+    logger.error('Get muted users error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -147,7 +148,7 @@ router.put('/dnd', protect, async (req, res) => {
       data: user.muteSettings.globalMute
     });
   } catch (error) {
-    console.error('Update DND error:', error);
+    logger.error('Update DND error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -170,7 +171,7 @@ router.get('/dnd', protect, async (req, res) => {
       data: user.muteSettings.globalMute
     });
   } catch (error) {
-    console.error('Get DND error:', error);
+    logger.error('Get DND error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -214,7 +215,7 @@ router.put('/notification-preferences', protect, async (req, res) => {
       data: user.notificationPreferences
     });
   } catch (error) {
-    console.error('Update notification preferences error:', error);
+    logger.error('Update notification preferences error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -237,7 +238,7 @@ router.get('/notification-preferences', protect, async (req, res) => {
       data: user.notificationPreferences
     });
   } catch (error) {
-    console.error('Get notification preferences error:', error);
+    logger.error('Get notification preferences error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -267,7 +268,7 @@ router.get('/is-muted/:userId', protect, async (req, res) => {
       muteSettings: mutedUser || null
     });
   } catch (error) {
-    console.error('Check mute error:', error);
+    logger.error('Check mute error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

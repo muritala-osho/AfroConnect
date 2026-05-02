@@ -1,5 +1,6 @@
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Report = require('../models/Report');
@@ -176,7 +177,7 @@ router.post('/', protect, async (req, res) => {
       report
     });
   } catch (error) {
-    console.error('Report error:', error);
+    logger.error('Report error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to submit report'
@@ -199,7 +200,7 @@ router.post('/block/:userId', protect, async (req, res) => {
       message: 'User blocked successfully'
     });
   } catch (error) {
-    console.error('Block error:', error);
+    logger.error('Block error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to block user'
@@ -222,7 +223,7 @@ router.delete('/block/:userId', protect, async (req, res) => {
       message: 'User unblocked successfully'
     });
   } catch (error) {
-    console.error('Unblock error:', error);
+    logger.error('Unblock error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to unblock user'

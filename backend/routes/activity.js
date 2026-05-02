@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
@@ -25,7 +26,7 @@ router.put('/status', protect, async (req, res) => {
       data: { status, lastActive: updateData.lastActive }
     });
   } catch (error) {
-    console.error('Update activity status error:', error);
+    logger.error('Update activity status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -64,7 +65,7 @@ router.get('/status/:userId', protect, async (req, res) => {
     await redis.set(cacheKey, statusData, 30);
     res.json({ success: true, data: statusData });
   } catch (error) {
-    console.error('Get activity status error:', error);
+    logger.error('Get activity status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

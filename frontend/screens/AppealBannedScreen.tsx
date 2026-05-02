@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { getApiBaseUrl } from '@/constants/config';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '@/navigation/RootNavigator';
+import { formatLongDate } from '@/utils/formatters';
 
 type AppealBannedScreenRouteProp = RouteProp<RootStackParamList, 'AppealBanned'>;
 
@@ -95,14 +96,6 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Unknown';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
 
   const canSubmitAppeal = appealStatus === 'none' || appealStatus === 'approved' ||
     (appealStatus === 'rejected' && daysUntilReapply === 0);
@@ -175,7 +168,7 @@ export default function AppealBannedScreen({ navigation, route }: Props) {
             <View style={styles.infoRow}>
               <Ionicons name="calendar-outline" size={20} color={theme.textSecondary} />
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Suspended On</Text>
-              <Text style={[styles.infoValue, { color: theme.text }]}>{formatDate(bannedAt)}</Text>
+              <Text style={[styles.infoValue, { color: theme.text }]}>{formatLongDate(bannedAt)}</Text>
             </View>
             
             <View style={styles.divider} />

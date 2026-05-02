@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, RefreshControl, Platform } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState } from "react";
 import { View, StyleSheet, Image, Pressable, Animated, Dimensions, Linking, ScrollView, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, ActivityIndicator, Keyboard } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";

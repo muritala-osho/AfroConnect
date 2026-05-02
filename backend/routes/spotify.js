@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const https = require('https');
 const crypto = require('crypto');
@@ -164,7 +165,7 @@ router.get('/callback', async (req, res) => {
     }, body);
 
     if (tokenResult.status !== 200 || !tokenResult.data.access_token) {
-      console.error('Spotify token error:', tokenResult.data);
+      logger.error('Spotify token error:', tokenResult.data);
       return res.send('<html><body><p>Failed to connect Spotify. Please try again.</p></body></html>');
     }
 
@@ -202,7 +203,7 @@ router.get('/callback', async (req, res) => {
       </html>
     `);
   } catch (err) {
-    console.error('Spotify callback error:', err);
+    logger.error('Spotify callback error:', err);
     res.status(500).send('<html><body><p>Server error. Please try again.</p></body></html>');
   }
 });
@@ -219,7 +220,7 @@ router.delete('/disconnect', protect, async (req, res) => {
     });
     res.json({ success: true, message: 'Spotify disconnected' });
   } catch (err) {
-    console.error('Spotify disconnect error:', err);
+    logger.error('Spotify disconnect error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -253,7 +254,7 @@ router.get('/search', protect, async (req, res) => {
     }));
     res.json({ success: true, tracks });
   } catch (err) {
-    console.error('Spotify search error:', err);
+    logger.error('Spotify search error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -279,7 +280,7 @@ router.post('/set-song', protect, async (req, res) => {
     ).select('favoriteSong spotify');
     res.json({ success: true, favoriteSong: updatedUser.favoriteSong });
   } catch (err) {
-    console.error('Set song error:', err);
+    logger.error('Set song error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -315,7 +316,7 @@ router.get('/track/:trackId', protect, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Spotify track fetch error:', err);
+    logger.error('Spotify track fetch error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

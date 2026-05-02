@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Platform, Dimensions, ScrollView, Modal, TextInput, AppState } from "react-native";
 import { useThemedAlert } from "@/components/ThemedAlert";
 import Animated, { 

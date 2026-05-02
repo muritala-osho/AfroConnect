@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const ScheduledBroadcast = require('../models/ScheduledBroadcast');
 const { protect } = require('../middleware/auth');
@@ -37,7 +38,7 @@ router.get('/', protect, isAdmin, async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('List scheduled broadcasts error:', err);
+    logger.error('List scheduled broadcasts error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -79,7 +80,7 @@ router.post('/', protect, isAdmin, async (req, res) => {
 
     res.status(201).json({ success: true, broadcast });
   } catch (err) {
-    console.error('Schedule broadcast error:', err);
+    logger.error('Schedule broadcast error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -111,7 +112,7 @@ router.delete('/:id', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, message: 'Broadcast cancelled.' });
   } catch (err) {
-    console.error('Cancel broadcast error:', err);
+    logger.error('Cancel broadcast error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -142,7 +143,7 @@ router.post('/:id/fire', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, message: 'Broadcast fired immediately.' });
   } catch (err) {
-    console.error('Fire broadcast error:', err);
+    logger.error('Fire broadcast error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

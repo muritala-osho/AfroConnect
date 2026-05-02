@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState } from "react";
+import { useState } from "react";
 import { View, StyleSheet, Pressable, Alert, ActivityIndicator, Dimensions, Platform, ScrollView, Modal } from "react-native";
 
 const ActionSheetIOS = Platform.OS === 'ios' ? require('react-native').ActionSheetIOS : null;

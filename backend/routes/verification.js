@@ -1,5 +1,6 @@
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
@@ -95,7 +96,7 @@ const handleVerificationVideoUpload = async (req, res) => {
         storage  = 'cloudinary';
         fs.unlink(tempPath, () => {});
       } catch (cloudError) {
-        console.error('[upload-verification-video] Cloudinary upload failed:', cloudError.message);
+        logger.error('[upload-verification-video] Cloudinary upload failed:', cloudError.message);
       }
     }
 
@@ -120,7 +121,7 @@ const handleVerificationVideoUpload = async (req, res) => {
       videoUrl,
     });
   } catch (error) {
-    console.error('[upload-verification-video] Error:', error.message);
+    logger.error('[upload-verification-video] Error:', error.message);
     if (tempPath) fs.unlink(tempPath, () => {});
     return res.status(500).json({ success: false, message: 'Verification video upload failed' });
   }
@@ -159,7 +160,7 @@ router.get('/status', protect, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Verification status error:', error);
+    logger.error('Verification status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -194,7 +195,7 @@ router.get('/pending', protect, isAdmin, async (req, res) => {
 
     res.json({ success: true, verifications: signed });
   } catch (error) {
-    console.error('Get pending verifications error:', error);
+    logger.error('Get pending verifications error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -221,7 +222,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
       const { sendVerificationApprovedEmail } = require('../utils/emailService');
       await sendVerificationApprovedEmail(user.email, user.name);
     } catch (emailError) {
-      console.error('Failed to send verification approved email:', emailError);
+      logger.error('Failed to send verification approved email:', emailError);
     }
 
     try {
@@ -236,7 +237,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
         });
       }
     } catch (pushError) {
-      console.error('Failed to send verification approved push notification:', pushError);
+      logger.error('Failed to send verification approved push notification:', pushError);
     }
 
     try {
@@ -249,7 +250,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
         });
       }
     } catch (socketError) {
-      console.error('Failed to emit verification socket event:', socketError);
+      logger.error('Failed to emit verification socket event:', socketError);
     }
 
     res.json({
@@ -258,7 +259,7 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
       user: { _id: user._id, name: user.name, email: user.email, verified: true },
     });
   } catch (error) {
-    console.error('Approval error:', error);
+    logger.error('Approval error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -281,7 +282,7 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
       const { sendVerificationRejectedEmail } = require('../utils/emailService');
       await sendVerificationRejectedEmail(user.email, user.name, reason);
     } catch (emailError) {
-      console.error('Failed to send verification rejection email:', emailError);
+      logger.error('Failed to send verification rejection email:', emailError);
     }
 
     try {
@@ -299,7 +300,7 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
         });
       }
     } catch (pushError) {
-      console.error('Failed to send verification rejected push notification:', pushError);
+      logger.error('Failed to send verification rejected push notification:', pushError);
     }
 
     res.json({
@@ -308,7 +309,7 @@ router.put('/:userId/reject', protect, isAdmin, async (req, res) => {
       user: { _id: user._id, name: user.name, email: user.email, status: 'rejected' },
     });
   } catch (error) {
-    console.error('Rejection error:', error);
+    logger.error('Rejection error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -344,7 +345,7 @@ router.post('/request', protect, upload.fields([{ name: 'selfiePhoto', maxCount:
     await redis.del(`profile:me:${user._id}`);
     res.json({ success: true, message: 'Verification request submitted', status: 'pending' });
   } catch (error) {
-    console.error('Verification request error:', error);
+    logger.error('Verification request error:', error);
     res.status(500).json({ success: false, message: 'Upload failed' });
   }
 });

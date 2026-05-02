@@ -1,5 +1,6 @@
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 
@@ -92,7 +93,7 @@ router.post('/translate', protect, async (req, res) => {
       const response = await fetch(url);
       data = await response.json();
     } catch (fetchErr) {
-      console.error('MyMemory fetch error:', fetchErr);
+      logger.error('MyMemory fetch error:', fetchErr);
       return res.status(502).json({ success: false, message: 'Translation temporarily unavailable, try again later.' });
     }
 
@@ -104,7 +105,7 @@ router.post('/translate', protect, async (req, res) => {
       (data.responseDetails && data.responseDetails.toUpperCase().includes('MYMEMORY WARNING'));
 
     if (isRateLimit) {
-      console.warn('[Translation] MyMemory daily limit reached');
+      logger.warn('[Translation] MyMemory daily limit reached');
       return res.status(429).json({ success: false, message: 'Translation limit reached for today. Please try again tomorrow.' });
     }
 
@@ -125,7 +126,7 @@ router.post('/translate', protect, async (req, res) => {
       res.status(400).json({ success: false, message: userMsg });
     }
   } catch (error) {
-    console.error('Translation error:', error);
+    logger.error('Translation error:', error);
     res.status(500).json({ success: false, message: 'Translation failed. Please try again.' });
   }
 });
@@ -195,7 +196,7 @@ router.post('/suggest-message', protect, async (req, res) => {
       tip: "Remember to be genuine and authentic! These are just conversation starters.",
     });
   } catch (error) {
-    console.error('Suggest-message error:', error);
+    logger.error('Suggest-message error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -222,7 +223,7 @@ router.post('/chat-suggestions', protect, async (req, res) => {
       .slice(0, 5);
     res.json({ success: true, suggestions });
   } catch (error) {
-    console.error('Chat suggestions error:', error);
+    logger.error('Chat suggestions error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

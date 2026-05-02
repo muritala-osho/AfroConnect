@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import logger from '@/utils/logger';
+import { formatTimeAgo } from '@/utils/formatters';
 import { View, StyleSheet, Pressable, Dimensions, StatusBar, Animated, ActivityIndicator, TextInput, Platform, Alert, Modal, ScrollView, Keyboard } from "react-native";
 import { KeyboardAvoidingView as KAVController, KeyboardStickyView } from "react-native-keyboard-controller";
 import { Image } from "expo-image";
@@ -133,7 +135,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         }
       } catch (error: any) {
         if (cancelled) return;
-        console.error("Error fetching stories:", error);
+        logger.error("Error fetching stories:", error);
         if (userId === user?.id) {
           setStories([]);
         } else if (error?.response?.status === 403 || error?.message?.includes("403")) {
@@ -166,7 +168,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     try {
       await post(`/stories/${storyId}/view`, {}, token);
     } catch (error) {
-      console.error("Mark story viewed error:", error);
+      logger.error("Mark story viewed error:", error);
     }
   };
 
@@ -201,7 +203,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                 Alert.alert("Error", "Failed to delete story");
               }
             } catch (error) {
-              console.error("Delete story error:", error);
+              logger.error("Delete story error:", error);
               Alert.alert("Error", "Failed to delete story");
             }
           }
@@ -236,7 +238,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
         Alert.alert("Error", "Failed to update story");
       }
     } catch (error) {
-      console.error("Update story error:", error);
+      logger.error("Update story error:", error);
       Alert.alert("Error", "Failed to update story");
     } finally {
       setIsSaving(false);
@@ -311,7 +313,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       setShowReplyInput(false);
       Alert.alert("Reply sent!");
     } catch (error) {
-      console.error("Reply error:", error);
+      logger.error("Reply error:", error);
       Alert.alert("Error", "Failed to send reply. Please try again.");
     }
   };
@@ -330,7 +332,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
       }
       setShowReactionPicker(false);
     } catch (error) {
-      console.error("Reaction error:", error);
+      logger.error("Reaction error:", error);
     }
   };
 
@@ -342,15 +344,6 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
     }
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours < 1) return "Just now";
-    if (hours < 24) return `${hours}h ago`;
-    return `${Math.floor(hours / 24)}d ago`;
-  };
 
   const handleShareStory = async () => {
     if (!currentStory) {
@@ -603,7 +596,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
             <View style={{ maxWidth: 120 }}>
               <ThemedText style={styles.userName} numberOfLines={1}>{userName}</ThemedText>
               <ThemedText style={styles.storyTime}>
-                {formatTime(currentStory.createdAt)}
+                {formatTimeAgo(currentStory.createdAt)}
               </ThemedText>
             </View>
           </Pressable>
@@ -810,7 +803,7 @@ export default function StoryViewerScreen({ navigation, route }: StoryViewerScre
                     />
                     <View style={styles.viewerInfo}>
                       <ThemedText style={styles.viewerName}>{viewer.name}</ThemedText>
-                      <ThemedText style={styles.viewerTime}>{formatTime(viewer.viewedAt)}</ThemedText>
+                      <ThemedText style={styles.viewerTime}>{formatTimeAgo(viewer.viewedAt)}</ThemedText>
                     </View>
                   </Pressable>
                 ))}

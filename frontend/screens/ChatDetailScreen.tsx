@@ -79,6 +79,7 @@ import logger from "@/utils/logger";
 import { rememberSentGif, getCachedGifsForIds } from "@/utils/sentGifsCache";
 import ZoomablePhoto from "@/components/ZoomablePhoto";
 import GifPicker, { GifResult } from "@/components/chat/GifPicker";
+import { formatMessageTime, formatDateHeader } from "@/utils/formatters";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -2074,17 +2075,6 @@ export default function ChatDetailScreen({
     finally { setSubmittingReport(false); }
   };
 
-  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-  const formatDateHeader = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === today.toDateString()) return "Today";
-    if (date.toDateString() === yesterday.toDateString()) return "Yesterday";
-    return date.toLocaleDateString([], { weekday: "long", month: "short", day: "numeric" });
-  };
 
   const shouldShowDateHeader = (currentMsg: Message, prevMsg: Message | null) => {
     if (!prevMsg) return true;
@@ -2655,7 +2645,7 @@ export default function ChatDetailScreen({
                       {item.edited && (
                         <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.55)" : theme.textSecondary, fontStyle: "italic", marginRight: 4 }]}>edited</ThemedText>
                       )}
-                      <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>{formatTime(item.createdAt)}</ThemedText>
+                      <ThemedText style={[styles.messageTime, { color: isMe ? "rgba(255,255,255,0.7)" : theme.textSecondary }]}>{formatMessageTime(item.createdAt)}</ThemedText>
                       {isMe && (
                         <Ionicons
                           name={item.status === "seen" || item.status === "delivered" ? "checkmark-done" : "checkmark"}
@@ -2675,7 +2665,7 @@ export default function ChatDetailScreen({
                           fontStyle: "italic",
                         }}
                       >
-                        Seen{isPremium && item.seenAt ? ` at ${formatTime(item.seenAt)}` : ""}
+                        Seen{isPremium && item.seenAt ? ` at ${formatMessageTime(item.seenAt)}` : ""}
                       </ThemedText>
                     )}
                   </View>

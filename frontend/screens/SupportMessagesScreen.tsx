@@ -9,7 +9,7 @@ import logger from '@/utils/logger';
  *  - Polls the open thread every 10 s for new staff replies
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,

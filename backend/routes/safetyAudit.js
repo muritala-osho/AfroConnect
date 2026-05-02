@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const crypto = require('crypto');
 const { protect } = require('../middleware/auth');
@@ -153,13 +154,13 @@ router.post('/warning-bypassed', protect, async (req, res) => {
           } catch (_socketErr) { /* non-fatal */ }
         }
       } catch (autoPauseErr) {
-        console.error('[safetyAudit] auto-pause check failed:', autoPauseErr);
+        logger.error('[safetyAudit] auto-pause check failed:', autoPauseErr);
       }
     }
 
     res.json({ success: true });
   } catch (error) {
-    console.error('[safetyAudit] failed:', error);
+    logger.error('[safetyAudit] failed:', error);
     res.status(500).json({ success: false, message: 'Failed to log safety event' });
   }
 });

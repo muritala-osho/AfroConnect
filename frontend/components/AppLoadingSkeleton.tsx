@@ -1,4 +1,3 @@
-import React from "react";
 import { View, StyleSheet } from "react-native";
 import { Skeleton } from "@/components/SkeletonLoader";
 import { useTheme } from "@/hooks/useTheme";

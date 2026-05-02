@@ -1,4 +1,3 @@
-import React from 'react';
 import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,

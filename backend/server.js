@@ -422,7 +422,6 @@ app.get('/api/app-version', (req, res) => {
   });
 });
 
-// DEBUG: Log all registered routes after they are defined
 const logRoutes = () => {
   if (app._router && app._router.stack) {
     app._router.stack.forEach(function(r){

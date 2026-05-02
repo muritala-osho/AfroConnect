@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Boost = require('../models/Boost');
@@ -46,7 +47,7 @@ router.get('/status', protect, async (req, res) => {
     await redis.set(cacheKey, boostPayload, 30);
     res.json({ success: true, ...boostPayload });
   } catch (error) {
-    console.error('Get boost status error:', error);
+    logger.error('Get boost status error:', error);
     res.status(500).json({ success: false, message: 'Failed to get boost status' });
   }
 });
@@ -102,7 +103,7 @@ router.post('/activate', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Activate boost error:', error);
+    logger.error('Activate boost error:', error);
     res.status(500).json({ success: false, message: 'Failed to activate boost' });
   }
 });
@@ -132,7 +133,7 @@ router.post('/extend', protect, async (req, res) => {
       newExpiresAt: activeBoost.expiresAt
     });
   } catch (error) {
-    console.error('Extend boost error:', error);
+    logger.error('Extend boost error:', error);
     res.status(500).json({ success: false, message: 'Failed to extend boost' });
   }
 });
@@ -162,7 +163,7 @@ router.delete('/cancel', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Cancel boost error:', error);
+    logger.error('Cancel boost error:', error);
     res.status(500).json({ success: false, message: 'Failed to cancel boost' });
   }
 });
@@ -213,7 +214,7 @@ router.get('/history', protect, async (req, res) => {
     await redis.set(cacheKey, historyPayload, 120);
     res.json({ success: true, ...historyPayload });
   } catch (error) {
-    console.error('Get boost history error:', error);
+    logger.error('Get boost history error:', error);
     res.status(500).json({ success: false, message: 'Failed to get boost history' });
   }
 });
@@ -237,7 +238,7 @@ router.get('/packages', protect, async (req, res) => {
       packages
     });
   } catch (error) {
-    console.error('Get boost packages error:', error);
+    logger.error('Get boost packages error:', error);
     res.status(500).json({ success: false, message: 'Failed to get packages' });
   }
 });
@@ -251,7 +252,7 @@ const recordBoostStat = async (userId, stat) => {
     }
     return false;
   } catch (error) {
-    console.error('Record boost stat error:', error);
+    logger.error('Record boost stat error:', error);
     return false;
   }
 };

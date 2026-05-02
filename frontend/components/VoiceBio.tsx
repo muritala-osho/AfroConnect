@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -12,6 +12,7 @@ import { Ionicons, Feather } from "@expo/vector-icons";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
 import { BorderRadius, Spacing } from "@/constants/theme";
+import { formatDuration } from "@/utils/formatters";
 
 interface Props {
   voiceBioUrl?: string | null;
@@ -25,11 +26,6 @@ interface Props {
 
 const BAR_COUNT = 28;
 
-function formatTime(secs: number): string {
-  const s = Math.floor(secs % 60);
-  const m = Math.floor(secs / 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hideHeader = false, onRecord, onDelete, onReport }: Props) {
   const { theme } = useTheme();
@@ -268,7 +264,7 @@ export default function VoiceBio({ voiceBioUrl, duration = 0, isOwn = false, hid
         </View>
 
         <ThemedText style={[styles.timer, { color: theme.textSecondary }]}>
-          {recording ? `${formatTime(elapsed)} / 0:30` : formatTime(displayDuration)}
+          {recording ? `${formatDuration(elapsed)} / 0:30` : formatDuration(displayDuration)}
         </ThemedText>
       </View>
 

@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,7 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { getPhotoSource } from '@/utils/photos';
 import { getApiBaseUrl } from '@/constants/config';
+import { formatMonthYear } from '@/utils/formatters';
 
 const { width } = Dimensions.get('window');
 
@@ -446,13 +447,6 @@ export default function SuccessStoriesScreen() {
     );
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    });
-  };
 
   const pickPhotos = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -918,7 +912,7 @@ export default function SuccessStoriesScreen() {
               </Text>
             </View>
             <Text style={[styles.myStoryDate, { color: theme.textSecondary }]}>
-              {t('shared')} {formatDate(myStory.createdAt)}
+              {t('shared')} {formatMonthYear(myStory.createdAt)}
             </Text>
           </View>
 

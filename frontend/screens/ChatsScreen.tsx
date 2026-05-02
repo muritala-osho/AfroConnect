@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, {
+import {
   useState,
   useCallback,
   useEffect,
@@ -47,6 +47,7 @@ import noMessageImg from "../assets/images/no_messages_empty_state.png";
 
 import socketService from "@/services/socket";
 import { getPhotoSource } from "@/utils/photos";
+import { formatChatTimestamp } from "@/utils/formatters";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -128,26 +129,6 @@ const ChatItem = memo(
     onLongPress: () => void;
     draft?: string;
   }) => {
-    const formatTimestamp = (timestamp: string) => {
-      if (!timestamp) return "";
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-      if (days === 0) {
-        return date.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } else if (days === 1) {
-        return "Yesterday";
-      } else if (days < 7) {
-        return date.toLocaleDateString([], { weekday: "short" });
-      } else {
-        return date.toLocaleDateString([], { month: "short", day: "numeric" });
-      }
-    };
 
     const getMessagePreview = (message: string, type: string) => {
       switch (type) {
@@ -253,7 +234,7 @@ const ChatItem = memo(
                 hasUnread && { fontWeight: '700' },
               ]}
             >
-              {formatTimestamp(item.timestamp)}
+              {formatChatTimestamp(item.timestamp)}
             </ThemedText>
           </View>
           <View style={styles.chatFooter}>
@@ -314,23 +295,6 @@ const CallHistoryItemComponent = memo(
       return `${mins}:${secs.toString().padStart(2, "0")}`;
     };
 
-    const formatTime = (dateStr: string) => {
-      const date = new Date(dateStr);
-      const now = new Date();
-      const diffDays = Math.floor(
-        (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
-      );
-      if (diffDays === 0) {
-        return date.toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } else if (diffDays === 1) {
-        return "Yesterday";
-      } else {
-        return date.toLocaleDateString([], { month: "short", day: "numeric" });
-      }
-    };
 
     const getStatusIcon = () => {
       if (item.status === "missed" || item.status === "rejected") {
@@ -394,7 +358,7 @@ const CallHistoryItemComponent = memo(
             <ThemedText
               style={[styles.callHistoryTime, { color: theme.textSecondary }]}
             >
-              {formatTime(item.createdAt)}
+              {formatChatTimestamp(item.createdAt)}
             </ThemedText>
           </View>
         </View>

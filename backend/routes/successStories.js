@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const SuccessStory = require('../models/SuccessStory');
@@ -50,7 +51,7 @@ router.post('/', protect, async (req, res) => {
       message: 'Your love story has been published!'
     });
   } catch (error) {
-    console.error('Submit story error:', error);
+    logger.error('Submit story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -100,7 +101,7 @@ router.get('/', protect, async (req, res) => {
       hasMore: total > parseInt(skip) + processedStories.length
     });
   } catch (error) {
-    console.error('Get stories error:', error);
+    logger.error('Get stories error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -128,7 +129,7 @@ router.get('/featured', protect, async (req, res) => {
 
     res.json({ success: true, data: processedStories });
   } catch (error) {
-    console.error('Get featured stories error:', error);
+    logger.error('Get featured stories error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -163,7 +164,7 @@ router.get('/stats', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get stats error:', error);
+    logger.error('Get stats error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -176,7 +177,7 @@ router.get('/my-story', protect, async (req, res) => {
 
     res.json({ success: true, data: story });
   } catch (error) {
-    console.error('Get my story error:', error);
+    logger.error('Get my story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -208,7 +209,7 @@ router.get('/:storyId', protect, async (req, res) => {
 
     res.json({ success: true, data: storyObj });
   } catch (error) {
-    console.error('Get story error:', error);
+    logger.error('Get story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -241,7 +242,7 @@ router.post('/:storyId/like', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Like story error:', error);
+    logger.error('Like story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -277,7 +278,7 @@ router.put('/:storyId', protect, async (req, res) => {
 
     res.json({ success: true, data: story });
   } catch (error) {
-    console.error('Update story error:', error);
+    logger.error('Update story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -298,7 +299,7 @@ router.delete('/:storyId', protect, async (req, res) => {
 
     res.json({ success: true, message: 'Story deleted' });
   } catch (error) {
-    console.error('Delete story error:', error);
+    logger.error('Delete story error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

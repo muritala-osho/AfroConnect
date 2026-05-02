@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { View, StyleSheet, Pressable, Dimensions, ActivityIndicator, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { WebView } from "react-native-webview";

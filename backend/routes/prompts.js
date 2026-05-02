@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const { ProfilePrompt, UserPromptResponse } = require('../models/ProfilePrompt');
@@ -42,7 +43,7 @@ router.get('/available', protect, async (req, res) => {
     
     res.json({ success: true, prompts: promptsWithStatus });
   } catch (error) {
-    console.error('Get prompts error:', error);
+    logger.error('Get prompts error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch prompts' });
   }
 });
@@ -58,7 +59,7 @@ router.get('/my-responses', protect, async (req, res) => {
     
     res.json({ success: true, responses });
   } catch (error) {
-    console.error('Get responses error:', error);
+    logger.error('Get responses error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch responses' });
   }
 });
@@ -87,7 +88,7 @@ router.get('/user/:userId', protect, async (req, res) => {
     
     res.json({ success: true, responses });
   } catch (error) {
-    console.error('Get user responses error:', error);
+    logger.error('Get user responses error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch responses' });
   }
 });
@@ -120,7 +121,7 @@ router.post('/answer', protect, async (req, res) => {
     
     res.json({ success: true, response });
   } catch (error) {
-    console.error('Answer prompt error:', error);
+    logger.error('Answer prompt error:', error);
     res.status(500).json({ success: false, message: 'Failed to save answer' });
   }
 });
@@ -146,7 +147,7 @@ router.put('/answer/:responseId', protect, async (req, res) => {
     
     res.json({ success: true, response });
   } catch (error) {
-    console.error('Update response error:', error);
+    logger.error('Update response error:', error);
     res.status(500).json({ success: false, message: 'Failed to update response' });
   }
 });
@@ -164,7 +165,7 @@ router.delete('/answer/:responseId', protect, async (req, res) => {
     
     res.json({ success: true, message: 'Response deleted' });
   } catch (error) {
-    console.error('Delete response error:', error);
+    logger.error('Delete response error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete response' });
   }
 });
@@ -188,7 +189,7 @@ router.put('/reorder', protect, async (req, res) => {
     
     res.json({ success: true, message: 'Order updated' });
   } catch (error) {
-    console.error('Reorder error:', error);
+    logger.error('Reorder error:', error);
     res.status(500).json({ success: false, message: 'Failed to reorder' });
   }
 });
@@ -222,7 +223,7 @@ router.post('/seed', protect, async (req, res) => {
     
     res.json({ success: true, message: 'Prompts seeded', count: defaultPrompts.length });
   } catch (error) {
-    console.error('Seed prompts error:', error);
+    logger.error('Seed prompts error:', error);
     res.status(500).json({ success: false, message: 'Failed to seed prompts' });
   }
 });

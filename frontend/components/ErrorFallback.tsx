@@ -1,5 +1,5 @@
 import logger from '@/utils/logger';
-import React, { useState } from "react";
+import { useState } from "react";
 import { reloadAppAsync } from "expo";
 import {
   StyleSheet,

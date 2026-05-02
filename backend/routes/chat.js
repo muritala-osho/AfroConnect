@@ -1,4 +1,5 @@
 const express = require("express");
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require("../middleware/auth");
 const { matchParticipant } = require("../middleware/rls");
@@ -144,7 +145,7 @@ router.get("/conversations", protect, async (req, res) => {
 
     res.json({ success: true, conversations: filteredConversations });
   } catch (error) {
-    console.error("Get conversations error:", error);
+    logger.error("Get conversations error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -226,7 +227,7 @@ router.get("/:matchId", protect, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get messages error:", error);
+    logger.error("Get messages error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -380,7 +381,6 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
       if (gifHeight) messageData.gifHeight = gifHeight;
       messageData.gifSource = gifSource || 'tenor';
       messageData.content = "🎞️ GIF";
-      console.log(`[GIF] Saving message with gifUrl=${gifUrl} preview=${safePreview} source=${messageData.gifSource}`);
     }
 
     if (replyTo) {
@@ -514,13 +514,13 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
           req.user._id.toString(),
         );
       } catch (err) {
-        console.error("Failed to send message push notification:", err);
+        logger.error("Failed to send message push notification:", err);
       }
     }
 
     res.status(201).json({ success: true, message });
   } catch (error) {
-    console.error("Send message error:", error);
+    logger.error("Send message error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -561,7 +561,7 @@ router.put("/:matchId/read", protect, async (req, res) => {
 
     res.json({ success: true, readCount: result.modifiedCount });
   } catch (error) {
-    console.error("Mark read error:", error);
+    logger.error("Mark read error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -668,7 +668,7 @@ router.delete("/message/:messageId", protect, async (req, res) => {
     }
     res.json({ success: true, message: "Message deleted" });
   } catch (error) {
-    console.error("Delete message error:", error);
+    logger.error("Delete message error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -707,7 +707,7 @@ router.patch("/message/:messageId", protect, async (req, res) => {
     }
     return res.json({ success: true, message: "Message updated", data: message });
   } catch (error) {
-    console.error("Edit message error:", error);
+    logger.error("Edit message error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -803,7 +803,6 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
       if (gifHeight) messageData.gifHeight = gifHeight;
       messageData.gifSource = gifSource || "tenor";
       messageData.content = "🎞️ GIF";
-      console.log(`[GIF] Saving message: gifUrl=${gifUrl} preview=${messageData.gifPreview} source=${messageData.gifSource}`);
     } else if (type === "location") {
       messageData.latitude = latitude;
       messageData.longitude = longitude;
@@ -931,13 +930,13 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
           req.user._id.toString(),
         );
       } catch (err) {
-        console.error("Failed to send push notification:", err);
+        logger.error("Failed to send push notification:", err);
       }
     }
 
     res.status(201).json({ success: true, message });
   } catch (error) {
-    console.error("Send message error:", error);
+    logger.error("Send message error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -984,7 +983,7 @@ router.post("/:matchId/location", protect, async (req, res) => {
 
     res.status(201).json({ success: true, message });
   } catch (error) {
-    console.error("Send location error:", error);
+    logger.error("Send location error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -1014,7 +1013,7 @@ router.delete("/:matchId", protect, async (req, res) => {
 
     res.json({ success: true, message: "Chat deleted" });
   } catch (error) {
-    console.error("Delete chat error:", error);
+    logger.error("Delete chat error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -1054,7 +1053,7 @@ router.post('/:matchId/messages/:messageId/react', protect, matchParticipant, as
 
     res.json({ success: true, reactions: message.reactions });
   } catch (error) {
-    console.error('React to message error:', error);
+    logger.error('React to message error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1095,7 +1094,7 @@ router.post('/messages/:messageId/view-once', protect, async (req, res) => {
 
     res.json({ success: true, alreadyViewed, openedAt: new Date() });
   } catch (error) {
-    console.error('View once error:', error);
+    logger.error('View once error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1143,7 +1142,7 @@ router.patch('/messages/:messageId/live-location', protect, async (req, res) => 
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Live location update error:', error);
+    logger.error('Live location update error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1180,7 +1179,7 @@ router.post('/messages/:messageId/stop-live-location', protect, async (req, res)
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Stop live location error:', error);
+    logger.error('Stop live location error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -1233,7 +1232,7 @@ router.post('/inline-reply', protect, async (req, res) => {
 
     res.status(201).json({ success: true, message });
   } catch (err) {
-    console.error('[chat/inline-reply] error:', err);
+    logger.error('[chat/inline-reply] error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

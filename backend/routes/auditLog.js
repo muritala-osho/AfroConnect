@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const AuditLog = require('../models/AuditLog');
@@ -72,7 +73,7 @@ router.get('/', protect, isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Audit log fetch error:', error);
+    logger.error('Audit log fetch error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -110,7 +111,7 @@ router.get('/stats', protect, isAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Audit stats error:', error);
+    logger.error('Audit stats error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

@@ -1,5 +1,6 @@
 
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const Activity = require('../models/Activity');
@@ -26,7 +27,7 @@ router.get('/profile-views', protect, async (req, res) => {
       period
     });
   } catch (error) {
-    console.error('Analytics error:', error);
+    logger.error('Analytics error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -56,7 +57,7 @@ router.get('/match-rate', protect, async (req, res) => {
       totalLikes: totalSwipesRight
     });
   } catch (error) {
-    console.error('Analytics error:', error);
+    logger.error('Analytics error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'

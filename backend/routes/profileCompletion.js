@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
@@ -162,7 +163,7 @@ router.get('/status', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Profile completion status error:', error);
+    logger.error('Profile completion status error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -281,7 +282,7 @@ router.get('/prompts', protect, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Profile prompts error:', error);
+    logger.error('Profile prompts error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
