@@ -351,6 +351,14 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       logger.log('[DISCOVERY RADAR] Skipped - no token');
       return;
     }
+    // Skip all radar work while the face-verification gate is active.
+    // The gate screen is visible, so scanning, updating location and toggling
+    // setRadarScanning/setLoading state would only cause the gate UI to
+    // re-render and appear to "reload" on every interval tick.
+    if (faceGateStatusRef.current !== 'approved') {
+      logger.log('[DISCOVERY RADAR] Skipped - face gate not approved');
+      return;
+    }
     if (hasLocationPermission === false) {
       logger.log('[DISCOVERY RADAR] Skipped - no location permission');
       return;
@@ -492,6 +500,15 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     if (!user?.id || !token) {
       logger.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
       setLoading(false);
+      return;
+    }
+
+    // Don't run discovery while the face-verification gate is blocking.
+    // The backend would 403, and the setLoading(true→false) toggle causes
+    // the gate screen to re-render and visually "reload" on every call.
+    if (faceGateStatusRef.current !== 'approved') {
+      if (!silent) setLoading(false);
+      logger.log('[DISCOVERY] loadPotentialMatches skipped - face gate not approved');
       return;
     }
 
