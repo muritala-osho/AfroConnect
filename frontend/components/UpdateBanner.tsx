@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -37,11 +37,29 @@ function isOlderThan(a: string, b: string): boolean {
   return false;
 }
 
+/* ─── Android: native Google Play In-App Updates ─── */
+let InAppUpdates: any = null;
+let IAUUpdateKind: any = null;
+let IAUInstallStatus: any = null;
+
+if (Platform.OS === 'android') {
+  try {
+    const mod = require('sp-react-native-in-app-updates');
+    InAppUpdates   = mod.default;
+    IAUUpdateKind  = mod.IAUUpdateKind;
+    IAUInstallStatus = mod.IAUInstallStatus;
+  } catch {
+    /* library not linked yet — fall back to custom UI */
+  }
+}
+
 export default function UpdateBanner() {
-  const [info,      setInfo]      = useState<VersionInfo | null>(null);
-  const [showBanner, setShowBanner] = useState(false);
-  const [showModal,  setShowModal]  = useState(false);
-  const slideAnim = React.useRef(new Animated.Value(-80)).current;
+  const [info,        setInfo]        = useState<VersionInfo | null>(null);
+  const [showBanner,  setShowBanner]  = useState(false);
+  const [showModal,   setShowModal]   = useState(false);
+  const [readyToInstall, setReadyToInstall] = useState(false);
+  const slideAnim  = useRef(new Animated.Value(-80)).current;
+  const inAppRef   = useRef<any>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -53,29 +71,88 @@ export default function UpdateBanner() {
         const needsUpdate  = isOlderThan(current, data.latestVersion);
         const belowMinimum = isOlderThan(current, data.minimumVersion);
 
-        if (belowMinimum || (needsUpdate && data.forceUpdate)) {
-          setInfo(data);
-          setShowModal(true);
-        } else if (needsUpdate) {
-          setInfo(data);
-          setShowBanner(true);
-          Animated.spring(slideAnim, {
-            toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
-          }).start();
+        if (!needsUpdate && !belowMinimum) return;
+
+        setInfo(data);
+
+        /* ── Android: use native Google Play In-App Updates API ── */
+        if (Platform.OS === 'android' && InAppUpdates) {
+          try {
+            const inApp = new InAppUpdates(false);
+            inAppRef.current = inApp;
+
+            const result = await inApp.checkNeedsUpdate({ curVersion: current });
+
+            if (result.shouldUpdate) {
+              if (belowMinimum || data.forceUpdate) {
+                /* Immediate mode — full-screen Google Play prompt, cannot skip */
+                await inApp.startUpdate({ updateType: IAUUpdateKind.IMMEDIATE });
+              } else {
+                /* Flexible mode — native Google Play bottom sheet (like the screenshot) */
+                inApp.addStatusUpdateListener((status: any) => {
+                  if (status.status === IAUInstallStatus.DOWNLOADED) {
+                    /* Download finished → show a "Restart to complete" banner */
+                    setReadyToInstall(true);
+                    setShowBanner(true);
+                    Animated.spring(slideAnim, {
+                      toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
+                    }).start();
+                  }
+                });
+                await inApp.startUpdate({ updateType: IAUUpdateKind.FLEXIBLE });
+              }
+            } else {
+              /* Play Store doesn't see an update yet — fall back to custom UI */
+              showFallbackUI(data, belowMinimum);
+            }
+          } catch {
+            /* Native flow failed — fall back to custom UI */
+            showFallbackUI(data, belowMinimum);
+          }
+          return;
         }
+
+        /* ── iOS / fallback: custom banner or blocking modal ── */
+        showFallbackUI(data, belowMinimum);
+
       } catch {
         /* silent — never block the app for a failed version check */
       }
     };
 
-    /* Slight delay so it doesn't fire right as the splash screen hides */
+    const showFallbackUI = (data: VersionInfo, isForce: boolean) => {
+      if (isForce || data.forceUpdate) {
+        setShowModal(true);
+      } else {
+        setShowBanner(true);
+        Animated.spring(slideAnim, {
+          toValue: 0, useNativeDriver: true, tension: 80, friction: 12,
+        }).start();
+      }
+    };
+
     const t = setTimeout(check, 2500);
     return () => clearTimeout(t);
+  }, []);
+
+  /* Cleanup status listener on unmount */
+  useEffect(() => {
+    return () => {
+      if (inAppRef.current?.removeStatusUpdateListener) {
+        inAppRef.current.removeStatusUpdateListener(() => {});
+      }
+    };
   }, []);
 
   const openStore = () => {
     const url = Platform.OS === 'ios' ? info?.iosUrl : info?.androidUrl;
     if (url) Linking.openURL(url).catch(() => {});
+  };
+
+  const finishFlexibleUpdate = () => {
+    if (inAppRef.current?.installUpdate) {
+      inAppRef.current.installUpdate();
+    }
   };
 
   const dismiss = () => {
@@ -84,7 +161,7 @@ export default function UpdateBanner() {
     }).start(() => setShowBanner(false));
   };
 
-  if (!info) return null;
+  if (!info && !showBanner) return null;
 
   /* ── Force update modal — cannot be dismissed ── */
   if (showModal) {
@@ -96,7 +173,7 @@ export default function UpdateBanner() {
               <Ionicons name="arrow-up-circle" size={48} color={BRAND} />
             </View>
             <Text style={s.modalTitle}>Update Required</Text>
-            <Text style={s.modalBody}>{info.message}</Text>
+            <Text style={s.modalBody}>{info?.message}</Text>
             <Pressable style={s.modalBtn} onPress={openStore}>
               <Text style={s.modalBtnText}>Update Now</Text>
             </Pressable>
@@ -106,7 +183,37 @@ export default function UpdateBanner() {
     );
   }
 
-  /* ── Soft banner — slides down from top, dismissible ── */
+  /* ── Flexible update downloaded — restart prompt ── */
+  if (showBanner && readyToInstall) {
+    return (
+      <Animated.View
+        style={[s.banner, { transform: [{ translateY: slideAnim }] }]}
+        pointerEvents="box-none"
+      >
+        <View style={s.bannerInner}>
+          <View style={s.bannerLeft}>
+            <View style={s.bannerIconWrap}>
+              <Ionicons name="checkmark-circle" size={20} color={BRAND} />
+            </View>
+            <View style={s.bannerTextWrap}>
+              <Text style={s.bannerTitle}>Update Downloaded</Text>
+              <Text style={s.bannerSub}>Restart to apply the latest version</Text>
+            </View>
+          </View>
+          <View style={s.bannerActions}>
+            <Pressable style={s.bannerUpdateBtn} onPress={finishFlexibleUpdate}>
+              <Text style={s.bannerUpdateText}>Restart</Text>
+            </Pressable>
+            <Pressable style={s.bannerDismiss} onPress={dismiss} hitSlop={10}>
+              <Ionicons name="close" size={16} color="rgba(255,255,255,0.4)" />
+            </Pressable>
+          </View>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  /* ── Soft banner — slides down from top, dismissible (iOS / fallback) ── */
   if (showBanner) {
     return (
       <Animated.View
@@ -120,7 +227,7 @@ export default function UpdateBanner() {
             </View>
             <View style={s.bannerTextWrap}>
               <Text style={s.bannerTitle}>Update Available</Text>
-              <Text style={s.bannerSub} numberOfLines={1}>{info.message}</Text>
+              <Text style={s.bannerSub} numberOfLines={1}>{info?.message}</Text>
             </View>
           </View>
           <View style={s.bannerActions}>
@@ -140,7 +247,6 @@ export default function UpdateBanner() {
 }
 
 const s = StyleSheet.create({
-  /* Banner */
   banner: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -182,7 +288,6 @@ const s = StyleSheet.create({
   bannerUpdateText: { color: '#fff', fontSize: 12, fontWeight: '800' },
   bannerDismiss:    { padding: 4 },
 
-  /* Force modal */
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.82)',
