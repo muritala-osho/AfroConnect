@@ -215,6 +215,9 @@ export default function VoiceCallScreen() {
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
   /* Always-current speaker state — avoids stale-closure issues in onMessage */
   const isSpeakerOnRef    = useRef(true);
+  /* Set to true when mic permission is denied — drives a user-friendly message
+   * instead of the generic "Call failed" / "Unable to connect" copy. */
+  const micDeniedRef      = useRef(false);
 
   const duration = activeCall?.duration || 0;
 
@@ -315,7 +318,31 @@ export default function VoiceCallScreen() {
       agoraJoined.current = true;
 
       const hasPerm = await requestMicPermission();
-      if (!hasPerm) { agoraJoined.current = false; return; }
+      if (!hasPerm) {
+        agoraJoined.current = false;
+        micDeniedRef.current = true;
+        /* If the call was already signalled as connected (e.g. the caller's
+         * mic check fires after the callee accepted, or a cold-start join
+         * runs after the screen mounts in callAccepted mode) the other side
+         * is sitting on a silent "connected" screen. End the call properly
+         * so their screen closes with a clear "call ended" status rather
+         * than hanging indefinitely. */
+        if (callStatusRef.current === "connected") {
+          const otherId = isIncoming ? callerId : userId;
+          socketService.endCall({
+            targetUserId: otherId,
+            callType: "voice",
+            duration: 0,
+            wasAnswered: false,
+          });
+          if (Platform.OS !== "web") sendToWebView({ action: "leave" });
+          stopGlobalTimer();
+          clearCall();
+        }
+        setStatus("failed");
+        setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
+        return;
+      }
 
       let joinToken = callDataObj.token;
       let joinUid = callDataObj.uid || 0;
@@ -364,7 +391,8 @@ export default function VoiceCallScreen() {
         pendingJoinRef.current = null;
       }
     },
-    [isIncoming, authToken, get, requestMicPermission],
+    [isIncoming, authToken, get, requestMicPermission,
+     callerId, userId, sendToWebView, stopGlobalTimer, clearCall, setStatus, navigation],
   );
 
   /* ── End call ── */
@@ -400,11 +428,26 @@ export default function VoiceCallScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
+
+    /* Check mic permission BEFORE signalling accept. If we signal accept first
+     * and then discover permission is denied, the caller's screen transitions
+     * to "connected" and they hear complete silence with no explanation.
+     * Declining here instead lets the caller see "Call declined" and move on. */
+    const hasPerm = await requestMicPermission();
+    if (!hasPerm) {
+      micDeniedRef.current = true;
+      socketService.declineCall({ callerId, callType: "voice" });
+      setStatus("failed");
+      clearCall();
+      setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
+      return;
+    }
+
     socketService.acceptCall({ callerId, callData: activeCallData });
     setStatus("connected");
     startGlobalTimer();
     if (activeCallData) joinAgoraVoice(activeCallData);
-  }, [callerId, activeCallData, stopRingtone, joinAgoraVoice, startGlobalTimer, setStatus]);
+  }, [callerId, activeCallData, stopRingtone, joinAgoraVoice, startGlobalTimer, setStatus, requestMicPermission, clearCall, navigation]);
 
   /* ── Decline incoming ── */
   const handleDecline = useCallback(async () => {
@@ -478,7 +521,7 @@ export default function VoiceCallScreen() {
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setStatus("failed");
     const hasPerm = await requestMicPermission();
-    if (!hasPerm) { setStatus("failed"); return; }
+    if (!hasPerm) { micDeniedRef.current = true; setStatus("failed"); return; }
 
     try {
       const response = await post<any>(
@@ -709,13 +752,14 @@ export default function VoiceCallScreen() {
       case "declined":   return "Call declined";
       case "busy":       return "User is busy";
       case "missed":     return "No answer";
-      case "failed":     return "Call failed";
+      case "failed":     return micDeniedRef.current ? "Microphone denied" : "Call failed";
       default:           return "";
     }
   };
 
   const terminalMsg = (): string => {
-    if (callStatus === "busy")    return "User is in another call";
+    if (micDeniedRef.current)      return "Microphone access is required for voice calls. Please enable it in Settings.";
+    if (callStatus === "busy")     return "User is in another call";
     if (callStatus === "declined") return "Call was declined";
     if (callStatus === "missed")   return "No answer";
     return "Unable to connect";
