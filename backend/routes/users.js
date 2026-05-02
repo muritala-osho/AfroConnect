@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const User = require('../models/User');
+const Boost = require('../models/Boost');
 const { sendOTP } = require('../utils/emailService');
 const crypto = require('crypto'); // For generating OTP
 const redis = require('../utils/redis');
@@ -711,12 +712,40 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
       logger.log(`[DISCOVERY:DIAG] after distance post-filter: ${users.length} (removed ${beforeFilter - users.length} — distance > ${maxDist}km or null)`);
     }
 
+    // Apply boost multiplier to scores so boosted profiles surface first
+    let boostMap = new Map();
+    try {
+      boostMap = await Boost.getBoostedUserIds();
+    } catch (boostErr) {
+      logger.warn('[DISCOVERY] Failed to fetch boost map (non-fatal):', boostErr);
+    }
+
+    users = users.map(u => {
+      const multiplier = boostMap.get(u._id.toString());
+      return multiplier ? { ...u, score: u.score * multiplier, boosted: true } : u;
+    });
+
     users.sort((a, b) => b.score - a.score);
 
     const offset = cursor ? Math.max(0, parseInt(cursor, 10) || 0) : 0;
     const totalAvailable = users.length;
     users = users.slice(offset, offset + limit);
     const nextCursor = offset + limit < totalAvailable ? String(offset + limit) : null;
+
+    // Track viewsGained for any boosted users that appear in this page (fire-and-forget)
+    const boostedInPage = users.filter(u => u.boosted).map(u => u._id.toString());
+    if (boostedInPage.length > 0) {
+      setImmediate(async () => {
+        try {
+          for (const uid of boostedInPage) {
+            const activeBoost = await Boost.getActiveBoost(uid);
+            if (activeBoost) await activeBoost.incrementStat('viewsGained');
+          }
+        } catch (e) {
+          logger.warn('[DISCOVERY] Boost stat increment failed (non-fatal):', e);
+        }
+      });
+    }
 
     // Premium-only feature: free users see only a coarse distance bucket
     // (e.g. "< 5 km", "5–15 km") rather than the exact figure, matching the

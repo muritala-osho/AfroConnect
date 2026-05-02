@@ -360,6 +360,16 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
       }
     }
 
+    // Track likesGained for a boosted target user (fire-and-forget)
+    if (action === 'like' || action === 'superlike') {
+      setImmediate(async () => {
+        try {
+          const activeBoost = await Boost.getActiveBoost(targetUserId);
+          if (activeBoost) await activeBoost.incrementStat('likesGained');
+        } catch (_) {}
+      });
+    }
+
     await Promise.all([
       redis.del(`wholikesme:${targetUserId}:premium`),
       redis.del(`wholikesme:${targetUserId}:free`),
