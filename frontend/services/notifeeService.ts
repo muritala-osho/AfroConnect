@@ -55,6 +55,7 @@ function getNotifee() {
 
 const CHANNEL_ID = 'afroconnect_messages';
 const MISSED_CALLS_CHANNEL_ID = 'afroconnect_missed_calls';
+const INCOMING_CALLS_CHANNEL_ID = 'afroconnect_incoming_calls';
 const MAX_THREAD_MESSAGES = 6;
 
 async function ensureChannel() {
@@ -78,6 +79,21 @@ async function ensureMissedCallsChannel() {
     importance: _AndroidImportance?.HIGH ?? 4,
     vibration: true,
     sound: 'default',
+  });
+}
+
+async function ensureIncomingCallsChannel() {
+  const notifee = getNotifee();
+  if (!notifee) return;
+  // URGENT importance (5) is required for fullScreenAction to work reliably
+  // on Android 10+. HIGH (4) also works but some OEMs need URGENT.
+  await notifee.createChannel({
+    id: INCOMING_CALLS_CHANNEL_ID,
+    name: 'Incoming Calls',
+    importance: _AndroidImportance?.HIGH ?? 4,
+    vibration: true,
+    sound: 'default',
+    lights: true,
   });
 }
 
@@ -317,6 +333,109 @@ export async function displayMissedCallNotification({
   });
 }
 
+// ─── Incoming call notifications ──────────────────────────────────────────────
+
+/**
+ * Display a full-screen incoming call notification on Android.
+ *
+ * Uses Notifee's fullScreenAction so Android raises this as an overlay even
+ * on the lock screen — exactly like WhatsApp/Signal. This works from a headless
+ * JS context (killed app) unlike react-native-callkeep which requires an
+ * Activity for setup().
+ *
+ * The notification shows "Answer" and "Decline" action buttons.
+ * - "Answer"  → launchActivity opens the app cold-start; IncomingCallHandler
+ *               reads global.__pendingVoipCall.answeredFromNotification and
+ *               navigates directly to the call screen.
+ * - "Decline" → handled in the Notifee background event handler without
+ *               launching the app; calls POST /api/call/decline.
+ */
+export async function displayIncomingCallNotification({
+  callerId,
+  callerName,
+  callerPhoto,
+  callType,
+  callData,
+}: {
+  callerId: string;
+  callerName: string;
+  callerPhoto: string;
+  callType: string;
+  callData?: any;
+}) {
+  if (Platform.OS !== 'android') return;
+  const notifee = getNotifee();
+  if (!notifee) return;
+
+  await ensureIncomingCallsChannel();
+
+  const isVideo = callType === 'video';
+
+  await notifee.displayNotification({
+    id: `call_${callerId}`,
+    title: callerName,
+    body: isVideo ? 'Incoming video call' : 'Incoming voice call',
+    android: {
+      channelId: INCOMING_CALLS_CHANNEL_ID,
+      importance: _AndroidImportance?.HIGH ?? 4,
+      smallIcon: 'ic_notification',
+      color: '#1A0A2E',
+      largeIcon: callerPhoto || undefined,
+      circularLargeIcon: true,
+      // fullScreenAction shows this notification as a full-screen overlay
+      // even when the device is locked — the system calls the Activity via
+      // Intent.FLAG_ACTIVITY_NEW_TASK so no Activity context is needed here.
+      fullScreenAction: {
+        id: 'default',
+        launchActivity: 'default',
+      },
+      pressAction: {
+        id: 'default',
+        launchActivity: 'default',
+      },
+      actions: [
+        {
+          title: '✓ Answer',
+          pressAction: { id: 'answer_call', launchActivity: 'default' },
+        },
+        {
+          title: '✕ Decline',
+          pressAction: { id: 'decline_call' },
+        },
+      ],
+      // Store all call data so the background handler and the app can
+      // reconstruct the call context without needing the socket.
+      data: {
+        type: 'call',
+        callerId,
+        callerName,
+        callerPhoto,
+        callType,
+        callData: callData ? JSON.stringify(callData) : '{}',
+        screen: 'ChatDetail',
+        senderId: callerId,
+        senderName: callerName,
+        senderPhoto: callerPhoto,
+      },
+      // Auto-cancel after 30 s so a stale notification doesn't linger if the
+      // caller hangs up and the cancel_call FCM message is missed.
+      timeoutAfter: 30000,
+      vibrationPattern: [0, 500, 1000, 500],
+    },
+  });
+}
+
+/**
+ * Cancel the full-screen incoming call notification for a given caller.
+ * Call this when a cancel_call FCM message is received (caller hung up).
+ */
+export async function cancelIncomingCallNotification(callerId: string) {
+  if (Platform.OS !== 'android') return;
+  const notifee = getNotifee();
+  if (!notifee) return;
+  await notifee.cancelNotification(`call_${callerId}`).catch(() => {});
+}
+
 // ─── Background event handler ─────────────────────────────────────────────────
 
 /**
@@ -324,7 +443,7 @@ export async function displayMissedCallNotification({
  *
  * Must be called before registerRootComponent in index.js.
  * Handles the "Reply" and "Mark as Read" inline actions when the app is in
- * background or killed state.
+ * background or killed state, and the "Answer" / "Decline" call actions.
  */
 export function registerNotifeeBackgroundHandler() {
   if (Platform.OS !== 'android') return;
@@ -387,6 +506,60 @@ export function registerNotifeeBackgroundHandler() {
         await clearThread(matchId);
       }
       await notifee.cancelNotification(notifId).catch(() => {});
+      return;
+    }
+
+    // ── Answer incoming call ──────────────────────────────────────────────────
+    // The user pressed "Answer" on the full-screen call notification.
+    // Mark the call as pre-answered so IncomingCallHandler skips the in-app
+    // ringing UI and navigates directly to the call screen on cold start.
+    if (type === _EventType.ACTION_PRESS && pressAction?.id === 'answer_call') {
+      const callerId   = data?.callerId;
+      const callerName = data?.callerName || 'Unknown';
+      const callType   = data?.callType   || 'voice';
+      let callData: any = {};
+      try { callData = data?.callData ? JSON.parse(data.callData) : {}; } catch {}
+
+      if (callerId) {
+        (global as any).__pendingVoipCall = {
+          callerId,
+          callerName,
+          callType,
+          callData,
+          answeredFromNotification: true,
+        };
+      }
+      await notifee.cancelNotification(`call_${callerId}`).catch(() => {});
+      return;
+    }
+
+    // ── Decline incoming call ─────────────────────────────────────────────────
+    // The user pressed "Decline" without opening the app.
+    // Call the backend REST endpoint so the caller is notified, and cancel the
+    // notification — no need to launch the Activity.
+    if (type === _EventType.ACTION_PRESS && pressAction?.id === 'decline_call') {
+      const callerId = data?.callerId;
+      if (callerId) {
+        try {
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          const { getApiBaseUrl } = require('../constants/config');
+          const authToken = await AsyncStorage.getItem('auth_token');
+          if (authToken) {
+            const apiUrl = getApiBaseUrl();
+            await fetch(`${apiUrl}/api/call/decline`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${authToken}`,
+              },
+              body: JSON.stringify({ callerId, type: data?.callType || 'voice' }),
+            });
+          }
+        } catch {
+          // swallow — do not crash the headless handler
+        }
+        await notifee.cancelNotification(`call_${callerId}`).catch(() => {});
+      }
       return;
     }
 

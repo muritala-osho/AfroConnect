@@ -9,8 +9,10 @@ import logger from '@/utils/logger';
  * How it works:
  *  • Android (app killed): FCM delivers a high-priority DATA message.
  *    Firebase wakes the app in a headless JS context and calls this handler.
- *    We call CallKeep.displayIncomingCall() to show the native ConnectionService
- *    incoming call screen without needing the React UI to be rendered.
+ *    We use Notifee's fullScreenAction to show a native incoming call overlay
+ *    without needing an Activity context — react-native-callkeep.setup()
+ *    requires an Activity and fails silently in a headless JS task, so Notifee
+ *    is the correct approach here (same pattern as WhatsApp / Signal).
  *
  *  • iOS (app killed): Firebase messaging on iOS does NOT wake a killed app for
  *    data-only messages. iOS requires PushKit (VoIP) push via APNs to wake a
@@ -23,7 +25,7 @@ import logger from '@/utils/logger';
 
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { initCallKeep, displayIncomingCall } from './callkeep';
+import { displayIncomingCallNotification, cancelIncomingCallNotification } from './notifeeService';
 
 /** Returns true when running inside the standard Expo Go app, which does not
  *  bundle Firebase native modules (RNFBAppModule). */
@@ -76,19 +78,18 @@ export function registerFirebaseBackgroundHandler() {
       return;
     }
 
-    // ── Cancel call: dismiss stale CallKeep / ConnectionService call UI ──────
+    // ── Cancel call: dismiss the full-screen incoming call notification ───────
     // The backend sends this when the caller hangs up before the callee answers,
-    // so the native incoming-call screen on the callee's locked/killed device is
-    // removed and the user isn't taken into a dead call if they tap "Answer".
+    // so the Notifee full-screen notification is removed and the user isn't
+    // taken into a dead call if they tap "Answer".
     if (data?.type === 'cancel_call') {
       const cancelCallerId = data.callerId || data.caller_id;
       try {
-        const { reportCallEnded } = require('./callkeep');
         if (cancelCallerId) {
-          await reportCallEnded(cancelCallerId);
+          await cancelIncomingCallNotification(cancelCallerId);
         }
       } catch (err) {
-        logger.warn('[FCM] Failed to dismiss CallKeep on cancel_call:', err);
+        logger.warn('[FCM] Failed to dismiss call notification on cancel_call:', err);
       }
       // Clear any pending cold-start call data so the app doesn't navigate to
       // the call screen when it eventually opens.
@@ -98,29 +99,38 @@ export function registerFirebaseBackgroundHandler() {
       return;
     }
 
-    // ── VoIP call: show native incoming-call UI via CallKeep ─────────────────
+    // ── VoIP call: show native full-screen call UI via Notifee ───────────────
+    // react-native-callkeep.setup() requires an Android Activity context and
+    // cannot be called from a headless JS background handler (killed app).
+    // Notifee's fullScreenAction works without an Activity — it posts a
+    // high-priority notification that Android raises as a full-screen overlay
+    // (same pattern used by WhatsApp / Signal on Android).
     if (data?.type !== 'call' && data?.type !== 'voice_call' && data?.type !== 'video_call') {
       return;
     }
 
     const callerId   = data.callerId   || data.caller_id;
     const callerName = data.callerName || data.caller_name || 'Unknown';
+    const callerPhoto = data.callerPhoto || data.caller_photo || '';
     const callType   = data.callType   || data.call_type   || 'voice';
+    let callData: any = {};
+    try { callData = data.callData ? JSON.parse(data.callData) : {}; } catch {}
 
     if (!callerId) return;
 
     try {
-      await initCallKeep('AfroConnect');
-      await displayIncomingCall(callerId, callerName, callType === 'video');
+      await displayIncomingCallNotification({ callerId, callerName, callerPhoto, callType, callData });
     } catch (err) {
-      logger.error('[FCM] Failed to show CallKeep incoming UI:', err);
+      logger.error('[FCM] Failed to show Notifee incoming call notification:', err);
     }
 
+    // Store call data globally so IncomingCallHandler can pick it up on cold
+    // start (when the user taps the notification body to open the app).
     (global as any).__pendingVoipCall = {
       callerId,
       callerName,
       callType,
-      callData: data.callData ? JSON.parse(data.callData) : {},
+      callData,
     };
   });
 

@@ -351,16 +351,59 @@ export default function IncomingCallHandler() {
   /* This effect runs once on mount — before the socket useEffect (which is
    * gated on auth loading). By populating incomingCallRef immediately we
    * ensure the CallKeep onAnswer handler has call data available even if the
-   * native "Answer" button was pressed the moment the app opened. */
+   * native "Answer" button was pressed the moment the app opened.
+   *
+   * If answeredFromNotification is true, the user already tapped "Answer"
+   * on the Notifee full-screen notification. Skip the in-app ringing UI
+   * and go straight to the call screen so they aren't presented with a
+   * second "Answer / Decline" prompt. */
   useEffect(() => {
     const pending = (global as any).__pendingVoipCall;
     if (!pending || incomingCallRef.current) return;
+    (global as any).__pendingVoipCall = null;
+
+    if (pending.answeredFromNotification) {
+      // User already pressed "Answer" — accept immediately on cold start.
+      const callTypeFromData = pending.callType === 'video' ? 'video' : 'voice';
+      const callData = { callType: pending.callType ?? 'voice', ...pending.callData };
+
+      stopRingtone();
+
+      const doAccept = () =>
+        socketService.acceptCall({ callerId: pending.callerId, callData });
+      if (socketService.isConnected()) {
+        doAccept();
+      } else {
+        socketService.onConnect(doAccept);
+      }
+
+      setActiveCall({
+        userId:     pending.callerId,
+        userName:   pending.callerName ?? 'Unknown',
+        userPhoto:  '',
+        isIncoming: true,
+        callStatus: 'connected',
+        callType:   callTypeFromData,
+        duration:   0,
+      });
+
+      navigation.navigate(callTypeFromData === 'video' ? 'VideoCall' : 'VoiceCall', {
+        userId:       pending.callerId,
+        userName:     pending.callerName ?? 'Unknown',
+        userPhoto:    '',
+        isIncoming:   true,
+        callData,
+        callerId:     pending.callerId,
+        callAccepted: true,
+      });
+      return;
+    }
+
     showCallUI({
       callerId:   pending.callerId,
       callerInfo: { name: pending.callerName ?? 'Unknown', photo: '' },
       callData:   { callType: pending.callType ?? 'voice', ...pending.callData },
     });
-    (global as any).__pendingVoipCall = null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
