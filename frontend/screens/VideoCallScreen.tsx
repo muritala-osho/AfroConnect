@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Pressable,
   Animated,
+  PanResponder,
   StatusBar,
   Vibration,
   Platform,
@@ -216,6 +217,53 @@ export default function VideoCallScreen() {
   const pulseAnim2    = useRef(new Animated.Value(1)).current;
   const pulseAnim3    = useRef(new Animated.Value(1)).current;
   const endBtnScale   = useRef(new Animated.Value(1)).current;
+
+  /* ── Draggable self-view PiP ── */
+  const PIP_W      = 110;
+  const PIP_H      = 150;
+  const PIP_MARGIN = 16;
+  // Initial position: bottom-right corner (mirrors the old static style)
+  const pipPos = useRef(new Animated.ValueXY({
+    x: SW - PIP_W - PIP_MARGIN,
+    y: SH - PIP_H - 200,
+  })).current;
+
+  const pipPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: () => {
+        // Capture the current position as offset so the drag delta starts at 0
+        pipPos.setOffset({
+          x: (pipPos.x as any)._value,
+          y: (pipPos.y as any)._value,
+        });
+        pipPos.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event(
+        [null, { dx: pipPos.x, dy: pipPos.y }],
+        { useNativeDriver: false },
+      ),
+      onPanResponderRelease: () => {
+        pipPos.flattenOffset();
+        const x = (pipPos.x as any)._value;
+        const y = (pipPos.y as any)._value;
+        // Snap to whichever corner the centre of the PiP is closest to
+        const snapX = x + PIP_W / 2 < SW / 2
+          ? PIP_MARGIN
+          : SW - PIP_W - PIP_MARGIN;
+        const snapY = y + PIP_H / 2 < SH / 2
+          ? 70 + PIP_MARGIN          // keep below the top header
+          : SH - PIP_H - 210;       // keep above the bottom controls
+        Animated.spring(pipPos, {
+          toValue: { x: snapX, y: snapY },
+          useNativeDriver: false,
+          tension: 120,
+          friction: 14,
+        }).start();
+      },
+    }),
+  ).current;
 
   /* ── Refs ── */
   const ringtoneRef       = useRef<Audio.Sound | null>(null);
@@ -903,6 +951,7 @@ export default function VideoCallScreen() {
                 myself"). Two separate, never-remounted SurfaceViews fix
                 both: the PiP is created with z-order overlay from the start
                 so it always sits above the remote view. */}
+          {/* Full-screen local view while waiting for remote to join */}
           {showVideo && !isCameraOff && !(isConnected && hasRemoteVideo) && (
             <RtcSurfaceView
               canvas={{
@@ -914,24 +963,30 @@ export default function VideoCallScreen() {
               style={StyleSheet.absoluteFillObject}
             />
           )}
-          {showVideo && !isCameraOff && isConnected && hasRemoteVideo && (
-            <RtcSurfaceView
-              canvas={{
-                uid: 0,
-                sourceType: VideoSourceType.VideoSourceCamera,
-                renderMode: RenderModeType.RenderModeHidden,
-                mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
-              }}
-              style={s.localPip}
-              zOrderMediaOverlay
-            />
-          )}
 
-          {/* Camera-off placeholder in PiP */}
-          {isConnected && hasRemoteVideo && isCameraOff && (
-            <View style={[s.localPip, s.camOffPip]}>
-              <Ionicons name="videocam-off" size={18} color="rgba(255,255,255,0.5)" />
-            </View>
+          {/* Draggable self-view PiP — shown once remote video is live */}
+          {isConnected && hasRemoteVideo && (
+            <Animated.View
+              style={[s.localPip, { left: pipPos.x, top: pipPos.y }]}
+              {...pipPan.panHandlers}
+            >
+              {showVideo && !isCameraOff ? (
+                <RtcSurfaceView
+                  canvas={{
+                    uid: 0,
+                    sourceType: VideoSourceType.VideoSourceCamera,
+                    renderMode: RenderModeType.RenderModeHidden,
+                    mirrorMode: VideoMirrorModeType.VideoMirrorModeEnabled,
+                  }}
+                  style={StyleSheet.absoluteFillObject}
+                  zOrderMediaOverlay
+                />
+              ) : (
+                <View style={[StyleSheet.absoluteFillObject, s.camOffPip]}>
+                  <Ionicons name="videocam-off" size={18} color="rgba(255,255,255,0.5)" />
+                </View>
+              )}
+            </Animated.View>
           )}
         </>
       )}
@@ -1210,11 +1265,9 @@ const s = StyleSheet.create({
   },
   bigBtnLabel: { fontSize: 12, color: "rgba(255,255,255,0.65)", fontWeight: "500" },
 
-  /* Native video PiP (self-view when remote is present) */
+  /* Native video PiP (self-view when remote is present) — position driven by pipPos */
   localPip: {
     position: "absolute",
-    bottom: 170,
-    right: 16,
     width: 110,
     height: 150,
     borderRadius: 14,
@@ -1222,6 +1275,11 @@ const s = StyleSheet.create({
     borderWidth: 2,
     borderColor: "rgba(255,255,255,0.35)",
     zIndex: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    elevation: 8,
   },
   camOffPip: {
     backgroundColor: "#111",
