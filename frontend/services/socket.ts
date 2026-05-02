@@ -124,6 +124,22 @@ class SocketService {
     }
   }
 
+  /** One-shot onConnect — fires once then removes itself from the queue.
+   *  Use this for call-accept / call-decline events that must not repeat
+   *  on every subsequent socket reconnect during the same session. */
+  onConnectOnce(callback: () => void) {
+    if (this.socket?.connected) {
+      callback();
+      return;
+    }
+    const fireOnce = () => {
+      const idx = this.connectionCallbacks.indexOf(fireOnce);
+      if (idx >= 0) this.connectionCallbacks.splice(idx, 1);
+      callback();
+    };
+    this.connectionCallbacks.push(fireOnce);
+  }
+
   disconnect() {
     if (this.socket) {
       this.isManualDisconnect = true;

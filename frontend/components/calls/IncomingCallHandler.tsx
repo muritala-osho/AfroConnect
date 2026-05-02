@@ -289,14 +289,16 @@ export default function IncomingCallHandler() {
 
         stopRingtone();
 
-        /* Use onConnect so that if the socket hasn't connected yet on cold
-         * start we still deliver the accept once the connection is ready. */
+        /* Use onConnectOnce so that if the socket hasn't connected yet on cold
+         * start we still deliver the accept once the connection is ready.
+         * onConnectOnce (not onConnect) removes itself after firing, so the
+         * stale accept is not re-sent on every subsequent socket reconnect. */
         const doAccept = () =>
           socketService.acceptCall({ callerId: call!.callerId, callData: call!.callData });
         if (socketService.isConnected()) {
           doAccept();
         } else {
-          socketService.onConnect(doAccept);
+          socketService.onConnectOnce(doAccept);
         }
         setCallActive(call.callerId);
 
@@ -375,7 +377,7 @@ export default function IncomingCallHandler() {
       if (socketService.isConnected()) {
         doAccept();
       } else {
-        socketService.onConnect(doAccept);
+        socketService.onConnectOnce(doAccept);
       }
 
       setActiveCall({

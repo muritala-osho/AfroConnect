@@ -380,7 +380,7 @@ export default function VoiceCallScreen() {
     else sendToWebView({ action: "leave" });
     socketService.endCall({
       targetUserId: isIncoming ? callerId : userId,
-      callType: "audio",
+      callType: "voice",
       duration: dur,
       wasAnswered: wasConnected,
     });
@@ -411,7 +411,7 @@ export default function VoiceCallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
-    socketService.declineCall({ callerId, callType: "audio" });
+    socketService.declineCall({ callerId, callType: "voice" });
     if (authToken && isIncoming) {
       post("/call/decline", { callerId, type: "audio" }, authToken).catch(() => {});
     }
@@ -547,7 +547,7 @@ export default function VoiceCallScreen() {
       ringingTimeout.current = setTimeout(async () => {
         if (callStatusRef.current === "ringing") {
           await stopRingtone();
-          socketService.declineCall({ callerId, callType: "audio" });
+          socketService.declineCall({ callerId, callType: "voice" });
           setStatus("missed");
           clearCall();
           setTimeout(() => navigation.canGoBack() && navigation.goBack(), 1500);
