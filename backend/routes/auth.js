@@ -253,6 +253,13 @@ router.post("/resend-otp", otpLimiter, async (req, res) => {
     user.verificationOTPExpire = Date.now() + 10 * 60 * 1000;
     await user.save();
 
+    if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) {
+      return res.status(500).json({
+        success: false,
+        message: "Email service is not configured",
+      });
+    }
+
     await sendOTP(user.email, otpCode);
 
     res.json({

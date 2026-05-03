@@ -516,13 +516,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resendOTP = async (userId: string) => {
-    const response = await post<{ message: string }>('/auth/resend-otp', {
-      userId,
-    });
-
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to resend OTP');
-    }
+    const response = await post<{ message: string }>('/auth/resend-otp', { userId });
+    if (!response.success) throw new Error(response.error || response.message || 'Failed to resend OTP');
   };
 
   const logout = async () => {
