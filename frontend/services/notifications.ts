@@ -38,6 +38,21 @@ Notifications.setNotificationHandler({
         };
       }
 
+      // Suppress Expo call notifications when the app is in the foreground.
+      // The socket delivers `call:incoming` and IncomingCallHandler shows the
+      // in-app ringing UI. Showing an Expo banner on top of that is confusing
+      // and redundant. When the app is backgrounded/killed, the Expo push
+      // shows normally because shouldShowAlert is evaluated in a background context.
+      if (notification?.request?.content?.data?.type === 'call') {
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+
       const soundEnabled = prefs.soundEnabled !== false;
 
       return {

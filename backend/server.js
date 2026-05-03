@@ -985,85 +985,115 @@ io.on('connection', (socket) => {
         callerId: callerId
       });
       logger.log(`Call initiated from ${callerId} to ${targetUserId}`);
-      
-      const isTargetOnline = onlineUsers.has(targetUserId);
-      if (!isTargetOnline) {
-        try {
-          const callType = callData?.callType || 'voice';
-          const notifType = callType === 'video' ? 'video_call' : 'voice_call';
-          const targetUser = await User.findById(targetUserId).select(
-            'pushToken voipPushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences'
-          );
-          const callerName = callerInfo?.name || 'Someone';
 
-          const callerPhoto = callerInfo?.photo || '';
+      // ── Push delivery for calls ───────────────────────────────────────────
+      // We always attempt to deliver a push, even when the target appears
+      // "online" (socket connected). This is critical because:
+      //   • On iOS/Android the app socket may still be technically connected
+      //     but the JS bridge is suspended while the screen is off or the app
+      //     is backgrounded — the socket `call:incoming` event never fires.
+      //   • FCM data-only messages are silent (no banner); they only wake the
+      //     Firebase background handler, so they don't cause duplicate UI.
+      //   • VoIP pushes are silent and only trigger CallKit on iOS — again,
+      //     no duplicate banner.
+      //   • The Expo fallback push (visible banner) is sent only when the user
+      //     is genuinely offline AND has no native push channel configured.
+      try {
+        const callType = callData?.callType || 'voice';
+        const notifType = callType === 'video' ? 'video_call' : 'voice_call';
+        const targetUser = await User.findById(targetUserId).select(
+          'pushToken voipPushToken fcmToken pushNotificationsEnabled muteSettings notificationPreferences'
+        );
+        const callerName = callerInfo?.name || 'Someone';
+        const callerPhoto = callerInfo?.photo || '';
 
-          // 1) iOS — VoIP (PushKit) push: wakes the app even when killed and triggers native CallKit UI
-          let sentVoip = false;
-          if (targetUser?.voipPushToken) {
-            try {
-              const { sendVoipPush } = require('./utils/voipPush');
-              await sendVoipPush(targetUser.voipPushToken, {
-                callerId,
-                callerName,
-                callerPhoto,
-                callType,
-                callData,
-              });
-              sentVoip = true;
-            } catch (voipErr) {
-              logger.error('[VoIP Push] Error:', voipErr?.message || voipErr);
-            }
+        let sentNativeChannel = false;
+
+        // 1) iOS — VoIP (PushKit) push: wakes the app silently even when killed
+        //    and triggers the native CallKit incoming call screen.
+        //    Always send regardless of socket online status.
+        if (targetUser?.voipPushToken) {
+          try {
+            const { sendVoipPush } = require('./utils/voipPush');
+            await sendVoipPush(targetUser.voipPushToken, {
+              callerId,
+              callerName,
+              callerPhoto,
+              callType,
+              callData,
+            });
+            sentNativeChannel = true;
+            logger.log('[Call] VoIP push sent to iOS device.');
+          } catch (voipErr) {
+            logger.error('[VoIP Push] Error:', voipErr?.message || voipErr);
           }
+        }
 
-          // 2) Android — FCM data-only message: wakes killed app → Firebase background
-          //    handler calls CallKeep.displayIncomingCall() → native ConnectionService UI
-          let sentFcmData = false;
-          if (targetUser?.fcmToken) {
-            try {
-              const { sendCallDataMessage } = require('./utils/fcmPush');
-              await sendCallDataMessage(targetUser.fcmToken, {
-                callerId,
-                callerName,
-                callerPhoto,
-                callType,
-                callData,
-              });
-              sentFcmData = true;
-            } catch (fcmErr) {
-              logger.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
-            }
+        // 2) Android — FCM data-only message: silently wakes the killed app.
+        //    Firebase setBackgroundMessageHandler calls displayIncomingCallNotification
+        //    (Notifee full-screen overlay) — same pattern as WhatsApp/Signal.
+        //    Always send regardless of socket online status (app may be backgrounded
+        //    with socket alive but JS bridge suspended).
+        if (targetUser?.fcmToken) {
+          try {
+            const { sendCallDataMessage } = require('./utils/fcmPush');
+            await sendCallDataMessage(targetUser.fcmToken, {
+              callerId,
+              callerName,
+              callerPhoto,
+              callType,
+              callData,
+            });
+            sentNativeChannel = true;
+            logger.log('[Call] FCM data message sent to Android device.');
+          } catch (fcmErr) {
+            logger.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
           }
+        }
 
-          // 3) Regular Expo push — only used as a true fallback when neither the
-          //    iOS VoIP push nor the Android FCM data message could be sent.
-          //    When either native channel fires, the user already sees the native
-          //    call screen (CallKit / ConnectionService). Sending a regular
-          //    visible notification on top of that creates a confusing double
-          //    notification — the banner appearing alongside the call screen.
-          if (!sentVoip && !sentFcmData && targetUser?.pushToken) {
+        // 3) Expo push fallback — only sent when BOTH native channels are
+        //    unavailable AND the user is genuinely offline (no active socket).
+        //    When a native channel fired the user already sees the CallKit /
+        //    Notifee full-screen UI; an additional Expo banner would be confusing.
+        //    When native channels are missing this is the last resort that at least
+        //    lets the user tap to open the app and see a "call is waiting" state.
+        const isTargetOnline = onlineUsers.has(targetUserId);
+        if (!sentNativeChannel && !isTargetOnline && targetUser?.pushToken) {
+          try {
             const { sendSmartNotification } = require('./utils/pushNotifications');
             await sendSmartNotification(
               targetUser,
               {
-                title: `Incoming ${callType} call`,
-                body: `${callerName} is calling you...`,
+                title: `📞 Incoming ${callType === 'video' ? 'video' : 'voice'} call`,
+                body: `${callerName} is calling you…`,
+                priority: 'high',
+                channelId: 'calls',
                 data: {
                   type: 'call',
                   callerId,
                   callType,
                   callData,
                   callerName,
-                  callerPhoto: callerInfo?.photo || '',
+                  callerPhoto,
+                  senderId: callerId,
+                  senderName: callerName,
+                  senderPhoto: callerPhoto,
                 },
               },
               notifType,
               callerId,
             );
+            logger.log('[Call] Expo push fallback sent (no native channel available).');
+          } catch (expoErr) {
+            logger.error('[Call] Expo push fallback error:', expoErr?.message || expoErr);
           }
-        } catch (err) {
-          logger.error('Failed to send call push notification:', err);
         }
+
+        if (!sentNativeChannel && isTargetOnline) {
+          logger.log('[Call] Target is online via socket — socket call:incoming delivered; no native push needed.');
+        }
+      } catch (err) {
+        logger.error('Failed to send call push notification:', err);
       }
     }
   });
