@@ -1,3 +1,4 @@
+const logger = require('./logger');
 const crypto = require('crypto');
 
 const RAW_KEY = process.env.TOKEN_ENCRYPTION_KEY || '';
@@ -19,7 +20,7 @@ if (RAW_KEY) {
 
 if (!KEY) {
   if (IS_PROD) {
-    console.warn(
+    logger.warn(
       '[cryptoTokens] WARNING: TOKEN_ENCRYPTION_KEY missing or invalid in production. ' +
       'Spotify tokens will be stored in plaintext. Set TOKEN_ENCRYPTION_KEY to a 32-byte hex string ' +
       '(generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))").'
@@ -48,7 +49,7 @@ function decrypt(value) {
   if (!value) return '';
   if (!isEncrypted(value)) return value;
   if (!KEY) {
-    console.warn('[cryptoTokens] Encrypted value present but no KEY configured — returning empty.');
+    logger.warn('[cryptoTokens] Encrypted value present but no KEY configured — returning empty.');
     return '';
   }
   try {
@@ -56,15 +57,12 @@ function decrypt(value) {
     const iv = buf.subarray(0, 12);
     const tag = buf.subarray(12, 28);
     const ct = buf.subarray(28);
-    // Explicitly specify authTagLength so Node rejects any ciphertext whose
-    // GCM authentication tag is not exactly 16 bytes (the AES-GCM standard).
-    // Without this, older Node versions accept shorter tags, weakening the MAC.
     const decipher = crypto.createDecipheriv('aes-256-gcm', KEY, iv, { authTagLength: 16 });
     decipher.setAuthTag(tag);
     const pt = Buffer.concat([decipher.update(ct), decipher.final()]);
     return pt.toString('utf8');
   } catch (err) {
-    console.error('[cryptoTokens] decrypt failed:', err.message);
+    logger.error('[cryptoTokens] decrypt failed:', err.message);
     return '';
   }
 }

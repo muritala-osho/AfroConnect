@@ -1,3 +1,4 @@
+const logger = require('../utils/logger');
 const AuditLog = require('../models/AuditLog');
 
 const logAudit = async ({
@@ -30,7 +31,7 @@ const logAudit = async ({
       ipAddress,
     });
   } catch (err) {
-    console.error('[AuditHelper] Failed to write audit log:', err.message);
+    logger.error('[AuditHelper] Failed to write audit log:', err.message);
   }
 };
 
