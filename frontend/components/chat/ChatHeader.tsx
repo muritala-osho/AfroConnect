@@ -43,30 +43,40 @@ export default function ChatHeader({
       style={[
         styles.header,
         {
-          backgroundColor: theme.background,
-          borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+          backgroundColor: isDark ? '#0D1117' : '#FFFFFF',
+          borderBottomColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)',
+          shadowColor: isDark ? '#000' : '#000',
         },
       ]}
     >
-      <Pressable onPress={onBack} style={styles.backButton}>
-        <Ionicons name="chevron-back" size={28} color={theme.text} />
+      <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+        <Ionicons name="chevron-back" size={26} color={theme.text} />
       </Pressable>
 
       <Pressable style={styles.headerProfile} onPress={onProfilePress}>
         <View style={styles.avatarContainer}>
-          <Image
-            source={photoSource || require('../../assets/icon.png')}
-            style={styles.headerAvatar}
-            contentFit="cover"
-          />
-          {isOnline && <View style={styles.onlineIndicator} />}
+          <View style={[
+            styles.avatarRing,
+            { borderColor: isOnline ? '#22C55E' : isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)' }
+          ]}>
+            <Image
+              source={photoSource || require('../../assets/icon.png')}
+              style={styles.headerAvatar}
+              contentFit="cover"
+            />
+          </View>
+          {isOnline && (
+            <View style={styles.onlineIndicatorWrap}>
+              <View style={styles.onlineIndicator} />
+            </View>
+          )}
         </View>
         <View style={styles.headerInfo}>
           <View style={styles.nameRow}>
             <ThemedText style={[styles.headerName, { color: theme.text }]} numberOfLines={1}>
               {userName}
             </ThemedText>
-            {otherUserVerified && <VerificationBadge size={14} />}
+            {otherUserVerified && <View style={{ marginLeft: 5 }}><VerificationBadge size={14} /></View>}
           </View>
           <ThemedText
             style={[
@@ -77,8 +87,9 @@ export default function ChatHeader({
                   : isTyping
                   ? theme.primary
                   : isOnline
-                  ? '#4CAF50'
-                  : theme.textSecondary,
+                  ? '#22C55E'
+                  : isDark ? 'rgba(255,255,255,0.38)' : 'rgba(0,0,0,0.35)',
+                fontWeight: (isTyping || isOtherRecording) ? '500' : '400',
               },
             ]}
           >
@@ -88,14 +99,22 @@ export default function ChatHeader({
       </Pressable>
 
       <View style={styles.headerActions}>
-        <Pressable onPress={onVoiceCall} style={styles.headerActionButton}>
-          <Feather name="phone" size={22} color={theme.primary} />
+        <Pressable
+          onPress={onVoiceCall}
+          style={[styles.headerActionButton, { backgroundColor: theme.primary + '16' }]}
+          hitSlop={4}
+        >
+          <Feather name="phone" size={19} color={theme.primary} />
         </Pressable>
-        <Pressable onPress={onVideoCall} style={styles.headerActionButton}>
-          <Feather name="video" size={22} color={theme.primary} />
+        <Pressable
+          onPress={onVideoCall}
+          style={[styles.headerActionButton, { backgroundColor: '#0EA5E9' + '16' }]}
+          hitSlop={4}
+        >
+          <Feather name="video" size={19} color="#0EA5E9" />
         </Pressable>
-        <Pressable onPress={onOpenOptions} style={styles.headerActionButton}>
-          <Feather name="more-vertical" size={22} color={theme.text} />
+        <Pressable onPress={onOpenOptions} style={styles.moreButton} hitSlop={4}>
+          <Feather name="more-vertical" size={21} color={isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)'} />
         </Pressable>
       </View>
     </View>
@@ -106,29 +125,63 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.07,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  backButton: { padding: 8 },
-  headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 4 },
+  backButton: { padding: 8, marginRight: 2 },
+  headerProfile: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 2 },
   avatarContainer: { position: 'relative' },
-  headerAvatar: { width: 44, height: 44, borderRadius: 22 },
-  onlineIndicator: {
+  avatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerAvatar: { width: 40, height: 40, borderRadius: 20 },
+  onlineIndicatorWrap: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
+    bottom: 1,
+    right: 1,
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#4CAF50',
-    borderWidth: 2,
-    borderColor: '#FFF',
+    backgroundColor: '#22C55E',
+    borderWidth: 2.5,
+    borderColor: '#0D1117',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  headerInfo: { marginLeft: 12, flex: 1 },
+  onlineIndicator: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FFF',
+  },
+  headerInfo: { marginLeft: 10, flex: 1 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
-  headerName: { fontSize: 17, fontWeight: '700' },
-  headerStatus: { fontSize: 13, marginTop: 2 },
-  headerActions: { flexDirection: 'row', alignItems: 'center' },
-  headerActionButton: { padding: 10, marginLeft: 4 },
+  headerName: { fontSize: 16, fontWeight: '700', letterSpacing: -0.2 },
+  headerStatus: { fontSize: 12, marginTop: 2, letterSpacing: 0.1 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 4 },
+  headerActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  moreButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });

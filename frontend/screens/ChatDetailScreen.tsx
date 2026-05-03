@@ -73,6 +73,7 @@ import TranslateModal from "@/components/chat/TranslateModal";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { scanForSensitiveInfo, showPersonalInfoWarning } from "@/utils/securityWarnings";
 import WavyWaveform from "@/components/chat/WavyWaveform";
+import { LinearGradient } from "expo-linear-gradient";
 import { Message, MessageReaction } from "@/types/chat";
 import { EMOJI_LIST, REPORT_REASONS, CHAT_THEMES, AI_SUGGESTIONS } from "@/constants/chatConstants";
 import logger from "@/utils/logger";
@@ -2155,20 +2156,37 @@ export default function ChatDetailScreen({
         <View>
           {showDateHeader && (
             <View style={styles.dateHeaderContainer}>
-              <View style={[styles.dateHeader, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
-                <ThemedText style={[styles.dateHeaderText, { color: "#FFF" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
+              <View style={[styles.dateHeader, { backgroundColor: isDark ? "rgba(255,255,255,0.09)" : "rgba(0,0,0,0.10)" }]}>
+                <ThemedText style={[styles.dateHeaderText, { color: isDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.55)" }]}>{formatDateHeader(item.createdAt)}</ThemedText>
               </View>
             </View>
           )}
 
-          {item.type === "system" || item.type === "call" || item.deletedForEveryone ? (
+          {item.type === "call" ? (
+            <View style={styles.callLogContainer}>
+              <View style={[styles.callLogCard, { backgroundColor: isDark ? "#131929" : "#F0F4FF", borderColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)" }]}>
+                <View style={[styles.callLogIconCircle, {
+                  backgroundColor: messageText.toLowerCase().includes("video") ? "#0EA5E9" + "22" : theme.primary + "22",
+                }]}>
+                  <Ionicons
+                    name={messageText.toLowerCase().includes("video") ? "videocam" : "call"}
+                    size={17}
+                    color={messageText.toLowerCase().includes("video") ? "#0EA5E9" : theme.primary}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={[styles.callLogText, { color: theme.text }]}>{messageText}</ThemedText>
+                  <ThemedText style={[styles.callLogTime, { color: theme.textSecondary }]}>{formatMessageTime(item.createdAt)}</ThemedText>
+                </View>
+              </View>
+            </View>
+          ) : item.type === "system" || item.deletedForEveryone ? (
             <View style={styles.systemMessageContainer}>
-              <View style={[styles.systemMessage, { backgroundColor: "rgba(0,0,0,0.3)" }]}>
-                <Ionicons
-                  name={item.type === "call" ? "call" : item.deletedForEveryone ? "trash-outline" : "information-circle"}
-                  size={14} color="#FFF" style={{ marginRight: 6 }}
-                />
-                <ThemedText style={styles.systemMessageText}>{messageText}</ThemedText>
+              <View style={[styles.systemMessage, { backgroundColor: isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)" }]}>
+                {item.deletedForEveryone && (
+                  <Ionicons name="trash-outline" size={12} color={isDark ? "rgba(255,255,255,0.45)" : "rgba(0,0,0,0.40)"} style={{ marginRight: 5 }} />
+                )}
+                <ThemedText style={[styles.systemMessageText, { color: isDark ? "rgba(255,255,255,0.50)" : "rgba(0,0,0,0.42)" }]}>{messageText}</ThemedText>
               </View>
             </View>
           ) : (
@@ -2176,11 +2194,12 @@ export default function ChatDetailScreen({
               <Pressable onLongPress={() => handleMessageLongPress(item)} delayLongPress={400}>
                 <View style={[styles.messageRow, isMe ? styles.messageRowRight : styles.messageRowLeft]}>
 
-                  <View
+                  <GradientBubble
+                    isMe={isMe}
                     style={[
                       styles.messageBubble,
                       isMe ? styles.myBubble : styles.theirBubble,
-                      { backgroundColor: isMe ? theme.primary : isDark ? "rgba(42,42,42,0.95)" : "rgba(255,255,255,0.95)" },
+                      !isMe && { backgroundColor: isDark ? "#1C2333" : "#FFFFFF" },
                       chatBubbleStyle === "sharp" && { borderRadius: 6 },
                       chatBubbleStyle === "sharp" && (isMe ? { borderBottomRightRadius: 2 } : { borderBottomLeftRadius: 2 }),
                       chatBubbleStyle === "minimal" && { borderRadius: 14, borderBottomRightRadius: isMe ? 14 : undefined, borderBottomLeftRadius: !isMe ? 14 : undefined },
@@ -2668,7 +2687,7 @@ export default function ChatDetailScreen({
                         Seen{isPremium && item.seenAt ? ` at ${formatMessageTime(item.seenAt)}` : ""}
                       </ThemedText>
                     )}
-                  </View>
+                  </GradientBubble>
 
                 </View>
 
@@ -2909,7 +2928,7 @@ export default function ChatDetailScreen({
         {currentTheme?.image ? (
           <ImageBackground source={currentTheme.image} style={[styles.chatBackground, { flex: 1 }]} resizeMode="cover">{chatContent}</ImageBackground>
         ) : (
-          <View style={[styles.chatBackground, { flex: 1, backgroundColor: isDark ? "#0a0d14" : "#E8E8E8" }]}>{chatContent}</View>
+          <View style={[styles.chatBackground, { flex: 1, backgroundColor: isDark ? "#080C16" : "#E9EDF2" }]}>{chatContent}</View>
         )}
 
         {showAISuggestions && (
@@ -3052,7 +3071,7 @@ export default function ChatDetailScreen({
                 </Pressable>
               )}
               <Pressable style={styles.attachButton} onPress={() => setShowAttachmentMenu(true)}><Feather name="plus-circle" size={26} color={theme.primary} /></Pressable>
-              <View style={[styles.inputWrapper, { backgroundColor: isDark ? "#2A2A2A" : "#F5F5F5" }]}>
+              <View style={[styles.inputWrapper, { backgroundColor: isDark ? "#1A2035" : "#F0F2F5" }]}>
                 <TextInput
                   ref={inputRef}
                   style={[styles.textInput, { color: theme.text }]}
@@ -3229,6 +3248,33 @@ export default function ChatDetailScreen({
   );
 }
 
+// Gradient bubble wrapper — renders LinearGradient for sent messages and a
+// plain View for received messages. Defined outside the main component so
+// React never remounts it during re-renders.
+const GradientBubble = React.memo(function GradientBubble({
+  isMe,
+  style,
+  children,
+}: {
+  isMe: boolean;
+  style: any;
+  children: React.ReactNode;
+}) {
+  if (isMe) {
+    return (
+      <LinearGradient
+        colors={["#34D399", "#10B981", "#059669"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={style}
+      >
+        {children}
+      </LinearGradient>
+    );
+  }
+  return <View style={style}>{children}</View>;
+});
+
 // Memoized swap between the send icon and the mic icon. Both views are
 // kept mounted and crossfade with a fast (110ms) native-driven transition,
 // so the toggle is perceptually instant and immune to the parent's
@@ -3294,7 +3340,7 @@ const styles = StyleSheet.create<any>({
   headerProfile: { flex: 1, flexDirection: "row", alignItems: "center", marginLeft: 4 },
   avatarContainer: { position: "relative" },
   headerAvatar: { width: 44, height: 44, borderRadius: 22 },
-  onlineIndicator: { position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#4CAF50", borderWidth: 2, borderColor: "#FFF" },
+  onlineIndicator: { position: "absolute", bottom: 0, right: 0, width: 14, height: 14, borderRadius: 7, backgroundColor: "#22C55E", borderWidth: 2, borderColor: "#0D1117" },
   headerInfo: { marginLeft: 12, flex: 1 },
   nameRow: { flexDirection: "row", alignItems: "center" },
   headerName: { fontSize: 17, fontWeight: "700" },
@@ -3314,10 +3360,10 @@ const styles = StyleSheet.create<any>({
     alignItems: "center",
     borderWidth: 1,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 6,
   },
   scrollToBottomBadge: {
     position: "absolute",
@@ -3337,21 +3383,56 @@ const styles = StyleSheet.create<any>({
     lineHeight: 13,
   },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  messagesList: { paddingHorizontal: 12, paddingVertical: 16, flexGrow: 1 },
-  dateHeaderContainer: { alignItems: "center", marginVertical: 16 },
-  dateHeader: { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 },
-  dateHeaderText: { fontSize: 12, fontWeight: "500" },
-  systemMessageContainer: { alignItems: "center", marginVertical: 8 },
-  systemMessage: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16 },
-  systemMessageText: { color: "#FFF", fontSize: 13 },
-  messageRow: { flexDirection: "row", marginVertical: 4, alignItems: "flex-end" },
+  messagesList: { paddingHorizontal: 14, paddingVertical: 18, flexGrow: 1 },
+  dateHeaderContainer: { alignItems: "center", marginVertical: 20 },
+  dateHeader: { paddingHorizontal: 18, paddingVertical: 6, borderRadius: 20 },
+  dateHeaderText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.2 },
+  systemMessageContainer: { alignItems: "center", marginVertical: 6 },
+  systemMessage: { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14 },
+  systemMessageText: { fontSize: 12, fontWeight: "400" },
+  callLogContainer: { alignItems: "center", marginVertical: 8, paddingHorizontal: 24 },
+  callLogCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 2,
+    width: "100%",
+  },
+  callLogIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  callLogText: { fontSize: 14, fontWeight: "600" },
+  callLogTime: { fontSize: 11, marginTop: 2 },
+  messageRow: { flexDirection: "row", marginVertical: 3, alignItems: "flex-end" },
   messageRowLeft: { justifyContent: "flex-start" },
   messageRowRight: { justifyContent: "flex-end" },
   messageAvatar: { width: 32, height: 32, borderRadius: 16, marginRight: 8 },
-  messageBubble: { maxWidth: "75%", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20 },
+  messageBubble: {
+    maxWidth: "75%",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 4,
+    elevation: 2,
+  },
   myBubble: { borderBottomRightRadius: 4 },
   theirBubble: { borderBottomLeftRadius: 4 },
-  messageText: { fontSize: 15, lineHeight: 21 },
+  messageText: { fontSize: 15, lineHeight: 22 },
   messageImage: { width: 200, height: 150, borderRadius: 16, marginBottom: 6, overflow: "hidden" },
   messageFooter: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", marginTop: 4 },
   messageTime: { fontSize: 11 },
@@ -3411,7 +3492,19 @@ const styles = StyleSheet.create<any>({
   emojiScrollContent: { paddingHorizontal: 12 },
   emojiButton: { padding: 6 },
   emojiText: { fontSize: 28 },
-  inputContainer: { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 8, paddingTop: 8, borderTopWidth: 1 },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 6,
+  },
   recordingContainer: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cancelRecordButton: { padding: 12 },
   recordingInfo: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
@@ -3419,14 +3512,41 @@ const styles = StyleSheet.create<any>({
   recordingTime: { fontSize: 18, fontWeight: "600" },
   recordingLabel: { fontSize: 13, fontWeight: "500" },
   sendRecordButton: { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
-  attachButton: { padding: 6, marginBottom: 2 },
-  inputWrapper: { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 24, paddingHorizontal: 12, paddingVertical: 6, marginHorizontal: 4, minHeight: 45, maxHeight: 120 },
-  textInput: { flex: 1, fontSize: 16, maxHeight: 100, paddingHorizontal: 8, paddingTop: Platform.OS === "ios" ? 10 : 0, paddingBottom: Platform.OS === "ios" ? 10 : 5 },
-  emojiToggle: { padding: 4, marginLeft: 8 },
-  aiButton: { padding: 6, marginBottom: 2 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  attachButton: { padding: 6, marginBottom: 4 },
+  inputWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    borderRadius: 26,
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === "ios" ? 8 : 6,
+    marginHorizontal: 6,
+    minHeight: 46,
+    maxHeight: 120,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  textInput: { flex: 1, fontSize: 15, maxHeight: 100, paddingHorizontal: 2, paddingTop: Platform.OS === "ios" ? 2 : 0, paddingBottom: Platform.OS === "ios" ? 2 : 2 },
+  emojiToggle: { padding: 4, marginLeft: 6, marginBottom: Platform.OS === "ios" ? 2 : 0 },
+  aiButton: { padding: 6, marginBottom: 4 },
+  sendButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 2,
+    shadowColor: "#10B981",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 4,
+  },
   micButton: { padding: 8, marginBottom: 2 },
-  sendMicSwap: { width: 44, height: 44, justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  sendMicSwap: { width: 46, height: 46, justifyContent: "center", alignItems: "center", marginBottom: 2 },
   swapLayer: { position: "absolute", justifyContent: "center", alignItems: "center" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   attachmentMenu: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
