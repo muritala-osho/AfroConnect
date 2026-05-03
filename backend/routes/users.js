@@ -379,7 +379,7 @@ router.get('/nearby', protect, discoveryLimiter, async (req, res) => {
     const normMin  = parseInt(minAge)      || '';
     const normMax  = parseInt(maxAge)      || '';
     const normGen  = (genders || '').split(',').sort().join(',');
-    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}:${cursor || ''}:${limit}`;
+    const cacheKey = `discovery:${req.user.id}:${isGlobal}:${countryFilter || ''}:${normLat}:${normLng}:${normDist}:${normMin}:${normMax}:${normGen}:${cursor || ''}:${limit}:${currentUser.updatedAt ? new Date(currentUser.updatedAt).getTime() : ''}`;
     const cached = await redis.get(cacheKey);
     if (cached) {
       return res.json({ success: true, users: cached.users || cached, nextCursor: cached.nextCursor || null, fromCache: true });
