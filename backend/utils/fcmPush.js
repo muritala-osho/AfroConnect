@@ -62,8 +62,9 @@ function getAdmin() {
  *
  * @param {string} fcmToken  - The device FCM token (from messaging().getToken())
  * @param {object} data      - String key-value pairs (FCM data payload)
+ * @param {object} options   - Optional { type: 'call' | 'message', ttl: ms }
  */
-async function sendFcmDataMessage(fcmToken, data) {
+async function sendFcmDataMessage(fcmToken, data, options = {}) {
   if (!fcmToken) return;
 
   const firebaseAdmin = getAdmin();
@@ -74,20 +75,45 @@ async function sendFcmDataMessage(fcmToken, data) {
     stringData[k] = typeof v === 'string' ? v : JSON.stringify(v);
   }
 
+  // Context-aware Android config for different message types
+  const messageType = options.type || 'call';
+  let collapseKey;
+  let ttl;
+
+  if (messageType === 'call') {
+    // Incoming calls: collapse key by caller so 2nd ring replaces 1st
+    // 30s TTL because if device doesn't answer in 35s, call is missed anyway
+    collapseKey = `call_${data.callerId || 'unknown'}`;
+    ttl = options.ttl || 30000;
+  } else if (messageType === 'message') {
+    // Chat messages: collapse key by conversation so rapid messages don't collapse
+    // 24h TTL so offline devices still get messages when they reconnect
+    collapseKey = `msg_${data.matchId || 'unknown'}`;
+    ttl = options.ttl || 86400000; // 24 hours
+  } else {
+    // Generic default
+    collapseKey = `generic_${data.senderId || data.callerId || 'unknown'}`;
+    ttl = options.ttl || 86400000;
+  }
+
   try {
     const result = await firebaseAdmin.messaging().send({
       token: fcmToken,
       data: stringData,
       android: {
         // priority:'high' tells FCM to deliver immediately and bypass Doze for
-        // a short window — required to wake a killed app for an incoming call.
+        // a short window — applies to all message types.
         priority: 'high',
-        // 30s TTL: if we can't reach the device within the ring window, drop
-        // the message rather than ringing later when the call is already over.
-        ttl: 30000,
-        // collapseKey makes a 2nd ring from the same caller replace the 1st in
-        // the FCM queue rather than queueing two rings.
-        collapseKey: `call_${data.callerId || 'unknown'}`,
+        // ttl (Time To Live): how long FCM should try to deliver the message.
+        // - Calls: 30s (if not answered in 35s, call is missed anyway)
+        // - Messages: 24h (user may be offline for hours, still want delivery)
+        ttl,
+        // collapseKey: if a 2nd message arrives before the 1st is delivered,
+        // the behavior depends on type:
+        // - Calls: collapse by callerId so rapid rings from same person don't queue
+        // - Messages: collapse by matchId so all messages in a thread don't collapse
+        //   (each message should be its own notification)
+        collapseKey,
       },
       // APNs config is for fallback only — the real iOS killed-app wake comes
       // from the separate VoIP push in voipPush.js.
@@ -98,10 +124,10 @@ async function sendFcmDataMessage(fcmToken, data) {
         },
       },
     });
-    logger.log('[FCM] ✅ Data message sent:', result);
+    logger.log(`[FCM] ✅ ${messageType} message sent:`, result);
     return result;
   } catch (err) {
-    logger.error('[FCM] Failed to send data message:', err.message);
+    logger.error(`[FCM] Failed to send ${messageType} message:`, err.message);
   }
 }
 
@@ -116,14 +142,18 @@ async function sendFcmDataMessage(fcmToken, data) {
  * @param {object} params.callData
  */
 async function sendCallDataMessage(fcmToken, { callerId, callerName, callerPhoto, callType, callData } = {}) {
-  return sendFcmDataMessage(fcmToken, {
-    type:        'call',
-    callerId:    callerId    || '',
-    callerName:  callerName  || '',
-    callerPhoto: callerPhoto || '',
-    callType:    callType    || 'voice',
-    callData:    callData    || {},
-  });
+  return sendFcmDataMessage(
+    fcmToken,
+    {
+      type:        'call',
+      callerId:    callerId    || '',
+      callerName:  callerName  || '',
+      callerPhoto: callerPhoto || '',
+      callType:    callType    || 'voice',
+      callData:    callData    || {},
+    },
+    { type: 'call' }
+  );
 }
 
 /**
@@ -165,16 +195,20 @@ async function sendCancelCallDataMessage(fcmToken, { callerId } = {}) {
  * @param {number} params.badge        unread count
  */
 async function sendMessageDataMessage(fcmToken, { matchId, messageId, senderId, senderName, senderPhoto, body, badge } = {}) {
-  return sendFcmDataMessage(fcmToken, {
-    type:        'message',
-    matchId:     matchId     || '',
-    messageId:   messageId   || '',
-    senderId:    senderId    || '',
-    senderName:  senderName  || '',
-    senderPhoto: senderPhoto || '',
-    body:        body        || '',
-    badge:       String(badge ?? 0),
-  });
+  return sendFcmDataMessage(
+    fcmToken,
+    {
+      type:        'message',
+      matchId:     matchId     || '',
+      messageId:   messageId   || '',
+      senderId:    senderId    || '',
+      senderName:  senderName  || '',
+      senderPhoto: senderPhoto || '',
+      body:        body        || '',
+      badge:       String(badge ?? 0),
+    },
+    { type: 'message' }
+  );
 }
 
 module.exports = { sendFcmDataMessage, sendCallDataMessage, sendCancelCallDataMessage, sendMessageDataMessage };
