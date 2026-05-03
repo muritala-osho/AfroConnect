@@ -1345,9 +1345,6 @@ const startServer = () => {
     startScheduledJobs();
     const { startBroadcastScheduler } = require('./jobs/broadcastScheduler');
     startBroadcastScheduler();
-    // Pre-warm face AI models so the first request isn't slow
-    const { loadModels: loadVerifier } = require('./utils/faceVerifier');
-    loadVerifier().then(() => logger.log('🤖 Face AI models ready')).catch(() => {});
   });
 
   serverInstance.on('error', (e) => {
