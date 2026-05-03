@@ -20,14 +20,24 @@ import { useNavigation, useRoute, useFocusEffect } from "@react-navigation/nativ
 import { LinearGradient } from "expo-linear-gradient";
 import { Audio } from "../utils/expoAvCompat";
 import * as Haptics from "expo-haptics";
+import Constants from "expo-constants";
 import { useAuth } from "@/hooks/useAuth";
 import { useApi } from "@/hooks/useApi";
 import socketService from "@/services/socket";
 import agoraService from "@/services/agoraService";
 import { ensureMicPermission } from "@/utils/callPermissions";
 import { useCallContext, CallStatus } from "@/contexts/CallContext";
-import { getApiBaseUrl } from "@/constants/config";
-import WebView from "react-native-webview";
+
+import {
+  createAgoraRtcEngine,
+  ChannelProfileType,
+  ClientRoleType,
+} from "@/utils/agoraNative";
+
+/* Detect Expo Go — native modules unavailable there */
+const isExpoGo =
+  Constants.appOwnership === "expo" ||
+  Constants.executionEnvironment === "storeClient";
 
 const { width: SW } = Dimensions.get("window");
 const AVATAR_SIZE = Math.min(SW * 0.42, 170);
@@ -189,13 +199,7 @@ export default function VoiceCallScreen() {
   );
   const [activeCallData, setActiveCallData] = useState<any>(incomingCallData || null);
   const [isMuted, setIsMuted] = useState(false);
-  /* Speaker is ON by default. Earpiece mode (playThroughEarpieceAndroid:true)
-   * forces Android into MODE_IN_CALL, which prevents the WebView WebRTC
-   * pipeline from accessing the microphone — both sides go silent. The user
-   * can switch to earpiece via the in-call control if they want. */
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-  const [webviewReady, setWebviewReady] = useState(false);
-  const webviewReadyRef = useRef(false);
 
   /* ── Animated values ── */
   const fadeAnim    = useRef(new Animated.Value(0)).current;
@@ -208,15 +212,10 @@ export default function VoiceCallScreen() {
   const ringtoneRef       = useRef<Audio.Sound | null>(null);
   const shouldRingRef     = useRef(false);
   const ringingTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const webViewRef        = useRef<WebView | null>(null);
+  const engineRef         = useRef<any>(null);
   const agoraJoined       = useRef(false);
-  const pendingJoinRef    = useRef<object | null>(null);
   const activeCallDataRef = useRef<any>(incomingCallData || null);
   const callStatusRef     = useRef<CallStatus>(callAccepted ? "connected" : "connecting");
-  /* Always-current speaker state — avoids stale-closure issues in onMessage */
-  const isSpeakerOnRef    = useRef(true);
-  /* Set to true when mic permission is denied — drives a user-friendly message
-   * instead of the generic "Call failed" / "Unable to connect" copy. */
   const micDeniedRef      = useRef(false);
 
   const duration = activeCall?.duration || 0;
@@ -243,14 +242,6 @@ export default function VoiceCallScreen() {
         await snd.unloadAsync().catch(() => {});
       }
     } catch {}
-    /* Reset audio session so mic is available for the call.
-     *
-     * IMPORTANT: keep `playThroughEarpieceAndroid: false` here. Setting it to
-     * true switches the system into MODE_IN_CALL, which prevents the WebView's
-     * WebRTC pipeline from accessing the microphone — the AgoraRTC mic track
-     * fails silently and BOTH sides go mute after accept. The user can
-     * explicitly toggle the speaker via the in-call control which sets the
-     * mode for the duration of the toggle. */
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -286,7 +277,6 @@ export default function VoiceCallScreen() {
         return;
       }
       ringtoneRef.current = sound;
-      /* Final guard: stopRingtone may have fired while the sound was being created */
       if (!shouldRingRef.current) {
         ringtoneRef.current = null;
         await sound.stopAsync().catch(() => {});
@@ -301,32 +291,69 @@ export default function VoiceCallScreen() {
     }
   }, [isIncoming, stopRingtone]);
 
-  /* ── Mic permission (with one-tap Settings shortcut on hard-deny) ── */
-  const requestMicPermission = useCallback(async () => {
-    return ensureMicPermission();
+  /* ── Init native Agora engine (audio-only) ── */
+  const initEngine = useCallback((callDataObj: any) => {
+    if (engineRef.current || Platform.OS === "web" || isExpoGo || !createAgoraRtcEngine) return;
+    try {
+      const engine = createAgoraRtcEngine();
+      engineRef.current = engine;
+
+      engine.initialize({
+        appId: callDataObj.appId,
+        channelProfile: ChannelProfileType.ChannelProfileCommunication,
+      });
+
+      /* Audio-only — disable video capture entirely */
+      engine.disableVideo();
+      engine.enableAudio();
+      engine.enableLocalAudio(true);
+      engine.muteLocalAudioStream(false);
+      /* Default to speakerphone so remote audio is audible without earpiece */
+      engine.setDefaultAudioRouteToSpeakerphone(true);
+
+      engine.addListener("onUserJoined", (_conn: any, _uid: any) => {
+        logger.log("[VoiceCall] Remote user joined, uid:", _uid);
+      });
+
+      engine.addListener("onUserOffline", (_conn: any, _uid: any, _reason: any) => {
+        logger.log("[VoiceCall] Remote user offline, uid:", _uid);
+        if (callStatusRef.current === "connected") {
+          handleEngineEndCall();
+        }
+      });
+
+      engine.addListener("onConnectionStateChanged", (_conn: any, state: any, _reason: any) => {
+        logger.log("[VoiceCall] Connection state:", state);
+      });
+
+      engine.addListener("onError", (_conn: any, err: any) => {
+        logger.warn("[VoiceCall] Engine error:", err);
+      });
+
+    } catch (e) {
+      logger.error("[VoiceCall] Engine init error:", e);
+    }
   }, []);
 
-  /* ── WebView bridge ── */
-  const sendToWebView = useCallback((msg: object) => {
-    webViewRef.current?.postMessage(JSON.stringify(msg));
-  }, []);
+  /* ── Internal end-call triggered by engine ── */
+  const handleEngineEndCall = useCallback(() => {
+    try { engineRef.current?.leaveChannel(); } catch {}
+    setStatus("ended");
+    stopGlobalTimer();
+    clearCall();
+    setTimeout(() => navigation.canGoBack() && navigation.goBack(), 600);
+  }, [navigation, setStatus, stopGlobalTimer, clearCall]);
 
-  /* ── Join Agora voice ── */
+  /* ── Join Agora voice channel via native engine ── */
   const joinAgoraVoice = useCallback(
     async (callDataObj: any) => {
       if (agoraJoined.current) return;
       agoraJoined.current = true;
 
-      const hasPerm = await requestMicPermission();
+      const hasPerm = await ensureMicPermission();
       if (!hasPerm) {
         agoraJoined.current = false;
         micDeniedRef.current = true;
-        /* If the call was already signalled as connected (e.g. the caller's
-         * mic check fires after the callee accepted, or a cold-start join
-         * runs after the screen mounts in callAccepted mode) the other side
-         * is sitting on a silent "connected" screen. End the call properly
-         * so their screen closes with a clear "call ended" status rather
-         * than hanging indefinitely. */
         if (callStatusRef.current === "connected") {
           const otherId = isIncoming ? callerId : userId;
           socketService.endCall({
@@ -335,7 +362,6 @@ export default function VoiceCallScreen() {
             duration: 0,
             wasAnswered: false,
           });
-          if (Platform.OS !== "web") sendToWebView({ action: "leave" });
           stopGlobalTimer();
           clearCall();
         }
@@ -344,9 +370,27 @@ export default function VoiceCallScreen() {
         return;
       }
 
-      let joinToken = callDataObj.token;
-      let joinUid = callDataObj.uid || 0;
+      /* Web platform falls back to the JS agoraService */
+      if (Platform.OS === "web") {
+        agoraService.joinVoiceCall(callDataObj.appId, callDataObj.channelName, callDataObj.token, callDataObj.uid || 0);
+        return;
+      }
 
+      /* Expo Go: no native module available */
+      if (isExpoGo || !createAgoraRtcEngine) return;
+
+      if (!engineRef.current) initEngine(callDataObj);
+
+      /* Ensure audio capture is active (re-join safety) */
+      try {
+        engineRef.current?.enableLocalAudio(true);
+        engineRef.current?.muteLocalAudioStream(false);
+      } catch {}
+
+      let joinToken = callDataObj.token;
+      let joinUid   = callDataObj.uid || 0;
+
+      /* Callee fetches a fresh token from the backend */
       if (isIncoming && authToken) {
         try {
           const res = await get<{ token: string; uid: number }>(
@@ -356,43 +400,30 @@ export default function VoiceCallScreen() {
           );
           if (res.success && res.data?.token) {
             joinToken = res.data.token;
-            joinUid = 0;
+            joinUid   = 0;
           }
         } catch {
-          logger.log("Token fallback — using shared token");
+          logger.log("[VoiceCall] Token fallback — using shared token");
         }
       }
 
-      if (Platform.OS === "web") {
-        agoraService.joinVoiceCall(callDataObj.appId, callDataObj.channelName, joinToken, joinUid);
-        return;
-      }
-
-      const msg = {
-        action: "join",
-        appId: callDataObj.appId,
-        channel: callDataObj.channelName,
-        token: joinToken,
-        uid: joinUid,
-        callType: "voice",
-      };
-
-      /* Queue the join message so the webviewReady effect can flush it if the
-       * WebView hasn't loaded yet. If the WebView is already ready, send
-       * immediately using webviewReadyRef — a plain ref that is always current
-       * regardless of when this callback closure was captured. This prevents a
-       * stale-closure bug: socket handlers (onCallAccepted etc.) are registered
-       * once on mount and capture the initial joinAgoraVoice; by the time the
-       * remote side accepts, the WebView has already loaded but the stale
-       * closure still sees webviewReady===false and silently drops the message. */
-      pendingJoinRef.current = msg;
-      if (webviewReadyRef.current && webViewRef.current) {
-        webViewRef.current.postMessage(JSON.stringify(msg));
-        pendingJoinRef.current = null;
+      try {
+        engineRef.current?.joinChannel(joinToken || null, callDataObj.channelName, joinUid, {
+          clientRoleType:         ClientRoleType.ClientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          publishCameraTrack:     false,
+          autoSubscribeAudio:     true,
+          autoSubscribeVideo:     false,
+        });
+        logger.log("[VoiceCall] joinChannel called for:", callDataObj.channelName);
+      } catch (e) {
+        logger.error("[VoiceCall] joinChannel error:", e);
+        agoraJoined.current = false;
+        setStatus("failed");
       }
     },
-    [isIncoming, authToken, get, requestMicPermission,
-     callerId, userId, sendToWebView, stopGlobalTimer, clearCall, setStatus, navigation],
+    [isIncoming, authToken, get, initEngine,
+     callerId, userId, stopGlobalTimer, clearCall, setStatus, navigation],
   );
 
   /* ── End call ── */
@@ -404,8 +435,13 @@ export default function VoiceCallScreen() {
     await stopRingtone();
     stopGlobalTimer();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
-    if (Platform.OS === "web") agoraService.leave();
-    else sendToWebView({ action: "leave" });
+
+    if (Platform.OS === "web") {
+      agoraService.leave();
+    } else if (!isExpoGo && engineRef.current) {
+      try { engineRef.current.leaveChannel(); } catch {}
+    }
+
     socketService.endCall({
       targetUserId: isIncoming ? callerId : userId,
       callType: "voice",
@@ -414,7 +450,7 @@ export default function VoiceCallScreen() {
     });
     clearCall();
     setTimeout(() => navigation.canGoBack() && navigation.goBack(), 600);
-  }, [callerId, userId, isIncoming, stopRingtone, sendToWebView, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
+  }, [callerId, userId, isIncoming, stopRingtone, clearCall, navigation, setStatus, activeCall, stopGlobalTimer]);
 
   /* ── Minimize ── */
   const handleMinimize = useCallback(() => {
@@ -429,11 +465,7 @@ export default function VoiceCallScreen() {
     await stopRingtone();
     if (ringingTimeout.current) clearTimeout(ringingTimeout.current);
 
-    /* Check mic permission BEFORE signalling accept. If we signal accept first
-     * and then discover permission is denied, the caller's screen transitions
-     * to "connected" and they hear complete silence with no explanation.
-     * Declining here instead lets the caller see "Call declined" and move on. */
-    const hasPerm = await requestMicPermission();
+    const hasPerm = await ensureMicPermission();
     if (!hasPerm) {
       micDeniedRef.current = true;
       socketService.declineCall({ callerId, callType: "voice" });
@@ -447,7 +479,7 @@ export default function VoiceCallScreen() {
     setStatus("connected");
     startGlobalTimer();
     if (activeCallData) joinAgoraVoice(activeCallData);
-  }, [callerId, activeCallData, stopRingtone, joinAgoraVoice, startGlobalTimer, setStatus, requestMicPermission, clearCall, navigation]);
+  }, [callerId, activeCallData, stopRingtone, joinAgoraVoice, startGlobalTimer, setStatus, clearCall, navigation]);
 
   /* ── Decline incoming ── */
   const handleDecline = useCallback(async () => {
@@ -492,18 +524,20 @@ export default function VoiceCallScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setIsMuted((prev) => {
       const next = !prev;
-      if (Platform.OS === "web") agoraService.toggleMute(next);
-      else sendToWebView({ action: "mute", muted: next });
+      if (Platform.OS === "web") {
+        agoraService.toggleMute(next);
+      } else if (!isExpoGo && engineRef.current) {
+        try { engineRef.current.muteLocalAudioStream(next); } catch {}
+      }
       return next;
     });
-  }, [sendToWebView]);
+  }, []);
 
   /* ── Toggle speaker ── */
   const toggleSpeaker = useCallback(async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = !isSpeakerOn;
     setIsSpeakerOn(next);
-    isSpeakerOnRef.current = next;
     try {
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
@@ -512,15 +546,17 @@ export default function VoiceCallScreen() {
         playThroughEarpieceAndroid: !next,
       });
     } catch (e) {
-      logger.log("Speaker error:", e);
+      logger.log("[VoiceCall] Speaker error:", e);
     }
-    if (Platform.OS !== "web") sendToWebView({ action: "speaker", on: next });
-  }, [isSpeakerOn, sendToWebView]);
+    if (!isExpoGo && engineRef.current) {
+      try { engineRef.current.setDefaultAudioRouteToSpeakerphone(next); } catch {}
+    }
+  }, [isSpeakerOn]);
 
   /* ── Initiate outgoing call ── */
   const initiateCall = useCallback(async () => {
     if (!authToken || !userId) return setStatus("failed");
-    const hasPerm = await requestMicPermission();
+    const hasPerm = await ensureMicPermission();
     if (!hasPerm) { micDeniedRef.current = true; setStatus("failed"); return; }
 
     try {
@@ -557,13 +593,12 @@ export default function VoiceCallScreen() {
     } catch {
       setStatus("failed");
     }
-  }, [authToken, userId, post, user, navigation, requestMicPermission, setStatus, clearCall]);
+  }, [authToken, userId, post, user, navigation, setStatus, clearCall]);
 
   /* ── Setup effect ── */
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
 
-    /* Tell the FloatingCallBar we are on a call screen — hide it */
     setIsOnCallScreen(true);
     maximizeCall();
 
@@ -580,13 +615,11 @@ export default function VoiceCallScreen() {
     if (callAccepted) {
       setStatus("connected");
       startGlobalTimer();
-      if (activeCallDataRef.current)
-        joinAgoraVoice(activeCallDataRef.current);
+      if (activeCallDataRef.current) joinAgoraVoice(activeCallDataRef.current);
     } else if (returnToCall) {
       setStatus("connected");
     } else if (isIncoming) {
       setStatus("ringing");
-      /* Auto-decline if not answered within 60 seconds */
       ringingTimeout.current = setTimeout(async () => {
         if (callStatusRef.current === "ringing") {
           await stopRingtone();
@@ -621,12 +654,7 @@ export default function VoiceCallScreen() {
       clearCall();
       setTimeout(() => navigation.canGoBack() && navigation.goBack(), 2000);
     });
-    /* Cold-start armor: when the user accepts a voice call from a push
-     * notification while the app was killed, the original caller's
-     * pending-call may have already expired by the time we cold-launch.
-     * The backend then bounces a `call:ended` to us — which used to
-     * dismiss the screen the moment it mounted. Give the WebView + Agora
-     * join pipeline a brief window before honouring `call:ended`. */
+
     const coldStartAccept = !!callAccepted;
     const acceptArmedAt = Date.now();
     socketService.onCallEnded(async () => {
@@ -637,7 +665,9 @@ export default function VoiceCallScreen() {
       }
       await stopRingtone();
       if (Platform.OS === "web") agoraService.leave();
-      else sendToWebView({ action: "leave" });
+      else if (!isExpoGo && engineRef.current) {
+        try { engineRef.current.leaveChannel(); } catch {}
+      }
       setStatus("ended");
       stopGlobalTimer();
       clearCall();
@@ -652,6 +682,14 @@ export default function VoiceCallScreen() {
       socketService.off("call:declined");
       socketService.off("call:busy");
       socketService.off("call:ended");
+      /* Release native engine on unmount */
+      if (!isExpoGo && engineRef.current) {
+        try {
+          engineRef.current.leaveChannel();
+          engineRef.current.release();
+        } catch {}
+        engineRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -663,7 +701,7 @@ export default function VoiceCallScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
-  /* ── Set audio mode for active call (enables AEC to prevent echo) ── */
+  /* ── Set audio mode for active call ── */
   useEffect(() => {
     if (callStatus !== "connected") return;
     Audio.setAudioModeAsync({
@@ -672,11 +710,6 @@ export default function VoiceCallScreen() {
       staysActiveInBackground: true,
       playThroughEarpieceAndroid: !isSpeakerOn,
     }).catch(() => {});
-    // Sync the WebView's speaker routing with the current isSpeakerOn state so
-    // audio routes correctly from the moment the call connects (default: earpiece).
-    if (Platform.OS !== "web") {
-      sendToWebView({ action: "speaker", on: isSpeakerOn });
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);
 
@@ -703,22 +736,6 @@ export default function VoiceCallScreen() {
     }
   }, [callStatus]);
 
-  /* ── WebView ready → flush pending join or join if already connected ── */
-  useEffect(() => {
-    if (!webviewReady) return;
-    /* Flush any join message that was queued before WebView finished loading */
-    if (pendingJoinRef.current) {
-      webViewRef.current?.postMessage(JSON.stringify(pendingJoinRef.current));
-      pendingJoinRef.current = null;
-      return;
-    }
-    /* Handle case where call was already accepted before the screen mounted */
-    if ((callStatus === "connected" || callAccepted) && activeCallDataRef.current && !agoraJoined.current) {
-      joinAgoraVoice(activeCallDataRef.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webviewReady]);
-
   /* ── Free-tier 5-min limit ── */
   useEffect(() => {
     if (user?.premium?.isActive || callStatus !== "connected") return;
@@ -738,7 +755,6 @@ export default function VoiceCallScreen() {
   const isWaiting    = !isIncoming && callStatus === "ringing";
   const showIncoming = isIncoming && callStatus === "ringing";
   const showCancel   = callStatus === "connecting" || isWaiting;
-  const agoraUrl     = `${getApiBaseUrl()}/public/agora-call.html`;
 
   const formatDuration = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
@@ -747,7 +763,7 @@ export default function VoiceCallScreen() {
     switch (callStatus) {
       case "connecting": return "Connecting…";
       case "ringing":    return isIncoming ? "Incoming voice call" : "Ringing…";
-      case "connected":  return "Connected";
+      case "connected":  return formatDuration(duration);
       case "ended":      return "Call ended";
       case "declined":   return "Call declined";
       case "busy":       return "User is busy";
@@ -785,69 +801,10 @@ export default function VoiceCallScreen() {
         />
       )}
 
-      {/* Hidden Agora WebView — loads from HTTPS backend for getUserMedia permission */}
-      {Platform.OS !== "web" && (
-        <WebView
-          ref={webViewRef}
-          source={{ uri: agoraUrl }}
-          /* A small transparent webview keeps the WebRTC media pipeline alive
-           * on Android — a 0×0 view can have its layer skipped by the
-           * compositor, silently muting audio. 4×4 is safely non-zero but
-           * invisible via opacity:0. */
-          style={{ width: 4, height: 4, position: "absolute", opacity: 0, top: 0, left: 0 }}
-          originWhitelist={["*"]}
-          allowsInlineMediaPlayback
-          mediaPlaybackRequiresUserAction={false}
-          mediaCapturePermissionGrantType="grant"
-          mixedContentMode="always"
-          javaScriptEnabled
-          domStorageEnabled
-          /* Android: WebView denies getUserMedia by default. Without this the
-           * mic is never granted, so AgoraRTC.createMicrophoneAudioTrack()
-           * fails silently and neither side hears anything. Grant exactly
-           * what the page is asking for (mic for voice, mic+camera for video). */
-          onPermissionRequest={(event: any) => {
-            try {
-              event?.nativeEvent?.grant?.(event.nativeEvent.resources);
-            } catch {}
-          }}
-          onLoad={() => { webviewReadyRef.current = true; setWebviewReady(true); }}
-          onLoadEnd={() => { webviewReadyRef.current = true; setWebviewReady(true); }}
-          onMessage={(e) => {
-            try {
-              const d = JSON.parse(e.nativeEvent.data);
-              if (d.type === "sdk-ready") logger.log("Voice: Agora SDK ready");
-              if (d.type === "joined") logger.log("Voice joined:", d.uid);
-              if (d.type === "remote-user-joined") {
-                logger.log("Voice: remote audio started, uid:", d.uid);
-                /* Re-apply audio routing now that the remote track is live.
-                 * The earlier sendToWebView({ action: "speaker" }) fires when
-                 * callStatus becomes "connected", but at that moment
-                 * client.remoteUsers is still empty so setSpeaker is a no-op.
-                 * This second pass (triggered by the track appearing) is what
-                 * actually routes audio to the speaker on Android. */
-                Audio.setAudioModeAsync({
-                  allowsRecordingIOS: true,
-                  playsInSilentModeIOS: true,
-                  staysActiveInBackground: true,
-                  playThroughEarpieceAndroid: !isSpeakerOnRef.current,
-                }).catch(() => {});
-                sendToWebView({ action: "speaker", on: isSpeakerOnRef.current });
-              }
-              if (d.type === "remote-user-left") {
-                if (callStatusRef.current === "connected") handleEndCall();
-              }
-              if (d.type === "connectionState") logger.log("Voice connection state:", d.state);
-              if (d.type === "error") logger.warn("Voice WebView error:", d.message);
-            } catch {}
-          }}
-        />
-      )}
-
-      {/* ── FULL-SCREEN OVERLAY (absolute fill — immune to nav height issues) ── */}
+      {/* ── FULL-SCREEN OVERLAY ── */}
       <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: fadeAnim }]}>
 
-        {/* ── BACK / MINIMIZE button — top-left only, no title bar ── */}
+        {/* ── BACK / MINIMIZE button ── */}
         <Pressable
           style={[s.backBtn, { top: insets.top + 12 }]}
           hitSlop={16}
@@ -860,7 +817,7 @@ export default function VoiceCallScreen() {
           />
         </Pressable>
 
-        {/* ── NAME + STATUS — top-center header area ── */}
+        {/* ── NAME + STATUS ── */}
         <View style={[s.topNameBlock, { top: insets.top + 12 }]}>
           <Text style={s.callerName} numberOfLines={1}>{userName || "Unknown"}</Text>
           <Text style={[s.statusText, isConnected && s.statusConnected, isTerminal && s.statusError]}>
@@ -874,9 +831,17 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* ── AVATAR — centered in the middle ── */}
+        {/* ── AVATAR ── */}
         <View style={s.avatarCenter}>
           <View style={s.avatarRing}>
+            {/* Pulse rings (ringing/connecting) */}
+            {(callStatus === "ringing" || callStatus === "connecting") && (
+              <>
+                <PulseRing anim={pulseAnim1} size={AVATAR_SIZE + 28} />
+                <PulseRing anim={pulseAnim2} size={AVATAR_SIZE + 58} />
+                <PulseRing anim={pulseAnim3} size={AVATAR_SIZE + 88} />
+              </>
+            )}
             {userPhoto ? (
               <SafeImage
                 source={{ uri: userPhoto }}
@@ -912,7 +877,7 @@ export default function VoiceCallScreen() {
           )}
         </View>
 
-        {/* ── CONTROLS — pinned to the bottom ── */}
+        {/* ── CONTROLS ── */}
         <View style={[s.controlsPanel, { paddingBottom: insets.bottom + 28 }]}>
           <View style={s.glass}>
 
@@ -1009,7 +974,6 @@ export default function VoiceCallScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#030d08" },
 
-  /* Back / minimize button — top-left, no title bar */
   backBtn: {
     position: "absolute",
     left: 16,
@@ -1022,7 +986,6 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
 
-  /* Name + status pinned at the top-center, below the back button */
   topNameBlock: {
     position: "absolute",
     left: 60,
@@ -1031,13 +994,12 @@ const s = StyleSheet.create({
     zIndex: 10,
   },
 
-  /* Avatar center — fills screen minus header/controls, avatar only */
   avatarCenter: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 140,    /* clear the top name block */
-    paddingBottom: 220, /* clear the controls panel */
+    paddingTop: 140,
+    paddingBottom: 220,
   },
   avatarRing: {
     width: AVATAR_SIZE,
@@ -1121,7 +1083,6 @@ const s = StyleSheet.create({
   },
   errorText: { fontSize: 13, color: "#f87171", fontWeight: "500" },
 
-  /* Controls panel — absolutely pinned to the bottom */
   controlsPanel: {
     position: "absolute",
     bottom: 0,
@@ -1147,7 +1108,6 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
 
-  /* Accept button (large green) */
   acceptWrap: { alignItems: "center", gap: 6 },
   acceptBtn: {
     width: 64,
@@ -1163,7 +1123,6 @@ const s = StyleSheet.create({
     elevation: 10,
   },
 
-  /* End call button */
   endRow: { alignItems: "center", gap: 6 },
   endBtn: {
     width: 68,
