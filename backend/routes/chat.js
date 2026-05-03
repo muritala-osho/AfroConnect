@@ -479,55 +479,33 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
           req.user.profilePicture ||
           "";
 
-        // Send Android data-only FCM message so the background handler can
-        // display a MessagingStyle notification with the sender's avatar and an
-        // inline Reply button and Mark as Read button via Notifee.
-        let fcmSent = false;
-        if (rcvUser?.fcmToken) {
-          try {
-            fcmSent = await sendMessageDataMessage(rcvUser.fcmToken, {
-              matchId:     matchId.toString(),
-              messageId:   message._id.toString(),
-              senderId:    req.user._id.toString(),
-              senderName,
-              senderPhoto,
-              body:        notifBody,
-              badge:       totalUnread,
-            });
-          } catch (fcmErr) {
-            logger.error("[Chat] FCM message failed:", fcmErr?.message || fcmErr);
-            fcmSent = false;
-          }
-        }
-
-        // Fallback to Expo push if FCM was not sent (either no token, or FCM failed).
-        // This ensures chat notifications are reliably delivered via one channel or the other.
-        // When FCM succeeds, the Notifee MessagingStyle on Android shows the rich
-        // notification with avatar + inline actions. When FCM is unavailable or fails,
-        // the Expo push provides a standard visible notification on iOS and as a backup on Android.
-        if (!fcmSent) {
-          try {
-            await sendSmartNotification(
-              rcvUser,
-              {
-                title: senderName,
-                body: notifBody,
-                badge: totalUnread,
-                data: {
-                  type: "message",
-                  screen: "ChatDetail",
-                  matchId: matchId.toString(),
-                  senderId: req.user._id.toString(),
-                  senderName,
-                  senderPhoto,
-                },
+        // Send Expo push notification with sender avatar as rich content.
+        // Simple approach that works on all devices and APK versions.
+        try {
+          await sendSmartNotification(
+            rcvUser,
+            {
+              title: senderName,
+              body: notifBody,
+              badge: totalUnread,
+              data: {
+                type: "message",
+                screen: "ChatDetail",
+                matchId: matchId.toString(),
+                senderId: req.user._id.toString(),
+                senderName,
+                senderPhoto,
               },
-              "message",
-              req.user._id.toString(),
-            );
-          } catch (expoErr) {
-            logger.error("[Chat] Expo push fallback failed:", expoErr?.message || expoErr);
-          }
+              // Rich content: sender's avatar shown on lock screen and notification
+              ...(senderPhoto && senderPhoto.startsWith('https://')
+                ? { richContent: { image: senderPhoto }, mutableContent: true }
+                : {}),
+            },
+            "message",
+            req.user._id.toString(),
+          );
+        } catch (expoErr) {
+          logger.error("[Chat] Push notification failed:", expoErr?.message || expoErr);
         }
       } catch (err) {
         logger.error("Failed to send message push notification:", err);
@@ -915,47 +893,33 @@ router.post("/:matchId/message", protect, validate(schemas.chat.sendMessage), as
           req.user.profilePicture ||
           "";
 
-        let fcmSent = false;
-        if (rcvUser?.fcmToken) {
-          try {
-            fcmSent = await sendMessageDataMessage(rcvUser.fcmToken, {
-              matchId:     matchId.toString(),
-              messageId:   message._id.toString(),
-              senderId:    req.user._id.toString(),
-              senderName,
-              senderPhoto,
-              body:        notifBody,
-              badge:       totalUnread,
-            });
-          } catch (fcmErr) {
-            logger.error("[Chat] FCM message failed:", fcmErr?.message || fcmErr);
-            fcmSent = false;
-          }
-        }
-
-        if (!fcmSent) {
-          try {
-            await sendSmartNotification(
-              rcvUser,
-              {
-                title: senderName,
-                body: notifBody,
-                badge: totalUnread,
-                data: {
-                  type: "message",
-                  screen: "ChatDetail",
-                  matchId: matchId.toString(),
-                  senderId: req.user._id.toString(),
-                  senderName,
-                  senderPhoto,
-                },
+        // Send Expo push notification with sender avatar as rich content.
+        // Simple approach that works on all devices and APK versions.
+        try {
+          await sendSmartNotification(
+            rcvUser,
+            {
+              title: senderName,
+              body: notifBody,
+              badge: totalUnread,
+              data: {
+                type: "message",
+                screen: "ChatDetail",
+                matchId: matchId.toString(),
+                senderId: req.user._id.toString(),
+                senderName,
+                senderPhoto,
               },
-              "message",
-              req.user._id.toString(),
-            );
-          } catch (expoErr) {
-            logger.error("[Chat] Expo push fallback failed:", expoErr?.message || expoErr);
-          }
+              // Rich content: sender's avatar shown on lock screen and notification
+              ...(senderPhoto && senderPhoto.startsWith('https://')
+                ? { richContent: { image: senderPhoto }, mutableContent: true }
+                : {}),
+            },
+            "message",
+            req.user._id.toString(),
+          );
+        } catch (expoErr) {
+          logger.error("[Chat] Push notification failed:", expoErr?.message || expoErr);
         }
       } catch (err) {
         logger.error("Failed to send message push notification:", err);
