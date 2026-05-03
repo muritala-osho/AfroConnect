@@ -296,7 +296,7 @@ router.post(
       if (!user) {
         return res.status(401).json({
           success: false,
-          message: "Invalid email or password.",
+          message: "Account does not exist. Please check your email or sign up.",
         });
       }
 
@@ -345,7 +345,7 @@ router.post(
       if (!isMatch) {
         return res.status(401).json({
           success: false,
-          message: "Invalid credentials",
+          message: "Incorrect password. Please try again.",
         });
       }
 
@@ -445,10 +445,9 @@ router.post(
       const user = await User.findOne({ email: normalizedEmail });
 
       if (!user) {
-        return res.json({
-          success: true,
-          message:
-            "If an account with that email exists, a verification code has been sent.",
+        return res.status(404).json({
+          success: false,
+          message: "Email not registered. Please check your email or sign up.",
         });
       }
 

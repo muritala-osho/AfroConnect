@@ -225,6 +225,18 @@ router.post('/swipe', protect, swipeLimiter, validate(schemas.match.swipe), asyn
 
         await currentUser.save();
 
+        // Track matchesGained for any boosted user involved in this match (fire-and-forget)
+        setImmediate(async () => {
+          try {
+            const [boostA, boostB] = await Promise.all([
+              Boost.getActiveBoost(currentUser._id),
+              Boost.getActiveBoost(targetUserId),
+            ]);
+            if (boostA) await boostA.incrementStat('matchesGained');
+            if (boostB) await boostB.incrementStat('matchesGained');
+          } catch (_) {}
+        });
+
         try {
           const { sendSmartNotification } = require('../utils/pushNotifications');
           const [currentUserFull, targetUserFull] = await Promise.all([
