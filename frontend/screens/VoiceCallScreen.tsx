@@ -105,6 +105,36 @@ const wave = StyleSheet.create({
   bar: { width: 4, height: 22, borderRadius: 3, backgroundColor: "#34d399" },
 });
 
+function qualityToBars(q: number): { bars: number; color: string; label: string } {
+  if (q === 0 || q === 8) return { bars: 0, color: "rgba(255,255,255,0.4)", label: "" };
+  if (q === 1) return { bars: 4, color: "#34d399", label: "Excellent" };
+  if (q === 2) return { bars: 3, color: "#34d399", label: "Good" };
+  if (q === 3) return { bars: 2, color: "#fbbf24", label: "Fair" };
+  if (q === 4) return { bars: 2, color: "#fbbf24", label: "Weak" };
+  if (q === 5) return { bars: 1, color: "#f87171", label: "Poor" };
+  return { bars: 0, color: "#f87171", label: "No signal" };
+}
+
+function SignalBars({ quality }: { quality: number }) {
+  const { bars, color } = qualityToBars(quality);
+  const heights = [4, 7, 10, 13];
+  return (
+    <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, height: 13 }}>
+      {heights.map((h, i) => (
+        <View
+          key={i}
+          style={{
+            width: 3,
+            height: h,
+            borderRadius: 1,
+            backgroundColor: i < bars ? color : "rgba(255,255,255,0.2)",
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 /* ─────────────────────────────────────────────────────────────────
    Control button — circle icon + label
 ───────────────────────────────────────────────────────────────── */
@@ -200,6 +230,7 @@ export default function VoiceCallScreen() {
   const [activeCallData, setActiveCallData] = useState<any>(incomingCallData || null);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+  const [networkQuality, setNetworkQuality] = useState(0);
 
   /* ── Animated values ── */
   const fadeAnim    = useRef(new Animated.Value(0)).current;
@@ -324,6 +355,10 @@ export default function VoiceCallScreen() {
 
       engine.addListener("onConnectionStateChanged", (_conn: any, state: any, _reason: any) => {
         logger.log("[VoiceCall] Connection state:", state);
+      });
+
+      engine.addListener("onNetworkQuality", (_conn: any, uid: any, txQ: any, rxQ: any) => {
+        if (uid === 0) setNetworkQuality(Math.max(txQ, rxQ));
       });
 
       engine.addListener("onError", (_conn: any, err: any) => {
@@ -859,6 +894,7 @@ export default function VoiceCallScreen() {
             <View style={s.liveRow}>
               <View style={s.liveDot} />
               <WaveBars active={!isMuted} />
+              <SignalBars quality={networkQuality} />
             </View>
           )}
 
