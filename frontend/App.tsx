@@ -131,11 +131,15 @@ function navigateFromNotification(data: Record<string, any>) {
 }
 
 // Print API configuration on startup
-logger.log("\n\n========== AFROCONNECT APP STARTED ==========");
-logger.log("API Base URL:", getApiBaseUrl());
-logger.log("Signup URL:", `${getApiBaseUrl()}/api/auth/signup`);
-logger.log("Login URL:", `${getApiBaseUrl()}/api/auth/login`);
-logger.log("==========================================\n\n");
+try {
+  logger.log("\n\n========== AFROCONNECT APP STARTED ==========");
+  logger.log("API Base URL:", getApiBaseUrl());
+  logger.log("Signup URL:", `${getApiBaseUrl()}/api/auth/signup`);
+  logger.log("Login URL:", `${getApiBaseUrl()}/api/auth/login`);
+  logger.log("==========================================\n\n");
+} catch (e) {
+  logger.error("[App] EXPO_PUBLIC_API_URL is not set — API calls will fail.", e);
+}
 
 function LanguageSync() {
   const { user, isLoading } = useAuth();
@@ -345,7 +349,7 @@ function AppContent() {
   );
 }
 
-export default function App() {
+function App() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
@@ -372,5 +376,4 @@ const styles = StyleSheet.create({
   },
 });
 
-// Wrap App with Sentry profiler for error tracking and performance monitoring
-export default Sentry.withProfiler(AppContent);
+export default Sentry.withProfiler(App);

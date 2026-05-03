@@ -417,7 +417,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Server returned HTML instead of JSON. Check backend status.');
       }
 
-      const data = JSON.parse(responseText);
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        logger.error('Login non-JSON response:', response.status, responseText.slice(0, 200));
+        throw new Error(`Server returned an unexpected response (${response.status}). Please try again.`);
+      }
       if (!response.ok) {
         const error: any = new Error(data.message || `Login failed (${response.status})`);
         error.isBanned = data.isBanned || false;
