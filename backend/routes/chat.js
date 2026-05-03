@@ -475,7 +475,7 @@ router.post("/:matchId", protect, validate(schemas.chat.sendMessage), async (req
 
         const firstPhoto = req.user.photos?.[0];
         const senderPhoto =
-          (typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url) ||
+          (typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url || firstPhoto?.uri) ||
           req.user.profilePicture ||
           "";
 

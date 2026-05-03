@@ -7,6 +7,12 @@ const expo = new Expo({
   useFcmV1: true,
 });
 
+function normalizePhotoUrl(photo) {
+  if (!photo) return '';
+  if (typeof photo === 'string') return photo;
+  return photo.url || photo.uri || photo.path || '';
+}
+
 /**
  * Clears an invalid push token from the database so we stop sending to it.
  * Called automatically when Expo returns DeviceNotRegistered.
@@ -266,8 +272,21 @@ async function sendSmartNotification(user, payload, type = 'system', mutedByUser
     system:     'default',
   };
 
+  const normalizedData = {
+    ...(payload.data || {}),
+  };
+
+  if (normalizedData.senderPhoto) {
+    normalizedData.senderPhoto = normalizePhotoUrl(normalizedData.senderPhoto);
+  }
+
+  if (normalizedData.callerPhoto) {
+    normalizedData.callerPhoto = normalizePhotoUrl(normalizedData.callerPhoto);
+  }
+
   await sendExpoPushNotification(user.pushToken, {
     ...payload,
+    data: normalizedData,
     priority: priorityMap[type] || 'high',
     sound,
     channelId: payload.channelId || channelMap[type] || 'default',
