@@ -19,6 +19,10 @@ frontend/node_modules/
 frontend/google-services.json
 frontend/GoogleService-Info.plist
 
+# Sentry — contains auth token, never commit
+frontend/android/sentry.properties
+frontend/ios/sentry.properties
+
 # Backend
 backend/node_modules/
 
