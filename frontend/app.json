@@ -83,7 +83,9 @@
       "./plugins/withFirebaseManifestFix",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
-      ["@sentry/react-native/expo", {}],
+      ["@sentry/react-native/expo", {
+        "uploadSourceMaps": false
+      }],
       [
         "expo-splash-screen",
         {
