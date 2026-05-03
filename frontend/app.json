@@ -85,8 +85,7 @@
       "@react-native-firebase/messaging",
       ["@sentry/react-native/expo", {
         "organization": "muri-6z",
-        "project": "afroconnect-backend",
-        "uploadSourceMaps": false
+        "project": "afroconnect-backend"
       }],
       [
         "expo-splash-screen",
