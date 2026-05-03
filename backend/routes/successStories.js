@@ -59,6 +59,8 @@ router.post('/', protect, async (req, res) => {
 router.get('/', protect, async (req, res) => {
   try {
     const { featured, relationship, limit = 20, skip = 0 } = req.query;
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit, 10) || 20));
+    const skipNum = Math.max(0, parseInt(skip, 10) || 0);
 
     const query = {
       $or: [
@@ -74,8 +76,8 @@ router.get('/', protect, async (req, res) => {
     const stories = await SuccessStory.find(query)
       .populate('couple', 'name photos')
       .sort({ featured: -1, likeCount: -1, createdAt: -1 })
-      .skip(parseInt(skip))
-      .limit(parseInt(limit));
+      .skip(skipNum)
+      .limit(limitNum);
 
     const processedStories = stories.map(story => {
       const storyObj = story.toObject();
@@ -98,7 +100,13 @@ router.get('/', protect, async (req, res) => {
       success: true,
       data: processedStories,
       total,
-      hasMore: total > parseInt(skip) + processedStories.length
+      hasMore: total > skipNum + processedStories.length,
+      pagination: {
+        skip: skipNum,
+        limit: limitNum,
+        total,
+        hasMore: total > skipNum + processedStories.length,
+      }
     });
   } catch (error) {
     logger.error('Get stories error:', error);
