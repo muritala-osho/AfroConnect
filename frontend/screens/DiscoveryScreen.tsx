@@ -568,6 +568,12 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
       });
   }, [api, token]);
 
+  const resetDiscoverySession = useCallback(() => {
+    hasAutoRetriedRef.current = false;
+    seenUserIds.current.clear();
+    stackExhaustedReportedRef.current = false;
+  }, []);
+
   const loadPotentialMatches = useCallback(async (silent = false, append = false) => {
     if (!user?.id || !token) {
       logger.log('[DISCOVERY] loadPotentialMatches skipped - no user or token');
@@ -801,12 +807,9 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
             } catch {}
           } else if (!silent) {
             // Empty result on a primary fetch with no cached fallback.
-            // Clear seenUserIds so the same profiles can recycle (critical
-            // when the pool is small). Auto-retry ONCE per session so the
-            // deck repopulates immediately — but stop after that so a
-            // specific-country or passport search that has genuinely no
-            // visible users doesn't loop forever showing an empty spinner.
-            seenUserIds.current.clear();
+            // Reset the session so a fresh refresh can rediscover new users
+            // instead of staying stuck on the exhausted cache.
+            resetDiscoverySession();
             reportStackExhausted();
             if (!hasAutoRetriedRef.current) {
               hasAutoRetriedRef.current = true;
@@ -822,7 +825,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
           }
         }
       } else if (!append) {
-        seenUserIds.current.clear();
+        resetDiscoverySession();
         reportStackExhausted();
         if (!hasAutoRetriedRef.current) {
           hasAutoRetriedRef.current = true;
@@ -2118,7 +2121,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               <Pressable
                 style={[styles.emptyRefreshButton, { backgroundColor: theme.primary }]}
                 onPress={() => {
-                  hasAutoRetriedRef.current = false;
+                  resetDiscoverySession();
                   setLoading(true);
                   loadPotentialMatchesRef.current?.();
                 }}
@@ -2213,7 +2216,7 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
               <Feather name="edit-2" size={14} color="#FFF" />
             </Pressable>
             <Pressable onPress={() => {
-              hasAutoRetriedRef.current = false;
+              resetDiscoverySession();
               setDailyLimitReached(false);
               setDiscoveryType('local');
               setSelectedCountry(null);
