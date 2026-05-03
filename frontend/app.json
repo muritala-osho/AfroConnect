@@ -83,6 +83,7 @@
       "./plugins/withFirebaseManifestFix",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
+      ["@sentry/react-native/expo", {}],
       [
         "expo-splash-screen",
         {

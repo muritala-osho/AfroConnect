@@ -1,6 +1,7 @@
 import logger from '@/utils/logger';
 import React, { useEffect, useCallback, useRef } from "react";
 import { StyleSheet, View, Text, TouchableOpacity, AppState, Platform } from "react-native";
+import * as Sentry from '@sentry/react-native';
 import { NavigationContainer, createNavigationContainerRef } from "@react-navigation/native";
 import * as Notifications from "expo-notifications";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -370,3 +371,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+
+// Wrap App with Sentry profiler for error tracking and performance monitoring
+export default Sentry.withProfiler(AppContent);

@@ -1,6 +1,27 @@
 import { registerRootComponent } from "expo";
 import { AppRegistry, Platform } from 'react-native';
 
+// ── Initialize Sentry early, before any other code ──
+// Sentry must be initialized before importing App and other modules
+// so it can instrument React Native, networking, and other integrations.
+if (Platform.OS !== 'web' && process.env.EXPO_PUBLIC_SENTRY_DSN) {
+  try {
+    const Sentry = require('@sentry/react-native');
+    Sentry.init({
+      dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'production',
+      tracesSampleRate: 0.2,
+      integrations: [
+        new Sentry.ReactNavigationIntegration(),
+      ],
+      attachStacktrace: true,
+      maxBreadcrumbs: 100,
+    });
+  } catch (err) {
+    console.warn('[Sentry] Failed to initialize:', err);
+  }
+}
+
 if (typeof global !== 'undefined') {
   global.Platform = Platform;
 }
