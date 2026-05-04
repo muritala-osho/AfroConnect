@@ -656,14 +656,43 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         Alert.alert("Spotify", data.message || "Could not connect to Spotify. Make sure Spotify integration is configured.");
         return;
       }
+
+      // Attach the deep-link listener BEFORE opening the browser so we never
+      // miss the afroconnect://spotify?success=true redirect even if it fires
+      // while the Custom Tab is still animating closed.
+      // deepLinkOutcome: null = no deep link received yet
+      //                  true = success deep link received
+      //                  false = error deep link received
+      let deepLinkOutcome: boolean | null = null;
+      const subscription = Linking.addEventListener('url', ({ url }) => {
+        if (!url.includes('afroconnect://spotify')) return;
+        subscription.remove();
+        deepLinkOutcome = url.includes('success=true');
+        logger.log('[Spotify] Deep link received:', url, '→ success:', deepLinkOutcome);
+      });
+
       await WebBrowser.openBrowserAsync(data.authUrl);
 
-      // Poll /api/spotify/status up to 4 times with 1.5 s gaps.
-      // This handles the race where the user closes the browser before the
-      // 800 ms deep-link fires, or where the backend DB write is still in
-      // flight when openBrowserAsync resolves.
+      // Browser dismissed — clean up listener if it never fired (user closed
+      // the browser manually on a device that doesn't support app-switching
+      // via deep link, e.g. some Android OEMs).
+      subscription.remove();
+
+      // If the deep link explicitly signalled an error, bail out immediately.
+      if (deepLinkOutcome === false) {
+        Alert.alert("Spotify", "Spotify authorization was cancelled or failed. Please try again.");
+        return;
+      }
+
+      // Poll /api/spotify/status.
+      // • Deep link fired (deepLinkOutcome === true): the DB write is already
+      //   complete — check once immediately, no delay needed.
+      // • No deep link (deepLinkOutcome === null): user closed the browser
+      //   manually before the redirect; retry up to 4 times with 1.5 s gaps
+      //   to give the backend time to complete the OAuth callback.
+      const maxAttempts = deepLinkOutcome === true ? 1 : 4;
       let statusData: any = { connected: false };
-      for (let attempt = 0; attempt < 4; attempt++) {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
           await new Promise<void>((r) => setTimeout(r, 1500));
         }
