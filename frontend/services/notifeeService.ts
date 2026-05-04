@@ -55,7 +55,11 @@ function getNotifee() {
 
 const CHANNEL_ID = 'afroconnect_messages';
 const MISSED_CALLS_CHANNEL_ID = 'afroconnect_missed_calls';
-const INCOMING_CALLS_CHANNEL_ID = 'afroconnect_incoming_calls';
+// v2 suffix forces Android to create a NEW channel with URGENT importance.
+// Android never lets an app upgrade an existing channel's importance once the
+// user has seen it, so changing the ID is the only reliable way to apply the
+// importance change on existing installs.
+const INCOMING_CALLS_CHANNEL_ID = 'afroconnect_incoming_calls_v2';
 const MAX_THREAD_MESSAGES = 6;
 
 async function ensureChannel() {
@@ -85,15 +89,19 @@ async function ensureMissedCallsChannel() {
 async function ensureIncomingCallsChannel() {
   const notifee = getNotifee();
   if (!notifee) return;
-  // URGENT importance (5) is required for fullScreenAction to work reliably
-  // on Android 10+. HIGH (4) also works but some OEMs need URGENT.
+  // URGENT (5) is required — not HIGH (4) — for fullScreenAction to fire as
+  // a lock-screen overlay on Android 10+. With HIGH the notification only
+  // appears in the shade; it never interrupts a sleeping screen.
+  // bypassDnd: true ensures the ring breaks through Do Not Disturb, matching
+  // the behaviour of WhatsApp / Signal call notifications.
   await notifee.createChannel({
     id: INCOMING_CALLS_CHANNEL_ID,
     name: 'Incoming Calls',
-    importance: _AndroidImportance?.HIGH ?? 4,
+    importance: _AndroidImportance?.URGENT ?? 5,
     vibration: true,
     sound: 'default',
     lights: true,
+    bypassDnd: true,
   });
 }
 
@@ -377,14 +385,17 @@ export async function displayIncomingCallNotification({
     body: isVideo ? 'Incoming video call' : 'Incoming voice call',
     android: {
       channelId: INCOMING_CALLS_CHANNEL_ID,
-      importance: _AndroidImportance?.HIGH ?? 4,
+      // URGENT (5) at the notification level is required alongside the
+      // URGENT channel so the fullScreenAction fires as a lock-screen overlay.
+      // HIGH (4) only places the notification in the shade — it never wakes
+      // a sleeping screen.
+      importance: _AndroidImportance?.URGENT ?? 5,
       smallIcon: 'ic_notification',
       color: '#1A0A2E',
       largeIcon: callerPhoto || undefined,
       circularLargeIcon: true,
-      // fullScreenAction shows this notification as a full-screen overlay
-      // even when the device is locked — the system calls the Activity via
-      // Intent.FLAG_ACTIVITY_NEW_TASK so no Activity context is needed here.
+      // fullScreenAction raises this as a full-screen overlay even on the
+      // lock screen — Intent.FLAG_ACTIVITY_NEW_TASK, no Activity needed.
       fullScreenAction: {
         id: 'default',
         launchActivity: 'default',
@@ -417,9 +428,9 @@ export async function displayIncomingCallNotification({
         senderName: callerName,
         senderPhoto: callerPhoto,
       },
-      // Auto-cancel after 30 s so a stale notification doesn't linger if the
+      // Auto-cancel after 35 s so a stale notification doesn't linger if the
       // caller hangs up and the cancel_call FCM message is missed.
-      timeoutAfter: 30000,
+      timeoutAfter: 35000,
       vibrationPattern: [0, 500, 1000, 500],
     },
   });

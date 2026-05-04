@@ -81,6 +81,7 @@
     "plugins": [
       "./plugins/withCallKeep",
       "./plugins/withFirebaseManifestFix",
+      "@notifee/react-native",
       "@react-native-firebase/app",
       "@react-native-firebase/messaging",
       ["@sentry/react-native/expo", {
