@@ -657,10 +657,27 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
         return;
       }
       await WebBrowser.openBrowserAsync(data.authUrl);
-      const statusResp = await fetch(`${getApiBaseUrl()}/api/spotify/status`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const statusData = await statusResp.json();
+
+      // Poll /api/spotify/status up to 4 times with 1.5 s gaps.
+      // This handles the race where the user closes the browser before the
+      // 800 ms deep-link fires, or where the backend DB write is still in
+      // flight when openBrowserAsync resolves.
+      let statusData: any = { connected: false };
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt > 0) {
+          await new Promise<void>((r) => setTimeout(r, 1500));
+        }
+        try {
+          const statusResp = await fetch(`${getApiBaseUrl()}/api/spotify/status`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          statusData = await statusResp.json();
+          if (statusData.connected) break;
+        } catch {
+          // network blip — try again
+        }
+      }
+
       if (statusData.connected) {
         setSpotifyConnected(true);
         setSpotifyDisplayName(statusData.displayName || "");
@@ -672,6 +689,8 @@ export default function EditProfileScreen({ navigation }: EditProfileScreenProps
           setSongPreviewUrl(statusData.favoriteSong.previewUrl || "");
         }
         if (fetchUser) await fetchUser();
+      } else {
+        Alert.alert("Spotify", "Could not confirm Spotify connection. Please try again.");
       }
     } catch (err) {
       Alert.alert("Error", "Failed to connect Spotify. Please try again.");

@@ -197,7 +197,7 @@ router.get('/callback', async (req, res) => {
           <script>
             setTimeout(function() {
               window.location.href = 'afroconnect://spotify?success=true';
-            }, 1500);
+            }, 800);
           </script>
         </body>
       </html>
@@ -236,12 +236,16 @@ router.get('/search', protect, async (req, res) => {
     if (!accessToken) {
       return res.status(401).json({ success: false, message: 'Spotify not connected or token expired' });
     }
-    const searchPath = `/v1/search?${querystring.stringify({ q: q.trim(), type: 'track', limit: 10, market: 'US' })}`;
+    // market:'from_token' uses the user's own Spotify country instead of
+    // hard-coding 'US', which caused 403/empty results for non-US accounts.
+    const searchPath = `/v1/search?${querystring.stringify({ q: q.trim(), type: 'track', limit: 10, market: 'from_token' })}`;
     const result = await httpsGet('api.spotify.com', searchPath, {
       'Authorization': `Bearer ${accessToken}`,
     });
     if (result.status !== 200) {
-      return res.status(result.status).json({ success: false, message: 'Spotify search failed' });
+      logger.error('Spotify search API error:', result.status, result.data);
+      const msg = result.data?.error?.message || 'Spotify search failed';
+      return res.status(result.status).json({ success: false, message: msg });
     }
     const tracks = (result.data.tracks?.items || []).map((track) => ({
       id: track.id,

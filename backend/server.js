@@ -1037,28 +1037,39 @@ io.on('connection', (socket) => {
         if (targetUser?.fcmToken) {
           try {
             const { sendCallDataMessage } = require('./utils/fcmPush');
-            await sendCallDataMessage(targetUser.fcmToken, {
+            const fcmResult = await sendCallDataMessage(targetUser.fcmToken, {
               callerId,
               callerName,
               callerPhoto,
               callType,
               callData,
             });
-            sentNativeChannel = true;
-            logger.log('[Call] FCM data message sent to Android device.');
+            // sendCallDataMessage returns the FCM message ID string on success,
+            // or undefined when Firebase Admin is not initialised (no
+            // FIREBASE_SERVICE_ACCOUNT env var). Only count it as sent when we
+            // got a real result back so the Expo fallback isn't incorrectly
+            // suppressed when FCM silently bailed out.
+            if (fcmResult) {
+              sentNativeChannel = true;
+              logger.log('[Call] FCM data message sent to Android device:', fcmResult);
+            } else {
+              logger.warn('[Call] FCM data message not sent (Firebase Admin not initialised — set FIREBASE_SERVICE_ACCOUNT). Falling back to Expo push.');
+            }
           } catch (fcmErr) {
             logger.error('[FCM Data] Error:', fcmErr?.message || fcmErr);
           }
         }
 
-        // 3) Expo push fallback — only sent when BOTH native channels are
-        //    unavailable AND the user is genuinely offline (no active socket).
-        //    When a native channel fired the user already sees the CallKit /
-        //    Notifee full-screen UI; an additional Expo banner would be confusing.
-        //    When native channels are missing this is the last resort that at least
-        //    lets the user tap to open the app and see a "call is waiting" state.
+        // 3) Expo push fallback — sent when native channels are unavailable.
+        //    For calls we also send it when the socket appears "online" because
+        //    on Android/iOS the JS bridge is often suspended while the screen is
+        //    off even though the TCP socket is still open. The Expo banner is
+        //    the last-resort wake-up that lets the user tap into the app.
+        //    We skip it only when a native channel (VoIP/FCM) already fired,
+        //    because those show a full-screen call UI — adding an Expo banner on
+        //    top would be confusing.
         const isTargetOnline = onlineUsers.has(targetUserId);
-        if (!sentNativeChannel && !isTargetOnline && targetUser?.pushToken) {
+        if (!sentNativeChannel && targetUser?.pushToken) {
           try {
             const { sendSmartNotification } = require('./utils/pushNotifications');
             await sendSmartNotification(
