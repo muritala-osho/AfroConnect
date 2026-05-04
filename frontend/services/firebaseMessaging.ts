@@ -139,8 +139,17 @@ export function registerFirebaseBackgroundHandler() {
 }
 
 /**
- * Request notification permission (iOS) and return the FCM token.
- * On Android permission is auto-granted.
+ * Request notification permission and return the FCM token.
+ *
+ * iOS: fires the system permission dialog via Firebase messaging.
+ * Android < 13: POST_NOTIFICATIONS is auto-granted by the OS.
+ * Android 13+ (API 33+): POST_NOTIFICATIONS is a runtime permission exactly
+ *   like Camera/Location. The user must explicitly grant it. We check the
+ *   current status here — the actual rationale + request UI is handled by
+ *   NotificationPermissionPrompt which fires before this function runs.
+ *   If permission is still denied at this point we log a warning and return
+ *   null so no FCM token is registered (registering a token without
+ *   notification permission is pointless and confuses the push pipeline).
  */
 export async function requestFCMPermissionAndGetToken(): Promise<string | null> {
   const messaging = getMessaging();
@@ -158,8 +167,21 @@ export async function requestFCMPermissionAndGetToken(): Promise<string | null> 
       }
     }
 
+    if (Platform.OS === 'android' && (Platform.Version as number) >= 33) {
+      // POST_NOTIFICATIONS is a runtime permission on Android 13+.
+      // expo-notifications' requestPermissionsAsync (called from
+      // registerForPushNotificationsAsync and NotificationPermissionPrompt)
+      // is the UI layer. Here we just verify the outcome.
+      const { Notifications } = require('expo-notifications');
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        logger.warn('[FCM] Android 13+ POST_NOTIFICATIONS not granted — skipping FCM token registration.');
+        return null;
+      }
+    }
+
     const token = await messaging().getToken();
-    logger.log('[FCM] Token:', token);
+    logger.log('[FCM] Token obtained successfully.');
     return token;
   } catch (err) {
     logger.warn('[FCM] Failed to get token:', err);
