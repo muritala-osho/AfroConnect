@@ -10,6 +10,7 @@ const redis = require('../utils/redis');
 const { distanceToUser, normaliseMaxDistanceKm } = require('../utils/distance');
 const { calculateMatchScore } = require('../utils/matching');
 const { discoveryLimiter } = require('../middleware/rateLimiter');
+const { notifyExhaustedUsersOfNewMember } = require('../utils/discoveryNotifier');
 
 // Cache key for the countries list endpoint.
 const COUNTRIES_CACHE_KEY = 'countries:list';
@@ -1121,6 +1122,12 @@ router.put('/me/live-location', protect, async (req, res) => {
 
     // Invalidate location caches — country may have changed.
     await invalidateLocationCaches(user._id);
+
+    // Fire-and-forget: notify any nearby users whose discovery stack is
+    // exhausted so the new/returning user appears in their deck right away.
+    const freshUser = await User.findById(user._id).lean();
+    const io = req.app.get('io');
+    notifyExhaustedUsersOfNewMember(freshUser, io).catch(() => {});
 
     res.json({
       success: true,

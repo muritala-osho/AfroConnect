@@ -9,6 +9,7 @@ const cloudinary = require('cloudinary').v2;
 const fs = require('fs');
 const path = require('path');
 const redis = require('../utils/redis');
+const { notifyExhaustedUsersOfNewMember } = require('../utils/discoveryNotifier');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -248,6 +249,11 @@ router.put('/:userId/approve', protect, isAdmin, async (req, res) => {
           verified: true,
           verificationStatus: 'approved',
         });
+
+        // Fire-and-forget: notify nearby exhausted users so the newly
+        // approved member shows up in their discovery deck immediately.
+        const freshUser = await User.findById(user._id).lean();
+        notifyExhaustedUsersOfNewMember(freshUser, io).catch(() => {});
       }
     } catch (socketError) {
       logger.error('Failed to emit verification socket event:', socketError);

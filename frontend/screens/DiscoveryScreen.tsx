@@ -287,6 +287,40 @@ export default function DiscoveryScreen({ navigation }: DiscoveryScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── Real-time new nearby user ─────────────────────────────────────────────
+  // When a new user sets their location or gets face-verified, the backend
+  // emits `discovery:new_user` to every nearby user whose deck is exhausted.
+  // We prepend the new card so it appears immediately without a full reload.
+  useEffect(() => {
+    const handleNewDiscoveryUser = (data: { user: any }) => {
+      if (!data?.user) return;
+      const newCard: DiscoverUser = {
+        ...data.user,
+        id: data.user._id,
+        online: data.user.online ?? null,
+        distance: data.user.distance ?? null,
+        similarityScore: 50,
+      };
+      setUsers(prev => {
+        const alreadyInDeck = prev.some(u => u.id === newCard.id || (u as any)._id === newCard.id);
+        if (alreadyInDeck) return prev;
+        return [newCard, ...prev];
+      });
+      // Reset the exhausted flag so a fresh load isn't blocked.
+      stackExhaustedReportedRef.current = false;
+    };
+
+    if (socketService && typeof socketService.on === 'function') {
+      socketService.on('discovery:new_user', handleNewDiscoveryUser);
+    }
+    return () => {
+      if (socketService && typeof socketService.off === 'function') {
+        socketService.off('discovery:new_user', handleNewDiscoveryUser);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   // ── Foreground-return poll ────────────────────────────────────────────────
   // When the user's verification is pending and they switch back to the app
   // from the background, automatically re-check the gate status. This means
