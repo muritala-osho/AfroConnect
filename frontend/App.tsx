@@ -28,6 +28,7 @@ import MaintenanceOverlay from "@/components/MaintenanceOverlay";
 import IncomingCallHandler from "@/components/calls/IncomingCallHandler";
 import FloatingCallBar from "@/components/calls/FloatingCallBar";
 import UpdateBanner from "@/components/UpdateBanner";
+import BatteryOptimizationPrompt from "@/components/BatteryOptimizationPrompt";
 import {
   registerForPushNotificationsAsync,
   setupNotificationListeners,
@@ -342,6 +343,7 @@ function AppContent() {
           </NavigationContainer>
           <MaintenanceOverlay />
           <UpdateBanner />
+          <BatteryOptimizationPrompt userId={user?.id} />
           <StatusBar style={isDark ? "light" : "dark"} />
         </CallProvider>
       </KeyboardProvider>
